@@ -101,4 +101,4 @@ Raintile.ini                 skin principale (stili, sfondo, scrollbar)
 ## Limiti noti
 
 - Rainmeter non estrae le icone dagli `.exe`: l'icona va fornita come immagine.
-- Usa nomi di categorie ed etichette senza lettere accentate: lo script legge `Tiles.ini` come UTF-8 e Rainmeter potrebbe mostrarle in modo errato.
+- Usa nomi di categorie ed etichette senza lettere accentate: lo script legge i file di categoria come UTF-8 e Rainmeter potrebbe mostrarle in modo errato.

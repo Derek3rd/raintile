@@ -56,7 +56,7 @@ CloseHotKey=ESCAPE
 CloseOnLaunch=1
 
 ; --- Aspetto -------------------------------------------------------------------
-; 1 = mostra l'etichetta della tile (se definita in Tiles.ini), 0 = nascondi
+; 1 = mostra l'etichetta della tile (Label= nel file di categoria), 0 = nascondi
 ShowLabels=1
 FontFace=Segoe UI
 MenuFontSize=12

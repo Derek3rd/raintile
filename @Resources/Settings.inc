@@ -43,6 +43,12 @@ MenuRadius=22
 ; Trasparenza delle icone delle categorie non attive (0-255)
 MenuIconDimAlpha=150
 
+; --- Chiusura -----------------------------------------------------------------
+; Azione della X in alto a destra. [!DeactivateConfig] scarica la skin
+; (zero memoria finche' e' chiusa); [!Hide] la nasconde soltanto.
+CloseAction=[!DeactivateConfig]
+CloseSize=14
+
 ; --- Aspetto -------------------------------------------------------------------
 ; 1 = mostra l'etichetta della tile (se definita in Tiles.ini), 0 = nascondi
 ShowLabels=1

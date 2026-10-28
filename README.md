@@ -13,6 +13,17 @@ Skin per [Rainmeter](https://www.rainmeter.net/) che sostituisce le icone del de
 3. La skin si posiziona da sola nell'angolo in alto a sinistra e copre lo schermo (`ScreenX/Y/W/H` in `Settings.inc`; usa `WORKAREA` invece di `SCREENAREA` per lasciare libera la barra delle applicazioni)
 4. Consigliato: tasto destro sulla skin > *Impostazioni* > *Posizione* > *Sul desktop*, così resta sotto le finestre come le icone
 
+## Chiudere e riaprire
+
+- **Chiudere**: la X in alto a destra. Di default scarica la skin (`CloseAction=[!DeactivateConfig]` in `Settings.inc`); con `[!Hide]` la nasconde soltanto.
+- **Riaprire con una scorciatoia da tastiera** (senza plugin): crea un collegamento sul desktop o nel menu Start con destinazione
+
+  ```
+  "C:\Program Files\Rainmeter\Rainmeter.exe" !ToggleConfig "Raintile" "Raintile.ini"
+  ```
+
+  poi *Proprietà* > *Tasto di scelta rapida* (es. `Ctrl+Alt+Spazio`). Con `!ToggleConfig` lo stesso tasto apre e chiude il launcher.
+
 ## Configurazione
 
 Tutto si modifica da due file (anche dal menu del tasto destro della skin):

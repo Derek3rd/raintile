@@ -16,6 +16,7 @@ Skin per [Rainmeter](https://www.rainmeter.net/) che sostituisce le icone del de
 ## Chiudere e riaprire
 
 - **Chiudere**: la X in alto a destra. Di default scarica la skin (`CloseAction=[!DeactivateConfig]` in `Settings.inc`); con `[!Hide]` la nasconde soltanto.
+- **Esc** chiude il launcher (serve il plugin HotKey installato; tasto in `CloseHotKey`). Finché il launcher è caricato il tasto viene intercettato in tutto il sistema: per questo, con `CloseOnLaunch=1` (predefinito), il launcher si chiude dopo aver avviato una tile.
 - **Riaprire con una scorciatoia da tastiera** (senza plugin): crea un collegamento sul desktop o nel menu Start con destinazione
 
   ```

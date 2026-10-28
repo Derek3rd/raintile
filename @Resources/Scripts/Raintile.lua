@@ -439,6 +439,8 @@ function Initialize()
 	V.MenuIconDimAlpha = math.floor(num('MenuIconDimAlpha', 150))
 	V.ScrollBarSize = num('ScrollBarSize', 4)
 	V.ShowLabels = num('ShowLabels', 1) ~= 0
+	V.CloseOnLaunch = num('CloseOnLaunch', 1) ~= 0
+	V.CloseAction = SKIN:GetVariable('CloseAction', '[!DeactivateConfig]')
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.GridW = V.NX * V.TileW + (V.NX - 1) * V.Gap
 	V.GridH = V.NY * V.TileH + (V.NY - 1) * V.Gap
@@ -514,5 +516,8 @@ end
 function Launch(slot)
 	if not ready then return end
 	local t = tileAt(slot)
-	if t and t.command then SKIN:Bang(t.command) end
+	if t and t.command then
+		SKIN:Bang(t.command)
+		if V.CloseOnLaunch then SKIN:Bang(V.CloseAction) end
+	end
 end

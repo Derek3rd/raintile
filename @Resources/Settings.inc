@@ -48,6 +48,12 @@ MenuIconDimAlpha=150
 ; (zero memoria finche' e' chiusa); [!Hide] la nasconde soltanto.
 CloseAction=[!DeactivateConfig]
 CloseSize=14
+; Tasto che chiude il launcher (plugin HotKey). Finche' il launcher e' caricato
+; il tasto viene intercettato in tutto il sistema.
+CloseHotKey=ESCAPE
+; 1 = chiude il launcher dopo aver avviato una tile (libera anche CloseHotKey
+; per le altre applicazioni), 0 = resta aperto
+CloseOnLaunch=1
 
 ; --- Aspetto -------------------------------------------------------------------
 ; 1 = mostra l'etichetta della tile (se definita in Tiles.ini), 0 = nascondi

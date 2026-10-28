@@ -64,81 +64,92 @@ local function parseIni(path)
 	return list
 end
 
-local function resolveImage(value, owner)
-	if not value or trim(value) == '' then return nil end
-	local path = unquote(trim(SKIN:ReplaceVariables(value)))
-	if not (path:match('^%a:[\\/]') or path:match('^\\\\')) then
-		path = resources .. 'Images\\' .. path
+local IMAGE_EXTS = { '.png', '.jpg', '.jpeg', '.bmp' }
+
+local function isAbsolute(path)
+	return path:match('^%a:[\\/]') ~= nil or path:match('^\\\\') ~= nil
+end
+
+-- Cerca 'name' in 'dir' (o come percorso assoluto). Se il nome non ha
+-- estensione prova .png, .jpg, .jpeg e .bmp.
+local function lookupImage(dir, name)
+	local path = unquote(trim(SKIN:ReplaceVariables(name)))
+	if not isAbsolute(path) then path = dir .. path end
+	if path:match('%.%w+$') then
+		return fileExists(path) and path or nil
 	end
-	if not fileExists(path) then
-		print('Raintile: immagine non trovata per [' .. owner .. ']: ' .. path)
-		return nil
+	for _, ext in ipairs(IMAGE_EXTS) do
+		if fileExists(path .. ext) then return path .. ext end
+	end
+	return nil
+end
+
+-- Immagine di una tile/categoria: 'value' se indicato (errore nel log se
+-- manca), altrimenti il nome di default, che puo' semplicemente non esserci.
+local function findImage(value, dir, defaultName, owner)
+	value = value and trim(value) or ''
+	if value == '' then return lookupImage(dir, defaultName) end
+	local path = lookupImage(dir, value)
+	if not path then
+		print('Raintile: immagine "' .. value .. '" non trovata in ' .. dir .. ' per [' .. owner .. ']')
 	end
 	return path
 end
 
-local function loadTiles()
-	cats = {}
-	local index = {}
-	local function category(name)
-		local key = name:lower()
-		if not index[key] then
-			cats[#cats + 1] = { name = name, label = name, tiles = {} }
-			index[key] = #cats
-		end
-		return cats[index[key]]
-	end
+-- Legge un file di categoria (Categories\<file>.ini).
+local function loadCategory(file)
+	local ini = parseIni(resources .. 'Categories\\' .. file)
+	if not ini then return nil end
 
-	local ini = parseIni(resources .. 'Tiles.ini')
-	if not ini then
-		print('Raintile: impossibile leggere ' .. resources .. 'Tiles.ini')
-		ini = {}
-	end
+	local base = file:gsub('%.[iI][nN][iI]$', '')
+	local images = resources .. 'Images\\' .. base .. '\\'
+	local c = { file = file, name = base, label = base, order = math.huge, tiles = {} }
+	local iconValue
 
-	-- Prima passata: ordine e aspetto delle categorie
-	for _, s in ipairs(ini) do
-		local lower = s.name:lower()
-		if lower == 'raintile' then
-			for name in (s.keys.categories or ''):gmatch('[^|]+') do
-				name = trim(name)
-				if name ~= '' then category(name) end
-			end
-		end
-	end
-	for _, s in ipairs(ini) do
-		local name = s.name:match('^[Cc]ategory:(.+)$')
-		if name then
-			local c = category(trim(name))
-			c.icon = resolveImage(s.keys.icon, s.name)
-			local label = trim(s.keys.label or '')
-			if label ~= '' then c.label = label end
-		end
-	end
-
-	-- Seconda passata: tile
 	for _, s in ipairs(ini) do
 		local k = s.keys
-		local lower = s.name:lower()
-		if lower ~= 'raintile' and not lower:match('^category:') then
-			local cat = trim(k.category or '')
-			if cat == '' then
-				print('Raintile: la tile [' .. s.name .. '] non ha Category, ignorata')
-			else
-				local tiles = category(cat).tiles
-				local label = k.label and trim(k.label) or ''
-				local command = k.command and trim(SKIN:ReplaceVariables(k.command)) or ''
-				tiles[#tiles + 1] = {
-					background = resolveImage(k.background, s.name),
-					icon = resolveImage(k.icon, s.name),
-					label = label ~= '' and label or nil,
-					color = (k.color and trim(k.color) ~= '') and trim(k.color) or V.TileColor,
-					command = command ~= '' and command or nil,
-				}
+		if s.name:lower() == 'category' then
+			local label = trim(k.name or '')
+			if label ~= '' then c.label = label end
+			c.order = tonumber(k.order or '') or math.huge
+			iconValue = k.icon
+		else
+			local label = trim(k.label or '')
+			local command = trim(SKIN:ReplaceVariables(k.command or ''))
+			-- Nome di default delle immagini: Image= oppure il nome della tile
+			local image = trim(k.image or '') ~= '' and trim(k.image) or s.name
+			local t = {
+				background = findImage(k.background, images .. 'background\\', image, s.name),
+				logo = findImage(k.logo, images .. 'logo\\', image, s.name),
+				color = trim(k.color or '') ~= '' and trim(k.color) or V.TileColor,
+				command = command ~= '' and command or nil,
+			}
+			if label ~= '' then
+				t.label = label
+			elseif not t.background and not t.logo then
+				t.label = s.name -- tile senza immagini: mostra almeno il nome
 			end
+			c.tiles[#c.tiles + 1] = t
 		end
 	end
 
-	if #cats == 0 then category('Vuoto') end
+	c.icon = findImage(iconValue, images, 'icon', base)
+	return c
+end
+
+local function loadCategories(files)
+	cats = {}
+	for _, file in ipairs(files) do
+		local c = loadCategory(file)
+		if c then cats[#cats + 1] = c end
+	end
+	table.sort(cats, function(a, b)
+		if a.order ~= b.order then return a.order < b.order end
+		return a.name:lower() < b.name:lower()
+	end)
+	if #cats == 0 then
+		cats[1] = { file = '', name = 'Vuoto', label = 'Nessuna categoria', order = 0, tiles = {} }
+	end
 
 	-- Meter che compongono ogni voce del menu, secondo MenuMode
 	for i, c in ipairs(cats) do
@@ -148,6 +159,15 @@ local function loadTiles()
 		if c.showIcon then c.parts[#c.parts + 1] = 'CatIcon' .. i end
 		if c.showText then c.parts[#c.parts + 1] = 'CatText' .. i end
 	end
+end
+
+local function splitList(s)
+	local list = {}
+	for item in (s or ''):gmatch('[^|\r\n]+') do
+		item = trim(item)
+		if item ~= '' then list[#list + 1] = item end
+	end
+	return list
 end
 
 -- Generazione di Grid.inc ---------------------------------------------------
@@ -160,13 +180,16 @@ local function signature()
 	return table.concat(s, '|')
 end
 
-local function writeGrid(path, sig)
+local function writeGrid(path, sig, files)
 	local o = {}
 	local function w(s) o[#o + 1] = s end
 
 	w('; GENERATO AUTOMATICAMENTE da Raintile.lua: non modificare a mano.')
 	w('[Variables]')
 	w('GridSignature=' .. sig)
+	-- Elenco dei file di categoria visto l'ultima volta: permette di disegnare
+	-- subito al caricamento, mentre la cartella viene ricontrollata in background.
+	w('CategoryFiles=' .. table.concat(files, '|'))
 	w('')
 
 	-- Voci del menu: una catena di meter con X relativa. Lo script, dopo averli
@@ -389,8 +412,8 @@ local function render()
 			set(tile, 'ImageName', t.background or '')
 			set(tile, 'SolidColor', t.color)
 			show(tile, true)
-			if t.icon then set(icon, 'ImageName', t.icon) end
-			show(icon, t.icon ~= nil)
+			if t.logo then set(icon, 'ImageName', t.logo) end
+			show(icon, t.logo ~= nil)
 			local hasLabel = V.ShowLabels and t.label ~= nil
 			if hasLabel then set(label, 'Text', t.label) end
 			show(label, hasLabel)
@@ -419,6 +442,22 @@ end
 -- Ciclo di vita di Rainmeter --------------------------------------------------
 
 local ready = false
+local knownFiles = {}
+
+-- Riscrive Grid.inc e ricarica la skin se menu, griglia o file sono cambiati.
+local function regenerate(files)
+	local sig = signature()
+	if SKIN:GetVariable('GridSignature', '') == sig
+			and table.concat(files, '|') == SKIN:GetVariable('CategoryFiles', '') then
+		return false
+	end
+	if writeGrid(resources .. 'Generated\\Grid.inc', sig, files) then
+		SKIN:Bang('!Refresh')
+	else
+		print('Raintile: impossibile scrivere Generated\\Grid.inc')
+	end
+	return true
+end
 
 function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
@@ -451,17 +490,15 @@ function Initialize()
 	local mode = SKIN:GetVariable('MenuMode', 'IconText'):lower()
 	V.MenuMode = (mode == 'icon' or mode == 'text') and mode or 'icontext'
 
-	loadTiles()
-
-	local sig = signature()
-	if SKIN:GetVariable('GridSignature', '') ~= sig then
-		if writeGrid(resources .. 'Generated\\Grid.inc', sig) then
-			SKIN:Bang('!Refresh')
-		else
-			print('Raintile: impossibile scrivere Generated\\Grid.inc')
-		end
-		return
+	-- Parte dall'elenco di file memorizzato; OnCategoryList() lo ricontrolla.
+	knownFiles = {}
+	for _, file in ipairs(splitList(SKIN:GetVariable('CategoryFiles', ''))) do
+		if fileExists(resources .. 'Categories\\' .. file) then knownFiles[#knownFiles + 1] = file end
 	end
+	if #knownFiles == 0 then return end -- primo avvio: si aspetta l'elenco
+
+	loadCategories(knownFiles)
+	if regenerate(knownFiles) then return end
 
 	slots = V.NX * V.NY
 	active = math.min(math.max(1, math.floor(num('LastCategory', 1))), #cats)
@@ -475,6 +512,22 @@ function Update()
 end
 
 -- Funzioni chiamate con !CommandMeasure ---------------------------------------
+
+-- Riceve l'elenco dei file in Categories\ (dal plugin RunCommand).
+function OnCategoryList()
+	local files = {}
+	local output = SKIN:GetMeasure('MeasureCategoryList'):GetStringValue()
+	for line in output:gmatch('[^\r\n]+') do
+		line = trim(line)
+		if line:lower():match('%.ini$') then files[#files + 1] = line end
+	end
+	table.sort(files, function(a, b) return a:lower() < b:lower() end)
+	if table.concat(files, '|') ~= table.concat(knownFiles, '|') then
+		knownFiles = files
+		loadCategories(files)
+		regenerate(files)
+	end
+end
 
 -- Ricentra il menu (chiamata anche da OnRefreshAction, a skin gia' disegnata).
 function Layout()

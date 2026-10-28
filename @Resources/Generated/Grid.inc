@@ -1,6 +1,7 @@
 ; GENERATO AUTOMATICAMENTE da Raintile.lua: non modificare a mano.
 [Variables]
-GridSignature=4x2|icontext|Giochi:Giochi:|App:App:|Link:Link:|Sistema:Sistema:
+GridSignature=4x2|icontext|Games:Giochi:|Apps:App:|Links:Link:|System:Sistema:
+CategoryFiles=Apps.ini|Games.ini|Links.ini|System.ini
 
 [CatText1]
 Meter=String

@@ -27,44 +27,59 @@ Skin per [Rainmeter](https://www.rainmeter.net/) che sostituisce le icone del de
 
 ## Configurazione
 
-Tutto si modifica da due file (anche dal menu del tasto destro della skin):
-
-| File | Contenuto |
+| Dove | Cosa |
 | --- | --- |
-| `@Resources\Settings.inc` | schermo, griglia (`NX`, `NY`, `ScrollDir`), menu (`MenuMode`), spaziature, colori, font |
-| `@Resources\Tiles.ini` | categorie (ordine, icona, testo) e tile |
+| `@Resources\Settings.inc` | schermo, griglia (`NX`, `NY`, `ScrollDir`), menu (`MenuMode`), chiusura, colori, font |
+| `@Resources\Categories\*.ini` | **un file per categoria**: voce del menu e tile |
+| `@Resources\Images\<categoria>\` | immagini della categoria |
 
-Le immagini vanno in `@Resources\Images\` (oppure si usa un percorso assoluto).
+Le categorie sono i file presenti in `Categories\`: per aggiungerne una basta creare un nuovo `.ini` (es. `Emulatori.ini`) e aggiornare la skin.
 
-Esempio di tile:
+### File di categoria
 
 ```ini
+[Category]
+Name=Giochi        ; testo nel menu (default: nome del file)
+Icon=              ; default: Images\Games\icon.png
+Order=1            ; posizione nel menu (default: ordine alfabetico)
+
 [Diablo]
-Category=Giochi
-Background=diablo4.jpg
-Icon=
-Label=
 Command=steam://rungameid/2344520
 ```
 
-Icona della categoria nel menu (cosa mostrare si sceglie con `MenuMode=IconText|Icon|Text` in `Settings.inc`; una categoria senza icona mostra sempre il testo):
+Ogni sezione diversa da `[Category]` è una tile, nell'ordine del file.
 
-```ini
-[Category:Giochi]
-Icon=gamepad.png
-Label=Giochi
+### Immagini
+
+Per la categoria `Games.ini` la struttura è:
+
+```
+Images\Games\
+  icon.png                 icona nel menu
+  background\Diablo.jpg    sfondo della tile [Diablo]
+  logo\Diablo.png          logo centrato della tile [Diablo]
 ```
 
-`Command` accetta un programma (con argomenti), un URL o protocollo (`steam://`, `https://`, `ms-settings:`), un percorso, oppure bang di Rainmeter tra parentesi quadre (`[!ActivateConfig "..."]`).
+Di default ogni tile cerca le immagini col **proprio nome** (estensioni `.png`, `.jpg`, `.jpeg`, `.bmp`). Per usare nomi diversi:
 
-Dopo aver salvato: tasto destro > *Aggiorna skin*. Se cambi `NX`, `NY`, `MenuMode` o le categorie, la griglia viene rigenerata da sola (vedi sotto).
+| Chiave | Effetto |
+| --- | --- |
+| `Image=diablo4` | altro nome per entrambe: `background\diablo4.*` e `logo\diablo4.*` |
+| `Background=d4_key_art` | sfondo specifico (estensione facoltativa, anche percorso assoluto) |
+| `Logo=d4_logo.png` | logo specifico |
+
+Le altre chiavi della tile sono `Command`, `Label` (testo in basso; una tile senza immagini mostra il proprio nome) e `Color` (colore di fondo senza sfondo).
+
+`Command` accetta un programma (con argomenti), un collegamento `.lnk`/`.url`, un URL o protocollo (`steam://`, `https://`, `ms-settings:`), una cartella, oppure bang di Rainmeter tra parentesi quadre.
+
+Dopo aver salvato: tasto destro > *Aggiorna skin*.
 
 ## Come funziona (e perché è leggera)
 
 - **Nessun ciclo di aggiornamento** (`Update=-1`): la skin non fa nulla finché non clicchi, scorri o passi col mouse. A riposo usa 0% di CPU.
 - **Numero fisso di meter**: esistono solo gli NX × NY slot visibili, a prescindere da quante tile hai. Scorrere o cambiare categoria cambia soltanto le opzioni degli slot esistenti.
 - **Solo le differenze**: lo script ricorda l'ultimo valore impostato su ogni meter e manda a Rainmeter solo quello che è cambiato.
-- **Tiles.ini viene letto una volta**, al caricamento della skin.
+- **I file di categoria vengono letti una volta**, al caricamento. L'elenco dei file è memorizzato, così la skin si disegna subito; la cartella viene ricontrollata in background (plugin RunCommand, incluso in Rainmeter) e, se è cambiata, la skin si ricarica da sola.
 - **Griglia generata**: i meter di menu e slot stanno in `@Resources\Generated\Grid.inc`, scritto da `Raintile.lua`. Se `NX`, `NY`, `MenuMode` o le categorie cambiano, lo script lo riscrive e ricarica la skin. Non va modificato a mano.
 - **Dimensioni calcolate una volta**: la misura delle tile è una formula su `ScreenW`/`ScreenH` risolta al caricamento; il menu viene misurato e centrato una sola volta dopo il primo disegno.
 
@@ -76,11 +91,11 @@ Consiglio per le prestazioni: usa immagini di sfondo già ridimensionate più o 
 Raintile.ini                 skin principale (stili, sfondo, scrollbar)
 @Resources/
   Settings.inc               impostazioni
-  Tiles.ini                  categorie e tile
+  Categories/*.ini           un file per categoria (voce di menu + tile)
   State.inc                  ultima categoria aperta (scritto dalla skin)
   Scripts/Raintile.lua       logica: lettura tile, rendering, scroll, avvio
   Generated/Grid.inc         meter generati automaticamente
-  Images/                    sfondi e icone
+  Images/<categoria>/        icon.png, background/, logo/
 ```
 
 ## Limiti noti

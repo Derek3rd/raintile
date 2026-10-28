@@ -15,6 +15,7 @@ local slots = 0
 local cache = {}      -- ultimo valore impostato per meter/opzione
 local hovered = 0     -- categoria sotto il mouse
 local hoverSlot = 0   -- slot sotto il mouse (0 = nessuno)
+local launching = nil -- animazione di avvio in corso: { tile, x, y, frame }
 local laidOut = false -- menu gia' misurato e centrato
 local resources
 
@@ -182,6 +183,8 @@ local function loadCategory(file)
 				color = trim(k.color or '') ~= '' and trim(k.color) or V.TileColor,
 				command = command ~= '' and command or nil,
 			}
+			-- originali, usati a schermo intero dall'animazione di avvio
+			t.backgroundFull, t.logoFull = t.background, t.logo
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
 				V.TileW, V.TileH, 'cover')
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
@@ -547,6 +550,10 @@ function Initialize()
 	V.IconSize = math.floor(num('IconSize', 96))
 	V.Thumbnails = num('Thumbnails', 1) ~= 0
 	V.TileHover = num('TileHover', 1) ~= 0
+	V.LaunchAnimation = num('LaunchAnimation', 1) ~= 0
+	V.LaunchAnimFrames = math.max(0, math.floor(num('LaunchAnimFrames', 15)))
+	V.LaunchLogoSize = math.floor(num('LaunchLogoSize', 400))
+	V.ScreenH = num('ScreenH', 1080)
 	V.CloseOnLaunch = num('CloseOnLaunch', 1) ~= 0
 	V.CloseAction = SKIN:GetVariable('CloseAction', '[!DeactivateConfig]')
 	V.GridY = V.PadY + V.MenuH + V.Gap
@@ -627,13 +634,19 @@ end
 -- Evidenziazione della tile sotto il mouse: un solo riquadro, spostato dallo
 -- script. Si ridisegna solo quando lo slot cambia davvero, cosi' gli eventi
 -- di mouse ripetuti (es. durante lo scorrimento) non costano nulla.
-function HoverTile(slot)
-	if not ready or slot == hoverSlot or not V.TileHover or not tileAt(slot) then return end
-	hoverSlot = slot
+-- Posizione (in pixel) dello slot nella griglia.
+local function slotPos(slot)
 	local s = slot - 1
 	local r, c = math.floor(s / V.NX), s % V.NX
-	set('TileHover', 'X', tostring(V.PadX + c * (V.TileW + V.Gap)))
-	set('TileHover', 'Y', tostring(V.GridY + r * (V.TileH + V.Gap)))
+	return V.PadX + c * (V.TileW + V.Gap), V.GridY + r * (V.TileH + V.Gap)
+end
+
+function HoverTile(slot)
+	if not ready or slot == hoverSlot or not V.TileHover or not tileAt(slot) or launching then return end
+	hoverSlot = slot
+	local x, y = slotPos(slot)
+	set('TileHover', 'X', tostring(x))
+	set('TileHover', 'Y', tostring(y))
 	show('TileHover', true)
 	SKIN:Bang('!UpdateMeter', 'TileHover')
 	SKIN:Bang('!Redraw')
@@ -657,7 +670,7 @@ function Layout()
 end
 
 function SetCategory(i)
-	if not ready or i < 1 or i > #cats then return end
+	if not ready or launching or i < 1 or i > #cats then return end
 	if i ~= active then
 		active = i
 		SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), resources .. 'State.inc')
@@ -675,7 +688,7 @@ function HoverCategory(i)
 end
 
 function Scroll(delta)
-	if not ready then return end
+	if not ready or launching then return end
 	local new = math.min(math.max(0, offset + delta * V.ScrollStep), maxOffset())
 	if new ~= offset then
 		offset = new
@@ -683,11 +696,81 @@ function Scroll(delta)
 	end
 end
 
-function Launch(slot)
-	if not ready then return end
-	local t = tileAt(slot)
-	if t and t.command then
-		SKIN:Bang(t.command)
-		if V.CloseOnLaunch then SKIN:Bang(V.CloseAction) end
+-- Animazione di avvio ----------------------------------------------------------
+-- La tile cliccata si espande fino a riempire lo schermo (LaunchAnimFrames
+-- passi da 16 ms, scanditi dal plugin ActionTimer), resta visibile per
+-- LaunchHold ms e poi il launcher si chiude.
+
+local function drawSplash(p)
+	local a = launching
+	local e = 1 - (1 - p) ^ 3 -- ease-out cubica
+	local function lerp(from, to) return math.floor(from + (to - from) * e + 0.5) end
+	local x, y = lerp(a.x, 0), lerp(a.y, 0)
+	local w, h = lerp(V.TileW, V.ScreenW), lerp(V.TileH, V.ScreenH)
+
+	set('SplashBg', 'X', tostring(x))
+	set('SplashBg', 'Y', tostring(y))
+	set('SplashBg', 'W', tostring(w))
+	set('SplashBg', 'H', tostring(h))
+	local cx, cy = x + math.floor(w / 2), y + math.floor(h / 2)
+	if a.tile.logoFull then
+		local size = lerp(V.IconSize, V.LaunchLogoSize)
+		set('SplashLogo', 'X', tostring(cx - math.floor(size / 2)))
+		set('SplashLogo', 'Y', tostring(cy - math.floor(size / 2)))
+		set('SplashLogo', 'W', tostring(size))
+		set('SplashLogo', 'H', tostring(size))
+	elseif a.tile.label then
+		set('SplashLabel', 'X', tostring(cx))
+		set('SplashLabel', 'Y', tostring(cy))
 	end
+	SKIN:Bang('!UpdateMeterGroup', 'Splash')
+	SKIN:Bang('!Redraw')
+end
+
+function Launch(slot)
+	if not ready or launching then return end
+	local t = tileAt(slot)
+	if not t or not t.command then return end
+
+	SKIN:Bang(t.command)
+	if not V.LaunchAnimation then
+		if V.CloseOnLaunch then SKIN:Bang(V.CloseAction) end
+		return
+	end
+
+	local x, y = slotPos(slot)
+	launching = { tile = t, x = x, y = y, frame = 0 }
+	hoverSlot = 0
+	show('TileHover', false)
+
+	set('SplashBg', 'ImageName', t.backgroundFull or '')
+	set('SplashBg', 'SolidColor', t.color)
+	show('SplashBg', true)
+	if t.logoFull then set('SplashLogo', 'ImageName', t.logoFull) end
+	show('SplashLogo', t.logoFull ~= nil)
+	local label = not t.logoFull and t.label
+	if label then set('SplashLabel', 'Text', label) end
+	show('SplashLabel', label and true or false)
+
+	drawSplash(V.LaunchAnimFrames > 0 and 0 or 1)
+	SKIN:Bang('!CommandMeasure', 'MeasureLaunchAnim', 'Execute 1')
+end
+
+function LaunchStep()
+	if not launching then return end
+	launching.frame = launching.frame + 1
+	drawSplash(math.min(1, launching.frame / math.max(1, V.LaunchAnimFrames)))
+end
+
+function LaunchFinish()
+	if not launching then return end
+	if V.CloseOnLaunch then
+		SKIN:Bang(V.CloseAction)
+	else
+		show('SplashBg', false)
+		show('SplashLogo', false)
+		show('SplashLabel', false)
+		SKIN:Bang('!Redraw')
+	end
+	launching = nil
 end

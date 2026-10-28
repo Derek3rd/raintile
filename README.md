@@ -25,6 +25,19 @@ Skin per [Rainmeter](https://www.rainmeter.net/) che sostituisce le icone del de
 
   poi *Proprietà* > *Tasto di scelta rapida* (es. `Ctrl+Alt+Spazio`). Con `!ToggleConfig` lo stesso tasto apre e chiude il launcher.
 
+## Avvio di una tile
+
+Al click la tile si espande fino a riempire lo schermo (con sfondo e logo a piena risoluzione), resta visibile per `LaunchHold` ms e poi il launcher si chiude. Il comando parte subito, all'inizio dell'animazione. Impostazioni in `Settings.inc`:
+
+| Variabile | Default | Effetto |
+| --- | --- | --- |
+| `LaunchAnimation` | `1` | `0` = nessuna animazione, chiusura immediata |
+| `LaunchAnimFrames` | `15` | passi dell'espansione da 16 ms (15 ≈ 250 ms) |
+| `LaunchHold` | `1500` | ms a schermo intero prima di chiudere |
+| `LaunchLogoSize` | 1/3 dell'altezza | dimensione finale del logo |
+
+L'animazione usa il plugin ActionTimer (incluso in Rainmeter) e gira solo durante l'avvio: a riposo la skin resta senza aggiornamenti.
+
 ## Configurazione
 
 | Dove | Cosa |

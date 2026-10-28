@@ -55,6 +55,18 @@ CloseHotKey=ESCAPE
 ; per le altre applicazioni), 0 = resta aperto
 CloseOnLaunch=1
 
+; --- Avvio di una tile ----------------------------------------------------------
+; 1 = al click la tile si espande a schermo intero, resta visibile per
+; LaunchHold ms e poi il launcher si chiude (se CloseOnLaunch=1); 0 = subito
+LaunchAnimation=1
+; Passi dell'espansione, 16 ms l'uno (15 = circa 250 ms)
+LaunchAnimFrames=15
+LaunchHold=1500
+; Lato del riquadro del logo a fine espansione
+LaunchLogoSize=(Floor(#ScreenH#/3))
+; Testo al centro per le tile senza logo
+LaunchFontSize=48
+
 ; --- Prestazioni ----------------------------------------------------------------
 ; 1 = usa miniature di sfondi e loghi alla misura esatta delle tile (create in
 ; background in Generated\Thumbs\ la prima volta), 0 = immagini originali

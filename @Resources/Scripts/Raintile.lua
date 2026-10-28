@@ -8,15 +8,23 @@
 -- modalita' del menu o le categorie.
 
 local V = {}          -- impostazioni
+local ready = false   -- categorie caricate e griglia pronta
 local cats = {}       -- { { name, label, icon, parts, tiles = { ... } }, ... }
 local active = 1      -- categoria attiva
-local offset = 0      -- righe (V) o colonne (H) scorse
+local offset = 0      -- righe (V) o colonne (H) scorse: destinazione
+local pos = 0         -- posizione di scorrimento mostrata (frazionaria durante l'animazione)
+local base = -1       -- riga/colonna mostrata dal primo slot (-1 = contenuti da reimpostare)
 local slots = 0
 local cache = {}      -- ultimo valore impostato per meter/opzione
 local hovered = 0     -- categoria sotto il mouse
-local hoverSlot = 0   -- slot sotto il mouse (0 = nessuno)
 local launching = nil -- animazione di avvio in corso: { tile, x, y, frame }
 local laidOut = false -- menu gia' misurato e centrato
+local appear = nil    -- passi dall'inizio della comparsa delle tile (nil = nessuna)
+-- Evidenziazione della tile sotto il mouse, in unita' di griglia (colonna,
+-- riga) cosi' segue le tile durante lo scorrimento; a = opacita' 0-1.
+local hover = { idx = 0, on = false, gx = 0, gy = 0, a = 0 }
+local pillPos = nil   -- { x, w } della pillola della categoria attiva
+local ticking = false -- orologio delle animazioni (ActionTimer) attivo
 local resources
 
 local function trim(s)
@@ -239,10 +247,10 @@ end
 -- Generazione di Grid.inc ---------------------------------------------------
 
 -- Da incrementare quando cambia il formato dei meter scritti da writeGrid().
-local GRID_VERSION = 2
+local GRID_VERSION = 3
 
 local function signature()
-	local s = { 'v' .. GRID_VERSION, V.NX .. 'x' .. V.NY, V.MenuMode }
+	local s = { 'v' .. GRID_VERSION, V.NX .. 'x' .. V.NY, V.Horizontal and 'H' or 'V', V.MenuMode }
 	for _, c in ipairs(cats) do
 		s[#s + 1] = c.name .. ':' .. c.label .. ':' .. (c.icon or '')
 	end
@@ -297,12 +305,14 @@ local function writeGrid(path, sig, files)
 		w('')
 	end
 
+	-- Slot della griglia, dentro il contenitore GridClip (coordinate relative).
+	-- C'e' una riga (o colonna) in piu' per lo scorrimento fluido.
 	local slot = 0
-	for r = 0, V.NY - 1 do
-		for c = 0, V.NX - 1 do
+	for r = 0, V.Rows - 1 do
+		for c = 0, V.Cols - 1 do
 			slot = slot + 1
-			local x = '#PadX#+' .. c .. '*(#TileW#+#Gap#)'
-			local y = '#PadY#+#MenuH#+#Gap#+' .. r .. '*(#TileH#+#Gap#)'
+			local x = c .. '*(#TileW#+#Gap#)'
+			local y = r .. '*(#TileH#+#Gap#)'
 
 			w('[Tile' .. slot .. ']')
 			w('Meter=Image')
@@ -360,6 +370,25 @@ local function rect(meter, x, y, w, h, color)
 		w, h, math.min(V.MenuRadius, math.floor(h / 2)), color))
 end
 
+-- Colore "R,G,B,A" con l'opacita' moltiplicata per f (0-1).
+local function fade(color, f)
+	local r, g, b, a = color:match('(%d+)%s*,%s*(%d+)%s*,%s*(%d+)%s*,?%s*(%d*)')
+	if not r then return color end
+	a = tonumber(a) or 255
+	return string.format('%s,%s,%s,%d', r, g, b, math.floor(a * f + 0.5))
+end
+
+local function easeOut(p)
+	return 1 - (1 - p) ^ 3
+end
+
+-- Avvicina cur a target di una frazione (AnimSmooth) per passo; restituisce
+-- il nuovo valore e true se non e' ancora arrivato.
+local function approach(cur, target, eps)
+	if math.abs(target - cur) <= eps then return target, false end
+	return cur + (target - cur) * V.AnimSmooth, true
+end
+
 local function maxOffset()
 	local n = #cats[active].tiles
 	if V.Horizontal then
@@ -368,17 +397,33 @@ local function maxOffset()
 	return math.max(0, math.ceil(n / V.NX) - V.NY)
 end
 
--- Tile mostrata nello slot (1-based) con l'offset corrente.
-local function tileAt(slot)
+local function slotRC(slot)
 	local s = slot - 1
-	local r, c = math.floor(s / V.NX), s % V.NX
-	local i
-	if V.Horizontal then
-		i = (offset + c) * V.NY + r + 1
-	else
-		i = (offset + r) * V.NX + c + 1
-	end
-	return cats[active].tiles[i]
+	return math.floor(s / V.Cols), s % V.Cols
+end
+
+-- Indice (in cats[active].tiles) della tile nello slot, con i contenuti attuali.
+local function indexAt(slot)
+	local r, c = slotRC(slot)
+	if V.Horizontal then return (base + c) * V.NY + r + 1 end
+	return (base + r) * V.NX + c + 1
+end
+
+local function tileAt(slot)
+	return cats[active].tiles[indexAt(slot)]
+end
+
+-- Posizione (relativa alla griglia) della tile con indice idx, alla posizione
+-- di scorrimento corrente; gx, gy in unita' di griglia.
+local function gridToPx(gx, gy)
+	if V.Horizontal then gx = gx - pos else gy = gy - pos end
+	return gx * V.StepX, gy * V.StepY
+end
+
+local function indexToGrid(idx)
+	local i = idx - 1
+	if V.Horizontal then return math.floor(i / V.NY), i % V.NY end
+	return i % V.NX, math.floor(i / V.NX)
 end
 
 -- Misura le voci del menu (gia' aggiornate) e centra la catena orizzontalmente.
@@ -409,15 +454,17 @@ local function layoutMenu()
 	laidOut = true
 end
 
-local function pill(meter, i, color)
+local function pillTarget(i)
 	local c = cats[i]
-	if not laidOut or not c then
-		show(meter, false)
-		return
-	end
-	rect(meter, c.l - V.MenuItemPad, V.PadY, c.r - c.l + 2 * V.MenuItemPad, V.MenuH, color)
+	return c.l - V.MenuItemPad, c.r - c.l + 2 * V.MenuItemPad
+end
+
+local function drawPill(meter, x, w, color)
+	rect(meter, math.floor(x + 0.5), V.PadY, math.floor(w + 0.5), V.MenuH, color)
 	show(meter, true)
 end
+
+local startTicker -- definita piu' sotto
 
 local function renderCategories()
 	for i, c in ipairs(cats) do
@@ -429,8 +476,27 @@ local function renderCategories()
 			set('CatIcon' .. i, 'ImageAlpha', on and '255' or tostring(V.MenuIconDimAlpha))
 		end
 	end
-	pill('CatPillActive', active, V.ActiveCategoryColor)
-	pill('CatPillHover', hovered ~= active and hovered or 0, V.HoverCategoryColor)
+	if not laidOut then
+		show('CatPillActive', false)
+		show('CatPillHover', false)
+		return
+	end
+
+	-- Pillola attiva: scivola verso la nuova voce (Tick) o salta subito
+	local x, w = pillTarget(active)
+	if pillPos and V.AnimCategory and (pillPos.x ~= x or pillPos.w ~= w) then
+		startTicker()
+	else
+		pillPos = { x = x, w = w }
+		drawPill('CatPillActive', x, w, V.ActiveCategoryColor)
+	end
+
+	if hovered ~= 0 and hovered ~= active then
+		local hx, hw = pillTarget(hovered)
+		drawPill('CatPillHover', hx, hw, V.HoverCategoryColor)
+	else
+		show('CatPillHover', false)
+	end
 end
 
 local function renderScrollBar()
@@ -448,13 +514,13 @@ local function renderScrollBar()
 		y = V.GridY + V.GridH + math.floor((V.PadY - size) / 2)
 		w, h = V.GridW, size
 		tw, th = math.floor(w * V.NX / total), h
-		tx, ty = math.floor((w - tw) * offset / maxOff), 0
+		tx, ty = math.floor((w - tw) * pos / maxOff), 0
 	else
 		x = V.PadX + V.GridW + math.floor((V.PadX - size) / 2)
 		y = V.GridY
 		w, h = size, V.GridH
 		tw, th = w, math.floor(h * V.NY / total)
-		tx, ty = 0, math.floor((h - th) * offset / maxOff)
+		tx, ty = 0, math.floor((h - th) * pos / maxOff)
 	end
 
 	local radius = math.floor(size / 2)
@@ -467,33 +533,98 @@ local function renderScrollBar()
 	show('MeterScrollBar', true)
 end
 
--- Ridisegna la griglia. 'menu' = aggiorna anche il menu (cambio categoria):
--- scorrendo non serve.
-local function render(menu)
+-- Contenuti degli slot (immagini, testi) per la riga/colonna 'base'.
+local function fillSlots()
 	for slot = 1, slots do
 		local t = tileAt(slot)
-		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
 		if t then
-			set(tile, 'ImageName', t.background or '')
-			set(tile, 'SolidColor', t.color)
-			show(tile, true)
-			if t.logo then set(icon, 'ImageName', t.logo) end
-			show(icon, t.logo ~= nil)
+			set('Tile' .. slot, 'ImageName', t.background or '')
+			if t.logo then set('TileIcon' .. slot, 'ImageName', t.logo) end
+			if t.label then set('TileLabel' .. slot, 'Text', t.label) end
+		end
+	end
+end
+
+-- Posizione, opacita' e visibilita' degli slot (anche a ogni passo di animazione).
+local function placeSlots()
+	local frac = pos - base
+	for slot = 1, slots do
+		local t = tileAt(slot)
+		local r, c = slotRC(slot)
+		local extra = r >= V.NY or c >= V.NX -- riga/colonna in piu'
+		local visible = t ~= nil and (not extra or frac > 0)
+		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
+
+		if visible then
+			local x, y = c * V.StepX, r * V.StepY
+			if V.Horizontal then x = x - frac * V.StepX else y = y - frac * V.StepY end
+
+			local f = 1
+			if appear then
+				local p = (appear - (slot - 1) * V.AnimStagger) / V.AnimAppearFrames
+				f = easeOut(math.min(1, math.max(0, p)))
+				y = y + (1 - f) * V.AnimSlide
+			end
+			x, y = math.floor(x + 0.5), math.floor(y + 0.5)
+			local alpha = tostring(math.floor(255 * f + 0.5))
+
+			set(tile, 'X', tostring(x))
+			set(tile, 'Y', tostring(y))
+			set(tile, 'ImageAlpha', alpha)
+			set(tile, 'SolidColor', fade(t.color, f))
+			if t.logo then
+				set(icon, 'X', tostring(x + math.floor((V.TileW - V.IconSize) / 2)))
+				set(icon, 'Y', tostring(y + math.floor((V.TileH - V.IconSize) / 2)))
+				set(icon, 'ImageAlpha', alpha)
+			end
 			local hasLabel = V.ShowLabels and t.label ~= nil
-			if hasLabel then set(label, 'Text', t.label) end
+			if hasLabel then
+				set(label, 'X', tostring(x + V.LabelPad))
+				set(label, 'Y', tostring(y + V.TileH - V.LabelPad))
+				set(label, 'FontColor', fade(V.TextColor, f))
+				set(label, 'FontEffectColor', fade('0,0,0,200', f))
+			end
+			show(tile, true)
+			show(icon, t.logo ~= nil)
 			show(label, hasLabel)
 		else
 			show(tile, false)
 			show(icon, false)
 			show(label, false)
-			if slot == hoverSlot then
-				-- lo slot sotto il mouse si e' svuotato
-				hoverSlot = 0
-				show('TileHover', false)
-			end
 		end
 	end
+end
 
+local function placeHover()
+	if hover.a <= 0 or hover.idx == 0 then
+		show('TileHover', false)
+		return
+	end
+	local x, y = gridToPx(hover.gx, hover.gy)
+	set('TileHover', 'X', tostring(math.floor(x + 0.5)))
+	set('TileHover', 'Y', tostring(math.floor(y + 0.5)))
+	set('TileHover', 'Shape', string.format(
+		'Rectangle 1,1,%d,%d | Fill Color %s | StrokeWidth 2 | Stroke Color %s',
+		V.TileW - 2, V.TileH - 2, fade(V.HoverColor, hover.a), fade(V.AccentColor, hover.a)))
+	show('TileHover', true)
+end
+
+-- Applica lo stato corrente alla griglia e ridisegna.
+local function frame()
+	local b = math.floor(pos)
+	if b ~= base then
+		base = b
+		fillSlots()
+	end
+	placeSlots()
+	placeHover()
+	renderScrollBar()
+	SKIN:Bang('!UpdateMeterGroup', 'Tiles')
+	SKIN:Bang('!Redraw')
+end
+
+-- Ridisegna tutto. 'menu' = aggiorna anche il menu (cambio categoria).
+local function render(menu)
 	if menu then
 		if not laidOut then
 			-- I meter del menu devono essere aggiornati per poterli misurare
@@ -503,14 +634,74 @@ local function render(menu)
 		renderCategories()
 		SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	end
-	renderScrollBar()
-	SKIN:Bang('!UpdateMeterGroup', 'Tiles')
-	SKIN:Bang('!Redraw')
+	frame()
+end
+
+-- Animazioni --------------------------------------------------------------------
+-- Un solo "orologio" (ActionTimer, Tick ogni 16 ms) fa avanzare tutte le
+-- animazioni e si ferma da solo quando nulla si muove piu'.
+
+startTicker = function()
+	if ticking then return end
+	ticking = true
+	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Execute 1')
+end
+
+local function stopTicker()
+	if not ticking then return end
+	ticking = false
+	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Stop 1')
+end
+
+-- Fa avanzare tutte le animazioni di un passo; true se qualcosa si muove ancora.
+local function advance()
+	local busy, moving = false, false
+
+	pos, moving = approach(pos, offset, 0.002)
+	busy = busy or moving
+
+	if appear then
+		appear = appear + 1
+		if appear >= (slots - 1) * V.AnimStagger + V.AnimAppearFrames then appear = nil end
+		busy = busy or appear ~= nil
+	end
+
+	if hover.idx ~= 0 then
+		local tx, ty = indexToGrid(hover.idx)
+		hover.gx, moving = approach(hover.gx, tx, 0.002)
+		busy = busy or moving
+		hover.gy, moving = approach(hover.gy, ty, 0.002)
+		busy = busy or moving
+		hover.a, moving = approach(hover.a, hover.on and 1 or 0, 0.02)
+		busy = busy or moving
+	end
+
+	if pillPos and laidOut then
+		local x, w = pillTarget(active)
+		pillPos.x, moving = approach(pillPos.x, x, 0.5)
+		busy = busy or moving
+		pillPos.w, moving = approach(pillPos.w, w, 0.5)
+		busy = busy or moving
+		drawPill('CatPillActive', pillPos.x, pillPos.w, V.ActiveCategoryColor)
+		SKIN:Bang('!UpdateMeter', 'CatPillActive')
+	end
+
+	return busy
+end
+
+function Tick()
+	if not ticking then return end -- passi rimasti in coda dopo lo stop
+	if not ready or launching then
+		stopTicker()
+		return
+	end
+	local busy = advance()
+	frame()
+	if not busy then stopTicker() end
 end
 
 -- Ciclo di vita di Rainmeter --------------------------------------------------
 
-local ready = false
 local knownFiles = {}
 
 -- Riscrive Grid.inc e ricarica la skin se menu, griglia o file sono cambiati.
@@ -557,10 +748,24 @@ function Initialize()
 	V.CloseOnLaunch = num('CloseOnLaunch', 1) ~= 0
 	V.CloseAction = SKIN:GetVariable('CloseAction', '[!DeactivateConfig]')
 	V.GridY = V.PadY + V.MenuH + V.Gap
+	V.StepX = V.TileW + V.Gap
+	V.StepY = V.TileH + V.Gap
+	-- Una riga (o colonna) di slot in piu' per lo scorrimento fluido
+	V.Rows = V.NY + (V.Horizontal and 0 or 1)
+	V.Cols = V.NX + (V.Horizontal and 1 or 0)
+	V.LabelPad = num('LabelPad', 14)
+	V.AnimOpen = num('AnimOpen', 1) ~= 0
+	V.AnimCategory = num('AnimCategory', 1) ~= 0
+	V.AnimHover = num('AnimHover', 1) ~= 0
+	V.AnimScroll = num('AnimScroll', 1) ~= 0
+	V.AnimAppearFrames = math.max(1, math.floor(num('AnimAppearFrames', 12)))
+	V.AnimStagger = math.max(0, num('AnimStagger', 2))
+	V.AnimSlide = num('AnimSlide', 30)
+	V.AnimSmooth = math.min(1, math.max(0.05, num('AnimSmooth', 0.3)))
 	V.GridW = V.NX * V.TileW + (V.NX - 1) * V.Gap
 	V.GridH = V.NY * V.TileH + (V.NY - 1) * V.Gap
 	for _, name in ipairs({ 'TileColor', 'ActiveCategoryColor', 'HoverCategoryColor', 'TextColor',
-			'TextDimColor', 'ScrollTrackColor', 'ScrollThumbColor' }) do
+			'TextDimColor', 'ScrollTrackColor', 'ScrollThumbColor', 'HoverColor', 'AccentColor' }) do
 		V[name] = SKIN:GetVariable(name, '255,255,255,255')
 	end
 	local mode = SKIN:GetVariable('MenuMode', 'IconText'):lower()
@@ -578,14 +783,18 @@ function Initialize()
 	loadCategories(knownFiles)
 	if regenerate(knownFiles) then return end
 
-	slots = V.NX * V.NY
+	slots = V.Rows * V.Cols
 	active = math.min(math.max(1, math.floor(num('LastCategory', 1))), #cats)
 	ready = true
 end
 
 function Update()
 	-- Con UpdateDivider=-1 viene chiamata una sola volta, al caricamento.
-	if ready then render(true) end
+	if ready then
+		if V.AnimOpen then appear = 0 end
+		render(true)
+		if appear then startTicker() end
+	end
 	return active
 end
 
@@ -628,35 +837,41 @@ function OnThumbnails()
 		end
 	end
 	pending = {}
-	if changed then render() end
+	if changed then
+		base = -1
+		frame()
+	end
 end
 
--- Evidenziazione della tile sotto il mouse: un solo riquadro, spostato dallo
--- script. Si ridisegna solo quando lo slot cambia davvero, cosi' gli eventi
--- di mouse ripetuti (es. durante lo scorrimento) non costano nulla.
--- Posizione (in pixel) dello slot nella griglia.
-local function slotPos(slot)
-	local s = slot - 1
-	local r, c = math.floor(s / V.NX), s % V.NX
-	return V.PadX + c * (V.TileW + V.Gap), V.GridY + r * (V.TileH + V.Gap)
-end
-
+-- Evidenziazione della tile sotto il mouse: un solo riquadro, gestito dallo
+-- script. Gli eventi ripetuti per la stessa tile non costano nulla; con
+-- AnimHover scivola da una tile all'altra e compare/sparisce in dissolvenza.
 function HoverTile(slot)
-	if not ready or slot == hoverSlot or not V.TileHover or not tileAt(slot) or launching then return end
-	hoverSlot = slot
-	local x, y = slotPos(slot)
-	set('TileHover', 'X', tostring(x))
-	set('TileHover', 'Y', tostring(y))
-	show('TileHover', true)
-	SKIN:Bang('!UpdateMeter', 'TileHover')
-	SKIN:Bang('!Redraw')
+	if not ready or launching or not V.TileHover or not tileAt(slot) then return end
+	local idx = indexAt(slot)
+	if hover.on and hover.idx == idx then return end
+	if hover.a < 0.05 or not V.AnimHover then
+		-- era spenta: compare direttamente sulla nuova tile
+		hover.gx, hover.gy = indexToGrid(idx)
+	end
+	hover.idx, hover.on = idx, true
+	if V.AnimHover then
+		startTicker()
+	else
+		hover.a = 1
+		frame()
+	end
 end
 
 function LeaveTile(slot)
-	if not ready or slot ~= hoverSlot then return end
-	hoverSlot = 0
-	show('TileHover', false)
-	SKIN:Bang('!Redraw')
+	if not ready or not tileAt(slot) or indexAt(slot) ~= hover.idx or not hover.on then return end
+	hover.on = false
+	if V.AnimHover then
+		startTicker()
+	else
+		hover.a = 0
+		frame()
+	end
 end
 
 -- Ricentra il menu (chiamata anche da OnRefreshAction, a skin gia' disegnata).
@@ -675,7 +890,12 @@ function SetCategory(i)
 		active = i
 		SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), resources .. 'State.inc')
 	end
-	offset = 0
+	offset, pos, base = 0, 0, -1
+	hover.idx, hover.on, hover.a = 0, false, 0
+	if V.AnimCategory then
+		appear = 0
+		startTicker()
+	end
 	render(true)
 end
 
@@ -692,7 +912,12 @@ function Scroll(delta)
 	local new = math.min(math.max(0, offset + delta * V.ScrollStep), maxOffset())
 	if new ~= offset then
 		offset = new
-		render()
+		if V.AnimScroll then
+			startTicker()
+		else
+			pos = offset
+			frame()
+		end
 	end
 end
 
@@ -738,9 +963,12 @@ function Launch(slot)
 		return
 	end
 
-	local x, y = slotPos(slot)
-	launching = { tile = t, x = x, y = y, frame = 0 }
-	hoverSlot = 0
+	stopTicker()
+	local r, c = slotRC(slot)
+	local x, y = c * V.StepX, r * V.StepY
+	if V.Horizontal then x = x - (pos - base) * V.StepX else y = y - (pos - base) * V.StepY end
+	launching = { tile = t, x = V.PadX + math.floor(x), y = V.GridY + math.floor(y), frame = 0 }
+	hover.on, hover.a = false, 0
 	show('TileHover', false)
 
 	set('SplashBg', 'ImageName', t.backgroundFull or '')

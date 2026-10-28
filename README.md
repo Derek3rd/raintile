@@ -38,6 +38,21 @@ Al click la tile si espande fino a riempire lo schermo (con sfondo e logo a pien
 
 L'animazione usa il plugin ActionTimer (incluso in Rainmeter) e gira solo durante l'avvio: a riposo la skin resta senza aggiornamenti.
 
+## Animazioni
+
+Tutte disattivabili in `Settings.inc` e attive solo mentre qualcosa si muove (un solo "orologio" ActionTimer che lo script ferma appena tutto è fermo):
+
+| Variabile | Animazione |
+| --- | --- |
+| `AnimOpen` | all'apertura le tile compaiono una dopo l'altra, salendo in dissolvenza |
+| `AnimCategory` | al cambio categoria le tile ricompaiono e la pillola del menu scivola sulla nuova voce |
+| `AnimHover` | il riquadro di evidenziazione scivola da una tile all'altra e compare/sparisce in dissolvenza |
+| `AnimScroll` | scorrimento fluido con la rotellina |
+
+Regolazioni: `AnimAppearFrames` (durata della comparsa di ogni tile, passi da 16 ms), `AnimStagger` (ritardo tra una tile e la successiva), `AnimSlide` (pixel di salita), `AnimSmooth` (morbidezza di hover, pillola e scorrimento: 0.1 lento, 1 istantaneo).
+
+Lo scorrimento fluido usa una riga (o colonna) di tile in più e l'opzione `Container` per tagliarle ai bordi della griglia: serve **Rainmeter 4.5 o successivo**.
+
 ## Configurazione
 
 | Dove | Cosa |

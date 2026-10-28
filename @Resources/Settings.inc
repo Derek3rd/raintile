@@ -67,6 +67,24 @@ LaunchLogoSize=(Floor(#ScreenH#/3))
 ; Testo al centro per le tile senza logo
 LaunchFontSize=48
 
+; --- Animazioni ------------------------------------------------------------------
+; Ognuna si disattiva con 0. Girano solo mentre qualcosa si muove.
+; Apertura: le tile compaiono una dopo l'altra
+AnimOpen=1
+; Cambio categoria: le tile ricompaiono e la pillola del menu scivola
+AnimCategory=1
+; Hover: il riquadro scivola da una tile all'altra, con dissolvenza
+AnimHover=1
+; Scorrimento fluido con la rotellina
+AnimScroll=1
+; Comparsa di ogni tile in passi da 16 ms, ritardo tra una tile e la
+; successiva (passi) e salita in pixel
+AnimAppearFrames=12
+AnimStagger=2
+AnimSlide=30
+; Morbidezza di hover, pillola e scorrimento: 0.1 = lento, 1 = istantaneo
+AnimSmooth=0.3
+
 ; --- Prestazioni ----------------------------------------------------------------
 ; 1 = usa miniature di sfondi e loghi alla misura esatta delle tile (create in
 ; background in Generated\Thumbs\ la prima volta), 0 = immagini originali

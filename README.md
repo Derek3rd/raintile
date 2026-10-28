@@ -89,7 +89,7 @@ Images\Games\
   logo\Diablo.png          logo centrato della tile [Diablo]
 ```
 
-Di default ogni tile cerca le immagini col **proprio nome** (estensioni `.png`, `.jpg`, `.jpeg`, `.bmp`). Per usare nomi diversi:
+Di default ogni tile cerca le immagini col **proprio nome** (estensioni `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`). Per usare nomi diversi:
 
 | Chiave | Effetto |
 | --- | --- |

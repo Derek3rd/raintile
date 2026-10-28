@@ -97,14 +97,14 @@ local function applyFadeDuration()
 	SKIN:Bang('!WriteKeyValue', SKIN:ReplaceVariables('#CURRENTCONFIG#'), 'FadeDuration', want, path)
 end
 
-local IMAGE_EXTS = { '.png', '.jpg', '.jpeg', '.bmp' }
+local IMAGE_EXTS = { '.png', '.jpg', '.jpeg', '.bmp', '.ico', '.gif' }
 
 local function isAbsolute(path)
 	return path:match('^%a:[\\/]') ~= nil or path:match('^\\\\') ~= nil
 end
 
 -- Cerca 'name' in 'dir' (o come percorso assoluto). Se il nome non ha
--- estensione prova .png, .jpg, .jpeg e .bmp.
+-- estensione prova le estensioni di IMAGE_EXTS.
 local function lookupImage(dir, name)
 	local path = unquote(trim(SKIN:ReplaceVariables(name)))
 	if not isAbsolute(path) then path = dir .. path end
@@ -208,6 +208,10 @@ local function loadCategory(file)
 	end
 
 	c.icon = findImage(iconValue, images, 'icon', base)
+	if not c.icon and V.MenuMode ~= 'text' and trim(iconValue or '') == '' then
+		print('Raintile: nessuna icona per la categoria "' .. base .. '": cercata ' .. images
+			.. 'icon' .. '(' .. table.concat(IMAGE_EXTS, '|') .. ')')
+	end
 	return c
 end
 

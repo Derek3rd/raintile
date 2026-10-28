@@ -26,6 +26,7 @@ local hover = { idx = 0, on = false, gx = 0, gy = 0, a = 0 }
 local pillPos = nil   -- { x, w } della pillola della categoria attiva
 local zooming = {}    -- tile con il logo ingrandito o in animazione: [tile] = true
 local ticking = false -- orologio delle animazioni (ActionTimer) attivo
+local visible = true  -- launcher mostrato (Show/Hide)
 local resources
 
 local function trim(s)
@@ -738,6 +739,7 @@ end
 
 function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
+	laidOut, pillPos = false, nil
 
 	V.NX = math.max(1, math.floor(num('NX', 4)))
 	V.NY = math.max(1, math.floor(num('NY', 2)))
@@ -763,7 +765,12 @@ function Initialize()
 	V.LaunchLogoSize = math.floor(num('LaunchLogoSize', 400))
 	V.ScreenH = num('ScreenH', 1080)
 	V.CloseOnLaunch = num('CloseOnLaunch', 1) ~= 0
-	V.CloseAction = SKIN:GetVariable('CloseAction', '[!DeactivateConfig]')
+	V.CloseAction = SKIN:GetVariable('CloseAction', '[!CommandMeasure MeasureScript "Hide()"]')
+	V.StartHidden = num('StartHidden', 0) ~= 0
+	V.ShowZPos = SKIN:GetVariable('ShowZPos', '')
+	V.HotKey = trim(SKIN:GetVariable('CloseHotKey', ''))
+	-- La mini-skin del tasto di chiusura: attiva solo mentre il launcher e' visibile
+	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.StepX = V.TileW + V.Gap
 	V.StepY = V.TileH + V.Gap
@@ -809,14 +816,87 @@ function Initialize()
 	ready = true
 end
 
+-- Accende o spegne la mini-skin che registra il tasto di chiusura (Esc).
+-- Da spenta il tasto torna libero per le altre applicazioni.
+local function hotKey(on)
+	if V.HotKey == '' then return end
+	if on then
+		SKIN:Bang('!ActivateConfig', V.HotKeyConfig, 'Hotkey.ini')
+	else
+		SKIN:Bang('!DeactivateConfig', V.HotKeyConfig)
+	end
+end
+
 function Update()
 	-- Con UpdateDivider=-1 viene chiamata una sola volta, al caricamento.
 	if ready then
-		if V.AnimOpen then appear = 0 end
+		if V.AnimOpen and not V.StartHidden then appear = 0 end
 		render(true)
-		if appear then startTicker() end
+		if V.StartHidden then
+			visible = false
+			SKIN:Bang('!Hide')
+			hotKey(false)
+		else
+			hotKey(true)
+			if appear then startTicker() end
+		end
 	end
 	return active
+end
+
+-- Mostra/nascondi ------------------------------------------------------------
+-- Il launcher si carica una volta sola e poi resta in memoria: aprirlo e
+-- chiuderlo lo mostra e lo nasconde, senza rileggere file ne' ricalcolare nulla.
+-- Dalla riga di comando o da una scorciatoia:
+--   Rainmeter.exe !CommandMeasure MeasureScript "Toggle()" "Raintile"
+
+local function hideSplash()
+	show('SplashBg', false)
+	show('SplashLogo', false)
+	show('SplashLabel', false)
+end
+
+function Show()
+	if not ready or visible then return end
+	visible = true
+	-- riparte pulito: niente hover, zoom o avvio rimasti dalla volta prima
+	launching = nil
+	hideSplash()
+	hover.on, hover.a = false, 0
+	for t in pairs(zooming) do t.zoom = 0 end
+	zooming = {}
+	if V.AnimOpen then appear = 0 end
+	frame() -- primo fotogramma disegnato prima di mostrare la finestra
+	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+	SKIN:Bang('!Show')
+	hotKey(true)
+	if appear then startTicker() end
+end
+
+function Hide()
+	if not ready or not visible then return end
+	visible = false
+	stopTicker()
+	if launching then
+		SKIN:Bang('!CommandMeasure', 'MeasureLaunchAnim', 'Stop 1')
+		launching = nil
+	end
+	SKIN:Bang('!Hide')
+	hotKey(false)
+end
+
+function Toggle()
+	if visible then Hide() else Show() end
+end
+
+local function close()
+	-- l'azione di default richiama Hide() di questo stesso script: la si
+	-- chiama direttamente invece di passare da Rainmeter
+	if V.CloseAction:match('MeasureScript%s+"Hide%(%)"') then
+		Hide()
+	else
+		SKIN:Bang(V.CloseAction)
+	end
 end
 
 -- Funzioni chiamate con !CommandMeasure ---------------------------------------
@@ -987,7 +1067,7 @@ function Launch(slot)
 
 	SKIN:Bang(t.command)
 	if not V.LaunchAnimation then
-		if V.CloseOnLaunch then SKIN:Bang(V.CloseAction) end
+		if V.CloseOnLaunch then close() end
 		return
 	end
 
@@ -1020,13 +1100,11 @@ end
 
 function LaunchFinish()
 	if not launching then return end
+	launching = nil
 	if V.CloseOnLaunch then
-		SKIN:Bang(V.CloseAction)
+		close()
 	else
-		show('SplashBg', false)
-		show('SplashLogo', false)
-		show('SplashLabel', false)
+		hideSplash()
 		SKIN:Bang('!Redraw')
 	end
-	launching = nil
 end

@@ -43,17 +43,24 @@ MenuRadius=22
 ; Trasparenza delle icone delle categorie non attive (0-255)
 MenuIconDimAlpha=150
 
-; --- Chiusura -----------------------------------------------------------------
-; Azione della X in alto a destra. [!DeactivateConfig] scarica la skin
-; (zero memoria finche' e' chiusa); [!Hide] la nasconde soltanto.
-CloseAction=[!DeactivateConfig]
+; --- Apertura e chiusura -------------------------------------------------------
+; Il launcher si carica una volta (all'avvio di Rainmeter) e poi viene solo
+; mostrato e nascosto. Per aprirlo/chiuderlo da una scorciatoia:
+;   Rainmeter.exe !CommandMeasure MeasureScript "Toggle()" "Raintile"
+; Azione della X in alto a destra (default: nasconde il launcher).
+; Con [!DeactivateConfig] invece lo scarica dalla memoria.
+CloseAction=[!CommandMeasure MeasureScript "Hide()"]
 CloseSize=14
-; Tasto che chiude il launcher (plugin HotKey). Finche' il launcher e' caricato
-; il tasto viene intercettato in tutto il sistema.
+; Tasto che chiude il launcher (plugin HotKey), registrato solo mentre il
+; launcher e' visibile. Vuoto = nessun tasto.
 CloseHotKey=ESCAPE
-; 1 = chiude il launcher dopo aver avviato una tile (libera anche CloseHotKey
-; per le altre applicazioni), 0 = resta aperto
+; 1 = nasconde il launcher dopo aver avviato una tile, 0 = resta aperto
 CloseOnLaunch=1
+; 1 = all'avvio di Rainmeter il launcher resta nascosto fino alla scorciatoia
+StartHidden=0
+; Livello della finestra quando viene mostrato: 1 = sopra le altre finestre,
+; -2 = sul desktop, vuoto = non cambiarlo
+ShowZPos=1
 
 ; --- Avvio di una tile ----------------------------------------------------------
 ; 1 = al click la tile si espande a schermo intero, resta visibile per

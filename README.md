@@ -13,17 +13,22 @@ Skin per [Rainmeter](https://www.rainmeter.net/) che sostituisce le icone del de
 3. La skin si posiziona da sola nell'angolo in alto a sinistra e copre lo schermo (`ScreenX/Y/W/H` in `Settings.inc`; usa `WORKAREA` invece di `SCREENAREA` per lasciare libera la barra delle applicazioni)
 4. Consigliato: tasto destro sulla skin > *Impostazioni* > *Posizione* > *Sul desktop*, così resta sotto le finestre come le icone
 
-## Chiudere e riaprire
+## Aprire e chiudere
 
-- **Chiudere**: la X in alto a destra. Di default scarica la skin (`CloseAction=[!DeactivateConfig]` in `Settings.inc`); con `[!Hide]` la nasconde soltanto.
-- **Esc** chiude il launcher (serve il plugin HotKey installato; tasto in `CloseHotKey`). Finché il launcher è caricato il tasto viene intercettato in tutto il sistema: per questo, con `CloseOnLaunch=1` (predefinito), il launcher si chiude dopo aver avviato una tile.
-- **Riaprire con una scorciatoia da tastiera** (senza plugin): crea un collegamento sul desktop o nel menu Start con destinazione
+Il launcher si carica **una volta sola** (all'avvio di Rainmeter o con *Aggiorna skin*) e poi resta in memoria: aprirlo e chiuderlo lo **mostra e nasconde**, senza rileggere file né ricalcolare nulla.
+
+- **Aprire/chiudere con una scorciatoia da tastiera**: crea un collegamento (desktop o menu Start) con destinazione
 
   ```
-  "C:\Program Files\Rainmeter\Rainmeter.exe" !ToggleConfig "Raintile" "Raintile.ini"
+  "C:\Program Files\Rainmeter\Rainmeter.exe" !CommandMeasure MeasureScript "Toggle()" "Raintile"
   ```
 
-  poi *Proprietà* > *Tasto di scelta rapida* (es. `Ctrl+Alt+Spazio`). Con `!ToggleConfig` lo stesso tasto apre e chiude il launcher.
+  poi *Proprietà* > *Tasto di scelta rapida* (es. `Ctrl+Alt+Spazio`). Lo stesso tasto apre e chiude.
+- **Chiudere**: la X in alto a destra, **Esc**, oppure in automatico dopo aver avviato una tile (`CloseOnLaunch=1`).
+- **Esc** (plugin HotKey, tasto in `CloseHotKey`) è registrato da una mini-skin invisibile, `Raintile\Hotkey`, che il launcher attiva quando si mostra e disattiva quando si nasconde: a launcher chiuso Esc torna alle altre applicazioni. Non va caricata a mano.
+- `StartHidden=1`: all'avvio di Rainmeter il launcher resta nascosto fino alla scorciatoia.
+- `ShowZPos=1`: quando si mostra va sopra le altre finestre (`-2` = sul desktop).
+- `CloseAction=[!DeactivateConfig]` torna al vecchio comportamento (scarica la skin a ogni chiusura).
 
 ## Avvio di una tile
 
@@ -118,6 +123,7 @@ Dopo aver salvato: tasto destro > *Aggiorna skin*.
 
 ```
 Raintile.ini                 skin principale (stili, sfondo, scrollbar)
+Hotkey/Hotkey.ini            mini-skin del tasto Esc (attivata dal launcher)
 @Resources/
   Settings.inc               impostazioni
   Categories/*.ini           un file per categoria (voce di menu + tile)

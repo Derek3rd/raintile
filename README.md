@@ -82,7 +82,7 @@ Dopo aver salvato: tasto destro > *Aggiorna skin*.
 - **I file di categoria vengono letti una volta**, al caricamento. L'elenco dei file è memorizzato, così la skin si disegna subito; la cartella viene ricontrollata in background (plugin RunCommand, incluso in Rainmeter) e, se è cambiata, la skin si ricarica da sola.
 - **Griglia generata**: i meter di menu e slot stanno in `@Resources\Generated\Grid.inc`, scritto da `Raintile.lua`. Se `NX`, `NY`, `MenuMode` o le categorie cambiano, lo script lo riscrive e ricarica la skin. Non va modificato a mano.
 - **Dimensioni calcolate una volta**: la misura delle tile è una formula su `ScreenW`/`ScreenH` risolta al caricamento; il menu viene misurato e centrato una sola volta dopo il primo disegno.
-
+- **Ridisegni ridotti al minimo**: ogni ridisegno di una skin a schermo intero costa, quindi l'evidenziazione della tile sotto il mouse è un solo riquadro gestito dallo script, che ridisegna solo quando cambia davvero tile (`TileHover=0` la disattiva). Scorrendo si aggiornano solo le tile, non il menu. La dissolvenza di apertura e chiusura è disattivata (`FadeDuration=0`).
 - **Miniature automatiche** (`Thumbnails=1`): Rainmeter decodifica ogni immagine a piena risoluzione quando una tile la mostra e la ridimensiona a ogni disegno. Per questo la skin crea in background (`Scripts\Thumbs.ps1`, PowerShell a bassa priorità) una copia di sfondi e loghi alla misura esatta in cui vengono mostrati, in `Generated\Thumbs\`, e carica quelle. Al primo avvio dopo aver aggiunto immagini si vedono gli originali per qualche secondo, poi la skin passa alle miniature da sola. Se cambi un'immagine, la risoluzione o `NX`/`NY`, le miniature vengono rifatte; quelle non più usate vengono cancellate.
 
 ## Struttura

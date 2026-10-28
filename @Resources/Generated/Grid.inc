@@ -1,6 +1,6 @@
 ; GENERATO AUTOMATICAMENTE da Raintile.lua: non modificare a mano.
 [Variables]
-GridSignature=4x2|icontext|Games:Giochi:|Apps:App:|Links:Link:|System:Sistema:
+GridSignature=v2|4x2|icontext|Games:Giochi:|Apps:App:|Links:Link:|System:Sistema:
 CategoryFiles=Apps.ini|Games.ini|Links.ini|System.ini
 
 [CatText1]
@@ -65,8 +65,8 @@ MeterStyle=StyleTile
 X=(#PadX#+0*(#TileW#+#Gap#))
 Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#))
 LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(1)"]
-MouseOverAction=[!ShowMeter TileHover1][!Redraw]
-MouseLeaveAction=[!HideMeter TileHover1][!Redraw]
+MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(1)"]
+MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(1)"]
 
 [TileIcon1]
 Meter=Image
@@ -80,20 +80,14 @@ MeterStyle=StyleTileLabel
 X=(#PadX#+0*(#TileW#+#Gap#)+#LabelPad#)
 Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#)+#TileH#-#LabelPad#)
 
-[TileHover1]
-Meter=Shape
-MeterStyle=StyleTileHover
-X=(#PadX#+0*(#TileW#+#Gap#))
-Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#))
-
 [Tile2]
 Meter=Image
 MeterStyle=StyleTile
 X=(#PadX#+1*(#TileW#+#Gap#))
 Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#))
 LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(2)"]
-MouseOverAction=[!ShowMeter TileHover2][!Redraw]
-MouseLeaveAction=[!HideMeter TileHover2][!Redraw]
+MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(2)"]
+MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(2)"]
 
 [TileIcon2]
 Meter=Image
@@ -107,20 +101,14 @@ MeterStyle=StyleTileLabel
 X=(#PadX#+1*(#TileW#+#Gap#)+#LabelPad#)
 Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#)+#TileH#-#LabelPad#)
 
-[TileHover2]
-Meter=Shape
-MeterStyle=StyleTileHover
-X=(#PadX#+1*(#TileW#+#Gap#))
-Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#))
-
 [Tile3]
 Meter=Image
 MeterStyle=StyleTile
 X=(#PadX#+2*(#TileW#+#Gap#))
 Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#))
 LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(3)"]
-MouseOverAction=[!ShowMeter TileHover3][!Redraw]
-MouseLeaveAction=[!HideMeter TileHover3][!Redraw]
+MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(3)"]
+MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(3)"]
 
 [TileIcon3]
 Meter=Image
@@ -134,20 +122,14 @@ MeterStyle=StyleTileLabel
 X=(#PadX#+2*(#TileW#+#Gap#)+#LabelPad#)
 Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#)+#TileH#-#LabelPad#)
 
-[TileHover3]
-Meter=Shape
-MeterStyle=StyleTileHover
-X=(#PadX#+2*(#TileW#+#Gap#))
-Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#))
-
 [Tile4]
 Meter=Image
 MeterStyle=StyleTile
 X=(#PadX#+3*(#TileW#+#Gap#))
 Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#))
 LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(4)"]
-MouseOverAction=[!ShowMeter TileHover4][!Redraw]
-MouseLeaveAction=[!HideMeter TileHover4][!Redraw]
+MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(4)"]
+MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(4)"]
 
 [TileIcon4]
 Meter=Image
@@ -161,20 +143,14 @@ MeterStyle=StyleTileLabel
 X=(#PadX#+3*(#TileW#+#Gap#)+#LabelPad#)
 Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#)+#TileH#-#LabelPad#)
 
-[TileHover4]
-Meter=Shape
-MeterStyle=StyleTileHover
-X=(#PadX#+3*(#TileW#+#Gap#))
-Y=(#PadY#+#MenuH#+#Gap#+0*(#TileH#+#Gap#))
-
 [Tile5]
 Meter=Image
 MeterStyle=StyleTile
 X=(#PadX#+0*(#TileW#+#Gap#))
 Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#))
 LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(5)"]
-MouseOverAction=[!ShowMeter TileHover5][!Redraw]
-MouseLeaveAction=[!HideMeter TileHover5][!Redraw]
+MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(5)"]
+MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(5)"]
 
 [TileIcon5]
 Meter=Image
@@ -188,20 +164,14 @@ MeterStyle=StyleTileLabel
 X=(#PadX#+0*(#TileW#+#Gap#)+#LabelPad#)
 Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#)+#TileH#-#LabelPad#)
 
-[TileHover5]
-Meter=Shape
-MeterStyle=StyleTileHover
-X=(#PadX#+0*(#TileW#+#Gap#))
-Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#))
-
 [Tile6]
 Meter=Image
 MeterStyle=StyleTile
 X=(#PadX#+1*(#TileW#+#Gap#))
 Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#))
 LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(6)"]
-MouseOverAction=[!ShowMeter TileHover6][!Redraw]
-MouseLeaveAction=[!HideMeter TileHover6][!Redraw]
+MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(6)"]
+MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(6)"]
 
 [TileIcon6]
 Meter=Image
@@ -215,20 +185,14 @@ MeterStyle=StyleTileLabel
 X=(#PadX#+1*(#TileW#+#Gap#)+#LabelPad#)
 Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#)+#TileH#-#LabelPad#)
 
-[TileHover6]
-Meter=Shape
-MeterStyle=StyleTileHover
-X=(#PadX#+1*(#TileW#+#Gap#))
-Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#))
-
 [Tile7]
 Meter=Image
 MeterStyle=StyleTile
 X=(#PadX#+2*(#TileW#+#Gap#))
 Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#))
 LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(7)"]
-MouseOverAction=[!ShowMeter TileHover7][!Redraw]
-MouseLeaveAction=[!HideMeter TileHover7][!Redraw]
+MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(7)"]
+MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(7)"]
 
 [TileIcon7]
 Meter=Image
@@ -242,20 +206,14 @@ MeterStyle=StyleTileLabel
 X=(#PadX#+2*(#TileW#+#Gap#)+#LabelPad#)
 Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#)+#TileH#-#LabelPad#)
 
-[TileHover7]
-Meter=Shape
-MeterStyle=StyleTileHover
-X=(#PadX#+2*(#TileW#+#Gap#))
-Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#))
-
 [Tile8]
 Meter=Image
 MeterStyle=StyleTile
 X=(#PadX#+3*(#TileW#+#Gap#))
 Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#))
 LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(8)"]
-MouseOverAction=[!ShowMeter TileHover8][!Redraw]
-MouseLeaveAction=[!HideMeter TileHover8][!Redraw]
+MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(8)"]
+MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(8)"]
 
 [TileIcon8]
 Meter=Image
@@ -268,9 +226,3 @@ Meter=String
 MeterStyle=StyleTileLabel
 X=(#PadX#+3*(#TileW#+#Gap#)+#LabelPad#)
 Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#)+#TileH#-#LabelPad#)
-
-[TileHover8]
-Meter=Shape
-MeterStyle=StyleTileHover
-X=(#PadX#+3*(#TileW#+#Gap#))
-Y=(#PadY#+#MenuH#+#Gap#+1*(#TileH#+#Gap#))

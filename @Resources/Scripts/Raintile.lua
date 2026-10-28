@@ -14,6 +14,7 @@ local offset = 0      -- righe (V) o colonne (H) scorse
 local slots = 0
 local cache = {}      -- ultimo valore impostato per meter/opzione
 local hovered = 0     -- categoria sotto il mouse
+local hoverSlot = 0   -- slot sotto il mouse (0 = nessuno)
 local laidOut = false -- menu gia' misurato e centrato
 local resources
 
@@ -212,8 +213,11 @@ end
 
 -- Generazione di Grid.inc ---------------------------------------------------
 
+-- Da incrementare quando cambia il formato dei meter scritti da writeGrid().
+local GRID_VERSION = 2
+
 local function signature()
-	local s = { V.NX .. 'x' .. V.NY, V.MenuMode }
+	local s = { 'v' .. GRID_VERSION, V.NX .. 'x' .. V.NY, V.MenuMode }
 	for _, c in ipairs(cats) do
 		s[#s + 1] = c.name .. ':' .. c.label .. ':' .. (c.icon or '')
 	end
@@ -281,8 +285,8 @@ local function writeGrid(path, sig, files)
 			w('X=(' .. x .. ')')
 			w('Y=(' .. y .. ')')
 			w('LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(' .. slot .. ')"]')
-			w('MouseOverAction=[!ShowMeter TileHover' .. slot .. '][!Redraw]')
-			w('MouseLeaveAction=[!HideMeter TileHover' .. slot .. '][!Redraw]')
+			w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ')"]')
+			w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(' .. slot .. ')"]')
 			w('')
 			w('[TileIcon' .. slot .. ']')
 			w('Meter=Image')
@@ -295,12 +299,6 @@ local function writeGrid(path, sig, files)
 			w('MeterStyle=StyleTileLabel')
 			w('X=(' .. x .. '+#LabelPad#)')
 			w('Y=(' .. y .. '+#TileH#-#LabelPad#)')
-			w('')
-			w('[TileHover' .. slot .. ']')
-			w('Meter=Shape')
-			w('MeterStyle=StyleTileHover')
-			w('X=(' .. x .. ')')
-			w('Y=(' .. y .. ')')
 			w('')
 		end
 	end
@@ -444,7 +442,9 @@ local function renderScrollBar()
 	show('MeterScrollBar', true)
 end
 
-local function render()
+-- Ridisegna la griglia. 'menu' = aggiorna anche il menu (cambio categoria):
+-- scorrendo non serve.
+local function render(menu)
 	for slot = 1, slots do
 		local t = tileAt(slot)
 		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
@@ -461,20 +461,24 @@ local function render()
 			show(tile, false)
 			show(icon, false)
 			show(label, false)
-			-- l'hover e' gestito dai MouseOver/LeaveAction: qui lo si spegne
-			-- solo quando lo slot si svuota
-			SKIN:Bang('!HideMeter', 'TileHover' .. slot)
+			if slot == hoverSlot then
+				-- lo slot sotto il mouse si e' svuotato
+				hoverSlot = 0
+				show('TileHover', false)
+			end
 		end
 	end
 
-	if not laidOut then
-		-- I meter del menu devono essere aggiornati per poterli misurare
+	if menu then
+		if not laidOut then
+			-- I meter del menu devono essere aggiornati per poterli misurare
+			SKIN:Bang('!UpdateMeterGroup', 'Menu')
+			layoutMenu()
+		end
+		renderCategories()
 		SKIN:Bang('!UpdateMeterGroup', 'Menu')
-		layoutMenu()
 	end
-	renderCategories()
 	renderScrollBar()
-	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	SKIN:Bang('!UpdateMeterGroup', 'Tiles')
 	SKIN:Bang('!Redraw')
 end
@@ -520,6 +524,7 @@ function Initialize()
 	V.ShowLabels = num('ShowLabels', 1) ~= 0
 	V.IconSize = math.floor(num('IconSize', 96))
 	V.Thumbnails = num('Thumbnails', 1) ~= 0
+	V.TileHover = num('TileHover', 1) ~= 0
 	V.CloseOnLaunch = num('CloseOnLaunch', 1) ~= 0
 	V.CloseAction = SKIN:GetVariable('CloseAction', '[!DeactivateConfig]')
 	V.GridY = V.PadY + V.MenuH + V.Gap
@@ -549,7 +554,7 @@ end
 
 function Update()
 	-- Con UpdateDivider=-1 viene chiamata una sola volta, al caricamento.
-	if ready then render() end
+	if ready then render(true) end
 	return active
 end
 
@@ -595,6 +600,28 @@ function OnThumbnails()
 	if changed then render() end
 end
 
+-- Evidenziazione della tile sotto il mouse: un solo riquadro, spostato dallo
+-- script. Si ridisegna solo quando lo slot cambia davvero, cosi' gli eventi
+-- di mouse ripetuti (es. durante lo scorrimento) non costano nulla.
+function HoverTile(slot)
+	if not ready or slot == hoverSlot or not V.TileHover or not tileAt(slot) then return end
+	hoverSlot = slot
+	local s = slot - 1
+	local r, c = math.floor(s / V.NX), s % V.NX
+	set('TileHover', 'X', tostring(V.PadX + c * (V.TileW + V.Gap)))
+	set('TileHover', 'Y', tostring(V.GridY + r * (V.TileH + V.Gap)))
+	show('TileHover', true)
+	SKIN:Bang('!UpdateMeter', 'TileHover')
+	SKIN:Bang('!Redraw')
+end
+
+function LeaveTile(slot)
+	if not ready or slot ~= hoverSlot then return end
+	hoverSlot = 0
+	show('TileHover', false)
+	SKIN:Bang('!Redraw')
+end
+
 -- Ricentra il menu (chiamata anche da OnRefreshAction, a skin gia' disegnata).
 function Layout()
 	if not ready then return end
@@ -612,7 +639,7 @@ function SetCategory(i)
 		SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), resources .. 'State.inc')
 	end
 	offset = 0
-	render()
+	render(true)
 end
 
 function HoverCategory(i)

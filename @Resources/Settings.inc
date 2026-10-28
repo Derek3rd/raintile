@@ -59,6 +59,10 @@ CloseOnLaunch=1
 ; 1 = usa miniature di sfondi e loghi alla misura esatta delle tile (create in
 ; background in Generated\Thumbs\ la prima volta), 0 = immagini originali
 Thumbnails=1
+; 1 = evidenzia la tile sotto il mouse (un ridisegno a ogni cambio di tile)
+TileHover=1
+; Durata in ms della dissolvenza all'apertura/chiusura (0 = istantanea)
+FadeDuration=0
 
 ; --- Aspetto -------------------------------------------------------------------
 ; 1 = mostra l'etichetta della tile (Label= nel file di categoria), 0 = nascondi

@@ -17,7 +17,8 @@ Skin per [Rainmeter](https://www.rainmeter.net/) che sostituisce le icone del de
 
 Il launcher si carica **una volta sola** (all'avvio di Rainmeter o con *Aggiorna skin*) e poi resta in memoria: aprirlo e chiuderlo lo **mostra e nasconde**, senza rileggere file né ricalcolare nulla.
 
-- **Aprire/chiudere con una scorciatoia da tastiera**: crea un collegamento (desktop o menu Start) con destinazione
+- **Aprire/chiudere con `Ctrl+Alt+G`** (plugin HotKey): la combinazione si cambia con `OpenHotKey` in `Settings.inc` (tasti separati da spazio, es. `CTRL ALT G`, `CTRL SHIFT F1`).
+- **In alternativa, senza plugin**: crea un collegamento (desktop o menu Start) con destinazione
 
   ```
   "C:\Program Files\Rainmeter\Rainmeter.exe" !CommandMeasure MeasureScript "Toggle()" "Raintile"

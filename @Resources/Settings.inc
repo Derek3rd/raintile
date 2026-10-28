@@ -47,6 +47,9 @@ MenuIconDimAlpha=150
 ; Il launcher si carica una volta (all'avvio di Rainmeter) e poi viene solo
 ; mostrato e nascosto. Per aprirlo/chiuderlo da una scorciatoia:
 ;   Rainmeter.exe !CommandMeasure MeasureScript "Toggle()" "Raintile"
+; Combinazione di tasti che apre e chiude il launcher (plugin HotKey): tasti
+; separati da spazio, es. CTRL ALT G, WIN SPACE, CTRL SHIFT F1
+OpenHotKey=CTRL ALT G
 ; Azione della X in alto a destra (default: nasconde il launcher).
 ; Con [!DeactivateConfig] invece lo scarica dalla memoria.
 CloseAction=[!CommandMeasure MeasureScript "Hide()"]

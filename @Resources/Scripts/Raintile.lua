@@ -96,6 +96,41 @@ local function findImage(value, dir, defaultName, owner)
 	return path
 end
 
+local function fileSize(path)
+	local f = io.open(path, 'rb')
+	if not f then return nil end
+	local size = f:seek('end')
+	f:close()
+	return size
+end
+
+-- Miniature ------------------------------------------------------------------
+-- Rainmeter decodifica le immagini a piena risoluzione e le ridimensiona a ogni
+-- disegno. Per questo sfondi e loghi vengono convertiti (in background, da
+-- Thumbs.ps1) in miniature della misura esatta in cui vengono mostrati, in
+-- Generated\Thumbs\. Il nome della miniatura contiene dimensione del file
+-- originale e misura di destinazione: se cambia l'una o l'altra, viene rifatta.
+
+local thumbJobs = {}  -- tutte le miniature desiderate, "src|dst|w|h|modo"
+local pending = {}    -- miniature ancora da creare: { tile, field, dst }
+
+local function safeName(s)
+	return (s:gsub('[\\/:%*%?"<>|]', '_'))
+end
+
+-- Restituisce l'immagine da mostrare: la miniatura se esiste gia', altrimenti
+-- l'originale (e la miniatura viene messa in coda).
+local function thumbnail(src, tile, field, dir, name, w, h, mode)
+	if not src or not V.Thumbnails then return src end
+	local ext = src:lower():match('%.png$') and '.png' or '.jpg'
+	local dst = string.format('%sGenerated\\Thumbs\\%s\\%s_%d_%dx%d%s',
+		resources, dir, safeName(name), fileSize(src) or 0, w, h, ext)
+	thumbJobs[#thumbJobs + 1] = table.concat({ src, dst, w, h, mode }, '|')
+	if fileExists(dst) then return dst end
+	pending[#pending + 1] = { tile = tile, field = field, dst = dst }
+	return src
+end
+
 -- Legge un file di categoria (Categories\<file>.ini).
 local function loadCategory(file)
 	local ini = parseIni(resources .. 'Categories\\' .. file)
@@ -124,6 +159,10 @@ local function loadCategory(file)
 				color = trim(k.color or '') ~= '' and trim(k.color) or V.TileColor,
 				command = command ~= '' and command or nil,
 			}
+			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
+				V.TileW, V.TileH, 'cover')
+			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
+				V.IconSize, V.IconSize, 'contain')
 			if label ~= '' then
 				t.label = label
 			elseif not t.background and not t.logo then
@@ -139,6 +178,7 @@ end
 
 local function loadCategories(files)
 	cats = {}
+	thumbJobs, pending = {}, {}
 	for _, file in ipairs(files) do
 		local c = loadCategory(file)
 		if c then cats[#cats + 1] = c end
@@ -478,6 +518,8 @@ function Initialize()
 	V.MenuIconDimAlpha = math.floor(num('MenuIconDimAlpha', 150))
 	V.ScrollBarSize = num('ScrollBarSize', 4)
 	V.ShowLabels = num('ShowLabels', 1) ~= 0
+	V.IconSize = math.floor(num('IconSize', 96))
+	V.Thumbnails = num('Thumbnails', 1) ~= 0
 	V.CloseOnLaunch = num('CloseOnLaunch', 1) ~= 0
 	V.CloseAction = SKIN:GetVariable('CloseAction', '[!DeactivateConfig]')
 	V.GridY = V.PadY + V.MenuH + V.Gap
@@ -527,6 +569,30 @@ function OnCategoryList()
 		loadCategories(files)
 		regenerate(files)
 	end
+end
+
+-- Crea in background le miniature mancanti (chiamata da OnRefreshAction).
+function BuildThumbnails()
+	if not ready or #pending == 0 then return end
+	local f = io.open(resources .. 'Generated\\Thumbs.txt', 'w')
+	if not f then return end
+	f:write(table.concat(thumbJobs, '\n'))
+	f:close()
+	SKIN:Bang('!CommandMeasure', 'MeasureThumbs', 'Run')
+end
+
+-- Fine di Thumbs.ps1: passa alle miniature appena create.
+function OnThumbnails()
+	if not ready then return end
+	local changed = false
+	for _, p in ipairs(pending) do
+		if fileExists(p.dst) then
+			p.tile[p.field] = p.dst
+			changed = true
+		end
+	end
+	pending = {}
+	if changed then render() end
 end
 
 -- Ricentra il menu (chiamata anche da OnRefreshAction, a skin gia' disegnata).

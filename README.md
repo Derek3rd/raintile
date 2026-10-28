@@ -83,7 +83,7 @@ Dopo aver salvato: tasto destro > *Aggiorna skin*.
 - **Griglia generata**: i meter di menu e slot stanno in `@Resources\Generated\Grid.inc`, scritto da `Raintile.lua`. Se `NX`, `NY`, `MenuMode` o le categorie cambiano, lo script lo riscrive e ricarica la skin. Non va modificato a mano.
 - **Dimensioni calcolate una volta**: la misura delle tile è una formula su `ScreenW`/`ScreenH` risolta al caricamento; il menu viene misurato e centrato una sola volta dopo il primo disegno.
 
-Consiglio per le prestazioni: usa immagini di sfondo già ridimensionate più o meno alla dimensione della tile (JPG per gli sfondi, PNG per le icone). Immagini 4K costano memoria senza alcun beneficio visivo.
+- **Miniature automatiche** (`Thumbnails=1`): Rainmeter decodifica ogni immagine a piena risoluzione quando una tile la mostra e la ridimensiona a ogni disegno. Per questo la skin crea in background (`Scripts\Thumbs.ps1`, PowerShell a bassa priorità) una copia di sfondi e loghi alla misura esatta in cui vengono mostrati, in `Generated\Thumbs\`, e carica quelle. Al primo avvio dopo aver aggiunto immagini si vedono gli originali per qualche secondo, poi la skin passa alle miniature da sola. Se cambi un'immagine, la risoluzione o `NX`/`NY`, le miniature vengono rifatte; quelle non più usate vengono cancellate.
 
 ## Struttura
 
@@ -94,7 +94,9 @@ Raintile.ini                 skin principale (stili, sfondo, scrollbar)
   Categories/*.ini           un file per categoria (voce di menu + tile)
   State.inc                  ultima categoria aperta (scritto dalla skin)
   Scripts/Raintile.lua       logica: lettura tile, rendering, scroll, avvio
+  Scripts/Thumbs.ps1         creazione delle miniature
   Generated/Grid.inc         meter generati automaticamente
+  Generated/Thumbs/          miniature (si possono cancellare: vengono rifatte)
   Images/<categoria>/        icon.png, background/, logo/
 ```
 

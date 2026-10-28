@@ -55,6 +55,11 @@ CloseHotKey=ESCAPE
 ; per le altre applicazioni), 0 = resta aperto
 CloseOnLaunch=1
 
+; --- Prestazioni ----------------------------------------------------------------
+; 1 = usa miniature di sfondi e loghi alla misura esatta delle tile (create in
+; background in Generated\Thumbs\ la prima volta), 0 = immagini originali
+Thumbnails=1
+
 ; --- Aspetto -------------------------------------------------------------------
 ; 1 = mostra l'etichetta della tile (Label= nel file di categoria), 0 = nascondi
 ShowLabels=1

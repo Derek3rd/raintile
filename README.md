@@ -48,6 +48,7 @@ Tutte disattivabili in `Settings.inc` e attive solo mentre qualcosa si muove (un
 | `AnimCategory` | al cambio categoria le tile ricompaiono e la pillola del menu scivola sulla nuova voce |
 | `AnimHover` | il riquadro di evidenziazione scivola da una tile all'altra e compare/sparisce in dissolvenza |
 | `AnimScroll` | scorrimento fluido con la rotellina |
+| `AnimLogoZoom` | il logo della tile sotto il mouse si ingrandisce (`HoverLogoScale`, default 1.25); quello appena lasciato torna alla misura normale |
 
 Regolazioni: `AnimAppearFrames` (durata della comparsa di ogni tile, passi da 16 ms), `AnimStagger` (ritardo tra una tile e la successiva), `AnimSlide` (pixel di salita), `AnimSmooth` (morbidezza di hover, pillola e scorrimento: 0.1 lento, 1 istantaneo).
 

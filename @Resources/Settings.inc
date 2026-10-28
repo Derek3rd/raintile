@@ -77,6 +77,9 @@ AnimCategory=1
 AnimHover=1
 ; Scorrimento fluido con la rotellina
 AnimScroll=1
+; Hover: il logo della tile sotto il mouse si ingrandisce di HoverLogoScale
+AnimLogoZoom=1
+HoverLogoScale=1.25
 ; Comparsa di ogni tile in passi da 16 ms, ritardo tra una tile e la
 ; successiva (passi) e salita in pixel
 AnimAppearFrames=12

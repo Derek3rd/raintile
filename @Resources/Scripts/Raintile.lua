@@ -24,6 +24,7 @@ local appear = nil    -- passi dall'inizio della comparsa delle tile (nil = ness
 -- riga) cosi' segue le tile durante lo scorrimento; a = opacita' 0-1.
 local hover = { idx = 0, on = false, gx = 0, gy = 0, a = 0 }
 local pillPos = nil   -- { x, w } della pillola della categoria attiva
+local zooming = {}    -- tile con il logo ingrandito o in animazione: [tile] = true
 local ticking = false -- orologio delle animazioni (ActionTimer) attivo
 local resources
 
@@ -196,7 +197,7 @@ local function loadCategory(file)
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
 				V.TileW, V.TileH, 'cover')
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
-				V.IconSize, V.IconSize, 'contain')
+				V.LogoMaxSize, V.LogoMaxSize, 'contain')
 			if label ~= '' then
 				t.label = label
 			elseif not t.background and not t.logo then
@@ -573,8 +574,11 @@ local function placeSlots()
 			set(tile, 'ImageAlpha', alpha)
 			set(tile, 'SolidColor', fade(t.color, f))
 			if t.logo then
-				set(icon, 'X', tostring(x + math.floor((V.TileW - V.IconSize) / 2)))
-				set(icon, 'Y', tostring(y + math.floor((V.TileH - V.IconSize) / 2)))
+				local size = math.floor(V.IconSize * (1 + (V.HoverLogoScale - 1) * (t.zoom or 0)) + 0.5)
+				set(icon, 'X', tostring(x + math.floor((V.TileW - size) / 2)))
+				set(icon, 'Y', tostring(y + math.floor((V.TileH - size) / 2)))
+				set(icon, 'W', tostring(size))
+				set(icon, 'H', tostring(size))
 				set(icon, 'ImageAlpha', alpha)
 			end
 			local hasLabel = V.ShowLabels and t.label ~= nil
@@ -596,7 +600,7 @@ local function placeSlots()
 end
 
 local function placeHover()
-	if hover.a <= 0 or hover.idx == 0 then
+	if not V.TileHover or hover.a <= 0 or hover.idx == 0 then
 		show('TileHover', false)
 		return
 	end
@@ -674,6 +678,15 @@ local function advance()
 		busy = busy or moving
 		hover.a, moving = approach(hover.a, hover.on and 1 or 0, 0.02)
 		busy = busy or moving
+	end
+
+	-- Zoom dei loghi: cresce sulla tile sotto il mouse, rientra sulle altre
+	local tiles = cats[active].tiles
+	for t in pairs(zooming) do
+		local target = (hover.on and tiles[hover.idx] == t) and 1 or 0
+		t.zoom, moving = approach(t.zoom or 0, target, 0.01)
+		busy = busy or moving
+		if t.zoom == 0 and target == 0 then zooming[t] = nil end
 	end
 
 	if pillPos and laidOut then
@@ -762,6 +775,10 @@ function Initialize()
 	V.AnimStagger = math.max(0, num('AnimStagger', 2))
 	V.AnimSlide = num('AnimSlide', 30)
 	V.AnimSmooth = math.min(1, math.max(0.05, num('AnimSmooth', 0.3)))
+	V.AnimLogoZoom = num('AnimLogoZoom', 1) ~= 0
+	V.HoverLogoScale = V.AnimLogoZoom and math.max(1, num('HoverLogoScale', 1.25)) or 1
+	-- le miniature dei loghi sono create alla dimensione massima (zoom incluso)
+	V.LogoMaxSize = math.floor(V.IconSize * V.HoverLogoScale + 0.5)
 	V.GridW = V.NX * V.TileW + (V.NX - 1) * V.Gap
 	V.GridH = V.NY * V.TileH + (V.NY - 1) * V.Gap
 	for _, name in ipairs({ 'TileColor', 'ActiveCategoryColor', 'HoverCategoryColor', 'TextColor',
@@ -846,8 +863,10 @@ end
 -- Evidenziazione della tile sotto il mouse: un solo riquadro, gestito dallo
 -- script. Gli eventi ripetuti per la stessa tile non costano nulla; con
 -- AnimHover scivola da una tile all'altra e compare/sparisce in dissolvenza.
+-- Con AnimLogoZoom il logo della tile sotto il mouse si ingrandisce.
 function HoverTile(slot)
-	if not ready or launching or not V.TileHover or not tileAt(slot) then return end
+	local t = ready and not launching and tileAt(slot)
+	if not t then return end
 	local idx = indexAt(slot)
 	if hover.on and hover.idx == idx then return end
 	if hover.a < 0.05 or not V.AnimHover then
@@ -855,23 +874,26 @@ function HoverTile(slot)
 		hover.gx, hover.gy = indexToGrid(idx)
 	end
 	hover.idx, hover.on = idx, true
-	if V.AnimHover then
-		startTicker()
-	else
-		hover.a = 1
-		frame()
+
+	local animate = false
+	if V.TileHover then
+		if V.AnimHover then animate = true else hover.a = 1 end
 	end
+	if V.AnimLogoZoom and t.logo then
+		zooming[t] = true
+		animate = true
+	end
+	if animate then startTicker() else frame() end
 end
 
 function LeaveTile(slot)
 	if not ready or not tileAt(slot) or indexAt(slot) ~= hover.idx or not hover.on then return end
 	hover.on = false
-	if V.AnimHover then
-		startTicker()
-	else
-		hover.a = 0
-		frame()
+	local animate = next(zooming) ~= nil
+	if V.TileHover then
+		if V.AnimHover then animate = true else hover.a = 0 end
 	end
+	if animate then startTicker() else frame() end
 end
 
 -- Ricentra il menu (chiamata anche da OnRefreshAction, a skin gia' disegnata).
@@ -892,6 +914,8 @@ function SetCategory(i)
 	end
 	offset, pos, base = 0, 0, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
+	for t in pairs(zooming) do t.zoom = 0 end
+	zooming = {}
 	if V.AnimCategory then
 		appear = 0
 		startTicker()

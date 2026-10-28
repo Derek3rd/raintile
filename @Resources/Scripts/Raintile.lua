@@ -24,7 +24,9 @@ local appear = nil    -- passi dall'inizio della comparsa delle tile (nil = ness
 -- riga) cosi' segue le tile durante lo scorrimento; a = opacita' 0-1.
 local hover = { idx = 0, on = false, gx = 0, gy = 0, a = 0 }
 local pillPos = nil   -- { x, w } della pillola della categoria attiva
-local zooming = {}    -- tile con il logo ingrandito o in animazione: [tile] = true
+-- Tile il cui logo e' (o sta tornando) "acceso" dall'hover: [tile] = true.
+-- tile.zoom (0-1) e' l'avanzamento, usato per ingrandimento e colore del logo.
+local zooming = {}
 local ticking = false -- orologio delle animazioni (ActionTimer) attivo
 local visible = true  -- launcher mostrato (Show/Hide)
 local resources
@@ -388,6 +390,20 @@ local function easeOut(p)
 	return 1 - (1 - p) ^ 3
 end
 
+-- Matrice di colore (righe 1-3 di ColorMatrix) con saturazione sat: 0 = bianco
+-- e nero (luminanza), 1 = colori originali.
+local LUMA = { 0.299, 0.587, 0.114 }
+local function saturationRows(sat)
+	local rows = {}
+	for i = 1, 3 do
+		local k = LUMA[i] * (1 - sat)
+		local v = { k, k, k }
+		v[i] = k + sat
+		rows[i] = string.format('%.3f;%.3f;%.3f;0;0', v[1], v[2], v[3])
+	end
+	return rows
+end
+
 -- Avvicina cur a target di una frazione (AnimSmooth) per passo; restituisce
 -- il nuovo valore e true se non e' ancora arrivato.
 local function approach(cur, target, eps)
@@ -585,6 +601,12 @@ local function placeSlots()
 				set(icon, 'W', tostring(size))
 				set(icon, 'H', tostring(size))
 				set(icon, 'ImageAlpha', alpha)
+				if V.LogoGreyscale then
+					local rows = saturationRows(t.zoom or 0)
+					set(icon, 'ColorMatrix1', rows[1])
+					set(icon, 'ColorMatrix2', rows[2])
+					set(icon, 'ColorMatrix3', rows[3])
+				end
 			end
 			local hasLabel = V.ShowLabels and t.label ~= nil
 			if hasLabel then
@@ -787,6 +809,7 @@ function Initialize()
 	V.AnimSlide = num('AnimSlide', 30)
 	V.AnimSmooth = math.min(1, math.max(0.05, num('AnimSmooth', 0.3)))
 	V.AnimLogoZoom = num('AnimLogoZoom', 1) ~= 0
+	V.LogoGreyscale = num('LogoGreyscale', 1) ~= 0
 	V.HoverLogoScale = V.AnimLogoZoom and math.max(1, num('HoverLogoScale', 1.25)) or 1
 	-- le miniature dei loghi sono create alla dimensione massima (zoom incluso)
 	V.LogoMaxSize = math.floor(V.IconSize * V.HoverLogoScale + 0.5)
@@ -963,7 +986,7 @@ function HoverTile(slot)
 	if V.TileHover then
 		if V.AnimHover then animate = true else hover.a = 1 end
 	end
-	if V.AnimLogoZoom and t.logo then
+	if (V.AnimLogoZoom or V.LogoGreyscale) and t.logo then
 		zooming[t] = true
 		animate = true
 	end

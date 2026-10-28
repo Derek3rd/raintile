@@ -61,7 +61,8 @@ CloseOnLaunch=1
 Thumbnails=1
 ; 1 = evidenzia la tile sotto il mouse (un ridisegno a ogni cambio di tile)
 TileHover=1
-; Durata in ms della dissolvenza all'apertura/chiusura (0 = istantanea)
+; Durata in ms della dissolvenza all'apertura/chiusura (0 = istantanea).
+; Viene copiata in Rainmeter.ini e vale dal caricamento successivo.
 FadeDuration=0
 
 ; --- Aspetto -------------------------------------------------------------------

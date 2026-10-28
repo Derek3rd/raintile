@@ -43,13 +43,21 @@ local function fileExists(path)
 	return false
 end
 
--- Parser INI minimale che mantiene l'ordine delle sezioni.
+-- Parser INI minimale che mantiene l'ordine delle sezioni. Legge UTF-8 e,
+-- in modo semplificato (solo caratteri ASCII), UTF-16 LE come Rainmeter.ini.
 local function parseIni(path)
-	local f = io.open(path, 'r')
+	local f = io.open(path, 'rb')
 	if not f then return nil end
+	local text = f:read('*a')
+	f:close()
+	if text:sub(1, 2) == '\255\254' then
+		text = text:sub(3):gsub('%z', '') -- Lua 5.1: lo zero nei pattern e' %z
+	end
+	text = text:gsub('^\239\187\191', '')
+
 	local list, cur = {}, nil
-	for line in f:lines() do
-		line = trim((line:gsub('^\239\187\191', '')))
+	for line in text:gmatch('[^\r\n]+') do
+		line = trim(line)
 		if line ~= '' and line:sub(1, 1) ~= ';' then
 			local section = line:match('^%[(.-)%]$')
 			if section then
@@ -61,8 +69,22 @@ local function parseIni(path)
 			end
 		end
 	end
-	f:close()
 	return list
+end
+
+-- La durata della dissolvenza di apertura/chiusura e' un'impostazione della
+-- skin in Rainmeter.ini, non un'opzione del file .ini della skin: la si
+-- allinea a FadeDuration di Settings.inc. Vale dal caricamento successivo.
+local function applyFadeDuration()
+	local want = tostring(math.max(0, math.floor(num('FadeDuration', 0))))
+	local path = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Rainmeter.ini'
+	local config = SKIN:ReplaceVariables('#CURRENTCONFIG#'):lower()
+	local current
+	for _, s in ipairs(parseIni(path) or {}) do
+		if s.name:lower() == config then current = s.keys.fadeduration end
+	end
+	if current and trim(current) == want then return end
+	SKIN:Bang('!WriteKeyValue', SKIN:ReplaceVariables('#CURRENTCONFIG#'), 'FadeDuration', want, path)
 end
 
 local IMAGE_EXTS = { '.png', '.jpg', '.jpeg', '.bmp' }
@@ -543,6 +565,8 @@ function Initialize()
 		if fileExists(resources .. 'Categories\\' .. file) then knownFiles[#knownFiles + 1] = file end
 	end
 	if #knownFiles == 0 then return end -- primo avvio: si aspetta l'elenco
+
+	applyFadeDuration()
 
 	loadCategories(knownFiles)
 	if regenerate(knownFiles) then return end

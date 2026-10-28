@@ -1,43 +1,59 @@
 ; GENERATO AUTOMATICAMENTE da Raintile.lua: non modificare a mano.
 [Variables]
-GridSignature=4x2|Giochi|App|Link|Sistema
+GridSignature=4x2|icontext|Giochi:Giochi:|App:App:|Link:Link:|Sistema:Sistema:
 
-[Cat1]
+[CatText1]
 Meter=String
 MeterStyle=StyleCategory
 X=#PadX#
 Y=(#PadY#+#MenuH#/2)
 Text=Giochi
+
+[CatText2]
+Meter=String
+MeterStyle=StyleCategory
+X=(#MenuGap#+2*#MenuItemPad#)R
+Y=(#PadY#+#MenuH#/2)
+Text=App
+
+[CatText3]
+Meter=String
+MeterStyle=StyleCategory
+X=(#MenuGap#+2*#MenuItemPad#)R
+Y=(#PadY#+#MenuH#/2)
+Text=Link
+
+[CatText4]
+Meter=String
+MeterStyle=StyleCategory
+X=(#MenuGap#+2*#MenuItemPad#)R
+Y=(#PadY#+#MenuH#/2)
+Text=Sistema
+
+[CatHit1]
+Meter=Shape
+MeterStyle=StyleCategoryHit
 LeftMouseUpAction=[!CommandMeasure MeasureScript "SetCategory(1)"]
 MouseOverAction=[!CommandMeasure MeasureScript "HoverCategory(1)"]
 MouseLeaveAction=[!CommandMeasure MeasureScript "HoverCategory(0)"]
 
-[Cat2]
-Meter=String
-MeterStyle=StyleCategory
-X=#MenuGap#R
-Y=(#PadY#+#MenuH#/2)
-Text=App
+[CatHit2]
+Meter=Shape
+MeterStyle=StyleCategoryHit
 LeftMouseUpAction=[!CommandMeasure MeasureScript "SetCategory(2)"]
 MouseOverAction=[!CommandMeasure MeasureScript "HoverCategory(2)"]
 MouseLeaveAction=[!CommandMeasure MeasureScript "HoverCategory(0)"]
 
-[Cat3]
-Meter=String
-MeterStyle=StyleCategory
-X=#MenuGap#R
-Y=(#PadY#+#MenuH#/2)
-Text=Link
+[CatHit3]
+Meter=Shape
+MeterStyle=StyleCategoryHit
 LeftMouseUpAction=[!CommandMeasure MeasureScript "SetCategory(3)"]
 MouseOverAction=[!CommandMeasure MeasureScript "HoverCategory(3)"]
 MouseLeaveAction=[!CommandMeasure MeasureScript "HoverCategory(0)"]
 
-[Cat4]
-Meter=String
-MeterStyle=StyleCategory
-X=#MenuGap#R
-Y=(#PadY#+#MenuH#/2)
-Text=Sistema
+[CatHit4]
+Meter=Shape
+MeterStyle=StyleCategoryHit
 LeftMouseUpAction=[!CommandMeasure MeasureScript "SetCategory(4)"]
 MouseOverAction=[!CommandMeasure MeasureScript "HoverCategory(4)"]
 MouseLeaveAction=[!CommandMeasure MeasureScript "HoverCategory(0)"]

@@ -1,16 +1,17 @@
 # Raintile
 
-Skin per [Rainmeter](https://www.rainmeter.net/) che sostituisce le icone del desktop con un launcher a tile:
+Skin per [Rainmeter](https://www.rainmeter.net/) che sostituisce le icone del desktop con un launcher a tile **a schermo intero**:
 
-- una barra in alto con le **categorie** (Giochi, App, Link, Sistema, ...)
-- una griglia di **NX × NY tile** visibili, con scorrimento **verticale o orizzontale** tramite la rotellina
+- un menu centrato in alto con le **categorie** (Giochi, App, Link, Sistema, ...), mostrate come icona, testo o entrambi
+- una griglia di **NX × NY tile** visibili che si ridimensionano da sole per riempire lo schermo, con scorrimento **verticale o orizzontale** tramite la rotellina
 - ogni tile ha **sfondo**, **icona**, **etichetta** e **comando**
 
 ## Installazione
 
 1. Clona o copia questa cartella in `Documenti\Rainmeter\Skins\Raintile`
 2. In Rainmeter: *Aggiorna tutto*, poi carica `Raintile\Raintile.ini`
-3. Consigliato: tasto destro sulla skin > *Impostazioni* > *Posizione* > *Sul desktop*, così resta sotto le finestre come le icone
+3. La skin si posiziona da sola nell'angolo in alto a sinistra e copre lo schermo (`ScreenX/Y/W/H` in `Settings.inc`; usa `WORKAREA` invece di `SCREENAREA` per lasciare libera la barra delle applicazioni)
+4. Consigliato: tasto destro sulla skin > *Impostazioni* > *Posizione* > *Sul desktop*, così resta sotto le finestre come le icone
 
 ## Configurazione
 
@@ -18,8 +19,8 @@ Tutto si modifica da due file (anche dal menu del tasto destro della skin):
 
 | File | Contenuto |
 | --- | --- |
-| `@Resources\Settings.inc` | griglia (`NX`, `NY`, `ScrollDir`), dimensioni, colori, font |
-| `@Resources\Tiles.ini` | elenco categorie e tile |
+| `@Resources\Settings.inc` | schermo, griglia (`NX`, `NY`, `ScrollDir`), menu (`MenuMode`), spaziature, colori, font |
+| `@Resources\Tiles.ini` | categorie (ordine, icona, testo) e tile |
 
 Le immagini vanno in `@Resources\Images\` (oppure si usa un percorso assoluto).
 
@@ -34,9 +35,17 @@ Label=
 Command=steam://rungameid/2344520
 ```
 
+Icona della categoria nel menu (cosa mostrare si sceglie con `MenuMode=IconText|Icon|Text` in `Settings.inc`; una categoria senza icona mostra sempre il testo):
+
+```ini
+[Category:Giochi]
+Icon=gamepad.png
+Label=Giochi
+```
+
 `Command` accetta un programma (con argomenti), un URL o protocollo (`steam://`, `https://`, `ms-settings:`), un percorso, oppure bang di Rainmeter tra parentesi quadre (`[!ActivateConfig "..."]`).
 
-Dopo aver salvato: tasto destro > *Aggiorna skin*. Se cambi `NX`, `NY` o l'elenco delle categorie, la griglia viene rigenerata da sola (vedi sotto).
+Dopo aver salvato: tasto destro > *Aggiorna skin*. Se cambi `NX`, `NY`, `MenuMode` o le categorie, la griglia viene rigenerata da sola (vedi sotto).
 
 ## Come funziona (e perché è leggera)
 
@@ -44,7 +53,8 @@ Dopo aver salvato: tasto destro > *Aggiorna skin*. Se cambi `NX`, `NY` o l'elenc
 - **Numero fisso di meter**: esistono solo gli NX × NY slot visibili, a prescindere da quante tile hai. Scorrere o cambiare categoria cambia soltanto le opzioni degli slot esistenti.
 - **Solo le differenze**: lo script ricorda l'ultimo valore impostato su ogni meter e manda a Rainmeter solo quello che è cambiato.
 - **Tiles.ini viene letto una volta**, al caricamento della skin.
-- **Griglia generata**: i meter di menu e slot stanno in `@Resources\Generated\Grid.inc`, scritto da `Raintile.lua`. Se `NX`, `NY` o le categorie cambiano, lo script lo riscrive e ricarica la skin. Non va modificato a mano.
+- **Griglia generata**: i meter di menu e slot stanno in `@Resources\Generated\Grid.inc`, scritto da `Raintile.lua`. Se `NX`, `NY`, `MenuMode` o le categorie cambiano, lo script lo riscrive e ricarica la skin. Non va modificato a mano.
+- **Dimensioni calcolate una volta**: la misura delle tile è una formula su `ScreenW`/`ScreenH` risolta al caricamento; il menu viene misurato e centrato una sola volta dopo il primo disegno.
 
 Consiglio per le prestazioni: usa immagini di sfondo già ridimensionate più o meno alla dimensione della tile (JPG per gli sfondi, PNG per le icone). Immagini 4K costano memoria senza alcun beneficio visivo.
 

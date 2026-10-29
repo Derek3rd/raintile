@@ -4,8 +4,8 @@
 # The games found are written at the end of the category file, after the
 # IMPORT_MARKER line: everything above it (the hand-written tiles) is never
 # touched, the block below is rewritten on every import.
-# A game already among the hand-written tiles (same name or same command) is
-# not imported again.
+# A game already among the hand-written tiles of any category (same name or
+# same command) is not imported again: it may have been moved elsewhere.
 #
 # Images: Steam keeps them locally (appcache\librarycache). For the other
 # stores, and for Steam games without local images, they are downloaded to
@@ -236,12 +236,25 @@ if (Test-Path -LiteralPath $categoryFile) {
 }
 $manual = $manual.TrimEnd() + "`r`n"
 
+# Hand-written tiles: those of this category and of all the others
 $manualNames = @{}; $manualCommands = @{}
-$section = $null
-foreach ($line in $manual -split "`r?`n") {
-    $t = $line.Trim()
-    if ($t -match '^\[(.+)\]$') { $section = $Matches[1].Trim(); $manualNames[$section.ToLowerInvariant()] = $true }
-    elseif ($section -and $t -match '^(?i)command\s*=\s*(.+)$') { $manualCommands[$Matches[1].Trim().ToLowerInvariant()] = $true }
+$texts = @($manual)
+foreach ($f in @(Get-ChildItem -LiteralPath (Split-Path -Parent $categoryFile) -Filter '*.ini' -File -ErrorAction SilentlyContinue)) {
+    if ($f.FullName -ieq [IO.Path]::GetFullPath($categoryFile)) { continue }
+    $other = [IO.File]::ReadAllText($f.FullName)
+    $j = Find-ImportMarker $other
+    $texts += $(if ($j -ge 0) { $other.Substring(0, $j) } else { $other })
+}
+foreach ($text in $texts) {
+    $section = $null
+    foreach ($line in $text -split "`r?`n") {
+        $t = $line.Trim()
+        if ($t -match '^\[(.+)\]$') {
+            $section = $Matches[1].Trim()
+            if ($section -ine 'Category') { $manualNames[$section.ToLowerInvariant()] = $true }
+        }
+        elseif ($section -and $t -match '^(?i)command\s*=\s*(.+)$') { $manualCommands[$Matches[1].Trim().ToLowerInvariant()] = $true }
+    }
 }
 
 $out = New-Object System.Text.StringBuilder

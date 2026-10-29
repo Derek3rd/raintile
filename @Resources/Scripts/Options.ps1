@@ -396,7 +396,7 @@ $schema = @(
         Groups = @()
     }
     @{ Id = 'categories'; Title = 'Categories'; Icon = 0xECA5
-        Desc = 'One file per category in Categories\. Double-click a category, or pick it on the left, to edit it and its tiles.'
+        Desc = 'One file per category in Categories\. Select a category to edit it; double-click it, or pick it in the menu, for its tiles.'
         Groups = @()
     }
 )
@@ -1613,13 +1613,106 @@ function New-ListEntry([string]$title, [string]$sub, $tag, [double]$thumbSize = 
     return $item
 }
 
-$script:currentFile = $null  # category shown (chosen in the menu)
+$script:currentFile = $null  # category whose tiles are shown (chosen in the menu)
+# category selected in the list of the Categories page
+function Get-ListFile { if ($cat.Cats -and $cat.Cats.SelectedItem) { return [string]$cat.Cats.SelectedItem.Tag.File } return $null }
+function Get-ListBase { $f = Get-ListFile; if ($f) { return [IO.Path]::GetFileNameWithoutExtension($f) } return $null }
 function Get-CurrentFile { return $script:currentFile }
 function Get-CurrentBase { $f = Get-CurrentFile; if ($f) { return [IO.Path]::GetFileNameWithoutExtension($f) } return $null }
+# Tile selected, if it can be edited (not imported)
 function Get-CurrentTile {
     $sel = $cat.Tiles.SelectedItem
     if (-not $sel -or $sel.Tag.Imported) { return $null }
     return $sel.Tag.Section
+}
+# Tile selected, imported ones too (read from the imported block)
+function Get-ShownTile {
+    $sel = $cat.Tiles.SelectedItem
+    if (-not $sel) { return $null }
+    return $sel.Tag.Section
+}
+
+# An imported game as a section (Name, Keys), read from the imported block
+function Get-ImportedSection($model, [string]$name) {
+    $s = $null
+    foreach ($line in ($model.Imported -split "`r?`n")) {
+        $t = $line.Trim()
+        if ($t -match '^\[(.+)\]$') {
+            if ($s) { break }
+            if ($Matches[1].Trim() -ieq $name) {
+                $s = [pscustomobject]@{ Name = $Matches[1].Trim(); Comments = @(); Keys = (New-Object System.Collections.ArrayList) }
+            }
+            continue
+        }
+        if ($s -and $t -match '^([^;=][^=]*?)\s*=(.*)$') { [void]$s.Keys.Add(@($Matches[1].Trim(), $Matches[2].Trim())) }
+    }
+    return $s
+}
+
+function Remove-ImportedSection($model, [string]$name) {
+    $out = New-Object System.Collections.ArrayList
+    $skip = $false
+    foreach ($line in ($model.Imported -split "`r?`n")) {
+        $t = $line.Trim()
+        if ($t -match '^\[(.+)\]$') {
+            $skip = ($Matches[1].Trim() -ieq $name)
+            if ($skip -and $out.Count -and "$($out[$out.Count - 1])".Trim() -eq '') { $out.RemoveAt($out.Count - 1) }
+        }
+        if (-not $skip) { [void]$out.Add($line) }
+    }
+    $model.Imported = ($out -join "`r`n")
+}
+
+# Imported game -> hand-written tile, at the end of the tiles: its images are
+# copied to the default folders (the import does not touch it any more: a
+# hand-written tile with its name or command is skipped)
+function Convert-ImportedTile([string]$file, [string]$name) {
+    $m = Get-Model $file
+    $src = Get-ImportedSection $m $name
+    if (-not $src) { return $null }
+    $base = [IO.Path]::GetFileNameWithoutExtension($file)
+    $s = [pscustomobject]@{ Name = $src.Name; Comments = @(); Keys = (New-Object System.Collections.ArrayList) }
+    foreach ($kv in $src.Keys) {
+        if ($kv[0] -in 'Background', 'Logo') {
+            $path = Find-Image (Join-Path $imagesRoot "$base\$($kv[0].ToLowerInvariant())") $kv[1]
+            if ($path) { [void](Copy-TileImage $base $kv[0].ToLowerInvariant() $src.Name $path); continue }
+        }
+        [void]$s.Keys.Add(@($kv[0], $kv[1]))
+    }
+    Remove-ImportedSection $m $name
+    [void]$m.Sections.Add($s)
+    Set-Changed $file
+    return $s
+}
+
+# Moves a tile and its images to another category; both files are written at
+# once (the images have already moved). Returns an error message, or $null.
+function Move-TileToCategory([string]$from, $section, [string]$to) {
+    $dst = Get-Model $to
+    if (($dst.Sections | Where-Object { $_.Name -ieq $section.Name }) -or ((Get-ImportedNames $dst) -contains $section.Name)) {
+        return "There is already a tile called '$($section.Name)' in that category."
+    }
+    $fromBase = [IO.Path]::GetFileNameWithoutExtension($from)
+    $toBase = [IO.Path]::GetFileNameWithoutExtension($to)
+    $fromRoot = Join-Path $imagesRoot $fromBase
+    foreach ($kind in 'Background', 'Logo') {
+        $path = Get-TileImage $fromBase $section $kind
+        if (-not $path -or -not $path.StartsWith($fromRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $dest = Join-Path (Join-Path $imagesRoot $toBase) $path.Substring($fromRoot.Length + 1)
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+        if (-not (Test-Path -LiteralPath $dest)) { Move-Item -LiteralPath $path -Destination $dest }
+        # a full path to the old place follows the image
+        $explicit = (Get-Key $section $kind).Trim('"')
+        if ($explicit -and [IO.Path]::IsPathRooted($explicit)) { Set-Key $section $kind $dest }
+    }
+    (Get-Model $from).Sections.Remove($section)
+    [void]$dst.Sections.Add($section)
+    foreach ($f in $from, $to) {
+        Write-Category (Join-Path $categoriesDir $f) (Get-Model $f)
+        $changedFiles.Remove($f)
+    }
+    Update-Dirty
+    return $null
 }
 
 # Colour of a tile as the skin shows it
@@ -1680,6 +1773,14 @@ function Update-NavCategory([string]$file) {
             $it.Tag.Icon.Source = Get-Bitmap (Get-CategoryIcon ([IO.Path]::GetFileNameWithoutExtension($file)) $c) 40
         }
     }
+    if ($cat.Cats) {
+        foreach ($it in $cat.Cats.Items) {
+            if ($it.Tag.File -eq $file) {
+                $it.Tag.Title.Text = $name
+                Set-Thumb $it.Tag.Thumb (Get-CategoryIcon ([IO.Path]::GetFileNameWithoutExtension($file)) $c)
+            }
+        }
+    }
     if ($script:currentFile -eq $file -and $script:navCurrent -eq "cat:$file") { $pageTitle.Text = $name }
 }
 
@@ -1703,32 +1804,39 @@ function Refresh-Tiles([int]$select = 0) {
             Update-TileEntry $item
         }
         foreach ($n in Get-ImportedNames $m) {
-            $item = New-ListEntry $n 'imported' @{ Section = $null; Imported = $true }
-            $item.Opacity = 0.6
+            $item = New-ListEntry $n 'imported' @{ Section = (Get-ImportedSection $m $n); Imported = $true }
+            $item.Opacity = 0.7
             [void]$cat.Tiles.Items.Add($item)
+            if ($item.Tag.Section) { Update-TileEntry $item }
         }
     }
     if ($cat.Tiles.Items.Count) { $cat.Tiles.SelectedIndex = [Math]::Max(0, [Math]::Min($select, $cat.Tiles.Items.Count - 1)) }
     else { Show-Tile }
 }
 
+# Tiles of the category chosen in the menu
 function Show-Category {
     if (-not $cat.Tiles) { return }
-    $script:loading = $true
-    $file = Get-CurrentFile
-    $cat.CatCard.IsEnabled = [bool]$file
-    $c = if ($file) { Get-CategorySection (Get-Model $file) } else { $null }
-    foreach ($k in 'Name', 'NX', 'NY', 'IconSize') { $cat["cat.$k"].Text = if ($c) { Get-Key $c $k } else { '' } }
-    Set-Thumb $cat.CatIcon $(if ($c) { Get-CategoryIcon (Get-CurrentBase) $c } else { $null })
-    $cat.CatIconHint.Text = if ($file) { "Default: Images\$(Get-CurrentBase)\icon.png" } else { '' }
-    $cat.GridHint.Text = "Empty = default ($($values['NX']) " + [char]0xD7 + " $($values['NY']), from Layout)"
-    $cat.SizeHint.Text = "Pixels or %. Empty = default ($($values['IconSize']))"
-    $script:loading = $false
     Refresh-Tiles
 }
 
+# Settings of the category selected in the list of the Categories page
+function Show-CategoryDetails {
+    if (-not $cat.CatCard) { return }
+    $script:loading = $true
+    $file = Get-ListFile
+    $cat.CatCard.IsEnabled = [bool]$file
+    $c = if ($file) { Get-CategorySection (Get-Model $file) } else { $null }
+    foreach ($k in 'Name', 'NX', 'NY', 'IconSize') { $cat["cat.$k"].Text = if ($c) { Get-Key $c $k } else { '' } }
+    Set-Thumb $cat.CatIcon $(if ($c) { Get-CategoryIcon (Get-ListBase) $c } else { $null })
+    $cat.CatIconHint.Text = if ($file) { "Default: Images\$(Get-ListBase)\icon.png" } else { '' }
+    $cat.GridHint.Text = "Empty = default ($($values['NX']) " + [char]0xD7 + " $($values['NY']), from Layout)"
+    $cat.SizeHint.Text = "Pixels or %. Empty = default ($($values['IconSize']))"
+    $script:loading = $false
+}
+
 function Update-TilePreview {
-    $s = Get-CurrentTile
+    $s = Get-ShownTile
     $base = Get-CurrentBase
     $bg = if ($s) { Get-TileImage $base $s 'Background' } else { $null }
     $logo = if ($s) { Get-TileImage $base $s 'Logo' } else { $null }
@@ -1747,20 +1855,29 @@ function Update-TilePreview {
     $sw = New-ColorBrush $(if ($s) { Get-Key $s 'Color' } else { '' }) -Opaque
     $cat.ColorSwatch.Background = if ($sw) { $sw } else { Res 'FieldBg' }
     $sel = $cat.Tiles.SelectedItem
-    if ($sel -and -not $sel.Tag.Imported) { Update-TileEntry $sel }
+    if ($sel -and $sel.Tag.Section) { Update-TileEntry $sel }
 }
 
 function Show-Tile {
     $script:loading = $true
-    $s = Get-CurrentTile
+    $s = Get-ShownTile
     $sel = $cat.Tiles.SelectedItem
-    $cat.TileCard.IsEnabled = [bool]$s
+    $imported = $sel -and $sel.Tag.Imported
+    $cat.TileCard.IsEnabled = [bool]$s -and -not $imported
+    $cat.ImportedCard.Visibility = if ($imported) { 'Visible' } else { 'Collapsed' }
     foreach ($k in 'Command', 'Label', 'Color') { $cat["tile.$k"].Text = if ($s) { Get-Key $s $k } else { '' } }
     $cat['tile.Name'].Text = if ($s) { $s.Name } else { '' }
-    $cat.Note.Text = if ($sel -and $sel.Tag.Imported) {
-        'Imported game: it is rewritten on every import and cannot be edited here. To customise it, add a tile with the same name: the import will not duplicate it.'
-    } elseif (-not $sel) { 'No tiles yet: add one with the + button.' } else { '' }
+    $cat.Note.Text = if (-not $sel) { 'No tiles yet: add one with the + button.' } else { '' }
     $cat.Note.Visibility = if ($cat.Note.Text) { 'Visible' } else { 'Collapsed' }
+    # other categories the tile can move to
+    $cat.MoveTo.Items.Clear()
+    foreach ($e in Get-CategoryEntries) {
+        if ($e.File -eq (Get-CurrentFile)) { continue }
+        $ci = New-Object System.Windows.Controls.ComboBoxItem
+        $ci.Content = $e.Name
+        $ci.Tag = $e.File
+        [void]$cat.MoveTo.Items.Add($ci)
+    }
     $script:loading = $false
     Update-TilePreview
 }
@@ -1805,10 +1922,19 @@ function New-ListColumn([string]$title, $list, [object[]]$buttons) {
 
 # Categories page: the list of categories, to create, reorder and delete them
 function New-CategoryListPage {
+    $grid = New-Grid @('440', '*')
+    $grid.Margin = T 36 4 36 20
     $dp = New-Object System.Windows.Controls.DockPanel
-    $dp.Margin = T 36 4 36 20
-    $dp.MaxWidth = 760
-    $dp.HorizontalAlignment = 'Left'
+    $dp.Margin = T 0 0 16 0
+    [void]$grid.Children.Add($dp)
+    $sv = New-Object System.Windows.Controls.ScrollViewer
+    $sv.VerticalScrollBarVisibility = 'Auto'
+    Set-Col $sv 1
+    [void]$grid.Children.Add($sv)
+    $side = New-Panel
+    $side.MaxWidth = 600
+    $side.HorizontalAlignment = 'Left'
+    $sv.Content = $side
     $bar = New-Panel 'Horizontal'
     $bar.Margin = T 0 0 0 12
     [System.Windows.Controls.DockPanel]::SetDock($bar, 'Top')
@@ -1827,6 +1953,77 @@ function New-CategoryListPage {
     $cat.Cats = New-Object System.Windows.Controls.ListBox
     $card.Child = $cat.Cats
     [void]$dp.Children.Add($card)
+
+    # Category card
+    $card = New-Card 'Category' ''
+    $cat.CatCard = $card
+    [void](Add-To $side $card)
+    $f = $card.Child
+    foreach ($k in 'Name', 'NX', 'NY', 'IconSize') {
+        $tb = New-Object System.Windows.Controls.TextBox
+        $tb.Tag = $k
+        $cat["cat.$k"] = $tb
+    }
+    $cat['cat.NX'].Width = 64; $cat['cat.NY'].Width = 64; $cat['cat.IconSize'].Width = 100
+    [void](Add-To $f (New-FormRow 'Name' $cat['cat.Name'] 'Text shown in the menu.'))
+    $iconRow = New-Panel 'Horizontal'
+    $cat.CatIcon = New-Thumb 36
+    $btnIcon = New-Button 'Choose...'
+    $btnIcon.Margin = T 10 0 0 0
+    $btnIconDel = New-Button 'Remove'
+    $btnIconDel.Margin = T 6 0 0 0
+    [void](Add-To $iconRow $cat.CatIcon); [void](Add-To $iconRow $btnIcon); [void](Add-To $iconRow $btnIconDel)
+    $cat.CatIconHint = New-Text '' 11.5 (Res 'DimBrush') -Wrap
+    [void](Add-To $f (New-FormRow 'Icon' $iconRow '' $cat.CatIconHint))
+    $gridRow = New-Panel 'Horizontal'
+    [void](Add-To $gridRow $cat['cat.NX'])
+    $x = New-Text ([string][char]0xD7) 13 (Res 'DimBrush'); $x.Margin = T 8 0 8 0; $x.VerticalAlignment = 'Center'
+    [void](Add-To $gridRow $x)
+    [void](Add-To $gridRow $cat['cat.NY'])
+    $cat.GridHint = New-Text '' 11.5 (Res 'DimBrush') -Wrap
+    [void](Add-To $f (New-FormRow 'Grid' $gridRow '' $cat.GridHint))
+    $cat.SizeHint = New-Text '' 11.5 (Res 'DimBrush') -Wrap
+    [void](Add-To $f (New-FormRow 'Logo size' $cat['cat.IconSize'] '' $cat.SizeHint))
+
+
+    $cat.Cats.Add_SelectionChanged({ Show-CategoryDetails })
+    foreach ($k in 'Name', 'NX', 'NY', 'IconSize') {
+        $cat["cat.$k"].Add_TextChanged({
+                param($s, $e)
+                if ($script:loading) { return }
+                $file = Get-ListFile; if (-not $file) { return }
+                Set-Key (Get-CategorySection (Get-Model $file)) $s.Tag $s.Text.Trim()
+                Set-Changed $file
+                if ($s.Tag -eq 'Name') { Update-NavCategory $file }
+            })
+    }
+    $btnIcon.Add_Click({
+            $file = Get-ListFile; if (-not $file) { return }
+            $src = Select-File $imageFilter; if (-not $src) { return }
+            $dir = Join-Path $imagesRoot (Get-ListBase)
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            Get-ChildItem -LiteralPath $dir -File | Where-Object { $_.BaseName -ieq 'icon' } | Remove-Item -Force
+            Copy-Item -LiteralPath $src -Destination (Join-Path $dir ('icon' + [IO.Path]::GetExtension($src).ToLowerInvariant())) -Force
+            Set-Key (Get-CategorySection (Get-Model $file)) 'Icon' ''   # the default icon just copied applies
+            Set-Changed $file
+            $icon = Get-CategoryIcon (Get-ListBase) (Get-CategorySection (Get-Model $file))
+            Set-Thumb $cat.CatIcon $icon
+            Update-NavCategory $file
+        })
+    $btnIconDel.Add_Click({
+            $file = Get-ListFile; if (-not $file) { return }
+            $c = Get-CategorySection (Get-Model $file)
+            $icon = Get-CategoryIcon (Get-ListBase) $c
+            if ($icon -and $icon.StartsWith($imagesRoot, [StringComparison]::OrdinalIgnoreCase)) {
+                $r = Show-Dialog 'Raintile' "Move $([IO.Path]::GetFileName($icon)) to the Recycle Bin?" @('Remove', 'Cancel')
+                if ($r.Button -ne 'Remove') { return }
+                [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($icon, 'OnlyErrorDialogs', 'SendToRecycleBin')
+            }
+            Set-Key $c 'Icon' ''
+            Set-Changed $file
+            Set-Thumb $cat.CatIcon $null
+            Update-NavCategory $file
+        })
 
     $cat.Cats.Add_MouseDoubleClick({ if ($cat.Cats.SelectedItem) { Open-Category $cat.Cats.SelectedItem.Tag.File } })
     $cat.Cats.Add_KeyDown({ param($s, $e) if ($e.Key -eq 'Return' -and $cat.Cats.SelectedItem) { Open-Category $cat.Cats.SelectedItem.Tag.File } })
@@ -1878,7 +2075,7 @@ function New-CategoryListPage {
                 Build-Nav $script:navCurrent
             })
     }
-    return $dp
+    return $grid
 }
 
 # Page of one category (the same page for all: Show-Category fills it)
@@ -1905,36 +2102,25 @@ function New-CategoryPage {
     $details.HorizontalAlignment = 'Left'
     $sv.Content = $details
 
-    # Category card
-    $card = New-Card 'Category' ''
-    $cat.CatCard = $card
+    # Imported game: read-only, can become a normal tile
+    $card = New-Card 'Imported game' ''
+    $cat.ImportedCard = $card
+    $card.Visibility = 'Collapsed'
     [void](Add-To $details $card)
-    $f = $card.Child
-    foreach ($k in 'Name', 'NX', 'NY', 'IconSize') {
-        $tb = New-Object System.Windows.Controls.TextBox
-        $tb.Tag = $k
-        $cat["cat.$k"] = $tb
-    }
-    $cat['cat.NX'].Width = 64; $cat['cat.NY'].Width = 64; $cat['cat.IconSize'].Width = 100
-    [void](Add-To $f (New-FormRow 'Name' $cat['cat.Name'] 'Text shown in the menu.'))
-    $iconRow = New-Panel 'Horizontal'
-    $cat.CatIcon = New-Thumb 36
-    $btnIcon = New-Button 'Choose...'
-    $btnIcon.Margin = T 10 0 0 0
-    $btnIconDel = New-Button 'Remove'
-    $btnIconDel.Margin = T 6 0 0 0
-    [void](Add-To $iconRow $cat.CatIcon); [void](Add-To $iconRow $btnIcon); [void](Add-To $iconRow $btnIconDel)
-    $cat.CatIconHint = New-Text '' 11.5 (Res 'DimBrush') -Wrap
-    [void](Add-To $f (New-FormRow 'Icon' $iconRow '' $cat.CatIconHint))
-    $gridRow = New-Panel 'Horizontal'
-    [void](Add-To $gridRow $cat['cat.NX'])
-    $x = New-Text ([string][char]0xD7) 13 (Res 'DimBrush'); $x.Margin = T 8 0 8 0; $x.VerticalAlignment = 'Center'
-    [void](Add-To $gridRow $x)
-    [void](Add-To $gridRow $cat['cat.NY'])
-    $cat.GridHint = New-Text '' 11.5 (Res 'DimBrush') -Wrap
-    [void](Add-To $f (New-FormRow 'Grid' $gridRow '' $cat.GridHint))
-    $cat.SizeHint = New-Text '' 11.5 (Res 'DimBrush') -Wrap
-    [void](Add-To $f (New-FormRow 'Logo size' $cat['cat.IconSize'] '' $cat.SizeHint))
+    $txt = New-Text 'Written by Import games: this block is rewritten on every import, so it cannot be edited here. Make it a normal tile to edit it, move it or keep it when the game is uninstalled: its images are copied to the category folders and the import will not add it again.' 12.5 (Res 'DimBrush') -Wrap
+    $txt.Margin = T 0 0 0 10
+    [void](Add-To $card.Child $txt)
+    $btnConvert = New-Button 'Make it a normal tile' 'AccentButton'
+    $btnConvert.HorizontalAlignment = 'Left'
+    $btnConvert.Margin = T 0 0 0 10
+    [void](Add-To $card.Child $btnConvert)
+    $btnConvert.Add_Click({
+            $sel = $cat.Tiles.SelectedItem
+            if (-not $sel -or -not $sel.Tag.Imported) { return }
+            $file = Get-CurrentFile
+            $s = Convert-ImportedTile $file $sel.Tag.Section.Name
+            if ($s) { Refresh-Tiles ((Get-Tiles (Get-Model $file)).Count - 1) }
+        })
 
     # Tile card
     $card = New-Card 'Tile' ''
@@ -1987,6 +2173,23 @@ function New-CategoryPage {
     $cat['tile.Color'].Margin = T 10 0 0 0
     [void](Add-To $colorRow $cat.ColorSwatch); [void](Add-To $colorRow $cat['tile.Color'])
     [void](Add-To $f (New-FormRow 'Colour' $colorRow 'Used when there is no background image. Empty = from the logo, or the default tile colour.'))
+    $moveRow = New-Panel 'Horizontal'
+    $cat.MoveTo = New-Object System.Windows.Controls.ComboBox
+    $cat.MoveTo.Width = 200
+    $btnMove = New-Button 'Move'
+    $btnMove.Margin = T 8 0 0 0
+    [void](Add-To $moveRow $cat.MoveTo); [void](Add-To $moveRow $btnMove)
+    [void](Add-To $f (New-FormRow 'Move to' $moveRow 'Moves the tile and its images to another category. Both category files are saved at once.'))
+    $btnMove.Add_Click({
+            $t = Get-CurrentTile; if (-not $t) { return }
+            $target = $cat.MoveTo.SelectedItem
+            if (-not $target) { [void](Show-Dialog 'Raintile' 'Choose the category to move the tile to.'); return }
+            $r = Show-Dialog 'Move tile' "Move '$($t.Name)' to $($target.Content)?" @('Move', 'Cancel')
+            if ($r.Button -ne 'Move') { return }
+            $err = Move-TileToCategory (Get-CurrentFile) $t $target.Tag
+            if ($err) { [void](Show-Dialog 'Raintile' $err); return }
+            Refresh-Tiles ([Math]::Max(0, $cat.Tiles.SelectedIndex - 1))
+        })
     foreach ($kind in 'Background', 'Logo') {
         $row = New-Panel 'Horizontal'
         $thumb = New-Thumb 44
@@ -2028,16 +2231,6 @@ function New-CategoryPage {
     # --- events
     $cat.Tiles.Add_SelectionChanged({ Show-Tile })
 
-    foreach ($k in 'Name', 'NX', 'NY', 'IconSize') {
-        $cat["cat.$k"].Add_TextChanged({
-                param($s, $e)
-                if ($script:loading) { return }
-                $file = Get-CurrentFile; if (-not $file) { return }
-                Set-Key (Get-CategorySection (Get-Model $file)) $s.Tag $s.Text.Trim()
-                Set-Changed $file
-                if ($s.Tag -eq 'Name') { Update-NavCategory $file }
-            })
-    }
     foreach ($k in 'Command', 'Label', 'Color') {
         $cat["tile.$k"].Add_TextChanged({
                 param($s, $e)
@@ -2075,34 +2268,6 @@ function New-CategoryPage {
             $new = Select-Color $cat['tile.Color'].Text
             if ($new) { $cat['tile.Color'].Text = $new }
         })
-    $btnIcon.Add_Click({
-            $file = Get-CurrentFile; if (-not $file) { return }
-            $src = Select-File $imageFilter; if (-not $src) { return }
-            $dir = Join-Path $imagesRoot (Get-CurrentBase)
-            New-Item -ItemType Directory -Force -Path $dir | Out-Null
-            Get-ChildItem -LiteralPath $dir -File | Where-Object { $_.BaseName -ieq 'icon' } | Remove-Item -Force
-            Copy-Item -LiteralPath $src -Destination (Join-Path $dir ('icon' + [IO.Path]::GetExtension($src).ToLowerInvariant())) -Force
-            Set-Key (Get-CategorySection (Get-Model $file)) 'Icon' ''   # the default icon just copied applies
-            Set-Changed $file
-            $icon = Get-CategoryIcon (Get-CurrentBase) (Get-CategorySection (Get-Model $file))
-            Set-Thumb $cat.CatIcon $icon
-            Update-NavCategory $file
-        })
-    $btnIconDel.Add_Click({
-            $file = Get-CurrentFile; if (-not $file) { return }
-            $c = Get-CategorySection (Get-Model $file)
-            $icon = Get-CategoryIcon (Get-CurrentBase) $c
-            if ($icon -and $icon.StartsWith($imagesRoot, [StringComparison]::OrdinalIgnoreCase)) {
-                $r = Show-Dialog 'Raintile' "Move $([IO.Path]::GetFileName($icon)) to the Recycle Bin?" @('Remove', 'Cancel')
-                if ($r.Button -ne 'Remove') { return }
-                [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($icon, 'OnlyErrorDialogs', 'SendToRecycleBin')
-            }
-            Set-Key $c 'Icon' ''
-            Set-Changed $file
-            Set-Thumb $cat.CatIcon $null
-            Update-NavCategory $file
-        })
-
     # tiles: new, delete, reorder (hand-written ones only)
     $btnTileNew.Add_Click({
             $file = Get-CurrentFile; if (-not $file) { return }
@@ -2479,7 +2644,7 @@ function Show-CategoryPage([string]$file) {
     $c = Get-CategorySection (Get-Model $file)
     $name = Get-Key $c 'Name'
     $pageTitle.Text = if ($name) { $name } else { [IO.Path]::GetFileNameWithoutExtension($file) }
-    $pageDesc.Text = "Categories\${file}: the category and its tiles."
+    $pageDesc.Text = "Categories\${file}: its tiles. Name, icon and grid of the category are on the Categories page."
 }
 
 function Show-NavTarget($tag) {

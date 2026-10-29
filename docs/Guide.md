@@ -183,7 +183,7 @@ How the result is written:
 
 - Games go to the end of the `ImportCategory` file (default `Games.ini`), below the line `; ===== IMPORTED AUTOMATICALLY =====`. Everything above it — your hand-written tiles — is never touched.
 - The imported block is rebuilt on every import: uninstalled games disappear, new ones appear.
-- A game already present among your hand-written tiles (same name or same `Command`) is not imported again. To customise an imported game, move its section above the marker line.
+- A game already present among your hand-written tiles, in any category (same name or same `Command`), is not imported again. To customise an imported game, use **Make it a normal tile** in the Options window, or move its section above the marker line by hand.
 - **Images** for stores other than Steam (and Steam games without local images) are downloaded from [SteamGridDB](https://www.steamgriddb.com/) into `Images\<category>\imported\` if `SteamGridDBKey` holds an API key (free, from the site's preferences). An image you put in `background\<Name>.*` or `logo\<Name>.*` always wins.
 - The file is only rewritten if something changed, and the skin only refreshes in that case. The outcome goes to the Rainmeter log (`Raintile: import:` lines).
 
@@ -208,14 +208,16 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 | Search | search bar |
 | Import | store import settings and **Import games** |
 | Advanced | performance, debug log, entries without a page of their own |
-| Categories | the list of categories: create, open, reorder, delete |
-| Categories > *each category* | its name, icon, grid and logo size, and its tiles, with a preview |
+| Categories | the list of categories (create, open, reorder, delete) and the settings of the selected one: name, icon, grid, logo size |
+| Categories > *each category* | its tiles, with a preview: edit, move to another category, turn imported games into normal tiles |
 | Info (at the bottom) | version, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the skin folder and Rainmeter's Manage window |
 
 - Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default, and restores it.
-- **Categories**: create, delete (to the Recycle Bin) and reorder categories; double-click one (or pick it in the menu) to open it. In a category you edit its name, icon, grid and logo size, and add, delete, reorder and edit tiles (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it. Imported games are listed read-only.
+- **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
+  - **Move to**: moves a tile, and its images, to another category; both category files are saved at once.
+  - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds while the skin reloads, then the launcher is shown and the window closes. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 
 The window hides the launcher while open. You can always keep editing the files by hand.

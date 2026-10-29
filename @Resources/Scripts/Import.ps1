@@ -83,7 +83,7 @@ function Read-Steam {
     $libraries = @($root)
     $vdf = Join-Path $root 'steamapps\libraryfolders.vdf'
     if (Test-Path -LiteralPath $vdf) {
-        foreach ($m in [regex]::Matches((Get-Content -LiteralPath $vdf -Raw), '"path"\s+"([^"]+)"')) {
+        foreach ($m in [regex]::Matches((Get-Content -LiteralPath $vdf -Raw -Encoding UTF8), '"path"\s+"([^"]+)"')) {
             $libraries += $m.Groups[1].Value -replace '\\\\', '\'
         }
     }
@@ -95,7 +95,7 @@ function Read-Steam {
         $apps = Join-Path $lib 'steamapps'
         if (-not (Test-Path -LiteralPath $apps)) { continue }
         foreach ($acf in Get-ChildItem -LiteralPath $apps -Filter 'appmanifest_*.acf' -File) {
-            $text = Get-Content -LiteralPath $acf.FullName -Raw
+            $text = Get-Content -LiteralPath $acf.FullName -Raw -Encoding UTF8
             $appid = [regex]::Match($text, '"appid"\s+"(\d+)"').Groups[1].Value
             $name = [regex]::Match($text, '"name"\s+"([^"]+)"').Groups[1].Value
             if (-not $appid -or -not $name -or $seen[$appid] -or $name -match $skip) { continue }
@@ -129,7 +129,7 @@ function Read-Epic {
     if (-not $dir -or -not (Test-Path -LiteralPath $dir)) { return 'not installed' }
     $count = 0
     foreach ($item in Get-ChildItem -LiteralPath $dir -Filter '*.item' -File) {
-        try { $m = Get-Content -LiteralPath $item.FullName -Raw | ConvertFrom-Json } catch { continue }
+        try { $m = Get-Content -LiteralPath $item.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch { continue }
         if (-not $m.DisplayName -or -not $m.AppName) { continue }
         # main games only (no DLC, no applications)
         if ($m.AppCategories -and ($m.AppCategories -notcontains 'games')) { continue }

@@ -210,7 +210,7 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 | Advanced | performance, debug log, entries without a page of their own |
 | Categories | the list of categories: create, open, reorder, delete |
 | Categories > *each category* | its name, icon, grid and logo size, and its tiles, with a preview |
-| Info (at the bottom) | version, skin folder, number of categories and tiles; buttons to open `Settings.inc` and the skin folder |
+| Info (at the bottom) | version, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the skin folder and Rainmeter's Manage window |
 
 - Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.

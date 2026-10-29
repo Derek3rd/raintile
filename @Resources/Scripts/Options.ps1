@@ -2271,6 +2271,7 @@ function Invoke-Action([string]$action) {
         }
         'OpenSettings' { Start-Process notepad.exe -ArgumentList "`"$settingsFile`"" }
         'OpenFolder' { Start-Process explorer.exe -ArgumentList "`"$Resources`"" }
+        'OpenRainmeter' { Invoke-Rainmeter '!Manage' }
     }
 }
 
@@ -2445,6 +2446,7 @@ function New-InfoPage {
     $card = New-Card 'Files' ''
     [void]$card.Child.Children.Add((New-Row 'Settings' 'Settings.inc, in Notepad.' (New-ActionControl 'OpenSettings' 'Open Settings.inc') $null))
     [void]$card.Child.Children.Add((New-Row 'Skin folder' 'Categories, images and scripts.' (New-ActionControl 'OpenFolder' 'Open the folder') $null))
+    [void]$card.Child.Children.Add((New-Row 'Rainmeter' 'The Manage window: skins, Rainmeter settings and log.' (New-ActionControl 'OpenRainmeter' 'Open Rainmeter') $null))
     [void](Add-To $sp $card)
     return $sv
 }

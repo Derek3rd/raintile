@@ -29,6 +29,14 @@ local pillPos = nil   -- { x, w } della pillola della categoria attiva
 local zooming = {}
 local ticking = false -- orologio delle animazioni (ActionTimer) attivo
 local visible = true  -- launcher mostrato (Show/Hide)
+local searchCat = nil -- risultati della ricerca, mostrati al posto della categoria attiva
+local query = ''      -- testo cercato
+local leaveSearch     -- definita nella sezione Ricerca
+
+-- Categoria mostrata nella griglia: i risultati della ricerca o quella attiva.
+local function cur()
+	return searchCat or cats[active]
+end
 local resources
 
 -- Messaggi di diagnostica nel log di Rainmeter (DebugLog=1 in Settings.inc).
@@ -290,6 +298,7 @@ local function loadCategory(file)
 			elseif not t.background and not t.logo then
 				t.label = s.name -- tile senza immagini: mostra almeno il nome
 			end
+			t.name, t.catLabel = s.name, c.label -- per la ricerca
 			c.tiles[#c.tiles + 1] = t
 		end
 	end
@@ -320,6 +329,9 @@ local function loadCategories(files)
 	-- Slot da generare: quanti ne servono alla griglia piu' grande
 	slots = 0
 	for _, c in ipairs(cats) do slots = math.max(slots, c.rows * c.cols) end
+	local default = {} -- griglia di default, usata dai risultati della ricerca
+	categoryGeometry(default)
+	slots = math.max(slots, default.rows * default.cols)
 
 	-- Meter che compongono ogni voce del menu, secondo MenuMode
 	for i, c in ipairs(cats) do
@@ -533,7 +545,7 @@ end
 -- Righe (V) o colonne (H) di tile della categoria attiva, e quante ne
 -- stanno sullo schermo.
 local function lineCount()
-	return math.ceil(#cats[active].tiles / (V.Horizontal and V.NY or V.NX))
+	return math.ceil(#cur().tiles / (V.Horizontal and V.NY or V.NX))
 end
 
 local function visibleLines()
@@ -565,6 +577,7 @@ end
 -- Ricorda lo scorrimento della categoria attiva (anche in State.inc, cosi'
 -- resta dopo un aggiornamento della skin).
 local function saveScroll()
+	if searchCat then return end -- i risultati della ricerca non si ricordano
 	local c = cats[active]
 	local o = normalizeOffset(offset)
 	if c.offset ~= o then
@@ -573,7 +586,7 @@ local function saveScroll()
 	end
 end
 
--- Indice (in cats[active].tiles) della tile nello slot, con i contenuti attuali.
+-- Indice (in cur().tiles) della tile nello slot, con i contenuti attuali.
 local function indexAt(slot)
 	local r, c = slotRC(slot)
 	local line = base + (V.Horizontal and c or r)
@@ -583,7 +596,7 @@ local function indexAt(slot)
 end
 
 local function tileAt(slot)
-	return cats[active].tiles[indexAt(slot)]
+	return cur().tiles[indexAt(slot)]
 end
 
 -- Posizione in pixel (relativa alla griglia) di un punto in unita' di griglia
@@ -657,9 +670,12 @@ local function renderCategories()
 		return
 	end
 
-	-- Pillola attiva: scivola verso la nuova voce (Tick) o salta subito
+	-- Pillola attiva: scivola verso la nuova voce (Tick) o salta subito.
+	-- Durante una ricerca nessuna categoria e' attiva.
 	local x, w = pillTarget(active)
-	if pillPos and V.AnimCategory and (pillPos.x ~= x or pillPos.w ~= w) then
+	if searchCat then
+		show('CatPillActive', false)
+	elseif pillPos and V.AnimCategory and (pillPos.x ~= x or pillPos.w ~= w) then
 		startTicker()
 	else
 		pillPos = { x = x, w = w }
@@ -870,7 +886,7 @@ local function advance()
 	end
 
 	-- Zoom dei loghi: cresce sulla tile sotto il mouse, rientra sulle altre
-	local tiles = cats[active].tiles
+	local tiles = cur().tiles
 	for t in pairs(zooming) do
 		local target = (hover.on and tiles[hover.idx] == t) and 1 or 0
 		t.zoom, moving = approach(t.zoom or 0, target, 0.01, V.AnimLogoSmooth)
@@ -886,7 +902,7 @@ local function advance()
 		if t.zoom == 0 and (t.pan or 0) == 0 and target == 0 then zooming[t] = nil end
 	end
 
-	if pillPos and laidOut then
+	if pillPos and laidOut and not searchCat then
 		local x, w = pillTarget(active)
 		pillPos.x, moving = approach(pillPos.x, x, 0.5, V.AnimPillSmooth)
 		busy = busy or moving
@@ -965,6 +981,8 @@ function Initialize()
 	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
 	V.DebugLog = num('DebugLog', 0) ~= 0
 	V.ImportOnStart = num('ImportOnStart', 0) ~= 0
+	V.SearchW = math.floor(num('SearchW', 320))
+	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Cerca')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.LabelPad = num('LabelPad', 14)
@@ -1106,6 +1124,7 @@ function Hide()
 	if not ready or not visible then return end
 	visible = false
 	stopTicker()
+	leaveSearch() -- alla prossima apertura si riparte dalla categoria
 	pos = offset -- uno scorrimento a meta' riparte gia' concluso
 	saveScroll()
 	if launching then
@@ -1254,6 +1273,12 @@ end
 
 function SetCategory(i)
 	if not ready or launching or i < 1 or i > #cats then return end
+	if leaveSearch() and i == active then
+		-- clic sulla categoria da cui si era partiti: si torna li'
+		if V.AnimCategory then appear = 0 startTicker() end
+		render(true)
+		return
+	end
 	if i == active then
 		-- clic sulla categoria gia' aperta: torna all'inizio (con lo scroll
 		-- infinito, all'inizio del giro piu' vicino)
@@ -1388,7 +1413,7 @@ end
 -- quanto basta perche' resti visibile.
 function Nav(dx, dy)
 	if not ready or launching or not visible then return end
-	local tiles = cats[active].tiles
+	local tiles = cur().tiles
 	if #tiles == 0 then return end
 	local L, per, vis = lineCount(), (V.Horizontal and V.NY or V.NX), visibleLines()
 
@@ -1434,13 +1459,131 @@ function Confirm()
 		return
 	end
 	local x, y = gridToPx(hover.tx, hover.ty)
-	launchTile(cats[active].tiles[hover.idx], x, y)
+	launchTile(cur().tiles[hover.idx], x, y)
 end
 
 -- Categoria precedente (-1) o successiva (+1), ricominciando dal fondo.
 function NextCategory(delta)
 	if not ready or launching or not visible then return end
 	SetCategory((active - 1 + delta) % #cats + 1)
+end
+
+-- Ricerca ----------------------------------------------------------------------
+-- La barra in alto a sinistra (o il tasto NavSearch) apre un campo di testo
+-- (plugin InputText). Premendo Invio la griglia mostra le tile di tutte le
+-- categorie che contengono tutte le parole cercate (nome della tile, etichetta
+-- o categoria); Esc, un clic su una categoria o una ricerca vuota tornano alla
+-- categoria. Mentre si scrive i tasti di navigazione ed Esc sono spenti, e si
+-- riaccendono poco dopo (MeasureKeysDelay) per non prendere il rilascio di Invio.
+
+local function updateSearchBar()
+	set('SearchText', 'Text', query ~= '' and query or V.SearchPlaceholder)
+	set('SearchText', 'FontColor', query ~= '' and V.TextColor or V.TextDimColor)
+	set('SearchPill', 'Shape', string.format(
+		'Rectangle 0,0,%d,%d,%d | Fill Color %s | StrokeWidth 0', V.SearchW, V.MenuH,
+		math.min(V.MenuRadius, math.floor(V.MenuH / 2)),
+		searchCat and V.ActiveCategoryColor or V.HoverCategoryColor))
+end
+
+-- Torna dalla ricerca alla categoria attiva (senza ridisegnare).
+leaveSearch = function()
+	if not searchCat then return false end
+	searchCat, query = nil, ''
+	applyGeometry(cats[active])
+	offset = normalizeOffset(cats[active].offset)
+	pos, base = offset, -1
+	hover.idx, hover.on, hover.a = 0, false, 0
+	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
+	zooming = {}
+	updateSearchBar()
+	show('SearchEmpty', false)
+	return true
+end
+
+local function runSearch(text)
+	local words = {}
+	for w in trim(text or ''):lower():gmatch('%S+') do words[#words + 1] = w end
+	if #words == 0 then
+		if leaveSearch() then
+			if V.AnimCategory then appear = 0 startTicker() end
+			render(true)
+		end
+		return
+	end
+
+	local results = {}
+	for _, c in ipairs(cats) do
+		for _, t in ipairs(c.tiles) do
+			local hay = (t.name .. ' ' .. (t.label or '') .. ' ' .. t.catLabel):lower()
+			local ok = true
+			for _, w in ipairs(words) do
+				if not hay:find(w, 1, true) then ok = false break end
+			end
+			if ok then results[#results + 1] = t end
+		end
+	end
+	-- prima i nomi che iniziano con la prima parola, poi in ordine alfabetico
+	local first = words[1]
+	table.sort(results, function(a, b)
+		local na, nb = a.name:lower(), b.name:lower()
+		local pa, pb = na:sub(1, #first) == first, nb:sub(1, #first) == first
+		if pa ~= pb then return pa end
+		return na < nb
+	end)
+
+	saveScroll() -- ricorda la posizione della categoria che si lascia
+	query = trim(text)
+	searchCat = { name = '', label = '', tiles = results }
+	categoryGeometry(searchCat)
+	applyGeometry(searchCat)
+	offset, pos, base = 0, 0, -1
+	hover.idx, hover.on, hover.a = 0, false, 0
+	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
+	zooming = {}
+	updateSearchBar()
+	show('SearchEmpty', #results == 0)
+	if V.AnimCategory then
+		appear = 0
+		startTicker()
+	end
+	render(true)
+	-- il primo risultato e' gia' evidenziato: Invio/Spazio lo avvia
+	if #results > 0 then Nav(0, 0) end
+end
+
+function SearchOpen()
+	if not ready or launching or not visible then return end
+	hotKey(false) -- i tasti servono al campo di testo
+	SKIN:Bang('!SetOption', 'MeasureSearchInput', 'DefaultValue', query)
+	SKIN:Bang('!UpdateMeasure', 'MeasureSearchInput')
+	SKIN:Bang('!CommandMeasure', 'MeasureSearchInput', 'ExecuteBatch 1')
+end
+
+function SearchSubmit(text)
+	dbg('ricerca: ' .. tostring(text))
+	if ready and visible then runSearch(text) end
+	SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1')
+end
+
+function SearchDismiss()
+	SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1')
+end
+
+-- Riaccende i tasti dopo la ricerca (chiamata da MeasureKeysDelay).
+function KeysReady()
+	if ready and visible then hotKey(true) end
+end
+
+-- Esc: chiude la ricerca se e' aperta, altrimenti nasconde il launcher.
+function Escape()
+	if not ready then return end
+	if searchCat and not launching then
+		leaveSearch()
+		if V.AnimCategory then appear = 0 startTicker() end
+		render(true)
+	else
+		Hide()
+	end
 end
 
 function LaunchStep()

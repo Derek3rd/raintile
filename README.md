@@ -38,9 +38,19 @@ Il launcher si carica **una volta sola** (all'avvio di Rainmeter o con *Aggiorna
 | `W` `A` `S` `D` / frecce | spostano l'evidenziazione tra le tile (la griglia scorre quando serve, anche con lo scroll infinito) |
 | `Spazio` / `Invio` | avviano la tile evidenziata (la prima pressione, se nulla è evidenziato, evidenzia la prima tile visibile) |
 | `Q` / `E` | categoria precedente / successiva |
-| `Esc` | chiude il launcher |
+| `F` | apre la ricerca |
+| `Esc` | chiude la ricerca, oppure il launcher |
 
 Mouse e tastiera muovono la stessa evidenziazione. I tasti sono registrati (plugin HotKey) dalla mini-skin invisibile `Raintile\Navigation`, attiva **solo mentre il launcher è visibile**: a launcher chiuso WASD e frecce tornano alle altre applicazioni. Si cambiano in `Settings.inc` (`NavUp`, `NavUp2`, ...); `KeyboardNav=0` disattiva tutto.
+
+## Ricerca
+
+Clic sulla barra **Cerca** in alto a sinistra, oppure tasto `F` (`NavSearch`): si apre un campo di testo. Premendo **Invio** la griglia mostra le tile di **tutte le categorie** che contengono tutte le parole scritte (nel nome della tile, nell'etichetta o nel nome della categoria: `giochi steam` trova le tile di Steam nella categoria Giochi). Prima vengono i nomi che iniziano con la prima parola, poi gli altri in ordine alfabetico.
+
+- Il primo risultato è già evidenziato: `Spazio`/`Invio` lo avviano, WASD/frecce scorrono i risultati.
+- `Esc`, un clic su una categoria o una ricerca vuota tornano alle categorie (alla posizione in cui le avevi lasciate).
+- I risultati usano la griglia di default (`NX`/`NY` di `Settings.inc`).
+- Il campo di testo è quello del plugin InputText di Rainmeter, che restituisce il testo solo alla pressione di Invio: i risultati non si aggiornano mentre si scrive.
 
 ## Avvio di una tile
 

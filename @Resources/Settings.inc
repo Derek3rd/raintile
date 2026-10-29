@@ -79,6 +79,8 @@ NavConfirm2=ENTER
 ; Categoria precedente / successiva
 NavPrevCategory=Q
 NavNextCategory=E
+; Apre la ricerca
+NavSearch=F
 ; 1 = nasconde il launcher dopo aver avviato una tile, 0 = resta aperto
 CloseOnLaunch=1
 ; 1 = all'avvio di Rainmeter il launcher resta nascosto fino alla scorciatoia
@@ -156,6 +158,12 @@ TileHover=1
 ; Durata in ms della dissolvenza all'apertura/chiusura (0 = istantanea).
 ; Viene copiata in Rainmeter.ini e vale dal caricamento successivo.
 FadeDuration=0
+
+; --- Ricerca ----------------------------------------------------------------------
+; Barra in alto a sinistra (o tasto NavSearch): Invio cerca in tutte le
+; categorie, Esc o un clic su una categoria tornano indietro
+SearchW=320
+SearchPlaceholder=Cerca
 
 ; --- Import dagli store -------------------------------------------------------------
 ; Tasto destro sulla skin > "Importa giochi dagli store". I giochi installati

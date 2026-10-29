@@ -137,7 +137,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | *section name* | tile name; also the default name of its images and what search looks at |
 | `Command` | what to run on launch (see below) |
 | `Label` | text at the bottom left; a tile without images shows its name |
-| `Color` | background colour `R,G,B,A` when there is no image |
+| `Color` | background colour (`R,G,B,A` or `#RRGGBBAA`, see [Colours](#colours)) when there is no background image (empty: taken from the logo with `AutoTileColor=1`, otherwise `TileColor`) |
 | `Image` | another name for both images: `Image=diablo4` looks for `background\diablo4.*` and `logo\diablo4.*` |
 | `Background` | specific background file (relative to `background\` or absolute; extension optional) |
 | `Logo` | specific logo file (relative to `logo\` or absolute) |
@@ -327,6 +327,8 @@ See [Importing games from stores](#importing-games-from-stores): `ImportCategory
 
 ### Appearance
 
+<a id="colours"></a>Colours can be written as `R,G,B,A` (e.g. `0,210,180,255`; the alpha is optional) or in hex as `#RRGGBBAA` or `#RRGGBB` (e.g. `#00D2B4FF`; the `#` is optional). Alpha is the opacity, 0-255 (`00`-`FF`). The same formats work for `Color=` in the category files.
+
 | Setting | Default | Description |
 | --- | --- | --- |
 | `ShowLabels` | `1` | show tile labels |
@@ -334,6 +336,7 @@ See [Importing games from stores](#importing-games-from-stores): `ImportCategory
 | `MenuFontSize`, `LabelFontSize` | `12`, `14` | font sizes (points) |
 | `BgColor` | `8,8,12,200` | launcher background |
 | `TileColor` | `36,36,44,255` | default tile colour |
+| `AutoTileColor` | `1` | tiles with a logo but no background image and no `Color=` get a dark colour taken from the logo's main hue (white/grey logos keep `TileColor`); computed in the background and cached in `Generated\Colors.txt` |
 | `HoverColor`, `AccentColor` | `255,255,255,25`, `0,210,180,255` | highlight fill and border/accent |
 | `ActiveCategoryColor`, `HoverCategoryColor` | `0,210,180,70`, `255,255,255,20` | menu pills |
 | `TextColor`, `TextDimColor` | `240,240,245,255`, `150,150,160,255` | text |
@@ -378,8 +381,9 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
   Scripts/Helper.ps1         gamepad and focus-loss helper
   Scripts/Options.ps1        Options window
   Generated/Grid.inc         generated meters
-  Generated/Sizes.inc        percentage sizes converted to pixels
+  Generated/Sizes.inc        percentage sizes and #hex colours converted for Rainmeter
   Generated/Thumbs/          thumbnails (safe to delete: they are rebuilt)
+  Generated/Colors.txt       tile colours taken from logos (AutoTileColor)
 ```
 
 ## Troubleshooting

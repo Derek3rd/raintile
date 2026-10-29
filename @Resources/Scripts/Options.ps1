@@ -37,7 +37,7 @@ $choices = @{
 # 0/1 switches (checkbox)
 $switches = 'ShowLabels', 'InfiniteScroll', 'KeyboardNav', 'CloseOnLaunch', 'StartHidden', 'LaunchAnimation',
 'AnimOpen', 'AnimCategory', 'AnimHover', 'AnimScroll', 'AnimLogoZoom', 'LogoGreyscale', 'Thumbnails',
-'TileHover', 'Gamepad', 'ImportOnStart', 'DebugLog'
+'TileHover', 'Gamepad', 'ImportOnStart', 'DebugLog', 'AutoHide', 'AutoTileColor'
 
 # --- Settings.inc --------------------------------------------------------------
 
@@ -80,9 +80,23 @@ function Write-Settings([string]$path, [hashtable]$values) {
     [IO.File]::WriteAllText($path, (($lines -join "`r`n") + "`r`n"), $utf8)
 }
 
+# Colour components (R, G, B[, A]) from "R,G,B[,A]" or hex RRGGBB[AA] (with or
+# without # or 0x); $null if the text is not a colour.
+function ConvertFrom-ColorText([string]$text) {
+    $t = $text.Trim()
+    if ($t -match '^\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(\s*,\s*\d{1,3})?$') {
+        return , ($t -split '\s*,\s*' | ForEach-Object { [int]$_ })
+    }
+    $hex = $t -replace '^#', '' -replace '^0[xX]', ''
+    if ($hex -match '^[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$') {
+        return , (0..($hex.Length / 2 - 1) | ForEach-Object { [Convert]::ToInt32($hex.Substring($_ * 2, 2), 16) })
+    }
+    return $null
+}
+
 function Get-ControlKind($item) {
     if ($choices.ContainsKey($item.Key)) { return 'choice' }
-    if ($item.Value -match '^\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(\s*,\s*\d{1,3})?$') { return 'color' }
+    if ($item.Key -match 'Color$' -and (ConvertFrom-ColorText $item.Value)) { return 'color' }
     if ($switches -contains $item.Key) { return 'bool' }
     return 'text'
 }
@@ -285,18 +299,26 @@ foreach ($item in $settings) {
         'color' {
             $c = New-Object System.Windows.Forms.Button
             $c.Width = 280; $c.Text = $item.Value; $c.Tag = $item.Value; $c.TextAlign = 'MiddleRight'
-            $p = $item.Value -split '\s*,\s*' | ForEach-Object { [int]$_ }
+            $p = ConvertFrom-ColorText $item.Value
             $c.BackColor = [System.Drawing.Color]::FromArgb(255, $p[0], $p[1], $p[2])
             $c.ForeColor = if (($p[0] + $p[1] + $p[2]) -gt 380) { [System.Drawing.Color]::Black } else { [System.Drawing.Color]::White }
             $c.Add_Click({
                     $btn = $this
-                    $v = $btn.Tag -split '\s*,\s*' | ForEach-Object { [int]$_ }
+                    $v = ConvertFrom-ColorText $btn.Tag
                     $dlg = New-Object System.Windows.Forms.ColorDialog
                     $dlg.FullOpen = $true
                     $dlg.Color = [System.Drawing.Color]::FromArgb(255, $v[0], $v[1], $v[2])
                     if ($dlg.ShowDialog($form) -eq 'OK') {
-                        $alpha = if ($v.Count -ge 4) { ",$($v[3])" } else { '' }
-                        $btn.Tag = "$($dlg.Color.R),$($dlg.Color.G),$($dlg.Color.B)$alpha"
+                        # the value keeps its format (hex or R,G,B) and its opacity
+                        $old = ([string]$btn.Tag).Trim()
+                        if ($old -notmatch ',') {
+                            $prefix = if ($old -match '^#') { '#' } elseif ($old -match '^0[xX]') { '0x' } else { '' }
+                            $alpha = if ($v.Count -ge 4) { '{0:X2}' -f $v[3] } else { '' }
+                            $btn.Tag = $prefix + ('{0:X2}{1:X2}{2:X2}' -f $dlg.Color.R, $dlg.Color.G, $dlg.Color.B) + $alpha
+                        } else {
+                            $alpha = if ($v.Count -ge 4) { ",$($v[3])" } else { '' }
+                            $btn.Tag = "$($dlg.Color.R),$($dlg.Color.G),$($dlg.Color.B)$alpha"
+                        }
                         $btn.Text = $btn.Tag
                         $btn.BackColor = [System.Drawing.Color]::FromArgb(255, $dlg.Color.R, $dlg.Color.G, $dlg.Color.B)
                         $btn.ForeColor = if (($dlg.Color.R + $dlg.Color.G + $dlg.Color.B) -gt 380) { [System.Drawing.Color]::Black } else { [System.Drawing.Color]::White }
@@ -437,7 +459,7 @@ Add-Header 'Tile'
 Add-Field 'tile.Name' 'Name' 'Tile name: also the default name of its images'
 Add-Field 'tile.Command' 'Command' 'Program, .lnk/.url shortcut, URL, folder or Rainmeter bang' 'Browse...'
 Add-Field 'tile.Label' 'Label' 'Text at the bottom left (empty = none)'
-Add-Field 'tile.Color' 'Colour' 'Background colour when there is no image (R,G,B,A)' 'Pick...'
+Add-Field 'tile.Color' 'Colour' 'Background colour when there is no background image (R,G,B,A or #RRGGBBAA; empty = automatic from the logo)' 'Pick...'
 Add-Field 'tile.Background' 'Background' 'Empty = Images\<category>\background\<Name>.*' 'Browse...'
 Add-Field 'tile.Logo' 'Logo' 'Empty = Images\<category>\logo\<Name>.*' 'Browse...'
 $note = New-Object System.Windows.Forms.Label

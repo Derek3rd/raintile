@@ -208,8 +208,14 @@ ShowLabels=1
 FontFace=Segoe UI
 MenuFontSize=12
 LabelFontSize=14
+; Colours: R,G,B,A (alpha optional) or hex #RRGGBBAA / #RRGGBB (the # is
+; optional). The same formats work for Color= in the category files.
 BgColor=8,8,12,200
 TileColor=36,36,44,255
+; 1 = tiles with a logo but no background image (and no Color= in their
+; category file) get a dark colour taken from the logo, computed once in the
+; background; 0 = they use TileColor
+AutoTileColor=1
 HoverColor=255,255,255,25
 AccentColor=0,210,180,255
 ActiveCategoryColor=0,210,180,70

@@ -1,13 +1,15 @@
 # Raintile: Options window (settings and categories). Work in progress.
 #
 # Opened from the gear button or the right-click menu. A WPF window (look in
-# Options.xaml) with the sections on the left:
+# Options.xaml) with a menu on the left ($navTree: sections, some with
+# sub-entries):
 #  - settings pages: every Settings.inc entry with a fitting control (switch,
 #    slider, choices, colour, key capture, ...), described by $schema below.
 #    Saving only changes the value on its line: comments and order stay as
 #    they were. Entries not in $schema are listed under Advanced.
-#  - Categories & tiles: create, delete (to the Recycle Bin) and reorder
-#    categories; add, delete, reorder and edit tiles, with a preview. Picked
+#  - Categories: create, delete (to the Recycle Bin) and reorder categories.
+#    One sub-entry per category: its settings, and its tiles to add, delete,
+#    reorder and edit, with a preview. Picked
 #    images are copied to Images\<category>\background|logo\<TileName>.<ext>.
 #    Imported games (below the Import.ps1 marker) are listed but cannot be
 #    edited.
@@ -206,7 +208,7 @@ $schema = @(
         )
     }
     @{ Id = 'layout'; Title = 'Layout'; Icon = 0xE8A9
-        Desc = 'The default grid of tiles and the spaces around it. Each category can have its own grid (Categories & tiles).'
+        Desc = 'The default grid of tiles and the spaces around it. Each category can have its own grid (Categories).'
         Groups = @(
             @{ Title = 'Grid'; Items = @(
                     (Num 'NX' 'Columns' 1 12 1),
@@ -315,7 +317,7 @@ $schema = @(
                 ) }
         )
     }
-    @{ Id = 'keys'; Title = 'Keybindings'; Icon = 0xE765
+    @{ Id = 'keys'; Title = 'Keyboard'; Icon = 0xE765
         Desc = 'Click a key and press the new one. Navigation keys only work while the launcher is visible.'
         Groups = @(
             @{ Title = 'Open and close'; Items = @(
@@ -393,10 +395,20 @@ $schema = @(
                 ) }
         )
     }
-    @{ Id = 'categories'; Title = 'Categories & tiles'; Icon = 0xECA5
-        Desc = 'One file per category in Categories\. Changes are written when you save.'
+    @{ Id = 'categories'; Title = 'Categories'; Icon = 0xECA5
+        Desc = 'One file per category in Categories\. Double-click a category, or pick it on the left, to edit it and its tiles.'
         Groups = @()
     }
+)
+
+# Menu on the left: pages, and groups with sub-entries (Categories lists one
+# entry per category file)
+$navTree = @(
+    @{ Page = 'general' }, @{ Page = 'layout' }, @{ Page = 'menu' }, @{ Page = 'appearance' },
+    @{ Page = 'animations' }, @{ Page = 'backgrounds' },
+    @{ Id = 'keybindings'; Title = 'Keybindings'; Icon = 0xE765; Children = @('keys', 'gamepad') },
+    @{ Page = 'search' }, @{ Page = 'import' }, @{ Page = 'advanced' },
+    @{ Page = 'categories'; Categories = $true }
 )
 
 # Default values (as shipped), for "Restore default"
@@ -1530,7 +1542,7 @@ function New-SettingsPage($page) {
     return $sv
 }
 
-# --- Categories & tiles page -------------------------------------------------------
+# --- Categories pages --------------------------------------------------------------
 
 function Get-Model([string]$file) {
     if (-not $models.ContainsKey($file)) { $models[$file] = Read-Category (Join-Path $categoriesDir $file) }
@@ -1558,10 +1570,10 @@ function Set-Thumb($thumb, [string]$path, $brush = $null) {
     $thumb.Background = if ($brush) { $brush } else { Res 'FieldBg' }
 }
 
-function New-ListEntry([string]$title, [string]$sub, $tag) {
+function New-ListEntry([string]$title, [string]$sub, $tag, [double]$thumbSize = 30) {
     $item = New-Object System.Windows.Controls.ListBoxItem
     $sp = New-Panel 'Horizontal'
-    $thumb = New-Thumb 30
+    $thumb = New-Thumb $thumbSize
     $thumb.Margin = T 0 0 10 0
     [void](Add-To $sp $thumb)
     $texts = New-Panel
@@ -1578,7 +1590,8 @@ function New-ListEntry([string]$title, [string]$sub, $tag) {
     return $item
 }
 
-function Get-CurrentFile { if ($cat.Cats.SelectedItem) { return [string]$cat.Cats.SelectedItem.Tag.File } return $null }
+$script:currentFile = $null  # category shown (chosen in the menu)
+function Get-CurrentFile { return $script:currentFile }
 function Get-CurrentBase { $f = Get-CurrentFile; if ($f) { return [IO.Path]::GetFileNameWithoutExtension($f) } return $null }
 function Get-CurrentTile {
     $sel = $cat.Tiles.SelectedItem
@@ -1599,25 +1612,52 @@ function Get-TileBrush([string]$base, $section, [string]$bg, [string]$logo) {
     return (Res 'FieldBg')
 }
 
-function Refresh-Cats([string]$selectFile = '') {
-    $cat.Cats.Items.Clear()
+# Categories in menu order: File, Base, Name, Icon, Tiles, Imported
+function Get-CategoryEntries {
     $entries = foreach ($f in Get-CategoryFiles) {
         $m = Get-Model $f.Name
         $c = Get-CategorySection $m
         $order = 0; [void][int]::TryParse((Get-Key $c 'Order'), [ref]$order)
         if (-not $order) { $order = 9999 }
         $name = Get-Key $c 'Name'; if (-not $name) { $name = $f.BaseName }
-        [pscustomobject]@{ File = $f.Name; Base = $f.BaseName; Order = $order; Name = $name; Icon = (Get-CategoryIcon $f.BaseName $c) }
+        [pscustomobject]@{
+            File = $f.Name; Base = $f.BaseName; Order = $order; Name = $name; Icon = (Get-CategoryIcon $f.BaseName $c)
+            Tiles = (Get-Tiles $m).Count; Imported = (Get-ImportedNames $m).Count
+        }
     }
+    return @($entries | Sort-Object Order, File)
+}
+
+# List of the Categories page
+function Refresh-Cats([string]$selectFile = '') {
+    if (-not $cat.Cats) { return }
+    $cat.Cats.Items.Clear()
     $index = 0; $i = 0
-    foreach ($e in @($entries | Sort-Object Order, File)) {
-        $item = New-ListEntry $e.Name $e.File @{ File = $e.File }
+    foreach ($e in Get-CategoryEntries) {
+        $count = "$($e.Tiles) tile$(if ($e.Tiles -ne 1) { 's' })"
+        if ($e.Imported) { $count += " + $($e.Imported) imported" }
+        $item = New-ListEntry $e.Name "$($e.File)   $([char]0xB7)   $count" @{ File = $e.File } 36
         Set-Thumb $item.Tag.Thumb $e.Icon
+        $item.Padding = T 12 9
         [void]$cat.Cats.Items.Add($item)
         if ($e.File -eq $selectFile) { $index = $i }
         $i++
     }
-    if ($cat.Cats.Items.Count) { $cat.Cats.SelectedIndex = $index } else { Show-Category }
+    if ($cat.Cats.Items.Count) { $cat.Cats.SelectedIndex = $index }
+}
+
+# Name and icon of a category in the menu and in the page title
+function Update-NavCategory([string]$file) {
+    $c = Get-CategorySection (Get-Model $file)
+    $name = Get-Key $c 'Name'
+    if (-not $name) { $name = [IO.Path]::GetFileNameWithoutExtension($file) }
+    foreach ($it in $nav.Items) {
+        if ($it.Tag.Id -eq "cat:$file") {
+            $it.Tag.Title.Text = $name
+            $it.Tag.Icon.Source = Get-Bitmap (Get-CategoryIcon ([IO.Path]::GetFileNameWithoutExtension($file)) $c) 40
+        }
+    }
+    if ($script:currentFile -eq $file -and $script:navCurrent -eq "cat:$file") { $pageTitle.Text = $name }
 }
 
 function Update-TileEntry($item) {
@@ -1650,6 +1690,7 @@ function Refresh-Tiles([int]$select = 0) {
 }
 
 function Show-Category {
+    if (-not $cat.Tiles) { return }
     $script:loading = $true
     $file = Get-CurrentFile
     $cat.CatCard.IsEnabled = [bool]$file
@@ -1739,33 +1780,102 @@ function New-ListColumn([string]$title, $list, [object[]]$buttons) {
     return $b
 }
 
-function New-CategoriesPage {
-    $grid = New-Grid @('250', '290', '*')
+# Categories page: the list of categories, to create, reorder and delete them
+function New-CategoryListPage {
+    $dp = New-Object System.Windows.Controls.DockPanel
+    $dp.Margin = T 36 4 36 20
+    $dp.MaxWidth = 760
+    $dp.HorizontalAlignment = 'Left'
+    $bar = New-Panel 'Horizontal'
+    $bar.Margin = T 0 0 0 12
+    [System.Windows.Controls.DockPanel]::SetDock($bar, 'Top')
+    [void]$dp.Children.Add($bar)
+    $btnCatNew = New-Button 'New category' 'AccentButton'
+    $btnCatOpen = New-Button 'Open'
+    $btnCatUp = New-Button 'Move up'
+    $btnCatDown = New-Button 'Move down'
+    $btnCatDel = New-Button 'Delete'
+    $btnCatDel.Foreground = Res 'DangerBrush'
+    foreach ($b in $btnCatNew, $btnCatOpen, $btnCatUp, $btnCatDown, $btnCatDel) { $b.Margin = T 0 0 8 0; [void](Add-To $bar $b) }
+    $card = New-Object System.Windows.Controls.Border
+    $card.Style = Res 'Card'
+    $card.Padding = T 8
+    $card.Margin = T 0
+    $cat.Cats = New-Object System.Windows.Controls.ListBox
+    $card.Child = $cat.Cats
+    [void]$dp.Children.Add($card)
+
+    $cat.Cats.Add_MouseDoubleClick({ if ($cat.Cats.SelectedItem) { Open-Category $cat.Cats.SelectedItem.Tag.File } })
+    $cat.Cats.Add_KeyDown({ param($s, $e) if ($e.Key -eq 'Return' -and $cat.Cats.SelectedItem) { Open-Category $cat.Cats.SelectedItem.Tag.File } })
+    $btnCatOpen.Add_Click({ if ($cat.Cats.SelectedItem) { Open-Category $cat.Cats.SelectedItem.Tag.File } })
+
+    $btnCatNew.Add_Click({
+            $r = Show-Dialog 'New category' 'Name of the new category (e.g. Emulators):' @('Create', 'Cancel') ''
+            if ($r.Button -ne 'Create' -or -not $r.Text) { return }
+            $file = ($r.Text -replace '[^A-Za-z0-9_-]', '')
+            if (-not $file) { [void](Show-Dialog 'Raintile' 'Use at least one letter or digit.'); return }
+            if (Test-Path -LiteralPath (Join-Path $categoriesDir "$file.ini")) {
+                [void](Show-Dialog 'Raintile' "The category '$file' already exists."); return
+            }
+            $m = [pscustomobject]@{ Header = '; Format: see Games.ini'; Sections = (New-Object System.Collections.ArrayList); Imported = '' }
+            $c = Get-CategorySection $m
+            Set-Key $c 'Name' $r.Text
+            Set-Key $c 'Order' "$($cat.Cats.Items.Count + 1)"
+            Write-Category (Join-Path $categoriesDir "$file.ini") $m
+            foreach ($kind in 'background', 'logo') { New-Item -ItemType Directory -Force -Path (Join-Path $imagesRoot "$file\$kind") | Out-Null }
+            $models["$file.ini"] = $m
+            Refresh-Cats "$file.ini"
+            Build-Nav $script:navCurrent
+        })
+    $btnCatDel.Add_Click({
+            if (-not $cat.Cats.SelectedItem) { return }
+            $file = $cat.Cats.SelectedItem.Tag.File
+            $r = Show-Dialog 'Delete category' "Move the category $file to the Recycle Bin? Its images stay in Images." @('Delete', 'Cancel')
+            if ($r.Button -ne 'Delete') { return }
+            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile((Join-Path $categoriesDir $file), 'OnlyErrorDialogs', 'SendToRecycleBin')
+            $models.Remove($file); $changedFiles.Remove($file)
+            if ($script:currentFile -eq $file) { $script:currentFile = $null }
+            Update-Dirty
+            Refresh-Cats
+            Build-Nav $script:navCurrent
+        })
+    foreach ($pair in @(@($btnCatUp, -1), @($btnCatDown, 1))) {
+        $pair[0].Tag = $pair[1]
+        $pair[0].Add_Click({
+                param($s, $e)
+                $i = $cat.Cats.SelectedIndex; $j = $i + $s.Tag
+                if ($i -lt 0 -or $j -lt 0 -or $j -ge $cat.Cats.Items.Count) { return }
+                $files = @($cat.Cats.Items | ForEach-Object { $_.Tag.File })
+                $tmp = $files[$i]; $files[$i] = $files[$j]; $files[$j] = $tmp
+                for ($n = 0; $n -lt $files.Count; $n++) {
+                    $c = Get-CategorySection (Get-Model $files[$n])
+                    if ((Get-Key $c 'Order') -ne "$($n + 1)") { Set-Key $c 'Order' "$($n + 1)"; Set-Changed $files[$n] }
+                }
+                Refresh-Cats $files[$j]
+                Build-Nav $script:navCurrent
+            })
+    }
+    return $dp
+}
+
+# Page of one category (the same page for all: Show-Category fills it)
+function New-CategoryPage {
+    $grid = New-Grid @('300', '*')
     $grid.Margin = T 36 4 36 20
 
-    # Column 1: categories
-    $cat.Cats = New-Object System.Windows.Controls.ListBox
-    $btnCatNew = New-IconButton 0xE710 'New category'
-    $btnCatDel = New-IconButton 0xE74D 'Delete category'
-    $btnCatUp = New-IconButton 0xE70E 'Move up'
-    $btnCatDown = New-IconButton 0xE70D 'Move down'
-    $col = New-ListColumn 'Categories' $cat.Cats @($btnCatNew, $btnCatUp, $btnCatDown, $btnCatDel)
-    [void]$grid.Children.Add($col)
-
-    # Column 2: tiles of the category
+    # Column 1: tiles of the category
     $cat.Tiles = New-Object System.Windows.Controls.ListBox
     $btnTileNew = New-IconButton 0xE710 'New tile'
     $btnTileDel = New-IconButton 0xE74D 'Delete tile'
     $btnTileUp = New-IconButton 0xE70E 'Move up'
     $btnTileDown = New-IconButton 0xE70D 'Move down'
     $col = New-ListColumn 'Tiles' $cat.Tiles @($btnTileNew, $btnTileUp, $btnTileDown, $btnTileDel)
-    Set-Col $col 1
     [void]$grid.Children.Add($col)
 
-    # Column 3: details
+    # Column 2: details
     $sv = New-Object System.Windows.Controls.ScrollViewer
     $sv.VerticalScrollBarVisibility = 'Auto'
-    Set-Col $sv 2
+    Set-Col $sv 1
     [void]$grid.Children.Add($sv)
     $details = New-Panel
     $details.MaxWidth = 640
@@ -1893,7 +2003,6 @@ function New-CategoriesPage {
     }
 
     # --- events
-    $cat.Cats.Add_SelectionChanged({ Show-Category })
     $cat.Tiles.Add_SelectionChanged({ Show-Tile })
 
     foreach ($k in 'Name', 'NX', 'NY', 'IconSize') {
@@ -1903,9 +2012,7 @@ function New-CategoriesPage {
                 $file = Get-CurrentFile; if (-not $file) { return }
                 Set-Key (Get-CategorySection (Get-Model $file)) $s.Tag $s.Text.Trim()
                 Set-Changed $file
-                if ($s.Tag -eq 'Name') {
-                    $cat.Cats.SelectedItem.Tag.Title.Text = $(if ($s.Text.Trim()) { $s.Text.Trim() } else { Get-CurrentBase })
-                }
+                if ($s.Tag -eq 'Name') { Update-NavCategory $file }
             })
     }
     foreach ($k in 'Command', 'Label', 'Color') {
@@ -1956,7 +2063,7 @@ function New-CategoriesPage {
             Set-Changed $file
             $icon = Get-CategoryIcon (Get-CurrentBase) (Get-CategorySection (Get-Model $file))
             Set-Thumb $cat.CatIcon $icon
-            Set-Thumb $cat.Cats.SelectedItem.Tag.Thumb $icon
+            Update-NavCategory $file
         })
     $btnIconDel.Add_Click({
             $file = Get-CurrentFile; if (-not $file) { return }
@@ -1970,51 +2077,8 @@ function New-CategoriesPage {
             Set-Key $c 'Icon' ''
             Set-Changed $file
             Set-Thumb $cat.CatIcon $null
-            Set-Thumb $cat.Cats.SelectedItem.Tag.Thumb $null
+            Update-NavCategory $file
         })
-
-    # categories: new, delete, reorder
-    $btnCatNew.Add_Click({
-            $r = Show-Dialog 'New category' 'Name of the new category (e.g. Emulators):' @('Create', 'Cancel') ''
-            if ($r.Button -ne 'Create' -or -not $r.Text) { return }
-            $file = ($r.Text -replace '[^A-Za-z0-9_-]', '')
-            if (-not $file) { [void](Show-Dialog 'Raintile' 'Use at least one letter or digit.'); return }
-            if (Test-Path -LiteralPath (Join-Path $categoriesDir "$file.ini")) {
-                [void](Show-Dialog 'Raintile' "The category '$file' already exists."); return
-            }
-            $m = [pscustomobject]@{ Header = '; Format: see Games.ini'; Sections = (New-Object System.Collections.ArrayList); Imported = '' }
-            $c = Get-CategorySection $m
-            Set-Key $c 'Name' $r.Text
-            Set-Key $c 'Order' "$($cat.Cats.Items.Count + 1)"
-            Write-Category (Join-Path $categoriesDir "$file.ini") $m
-            foreach ($kind in 'background', 'logo') { New-Item -ItemType Directory -Force -Path (Join-Path $imagesRoot "$file\$kind") | Out-Null }
-            $models["$file.ini"] = $m
-            Refresh-Cats "$file.ini"
-        })
-    $btnCatDel.Add_Click({
-            $file = Get-CurrentFile; if (-not $file) { return }
-            $r = Show-Dialog 'Delete category' "Move the category $file to the Recycle Bin? Its images stay in Images." @('Delete', 'Cancel')
-            if ($r.Button -ne 'Delete') { return }
-            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile((Join-Path $categoriesDir $file), 'OnlyErrorDialogs', 'SendToRecycleBin')
-            $models.Remove($file); $changedFiles.Remove($file)
-            Update-Dirty
-            Refresh-Cats
-        })
-    foreach ($pair in @(@($btnCatUp, -1), @($btnCatDown, 1))) {
-        $pair[0].Tag = $pair[1]
-        $pair[0].Add_Click({
-                param($s, $e)
-                $i = $cat.Cats.SelectedIndex; $j = $i + $s.Tag
-                if ($i -lt 0 -or $j -lt 0 -or $j -ge $cat.Cats.Items.Count) { return }
-                $files = @($cat.Cats.Items | ForEach-Object { $_.Tag.File })
-                $tmp = $files[$i]; $files[$i] = $files[$j]; $files[$j] = $tmp
-                for ($n = 0; $n -lt $files.Count; $n++) {
-                    $c = Get-CategorySection (Get-Model $files[$n])
-                    if ((Get-Key $c 'Order') -ne "$($n + 1)") { Set-Key $c 'Order' "$($n + 1)"; Set-Changed $files[$n] }
-                }
-                Refresh-Cats $files[$j]
-            })
-    }
 
     # tiles: new, delete, reorder (hand-written ones only)
     $btnTileNew.Add_Click({
@@ -2101,7 +2165,9 @@ function Invoke-Action([string]$action) {
             } finally { $win.Cursor = $null }
             $models.Clear()
             $changedFiles.Clear()
-            if ($cat.Cats) { Refresh-Cats (Get-CurrentFile) }
+            Build-Nav $script:navCurrent
+            Refresh-Cats
+            if ($script:currentFile) { Show-Category }
             Invoke-Rainmeter "!Refresh `"$Config`""
         }
         'OpenSettings' { Start-Process notepad.exe -ArgumentList "`"$settingsFile`"" }
@@ -2110,23 +2176,159 @@ function Invoke-Action([string]$action) {
 }
 
 # --- Navigation ------------------------------------------------------------------
+# The menu is rebuilt (Build-Nav) when a group opens or closes and when the
+# categories change. Entry ids: page:<id>, group:<id>, categories, cat:<file>.
 
 $pages = @{}
-foreach ($page in $schema) {
+$schemaById = @{}
+foreach ($page in $schema) { $schemaById[$page.Id] = $page }
+$navOpen = @{ keybindings = $true; categories = $true }
+$script:navBuilding = $false
+$script:navCurrent = $null
+$script:navPending = $null
+
+# Entry of the menu: level 0 with a glyph (and an arrow for groups), level 1
+# indented, with the category icon if any
+function New-NavItem([string]$id, [string]$title, [int]$glyph, [int]$level, [hashtable]$tag, [string]$icon = '', $open = $null) {
     $item = New-Object System.Windows.Controls.ListBoxItem
-    $sp = New-Panel 'Horizontal'
-    $g = New-Glyph $page.Icon 15
-    $g.Width = 22
-    $g.Margin = T 0 0 10 0
-    [void](Add-To $sp $g)
-    $t = New-Text $page.Title 13.5
+    $g = New-Grid @('Auto', '*', 'Auto')
+    if ($level -eq 0) {
+        $gl = New-Glyph $glyph 15
+        $gl.Width = 22
+        $gl.Margin = T 0 0 10 0
+        [void]$g.Children.Add($gl)
+        $item.Padding = T 12 9
+    } else {
+        $img = New-Object System.Windows.Controls.Image
+        $img.Width = 16; $img.Height = 16
+        $img.Margin = T 0 0 10 0
+        $img.Source = Get-Bitmap $icon 40
+        [void]$g.Children.Add($img)
+        $tag.Icon = $img
+        $item.Padding = T 44 7 12 7
+    }
+    $t = New-Text $title $(if ($level -eq 0) { 13.5 } else { 13 })
     $t.VerticalAlignment = 'Center'
-    [void](Add-To $sp $t)
-    $item.Content = $sp
-    $item.Tag = $page
-    $item.Padding = T 12 9
-    [void]$nav.Items.Add($item)
+    $t.TextTrimming = 'CharacterEllipsis'
+    Set-Col $t 1
+    [void]$g.Children.Add($t)
+    if ($null -ne $open) {
+        $ch = New-Glyph $(if ($open) { 0xE70D } else { 0xE76C }) 9
+        $ch.Foreground = Res 'DimBrush'
+        $ch.Margin = T 8 0 0 0
+        Set-Col $ch 2
+        [void]$g.Children.Add($ch)
+        $item.Add_PreviewMouseLeftButtonDown({ param($s, $e) Switch-NavGroup $s $e })
+    }
+    $item.Content = $g
+    $tag.Id = $id
+    $tag.Title = $t
+    $item.Tag = $tag
+    return $item
 }
+
+function Build-Nav([string]$selectId) {
+    $script:navBuilding = $true
+    try {
+        $nav.Items.Clear()
+        foreach ($node in $navTree) {
+            if ($node.Children) {
+                $open = [bool]$navOpen[$node.Id]
+                [void]$nav.Items.Add((New-NavItem "group:$($node.Id)" $node.Title $node.Icon 0 @{ Type = 'group'; Group = $node.Id; First = "page:$($node.Children[0])" } '' $open))
+                if ($open) {
+                    foreach ($c in $node.Children) {
+                        [void]$nav.Items.Add((New-NavItem "page:$c" $schemaById[$c].Title 0 1 @{ Type = 'page'; Page = $schemaById[$c] }))
+                    }
+                }
+            } elseif ($node.Categories) {
+                $page = $schemaById[$node.Page]
+                $open = [bool]$navOpen['categories']
+                [void]$nav.Items.Add((New-NavItem 'categories' $page.Title $page.Icon 0 @{ Type = 'page'; Group = 'categories'; Page = $page } '' $open))
+                if ($open) {
+                    foreach ($e in Get-CategoryEntries) {
+                        [void]$nav.Items.Add((New-NavItem "cat:$($e.File)" $e.Name 0 1 @{ Type = 'category'; File = $e.File } $e.Icon))
+                    }
+                }
+            } else {
+                $page = $schemaById[$node.Page]
+                [void]$nav.Items.Add((New-NavItem "page:$($node.Page)" $page.Title $page.Icon 0 @{ Type = 'page'; Page = $page }))
+            }
+        }
+        foreach ($it in $nav.Items) { if ($it.Tag.Id -eq $selectId) { $nav.SelectedItem = $it } }
+    } finally { $script:navBuilding = $false }
+}
+
+# Goes to a menu entry (after the current event: the menu may be rebuilt)
+function Open-Nav([string]$id) {
+    $script:navPending = $id
+    [void]$win.Dispatcher.BeginInvoke([action] {
+            Build-Nav $script:navPending
+            if ($nav.SelectedItem) { Show-NavTarget $nav.SelectedItem.Tag }
+        })
+}
+
+function Open-Category([string]$file) {
+    $navOpen['categories'] = $true
+    Open-Nav "cat:$file"
+}
+
+# Click on a group: opens or closes it. Keybindings has no page of its own and
+# goes to its first entry; Categories opens on the first click and only
+# closes when its page is already shown.
+function Switch-NavGroup($item, $e) {
+    $tag = $item.Tag
+    if ($tag.Type -eq 'group') {
+        $e.Handled = $true
+        $navOpen[$tag.Group] = -not $navOpen[$tag.Group]
+        Open-Nav $(if ($navOpen[$tag.Group]) { $tag.First } else { $script:navCurrent })
+    } elseif ($script:navCurrent -eq $tag.Id) {
+        $e.Handled = $true
+        $navOpen[$tag.Group] = -not $navOpen[$tag.Group]
+        Open-Nav $script:navCurrent
+    } elseif (-not $navOpen[$tag.Group]) {
+        $e.Handled = $true
+        $navOpen[$tag.Group] = $true
+        Open-Nav $tag.Id
+    }
+}
+
+function Show-Page($page) {
+    if (-not $pages.ContainsKey($page.Id)) {
+        $script:updating = $true
+        try {
+            $pages[$page.Id] = if ($page.Id -eq 'categories') { New-CategoryListPage } else { New-SettingsPage $page }
+        } finally { $script:updating = $false }
+        Update-Resets
+        Update-KeyConflicts
+    }
+    if ($page.Id -eq 'categories') { Refresh-Cats $script:currentFile }
+    $pageHost.Children.Clear()
+    [void]$pageHost.Children.Add($pages[$page.Id])
+    $pageTitle.Text = $page.Title
+    $pageDesc.Text = $page.Desc
+}
+
+function Show-CategoryPage([string]$file) {
+    if (-not $pages.ContainsKey('category')) { $pages['category'] = New-CategoryPage }
+    $script:currentFile = $file
+    Show-Category
+    $pageHost.Children.Clear()
+    [void]$pageHost.Children.Add($pages['category'])
+    $c = Get-CategorySection (Get-Model $file)
+    $name = Get-Key $c 'Name'
+    $pageTitle.Text = if ($name) { $name } else { [IO.Path]::GetFileNameWithoutExtension($file) }
+    $pageDesc.Text = "Categories\${file}: the category and its tiles."
+}
+
+function Show-NavTarget($tag) {
+    switch ($tag.Type) {
+        'page' { Show-Page $tag.Page }
+        'category' { Show-CategoryPage $tag.File }
+        'group' { return }
+    }
+    $script:navCurrent = $tag.Id
+}
+
 $links = $win.FindName('Links')
 foreach ($l in @(@('OpenSettings', 'Open Settings.inc'), @('OpenFolder', 'Open the skin folder'))) {
     $b = New-Button $l[1] 'LinkButton'
@@ -2136,27 +2338,17 @@ foreach ($l in @(@('OpenSettings', 'Open Settings.inc'), @('OpenFolder', 'Open t
 }
 
 $nav.Add_SelectionChanged({
-        $page = $nav.SelectedItem.Tag
-        if (-not $page) { return }
-        if (-not $pages.ContainsKey($page.Id)) {
-            $script:updating = $true
-            try {
-                if ($page.Id -eq 'categories') {
-                    $pages[$page.Id] = New-CategoriesPage
-                    Refresh-Cats
-                } else {
-                    $pages[$page.Id] = New-SettingsPage $page
-                }
-            } finally { $script:updating = $false }
-            Update-Resets
-            Update-KeyConflicts
-        } elseif ($page.Id -eq 'categories') {
-            Show-Category  # the defaults shown may have changed
+        if ($script:navBuilding) { return }
+        $sel = $nav.SelectedItem
+        if (-not $sel) { return }
+        $tag = $sel.Tag
+        if ($tag.Type -eq 'group') {
+            # reached with the keyboard: open the group on its first entry
+            $navOpen[$tag.Group] = $true
+            Open-Nav $tag.First
+            return
         }
-        $pageHost.Children.Clear()
-        [void]$pageHost.Children.Add($pages[$page.Id])
-        $pageTitle.Text = $page.Title
-        $pageDesc.Text = $page.Desc
+        Show-NavTarget $tag
     })
 
 $btnSave.Add_Click({ Save-All })
@@ -2185,7 +2377,8 @@ $win.Add_ContentRendered({
     })
 
 $script:updating = $false
-$nav.SelectedIndex = 0
+Build-Nav 'page:general'
+Show-NavTarget $nav.SelectedItem.Tag
 Update-Dirty
 [void]$win.ShowDialog()
 $app.Shutdown()

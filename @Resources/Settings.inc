@@ -22,7 +22,10 @@ ScrollStep=1
 ; categorie con piu' tile di quante ne stanno sullo schermo); 0 = si ferma
 InfiniteScroll=1
 
-; --- Spaziature (pixel) --------------------------------------------------------
+; --- Spaziature -------------------------------------------------------------------
+; Le misure si scrivono in pixel (es. 40) oppure in percentuale dello schermo
+; (es. 2%): della larghezza per PadX, SearchW, MenuItemPad, MenuGap e
+; MenuIconGap, dell'altezza per tutte le altre.
 Gap=18
 ; Margini esterni: PadX ospita la scrollbar verticale, PadY quella orizzontale.
 PadX=40
@@ -100,7 +103,7 @@ LaunchAnimation=1
 LaunchAnimFrames=15
 LaunchHold=1500
 ; Lato del riquadro del logo a fine espansione
-LaunchLogoSize=(Floor(#ScreenH#/3))
+LaunchLogoSize=33%
 ; Testo al centro per le tile senza logo
 LaunchFontSize=48
 
@@ -216,7 +219,3 @@ TextColor=240,240,245,255
 TextDimColor=150,150,160,255
 ScrollTrackColor=255,255,255,25
 ScrollThumbColor=0,210,180,200
-
-; --- Calcolati (non modificare) ------------------------------------------------
-TileW=(Floor((#ScreenW#-2*#PadX#-(#NX#-1)*#Gap#)/#NX#))
-TileH=(Floor((#ScreenH#-2*#PadY#-#MenuH#-#Gap#-(#NY#-1)*#Gap#)/#NY#))

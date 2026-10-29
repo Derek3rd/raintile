@@ -136,6 +136,8 @@ Si può sempre continuare a modificare i file a mano.
 | `@Resources\Categories\*.ini` | **un file per categoria**: voce del menu e tile |
 | `@Resources\Images\<categoria>\` | immagini della categoria |
 
+**Misure in pixel o in percentuale.** Le misure di `Settings.inc` (margini, spazi, menu, loghi, ...) si scrivono in pixel (`PadX=40`) oppure in percentuale dello schermo (`PadX=2%`): della larghezza per `PadX`, `SearchW`, `MenuItemPad`, `MenuGap` e `MenuIconGap`, dell'altezza per tutte le altre (anche `IconSize` nei file di categoria). Così lo stesso file va bene su monitor diversi. Lo script converte le percentuali in pixel in `Generated\Sizes.inc` (incluso dopo `Settings.inc`) e lo riscrive, ricaricando la skin, solo quando cambia una percentuale o la risoluzione.
+
 Le categorie sono i file presenti in `Categories\`: per aggiungerne una basta creare un nuovo `.ini` (es. `Emulatori.ini`) e aggiornare la skin.
 
 ### File di categoria
@@ -217,6 +219,7 @@ Navigation/Navigation.ini    mini-skin dei tasti di navigazione (attivata dal la
   Scripts/Raintile.lua       logica: lettura tile, rendering, scroll, avvio
   Scripts/Thumbs.ps1         creazione delle miniature
   Generated/Grid.inc         meter generati automaticamente
+  Generated/Sizes.inc        misure in percentuale convertite in pixel
   Generated/Thumbs/          miniature (si possono cancellare: vengono rifatte)
   Images/<categoria>/        icon.png, background/, logo/
 ```

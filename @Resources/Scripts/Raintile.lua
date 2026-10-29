@@ -53,14 +53,40 @@ local function unquote(s)
 	return (s:gsub('^"(.*)"$', '%1'))
 end
 
--- Legge una variabile numerica; accetta anche formule come (Floor(#ScreenW#/4)).
-local function num(name, default)
-	local raw = trim(SKIN:ReplaceVariables(SKIN:GetVariable(name, '')))
+-- Numero da un testo; accetta anche formule come (Floor(#ScreenW#/4)).
+local function toNumber(raw)
+	raw = trim(SKIN:ReplaceVariables(raw or ''))
 	local n = tonumber(raw)
 	if not n and raw ~= '' then
 		if raw:sub(1, 1) ~= '(' then raw = '(' .. raw .. ')' end
 		n = tonumber(SKIN:ParseFormula(raw))
 	end
+	return n
+end
+
+-- Misure che si possono scrivere anche in percentuale dello schermo (es. 3%):
+-- 'W' = della larghezza, 'H' = dell'altezza.
+local SIZE_AXIS = {
+	PadX = 'W', SearchW = 'W', MenuItemPad = 'W', MenuGap = 'W', MenuIconGap = 'W',
+	PadY = 'H', Gap = 'H', MenuH = 'H', MenuIconSize = 'H', MenuRadius = 'H', IconSize = 'H',
+	LabelPad = 'H', ScrollBarSize = 'H', LaunchLogoSize = 'H',
+}
+
+-- Pixel di una misura: un numero, una formula o una percentuale dello schermo.
+local function size(raw, axis)
+	local pct = trim(raw or ''):match('^([%d%.]+)%s*%%$')
+	if pct then
+		local total = axis == 'W' and V.ScreenW or V.ScreenH
+		return math.floor((toNumber(pct) or 0) * total / 100 + 0.5)
+	end
+	return toNumber(raw)
+end
+
+-- Legge una variabile numerica (le misure di SIZE_AXIS anche in percentuale).
+local function num(name, default)
+	local raw = SKIN:GetVariable(name, '')
+	local n
+	if SIZE_AXIS[name] and V.ScreenW then n = size(raw, SIZE_AXIS[name]) else n = toNumber(raw) end
 	return n or default
 end
 
@@ -273,7 +299,7 @@ local function loadCategory(file)
 	c.order = tonumber(catKeys.order or '') or math.huge
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
-		tonumber(catKeys.iconsize or ''))
+		size(catKeys.iconsize, 'H'))
 
 	for _, s in ipairs(ini) do
 		local k = s.keys
@@ -947,6 +973,47 @@ end
 
 local knownFiles = {}
 
+-- Le misure in percentuale, convertite in pixel, vanno anche alla skin (che usa
+-- #PadX#, #MenuH#, ... nelle formule e non capisce "3%"): Generated\Sizes.inc
+-- e' incluso dopo Settings.inc e ha la precedenza. Si riscrive (e la skin si
+-- ricarica) solo se cambia: una percentuale o la risoluzione dello schermo.
+local function writeSizes()
+	local values = {}
+	for _, s in ipairs(parseIni(resources .. 'Settings.inc') or {}) do
+		for key, value in pairs(s.keys) do values[key] = value end -- chiavi in minuscolo
+	end
+	local names = {}
+	for name in pairs(SIZE_AXIS) do names[#names + 1] = name end
+	table.sort(names)
+	local lines = {
+		'; GENERATO AUTOMATICAMENTE da Raintile.lua: le misure in percentuale di',
+		'; Settings.inc convertite in pixel. Non modificare a mano.',
+		'[Variables]',
+	}
+	for _, name in ipairs(names) do
+		local raw = values[name:lower()]
+		if raw and raw:match('%%%s*$') then
+			lines[#lines + 1] = name .. '=' .. size(raw, SIZE_AXIS[name])
+		end
+	end
+	local text = table.concat(lines, '\n') .. '\n'
+
+	local path = resources .. 'Generated\\Sizes.inc'
+	local f = io.open(path, 'rb')
+	local old = f and f:read('*a') or ''
+	if f then f:close() end
+	if old == text then return false end
+	f = io.open(path, 'wb')
+	if not f then
+		print('Raintile: impossibile scrivere Generated\\Sizes.inc')
+		return false
+	end
+	f:write(text)
+	f:close()
+	SKIN:Bang('!Refresh')
+	return true
+end
+
 -- Riscrive Grid.inc e ricarica la skin se menu, griglia o file sono cambiati.
 local function regenerate(files)
 	local sig = signature()
@@ -972,6 +1039,7 @@ function Initialize()
 	V.Horizontal = SKIN:GetVariable('ScrollDir', 'V'):upper():sub(1, 1) == 'H'
 	V.ScrollStep = math.max(1, math.floor(num('ScrollStep', 1)))
 	V.ScreenW = num('ScreenW', 1920)
+	V.ScreenH = num('ScreenH', 1080) -- prima delle misure: servono alle percentuali
 	V.Gap = num('Gap', 16)
 	V.PadX = num('PadX', 40)
 	V.PadY = num('PadY', 24)
@@ -987,7 +1055,6 @@ function Initialize()
 	V.LaunchAnimation = num('LaunchAnimation', 1) ~= 0
 	V.LaunchAnimFrames = math.max(0, math.floor(num('LaunchAnimFrames', 15)))
 	V.LaunchLogoSize = math.floor(num('LaunchLogoSize', 400))
-	V.ScreenH = num('ScreenH', 1080)
 	V.CloseOnLaunch = num('CloseOnLaunch', 1) ~= 0
 	V.CloseAction = SKIN:GetVariable('CloseAction', '[!CommandMeasure MeasureScript "Hide()"]')
 	V.StartHidden = num('StartHidden', 0) ~= 0
@@ -1054,6 +1121,7 @@ function Initialize()
 	if #knownFiles == 0 then return end -- primo avvio: si aspetta l'elenco
 
 	applyFadeDuration()
+	if writeSizes() then return end
 
 	loadCategories(knownFiles)
 	if regenerate(knownFiles) then return end

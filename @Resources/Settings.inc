@@ -146,7 +146,7 @@ AnimLogoSmooth=0.2
 ;          Pan      = under the mouse the tile slowly slides over the image
 ;          Parallax = while scrolling the image moves slower than the tile
 ;          Zoom     = under the mouse the background slightly grows
-BgStyle=Pan
+BgStyle=Parallax
 ; How much larger the image is than the tile (room to slide)
 BgOverscan=1.15
 ; Pan: length of the slide in 16 ms steps (180 = about 3 seconds)

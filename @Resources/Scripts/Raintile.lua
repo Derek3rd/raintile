@@ -31,6 +31,11 @@ local ticking = false -- orologio delle animazioni (ActionTimer) attivo
 local visible = true  -- launcher mostrato (Show/Hide)
 local resources
 
+-- Messaggi di diagnostica nel log di Rainmeter (DebugLog=1 in Settings.inc).
+local function dbg(msg)
+	if V.DebugLog then print('Raintile: ' .. msg) end
+end
+
 local function trim(s)
 	return (s:gsub('^%s+', ''):gsub('%s+$', ''))
 end
@@ -958,6 +963,7 @@ function Initialize()
 	-- La mini-skin del tasto di chiusura: attiva solo mentre il launcher e' visibile
 	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
 	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
+	V.DebugLog = num('DebugLog', 0) ~= 0
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.LabelPad = num('LabelPad', 14)
@@ -1077,6 +1083,7 @@ local function hideSplash()
 end
 
 function Show()
+	dbg('Show: visible=' .. tostring(visible))
 	if not ready or visible then return end
 	visible = true
 	-- riparte pulito: niente hover, zoom o avvio rimasti dalla volta prima
@@ -1094,6 +1101,7 @@ function Show()
 end
 
 function Hide()
+	dbg('Hide: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
 	if not ready or not visible then return end
 	visible = false
 	stopTicker()
@@ -1310,7 +1318,11 @@ end
 -- Avvia la tile t; x, y = sua posizione (in pixel) nella griglia, da cui
 -- parte l'espansione.
 local function launchTile(t, x, y)
-	if not t or not t.command then return end
+	if not t or not t.command then
+		dbg('avvio ignorato: tile senza Command')
+		return
+	end
+	dbg('avvio: ' .. t.command)
 
 	SKIN:Bang(t.command)
 	if not V.LaunchAnimation then
@@ -1391,6 +1403,8 @@ end
 
 -- Avvia la tile evidenziata (o, se non ce n'e' una, evidenzia la prima).
 function Confirm()
+	dbg(string.format('Confirm: ready=%s launching=%s visible=%s hover=%d on=%s', tostring(ready),
+		tostring(launching ~= nil), tostring(visible), hover.idx, tostring(hover.on)))
 	if not ready or launching or not visible then return end
 	if hover.idx == 0 or not hover.on then
 		Nav(0, 0)
@@ -1413,6 +1427,7 @@ function LaunchStep()
 end
 
 function LaunchFinish()
+	dbg('fine animazione di avvio: launching=' .. tostring(launching ~= nil) .. ' visible=' .. tostring(visible))
 	if not launching then return end
 	launching = nil
 	if V.CloseOnLaunch then

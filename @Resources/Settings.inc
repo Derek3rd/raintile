@@ -157,6 +157,11 @@ TileHover=1
 ; Viene copiata in Rainmeter.ini e vale dal caricamento successivo.
 FadeDuration=0
 
+; --- Diagnostica -----------------------------------------------------------------
+; 1 = scrive nel log di Rainmeter (Gestisci > Log) cosa succede alla conferma,
+; all'avvio di una tile e a mostra/nascondi, e i tasti visti dal plugin HotKey
+DebugLog=0
+
 ; --- Aspetto -------------------------------------------------------------------
 ; 1 = mostra l'etichetta della tile (Label= nel file di categoria), 0 = nascondi
 ShowLabels=1

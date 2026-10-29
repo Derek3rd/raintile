@@ -18,6 +18,9 @@ NY=2
 ScrollDir=V
 ; Righe/colonne fatte scorrere per ogni scatto della rotellina
 ScrollStep=1
+; 1 = scroll infinito: dopo l'ultima riga ricomincia la prima (solo nelle
+; categorie con piu' tile di quante ne stanno sullo schermo); 0 = si ferma
+InfiniteScroll=1
 
 ; --- Spaziature (pixel) --------------------------------------------------------
 Gap=18

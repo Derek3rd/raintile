@@ -57,6 +57,12 @@ Tutte disattivabili in `Settings.inc` e attive solo mentre qualcosa si muove (un
 | `LogoGreyscale` | i loghi sono in bianco e nero e si colorano gradualmente con il mouse sopra |
 | `AnimLogoZoom` | il logo della tile sotto il mouse si ingrandisce (`HoverLogoScale`, default 1.25); quello appena lasciato torna alla misura normale |
 
+### Scorrimento
+
+- `InfiniteScroll=1` (default): dopo l'ultima riga ricomincia la prima, in entrambe le direzioni. Vale solo per le categorie con più tile di quante ne stanno sullo schermo; con `0` lo scorrimento si ferma alla fine.
+- Ogni categoria **ricorda fin dove l'avevi scorsa**: cambiando categoria e tornando indietro ritrovi la stessa posizione, anche dopo aver nascosto il launcher o aggiornato la skin (salvata in `State.inc`).
+- Un clic sulla categoria già aperta torna all'inizio.
+
 ### Stile degli sfondi
 
 Con `BgStyle` la tile può fare da "finestra" su un'immagine più grande (`BgOverscan`, default 1.15) invece di ritagliarla:

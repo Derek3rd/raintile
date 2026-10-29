@@ -22,7 +22,7 @@ local laidOut = false -- menu gia' misurato e centrato
 local appear = nil    -- passi dall'inizio della comparsa delle tile (nil = nessuna)
 -- Evidenziazione della tile sotto il mouse, in unita' di griglia (colonna,
 -- riga) cosi' segue le tile durante lo scorrimento; a = opacita' 0-1.
-local hover = { idx = 0, on = false, gx = 0, gy = 0, a = 0 }
+local hover = { idx = 0, on = false, gx = 0, gy = 0, tx = 0, ty = 0, a = 0 }
 local pillPos = nil   -- { x, w } della pillola della categoria attiva
 -- Tile il cui logo e' (o sta tornando) "acceso" dall'hover: [tile] = true.
 -- tile.zoom (0-1) e' l'avanzamento, usato per ingrandimento e colore del logo.
@@ -500,12 +500,31 @@ local function approach(cur, target, eps, k)
 	return cur + (target - cur) * (k or V.AnimSmooth), true
 end
 
+-- Righe (V) o colonne (H) di tile della categoria attiva, e quante ne
+-- stanno sullo schermo.
+local function lineCount()
+	return math.ceil(#cats[active].tiles / (V.Horizontal and V.NY or V.NX))
+end
+
+local function visibleLines()
+	return V.Horizontal and V.NX or V.NY
+end
+
 local function maxOffset()
-	local n = #cats[active].tiles
-	if V.Horizontal then
-		return math.max(0, math.ceil(n / V.NY) - V.NX)
-	end
-	return math.max(0, math.ceil(n / V.NX) - V.NY)
+	return math.max(0, lineCount() - visibleLines())
+end
+
+-- Scroll infinito: dopo l'ultima riga ricomincia la prima. Solo se le tile
+-- non stanno tutte sullo schermo (altrimenti si vedrebbero ripetute).
+local function infinite()
+	return V.InfiniteScroll and lineCount() > visibleLines()
+end
+
+-- Porta uno scorrimento salvato nei limiti della categoria attiva.
+local function normalizeOffset(o)
+	o = math.floor(o or 0)
+	if infinite() then return o % lineCount() end
+	return math.min(math.max(0, o), maxOffset())
 end
 
 local function slotRC(slot)
@@ -513,28 +532,43 @@ local function slotRC(slot)
 	return math.floor(s / V.Cols), s % V.Cols
 end
 
+-- Ricorda lo scorrimento della categoria attiva (anche in State.inc, cosi'
+-- resta dopo un aggiornamento della skin).
+local function saveScroll()
+	local c = cats[active]
+	local o = normalizeOffset(offset)
+	if c.offset ~= o then
+		c.offset = o
+		SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(o), resources .. 'State.inc')
+	end
+end
+
 -- Indice (in cats[active].tiles) della tile nello slot, con i contenuti attuali.
 local function indexAt(slot)
 	local r, c = slotRC(slot)
-	if V.Horizontal then return (base + c) * V.NY + r + 1 end
-	return (base + r) * V.NX + c + 1
+	local line = base + (V.Horizontal and c or r)
+	if infinite() then line = line % lineCount() end
+	if V.Horizontal then return line * V.NY + r + 1 end
+	return line * V.NX + c + 1
 end
 
 local function tileAt(slot)
 	return cats[active].tiles[indexAt(slot)]
 end
 
--- Posizione (relativa alla griglia) della tile con indice idx, alla posizione
--- di scorrimento corrente; gx, gy in unita' di griglia.
+-- Posizione in pixel (relativa alla griglia) di un punto in unita' di griglia
+-- (colonna, riga), alla posizione di scorrimento corrente.
 local function gridToPx(gx, gy)
 	if V.Horizontal then gx = gx - pos else gy = gy - pos end
 	return gx * V.StepX, gy * V.StepY
 end
 
-local function indexToGrid(idx)
-	local i = idx - 1
-	if V.Horizontal then return math.floor(i / V.NY), i % V.NY end
-	return i % V.NX, math.floor(i / V.NX)
+-- Coordinate di griglia (colonna, riga) dello slot con i contenuti attuali;
+-- con lo scroll infinito la riga (o colonna) non viene riportata nel giro.
+local function slotToGrid(slot)
+	local r, c = slotRC(slot)
+	if V.Horizontal then return base + c, r end
+	return c, base + r
 end
 
 -- Misura le voci del menu (gia' aggiornate) e centra la catena orizzontalmente.
@@ -617,7 +651,10 @@ local function renderScrollBar()
 		return
 	end
 
-	local total = maxOff + (V.Horizontal and V.NX or V.NY)
+	local total = lineCount()
+	-- frazione di corsa del cursore (con lo scroll infinito: posizione nel giro)
+	local at = infinite() and (pos % total) / maxOff or pos / maxOff
+	at = math.min(1, math.max(0, at))
 	local size = V.ScrollBarSize
 	local x, y, w, h, tx, ty, tw, th
 	if V.Horizontal then
@@ -625,13 +662,13 @@ local function renderScrollBar()
 		y = V.GridY + V.GridH + math.floor((V.PadY - size) / 2)
 		w, h = V.GridW, size
 		tw, th = math.floor(w * V.NX / total), h
-		tx, ty = math.floor((w - tw) * pos / maxOff), 0
+		tx, ty = math.floor((w - tw) * at), 0
 	else
 		x = V.PadX + V.GridW + math.floor((V.PadX - size) / 2)
 		y = V.GridY
 		w, h = size, V.GridH
 		tw, th = w, math.floor(h * V.NY / total)
-		tx, ty = 0, math.floor((h - th) * pos / maxOff)
+		tx, ty = 0, math.floor((h - th) * at)
 	end
 
 	local radius = math.floor(size / 2)
@@ -790,10 +827,9 @@ local function advance()
 	end
 
 	if hover.idx ~= 0 then
-		local tx, ty = indexToGrid(hover.idx)
-		hover.gx, moving = approach(hover.gx, tx, 0.002, V.AnimHoverSmooth)
+		hover.gx, moving = approach(hover.gx, hover.tx, 0.002, V.AnimHoverSmooth)
 		busy = busy or moving
-		hover.gy, moving = approach(hover.gy, ty, 0.002, V.AnimHoverSmooth)
+		hover.gy, moving = approach(hover.gy, hover.ty, 0.002, V.AnimHoverSmooth)
 		busy = busy or moving
 		hover.a, moving = approach(hover.a, hover.on and 1 or 0, 0.02, V.AnimHoverSmooth)
 		busy = busy or moving
@@ -908,6 +944,7 @@ function Initialize()
 	V.AnimStagger = math.max(0, num('AnimStagger', 2))
 	V.AnimSlide = num('AnimSlide', 30)
 	V.AnimSmooth = math.min(1, math.max(0.05, num('AnimSmooth', 0.3)))
+	V.InfiniteScroll = num('InfiniteScroll', 1) ~= 0
 	-- Morbidezza di ciascuna animazione; se vuota vale AnimSmooth
 	local function smooth(name)
 		return math.min(1, math.max(0.02, num(name, V.AnimSmooth)))
@@ -957,6 +994,12 @@ function Initialize()
 
 	slots = V.Rows * V.Cols
 	active = math.min(math.max(1, math.floor(num('LastCategory', 1))), #cats)
+	-- scorrimento salvato di ogni categoria
+	for _, c in ipairs(cats) do
+		c.offset = math.floor(num('Scroll_' .. c.name, 0))
+	end
+	offset = normalizeOffset(cats[active].offset)
+	pos = offset
 	ready = true
 end
 
@@ -1021,6 +1064,8 @@ function Hide()
 	if not ready or not visible then return end
 	visible = false
 	stopTicker()
+	pos = offset -- uno scorrimento a meta' riparte gia' concluso
+	saveScroll()
 	if launching then
 		SKIN:Bang('!CommandMeasure', 'MeasureLaunchAnim', 'Stop 1')
 		launching = nil
@@ -1098,9 +1143,10 @@ function HoverTile(slot)
 	if not t then return end
 	local idx = indexAt(slot)
 	if hover.on and hover.idx == idx then return end
+	hover.tx, hover.ty = slotToGrid(slot)
 	if hover.a < 0.05 or not V.AnimHover then
 		-- era spenta: compare direttamente sulla nuova tile
-		hover.gx, hover.gy = indexToGrid(idx)
+		hover.gx, hover.gy = hover.tx, hover.ty
 	end
 	hover.idx, hover.on = idx, true
 
@@ -1138,11 +1184,25 @@ end
 
 function SetCategory(i)
 	if not ready or launching or i < 1 or i > #cats then return end
-	if i ~= active then
-		active = i
-		SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), resources .. 'State.inc')
+	if i == active then
+		-- clic sulla categoria gia' aperta: torna all'inizio (con lo scroll
+		-- infinito, all'inizio del giro piu' vicino)
+		local target = 0
+		if infinite() then
+			local L, o = lineCount(), offset % lineCount()
+			target = o <= L / 2 and offset - o or offset + L - o
+		end
+		if target ~= offset then
+			offset = target
+			if V.AnimScroll then startTicker() else pos = offset frame() end
+		end
+		return
 	end
-	offset, pos, base = 0, 0, -1
+	saveScroll()
+	active = i
+	SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), resources .. 'State.inc')
+	offset = normalizeOffset(cats[i].offset)
+	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
@@ -1163,7 +1223,8 @@ end
 
 function Scroll(delta)
 	if not ready or launching then return end
-	local new = math.min(math.max(0, offset + delta * V.ScrollStep), maxOffset())
+	local new = offset + delta * V.ScrollStep
+	if not infinite() then new = math.min(math.max(0, new), maxOffset()) end
 	if new ~= offset then
 		offset = new
 		if V.AnimScroll then

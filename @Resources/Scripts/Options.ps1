@@ -389,11 +389,11 @@ $schema = @(
                     (S 'bool' 'DebugLog' 'Debug log' 'Writes details to the Rainmeter log (Manage > Log).')
                 ) }
             @{ Title = 'Other settings'; Other = $true; Items = @() }
-            @{ Title = 'Files'; Items = @(
-                    (S 'action' 'OpenSettings' 'Settings file' 'Settings.inc, in Notepad.'),
-                    (S 'action' 'OpenFolder' 'Skin resources' 'Categories, images and scripts.')
-                ) }
         )
+    }
+    @{ Id = 'info'; Title = 'Info'; Icon = 0xE946
+        Desc = 'About Raintile, and its files.'
+        Groups = @()
     }
     @{ Id = 'categories'; Title = 'Categories'; Icon = 0xECA5
         Desc = 'One file per category in Categories\. Double-click a category, or pick it on the left, to edit it and its tiles.'
@@ -849,9 +849,13 @@ function Show-Dialog([string]$title, [string]$message, [string[]]$buttons = @('O
 # --- Window ------------------------------------------------------------------
 
 $version = ''
+$information = ''
 try {
-    $m = [regex]::Match([IO.File]::ReadAllText((Join-Path (Split-Path -Parent $Resources) 'Raintile.ini')), '(?m)^\s*Version\s*=\s*(.+?)\s*$')
+    $ini = [IO.File]::ReadAllText((Join-Path (Split-Path -Parent $Resources) 'Raintile.ini'))
+    $m = [regex]::Match($ini, '(?m)^\s*Version\s*=\s*(.+?)\s*$')
     if ($m.Success) { $version = 'v' + $m.Groups[1].Value }
+    $m = [regex]::Match($ini, '(?m)^\s*Information\s*=\s*(.+?)\s*$')
+    if ($m.Success) { $information = $m.Groups[1].Value }
 } catch { }
 
 $win = [System.Windows.Markup.XamlReader]::Parse(@'
@@ -877,7 +881,10 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
           </StackPanel>
           <TextBlock x:Name="Version" Foreground="{StaticResource DimBrush}" FontSize="12" Margin="0,2,0,0"/>
         </StackPanel>
-        <StackPanel x:Name="Links" DockPanel.Dock="Bottom" Margin="0,10,0,0"/>
+        <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
+          <Border Height="1" Background="{StaticResource LineBrush}" Margin="8,0,8,8"/>
+          <ListBox x:Name="NavBottom"/>
+        </StackPanel>
         <ListBox x:Name="Nav"/>
       </DockPanel>
     </Border>
@@ -2163,7 +2170,8 @@ function Save-All([switch]$NoRefresh) {
 }
 
 # "Save and refresh": saves, refreshes the skin, shows a progress bar for 3
-# seconds (the time the skin needs to reload) and then shows the launcher.
+# seconds (the time the skin needs to reload), then shows the launcher and
+# closes the window.
 $overlay = $win.FindName('Overlay')
 $progressTrack = $win.FindName('ProgressTrack')
 $progressBar = $win.FindName('ProgressBar')
@@ -2179,6 +2187,7 @@ $refreshTimer.Add_Tick({
             $overlay.Visibility = 'Collapsed'
             $script:refreshing = $false
             Invoke-Rainmeter "!CommandMeasure MeasureScript `"Show()`" `"$Config`""
+            $win.Close()
         }
     })
 
@@ -2334,11 +2343,72 @@ function Switch-NavGroup($item, $e) {
     }
 }
 
+# Info page: what Raintile is, version, where it is, and its files
+function New-InfoPage {
+    $sv = New-Object System.Windows.Controls.ScrollViewer
+    $sv.VerticalScrollBarVisibility = 'Auto'
+    $sp = New-Panel
+    $sp.Margin = T 36 4 36 24
+    $sp.MaxWidth = 920
+    $sp.HorizontalAlignment = 'Left'
+    $sv.Content = $sp
+
+    $card = New-Card '' ''
+    $card.Padding = T 24 20 24 20
+    $head = New-Panel 'Horizontal'
+    [void](Add-To $head (New-Text 'Raintile' 26 -Bold))
+    if ($version) {
+        $badge = New-Object System.Windows.Controls.Border
+        $badge.Background = Res 'AccentSoftBrush'
+        $badge.CornerRadius = New-Object System.Windows.CornerRadius(4)
+        $badge.Padding = T 8 2 8 2
+        $badge.Margin = T 12 4 0 0
+        $badge.VerticalAlignment = 'Center'
+        $badge.Child = New-Text $version 12 (Res 'AccentBrush') -Bold
+        [void](Add-To $head $badge)
+    }
+    [void](Add-To $card.Child $head)
+    $about = New-Text $(if ($information) { $information } else { 'Full-screen tile launcher for Rainmeter.' }) 13.5 (Res 'DimBrush') -Wrap
+    $about.Margin = T 0 8 0 0
+    [void](Add-To $card.Child $about)
+    $more = New-Text 'Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, import from the game stores. Every setting is described in docs\Guide.md.' 12.5 (Res 'DimBrush') -Wrap
+    $more.Margin = T 0 6 0 0
+    [void](Add-To $card.Child $more)
+    [void](Add-To $sp $card)
+
+    $entries = Get-CategoryEntries
+    $tiles = ($entries | Measure-Object -Property Tiles -Sum).Sum
+    $imported = ($entries | Measure-Object -Property Imported -Sum).Sum
+    $card = New-Card 'Details' ''
+    foreach ($row in @(
+            @('Version', $(if ($version) { $version.Substring(1) } else { 'unknown' })),
+            @('Rainmeter skin', $Config),
+            @('Skin folder', (Split-Path -Parent $Resources)),
+            @('Categories', "$(@($entries).Count)"),
+            @('Tiles', "$([int]$tiles) written by hand, $([int]$imported) imported")
+        )) {
+        $v = New-Text $row[1] 13 -Wrap
+        $v.MaxWidth = 460
+        $v.TextAlignment = 'Right'
+        [void]$card.Child.Children.Add((New-Row $row[0] '' $v $null))
+    }
+    [void](Add-To $sp $card)
+
+    $card = New-Card 'Files' ''
+    [void]$card.Child.Children.Add((New-Row 'Settings' 'Settings.inc, in Notepad.' (New-ActionControl 'OpenSettings' 'Open Settings.inc') $null))
+    [void]$card.Child.Children.Add((New-Row 'Skin folder' 'Categories, images and scripts.' (New-ActionControl 'OpenFolder' 'Open the folder') $null))
+    [void](Add-To $sp $card)
+    return $sv
+}
+
 function Show-Page($page) {
+    if ($page.Id -eq 'info') { $pages.Remove('info') }   # the counts may have changed
     if (-not $pages.ContainsKey($page.Id)) {
         $script:updating = $true
         try {
-            $pages[$page.Id] = if ($page.Id -eq 'categories') { New-CategoryListPage } else { New-SettingsPage $page }
+            $pages[$page.Id] = if ($page.Id -eq 'categories') { New-CategoryListPage }
+            elseif ($page.Id -eq 'info') { New-InfoPage }
+            else { New-SettingsPage $page }
         } finally { $script:updating = $false }
         Update-Resets
         Update-KeyConflicts
@@ -2371,18 +2441,25 @@ function Show-NavTarget($tag) {
     $script:navCurrent = $tag.Id
 }
 
-$links = $win.FindName('Links')
-foreach ($l in @(@('OpenSettings', 'Open Settings.inc'), @('OpenFolder', 'Open the skin folder'))) {
-    $b = New-Button $l[1] 'LinkButton'
-    $b.Tag = $l[0]
-    $b.Add_Click({ param($s, $e) Invoke-Action $s.Tag })
-    [void](Add-To $links $b)
-}
+# Info, at the bottom of the menu: a list of its own, only one of the two
+# lists has a selection
+$navBottom = $win.FindName('NavBottom')
+[void]$navBottom.Items.Add((New-NavItem 'page:info' 'Info' $schemaById['info'].Icon 0 @{ Type = 'page'; Page = $schemaById['info'] }))
+$navBottom.Add_SelectionChanged({
+        if ($script:navBuilding -or -not $navBottom.SelectedItem) { return }
+        $script:navBuilding = $true
+        $nav.SelectedItem = $null
+        $script:navBuilding = $false
+        Show-NavTarget $navBottom.SelectedItem.Tag
+    })
 
 $nav.Add_SelectionChanged({
         if ($script:navBuilding) { return }
         $sel = $nav.SelectedItem
         if (-not $sel) { return }
+        $script:navBuilding = $true
+        $navBottom.SelectedItem = $null
+        $script:navBuilding = $false
         $tag = $sel.Tag
         if ($tag.Type -eq 'group') {
             # reached with the keyboard: open the group on its first entry

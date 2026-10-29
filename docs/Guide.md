@@ -207,15 +207,16 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 | Keybindings > Gamepad | support, open/close buttons, dead zone, repeat |
 | Search | search bar |
 | Import | store import settings and **Import games** |
-| Advanced | performance, debug log, entries without a page of their own, links to the files |
+| Advanced | performance, debug log, entries without a page of their own |
 | Categories | the list of categories: create, open, reorder, delete |
 | Categories > *each category* | its name, icon, grid and logo size, and its tiles, with a preview |
+| Info (at the bottom) | version, skin folder, number of categories and tiles; buttons to open `Settings.inc` and the skin folder |
 
 - Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default, and restores it.
 - **Categories**: create, delete (to the Recycle Bin) and reorder categories; double-click one (or pick it in the menu) to open it. In a category you edit its name, icon, grid and logo size, and add, delete, reorder and edit tiles (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it. Imported games are listed read-only.
-- **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 3 seconds while the skin reloads, then the launcher is shown. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
+- **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 3 seconds while the skin reloads, then the launcher is shown and the window closes. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 
 The window hides the launcher while open. You can always keep editing the files by hand.
 

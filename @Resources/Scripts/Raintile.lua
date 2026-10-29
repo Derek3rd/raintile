@@ -1255,7 +1255,14 @@ end
 
 function Show()
 	dbg('Show: visible=' .. tostring(visible))
-	if not ready or visible then return end
+	if not ready then return end
+	if visible then
+		-- a refresh while hidden (e.g. saving in the Options window) leaves
+		-- the window hidden although the script starts as visible: show it
+		if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+		SKIN:Bang('!Show')
+		return
+	end
 	visible = true
 	-- start clean: no hover, zoom or launch left over from last time
 	launching = nil

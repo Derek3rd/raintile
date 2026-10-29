@@ -17,7 +17,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
   - [Commands](#commands)
   - [Images](#images)
 - [Importing games from stores](#importing-games-from-stores)
-- [Options window (WIP)](#options-window-wip)
+- [Options window](#options-window)
 - [Settings reference](#settings-reference)
 - [Sizes in pixels or percentages](#sizes-in-pixels-or-percentages)
 - [How it works](#how-it-works)
@@ -183,19 +183,42 @@ How the result is written:
 
 - Games go to the end of the `ImportCategory` file (default `Games.ini`), below the line `; ===== IMPORTED AUTOMATICALLY =====`. Everything above it — your hand-written tiles — is never touched.
 - The imported block is rebuilt on every import: uninstalled games disappear, new ones appear.
-- A game already present among your hand-written tiles (same name or same `Command`) is not imported again. To customise an imported game, move its section above the marker line.
+- A game already present among your hand-written tiles, in any category (same name or same `Command`), is not imported again. To customise an imported game, use **Make it a normal tile** in the Options window, or move its section above the marker line by hand.
 - **Images** for stores other than Steam (and Steam games without local images) are downloaded from [SteamGridDB](https://www.steamgriddb.com/) into `Images\<category>\imported\` if `SteamGridDBKey` holds an API key (free, from the site's preferences). An image you put in `background\<Name>.*` or `logo\<Name>.*` always wins.
 - The file is only rewritten if something changed, and the skin only refreshes in that case. The outcome goes to the Rainmeter log (`Raintile: import:` lines).
 
 Settings: `ImportCategory`, `ImportStores` (e.g. `Steam|Epic`), `ImportOnStart=1` to import automatically in the background on every load, `SteamGridDBKey`.
 
-## Options window (WIP)
+## Options window
 
-The **gear** next to the X, or right click > **Options...**, opens a Windows window (`Scripts\Options.ps1`, PowerShell). It is a **work in progress**: it works, but its look and features will change.
+The **gear** next to the X, or right click > **Options...**, opens the Options window (`Scripts\Options.ps1`, WPF; its look is in `Scripts\Options.xaml`).
 
-- **Settings** tab: every entry of `Settings.inc`, grouped by section, with the description taken from the file's comments; checkboxes for switches, drop-downs for fixed choices (`BgStyle`, `MenuMode`, `ScrollDir`, `ShowZPos`), colour pickers for colours. Saving only changes the values: comments and order of the file stay as they were.
-- **Categories** tab: create, delete (to the Recycle Bin) and reorder categories and edit their name, icon and grid; add, delete, reorder and edit tiles (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`. Imported games are listed read-only.
-- **Import games** runs the store import and shows the result; **Save and refresh** writes the files and refreshes the skin.
+The sections are in the menu on the left; **Keybindings** and **Categories** open into sub-entries (click them again to close them):
+
+| Section | What it holds |
+| --- | --- |
+| General | area covered (whole screen or work area, monitor), opening and closing behaviour, fade |
+| Layout | default grid, scrolling, spacing |
+| Menu | category menu, X and gear buttons |
+| Appearance | fonts, tile colours, launcher colours |
+| Animations | effects, appearing tiles, smoothing, tile launch |
+| Backgrounds | background style and its amounts |
+| Keybindings > Keyboard | open/close shortcut, close key, navigation keys |
+| Keybindings > Gamepad | support, open/close buttons, dead zone, repeat |
+| Search | search bar |
+| Import | store import settings and **Import games** |
+| Advanced | performance, debug log, entries without a page of their own |
+| Categories | the list of categories (create, open, reorder, delete) and the settings of the selected one: name, icon, grid, logo size |
+| Categories > *each category* | its tiles, with a preview: edit, move to another category, turn imported games into normal tiles |
+| Info (at the bottom) | version, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the skin folder and Rainmeter's Manage window |
+
+- Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
+- **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
+- The arrow next to a setting appears when it differs from the default, and restores it.
+- **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
+  - **Move to**: moves a tile, and its images, to another category; both category files are saved at once.
+  - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
+- **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds while the skin reloads, then the launcher is shown and the window closes. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 
 The window hides the launcher while open. You can always keep editing the files by hand.
 
@@ -380,6 +403,7 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
   Scripts/Import.ps1         store import
   Scripts/Helper.ps1         gamepad and focus-loss helper
   Scripts/Options.ps1        Options window
+  Scripts/Options.xaml       look of the Options window
   Generated/Grid.inc         generated meters
   Generated/Sizes.inc        percentage sizes and #hex colours converted for Rainmeter
   Generated/Thumbs/          thumbnails (safe to delete: they are rebuilt)
@@ -392,7 +416,7 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
 - **Esc, keyboard navigation or the gamepad don't work after an update**: in Rainmeter use **Refresh all** (not just *Refresh skin*) so it sees new or renamed mini-skins and scripts. Check that the HotKey plugin is installed.
 - **A category icon doesn't show**: the icon goes in `Images\<file name>\icon.png` — the folder is named after the category *file* (`Games`), not its menu label. The log shows exactly where it looked (`Raintile: no icon for category ...`).
 - **A tile image doesn't show**: check the file name matches the tile name (or its `Image`/`Background`/`Logo` key); explicit names that are not found are logged.
-- **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`.
+- **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. It needs Windows PowerShell 5.1 (included in Windows 10/11).
 - **Imported games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey`. Import messages are in the log (`Raintile: import:`).
 - **Thumbnails are not created**: they are made by PowerShell in the background; errors are listed in the log. Deleting `Generated\Thumbs\` forces a rebuild.
 - **Slow or choppy animations on very large screens**: every animation step redraws the whole full-screen window. Turn off the heaviest ones (`AnimScroll`, `BgStyle=Crop`), lower `AnimAppearFrames`/`LaunchAnimFrames` or raise the `Anim*Smooth` values.
@@ -405,4 +429,3 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
 - **Non-ASCII characters** (accents, etc.) in category names and labels may display incorrectly: category files are read as UTF-8.
 - **Store import** does not cover Battle.net, EA app and Xbox/Microsoft Store yet; use `.lnk` shortcuts for those.
 - **Fonts** sizes cannot be percentages.
-- **Options window** is a work in progress.

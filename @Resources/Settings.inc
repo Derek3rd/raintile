@@ -54,7 +54,7 @@ MenuIconDimAlpha=150
 ; hidden. To open/close it from a shortcut:
 ;   Rainmeter.exe !CommandMeasure MeasureScript "Toggle()" "Raintile"
 ; Key combination that opens and closes the launcher (HotKey plugin): keys
-; separated by spaces, e.g. CTRL ALT G, WIN SPACE, CTRL SHIFT F1
+; separated by spaces, e.g. CTRL ALT G, LWIN SPACE, CTRL SHIFT F1
 OpenHotKey=CTRL ALT G
 ; Action of the X at the top right (default: hide the launcher).
 ; With [!DeactivateConfig] it unloads it from memory instead.

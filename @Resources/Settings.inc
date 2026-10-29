@@ -9,9 +9,9 @@ ScreenW=#SCREENAREAWIDTH#
 ScreenH=#SCREENAREAHEIGHT#
 
 ; --- Griglia -----------------------------------------------------------------
-; Tile visibili: NX colonne x NY righe. Le tile si ridimensionano da sole per
-; riempire lo schermo. Cambiando NX o NY la griglia viene rigenerata e la skin
-; ricaricata in automatico.
+; Tile visibili di default: NX colonne x NY righe. Ogni categoria puo' avere
+; la sua griglia (NX=, NY= nella sezione [Category] del suo file). Le tile si
+; ridimensionano da sole per riempire lo schermo.
 NX=4
 NY=2
 ; Direzione di scorrimento: V (verticale, per righe) oppure H (orizzontale, per colonne)
@@ -27,6 +27,7 @@ Gap=18
 ; Margini esterni: PadX ospita la scrollbar verticale, PadY quella orizzontale.
 PadX=40
 PadY=24
+; Lato del riquadro del logo nelle tile (per categoria: IconSize= in [Category])
 IconSize=96
 LabelPad=14
 ScrollBarSize=4

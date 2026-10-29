@@ -213,6 +213,33 @@ local function thumbnail(src, tile, field, dir, name, w, h, mode)
 	return src
 end
 
+-- Griglia di una categoria: NX x NY tile visibili (default quelli di
+-- Settings.inc), dimensionate per riempire l'area della griglia.
+local function categoryGeometry(c, nx, ny, iconSize)
+	c.nx = math.max(1, math.floor(nx or V.DefNX))
+	c.ny = math.max(1, math.floor(ny or V.DefNY))
+	c.tw = math.floor((V.AreaW - (c.nx - 1) * V.Gap) / c.nx)
+	c.th = math.floor((V.AreaH - (c.ny - 1) * V.Gap) / c.ny)
+	-- una riga (o colonna) di slot in piu' per lo scorrimento fluido
+	c.rows = c.ny + (V.Horizontal and 0 or 1)
+	c.cols = c.nx + (V.Horizontal and 1 or 0)
+	c.iconSize = math.floor(iconSize or V.DefIconSize)
+	-- le miniature dei loghi sono create alla dimensione massima (zoom incluso)
+	c.logoMax = math.floor(c.iconSize * V.HoverLogoScale + 0.5)
+end
+
+-- Rende "corrente" la griglia della categoria c: il resto dello script usa
+-- V.NX, V.TileW, ... della categoria attiva.
+local function applyGeometry(c)
+	V.NX, V.NY, V.TileW, V.TileH = c.nx, c.ny, c.tw, c.th
+	V.StepX, V.StepY = c.tw + V.Gap, c.th + V.Gap
+	V.Rows, V.Cols = c.rows, c.cols
+	V.Slots = c.rows * c.cols -- slot usati (gli altri restano nascosti)
+	V.GridW = c.nx * c.tw + (c.nx - 1) * V.Gap
+	V.GridH = c.ny * c.th + (c.ny - 1) * V.Gap
+	V.IconSize = c.iconSize
+end
+
 -- Legge un file di categoria (Categories\<file>.ini).
 local function loadCategory(file)
 	local ini = parseIni(resources .. 'Categories\\' .. file)
@@ -221,16 +248,22 @@ local function loadCategory(file)
 	local base = file:gsub('%.[iI][nN][iI]$', '')
 	local images = resources .. 'Images\\' .. base .. '\\'
 	local c = { file = file, name = base, label = base, order = math.huge, tiles = {} }
-	local iconValue
+
+	-- [Category] per primo: la griglia della categoria serve gia' per le miniature
+	local catKeys = {}
+	for _, s in ipairs(ini) do
+		if s.name:lower() == 'category' then catKeys = s.keys end
+	end
+	local catLabel = trim(catKeys.name or '')
+	if catLabel ~= '' then c.label = catLabel end
+	c.order = tonumber(catKeys.order or '') or math.huge
+	local iconValue = catKeys.icon
+	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
+		tonumber(catKeys.iconsize or ''))
 
 	for _, s in ipairs(ini) do
 		local k = s.keys
-		if s.name:lower() == 'category' then
-			local label = trim(k.name or '')
-			if label ~= '' then c.label = label end
-			c.order = tonumber(k.order or '') or math.huge
-			iconValue = k.icon
-		else
+		if s.name:lower() ~= 'category' then
 			local label = trim(k.label or '')
 			local command = trim(SKIN:ReplaceVariables(k.command or ''))
 			-- Nome di default delle immagini: Image= oppure il nome della tile
@@ -244,9 +277,9 @@ local function loadCategory(file)
 			-- originali, usati a schermo intero dall'animazione di avvio
 			t.backgroundFull, t.logoFull = t.background, t.logo
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
-				V.TileW, V.TileH, V.BgThumbMode)
+				c.tw, c.th, V.BgThumbMode)
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
-				V.LogoMaxSize, V.LogoMaxSize, 'contain')
+				c.logoMax, c.logoMax, 'contain')
 			if label ~= '' then
 				t.label = label
 			elseif not t.background and not t.logo then
@@ -277,7 +310,11 @@ local function loadCategories(files)
 	end)
 	if #cats == 0 then
 		cats[1] = { file = '', name = 'Vuoto', label = 'Nessuna categoria', order = 0, tiles = {} }
+		categoryGeometry(cats[1])
 	end
+	-- Slot da generare: quanti ne servono alla griglia piu' grande
+	slots = 0
+	for _, c in ipairs(cats) do slots = math.max(slots, c.rows * c.cols) end
 
 	-- Meter che compongono ogni voce del menu, secondo MenuMode
 	for i, c in ipairs(cats) do
@@ -301,10 +338,10 @@ end
 -- Generazione di Grid.inc ---------------------------------------------------
 
 -- Da incrementare quando cambia il formato dei meter scritti da writeGrid().
-local GRID_VERSION = 3
+local GRID_VERSION = 4
 
 local function signature()
-	local s = { 'v' .. GRID_VERSION, V.NX .. 'x' .. V.NY, V.Horizontal and 'H' or 'V', V.MenuMode }
+	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
 	for _, c in ipairs(cats) do
 		s[#s + 1] = c.name .. ':' .. c.label .. ':' .. (c.icon or '')
 	end
@@ -359,37 +396,25 @@ local function writeGrid(path, sig, files)
 		w('')
 	end
 
-	-- Slot della griglia, dentro il contenitore GridClip (coordinate relative).
-	-- C'e' una riga (o colonna) in piu' per lo scorrimento fluido.
-	local slot = 0
-	for r = 0, V.Rows - 1 do
-		for c = 0, V.Cols - 1 do
-			slot = slot + 1
-			local x = c .. '*(#TileW#+#Gap#)'
-			local y = r .. '*(#TileH#+#Gap#)'
-
-			w('[Tile' .. slot .. ']')
-			w('Meter=Image')
-			w('MeterStyle=StyleTile')
-			w('X=(' .. x .. ')')
-			w('Y=(' .. y .. ')')
-			w('LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(' .. slot .. ')"]')
-			w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ')"]')
-			w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(' .. slot .. ')"]')
-			w('')
-			w('[TileIcon' .. slot .. ']')
-			w('Meter=Image')
-			w('MeterStyle=StyleTileIcon')
-			w('X=(' .. x .. '+(#TileW#-#IconSize#)/2)')
-			w('Y=(' .. y .. '+(#TileH#-#IconSize#)/2)')
-			w('')
-			w('[TileLabel' .. slot .. ']')
-			w('Meter=String')
-			w('MeterStyle=StyleTileLabel')
-			w('X=(' .. x .. '+#LabelPad#)')
-			w('Y=(' .. y .. '+#TileH#-#LabelPad#)')
-			w('')
-		end
+	-- Slot della griglia, dentro il contenitore GridClip: tanti quanti ne servono
+	-- alla categoria con la griglia piu' grande. Posizione e misura di ogni slot
+	-- le imposta lo script, secondo la griglia della categoria attiva.
+	for slot = 1, slots do
+		w('[Tile' .. slot .. ']')
+		w('Meter=Image')
+		w('MeterStyle=StyleTile')
+		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(' .. slot .. ')"]')
+		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ')"]')
+		w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(' .. slot .. ')"]')
+		w('')
+		w('[TileIcon' .. slot .. ']')
+		w('Meter=Image')
+		w('MeterStyle=StyleTileIcon')
+		w('')
+		w('[TileLabel' .. slot .. ']')
+		w('Meter=String')
+		w('MeterStyle=StyleTileLabel')
+		w('')
 	end
 
 	local f = io.open(path, 'w')
@@ -683,7 +708,7 @@ end
 
 -- Contenuti degli slot (immagini, testi) per la riga/colonna 'base'.
 local function fillSlots()
-	for slot = 1, slots do
+	for slot = 1, V.Slots do
 		local t = tileAt(slot)
 		if t then
 			set('Tile' .. slot, 'ImageName', t.background or '')
@@ -697,10 +722,11 @@ end
 local function placeSlots()
 	local frac = pos - base
 	for slot = 1, slots do
-		local t = tileAt(slot)
+		local inUse = slot <= V.Slots -- slot oltre la griglia della categoria: nascosti
+		local t = inUse and tileAt(slot)
 		local r, c = slotRC(slot)
 		local extra = r >= V.NY or c >= V.NX -- riga/colonna in piu'
-		local visible = t ~= nil and (not extra or frac > 0)
+		local visible = t and (not extra or frac > 0)
 		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
 
 		if visible then
@@ -718,6 +744,8 @@ local function placeSlots()
 
 			set(tile, 'X', tostring(x))
 			set(tile, 'Y', tostring(y))
+			set(tile, 'W', tostring(V.TileW))
+			set(tile, 'H', tostring(V.TileH))
 			set(tile, 'ImageAlpha', alpha)
 			set(tile, 'SolidColor', fade(t.color, f))
 			local crop = V.BgStyle ~= 'crop' and t.background and bgWindow(t, x, y)
@@ -739,6 +767,7 @@ local function placeSlots()
 			end
 			local hasLabel = V.ShowLabels and t.label ~= nil
 			if hasLabel then
+				set(label, 'W', tostring(V.TileW - 2 * V.LabelPad))
 				set(label, 'X', tostring(x + V.LabelPad))
 				set(label, 'Y', tostring(y + V.TileH - V.LabelPad))
 				set(label, 'FontColor', fade(V.TextColor, f))
@@ -822,7 +851,7 @@ local function advance()
 
 	if appear then
 		appear = appear + 1
-		if appear >= (slots - 1) * V.AnimStagger + V.AnimAppearFrames then appear = nil end
+		if appear >= (V.Slots - 1) * V.AnimStagger + V.AnimAppearFrames then appear = nil end
 		busy = busy or appear ~= nil
 	end
 
@@ -899,13 +928,12 @@ function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
 	laidOut, pillPos = false, nil
 
-	V.NX = math.max(1, math.floor(num('NX', 4)))
-	V.NY = math.max(1, math.floor(num('NY', 2)))
+	-- griglia di default; ogni categoria puo' avere la sua (NX/NY in [Category])
+	V.DefNX = math.max(1, math.floor(num('NX', 4)))
+	V.DefNY = math.max(1, math.floor(num('NY', 2)))
 	V.Horizontal = SKIN:GetVariable('ScrollDir', 'V'):upper():sub(1, 1) == 'H'
 	V.ScrollStep = math.max(1, math.floor(num('ScrollStep', 1)))
 	V.ScreenW = num('ScreenW', 1920)
-	V.TileW = math.floor(num('TileW', 320))
-	V.TileH = math.floor(num('TileH', 250))
 	V.Gap = num('Gap', 16)
 	V.PadX = num('PadX', 40)
 	V.PadY = num('PadY', 24)
@@ -915,7 +943,7 @@ function Initialize()
 	V.MenuIconDimAlpha = math.floor(num('MenuIconDimAlpha', 150))
 	V.ScrollBarSize = num('ScrollBarSize', 4)
 	V.ShowLabels = num('ShowLabels', 1) ~= 0
-	V.IconSize = math.floor(num('IconSize', 96))
+	V.DefIconSize = math.floor(num('IconSize', 96))
 	V.Thumbnails = num('Thumbnails', 1) ~= 0
 	V.TileHover = num('TileHover', 1) ~= 0
 	V.LaunchAnimation = num('LaunchAnimation', 1) ~= 0
@@ -930,11 +958,6 @@ function Initialize()
 	-- La mini-skin del tasto di chiusura: attiva solo mentre il launcher e' visibile
 	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
 	V.GridY = V.PadY + V.MenuH + V.Gap
-	V.StepX = V.TileW + V.Gap
-	V.StepY = V.TileH + V.Gap
-	-- Una riga (o colonna) di slot in piu' per lo scorrimento fluido
-	V.Rows = V.NY + (V.Horizontal and 0 or 1)
-	V.Cols = V.NX + (V.Horizontal and 1 or 0)
 	V.LabelPad = num('LabelPad', 14)
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
 	V.AnimCategory = num('AnimCategory', 1) ~= 0
@@ -969,10 +992,9 @@ function Initialize()
 		V.BgThumbMode = 'overscan' .. math.floor(over * 100 + 0.5)
 	end
 	V.HoverLogoScale = V.AnimLogoZoom and math.max(1, num('HoverLogoScale', 1.25)) or 1
-	-- le miniature dei loghi sono create alla dimensione massima (zoom incluso)
-	V.LogoMaxSize = math.floor(V.IconSize * V.HoverLogoScale + 0.5)
-	V.GridW = V.NX * V.TileW + (V.NX - 1) * V.Gap
-	V.GridH = V.NY * V.TileH + (V.NY - 1) * V.Gap
+	-- area disponibile per la griglia (le tile di ogni categoria la riempiono)
+	V.AreaW = V.ScreenW - 2 * V.PadX
+	V.AreaH = V.ScreenH - 2 * V.PadY - V.MenuH - V.Gap
 	for _, name in ipairs({ 'TileColor', 'ActiveCategoryColor', 'HoverCategoryColor', 'TextColor',
 			'TextDimColor', 'ScrollTrackColor', 'ScrollThumbColor', 'HoverColor', 'AccentColor' }) do
 		V[name] = SKIN:GetVariable(name, '255,255,255,255')
@@ -992,8 +1014,8 @@ function Initialize()
 	loadCategories(knownFiles)
 	if regenerate(knownFiles) then return end
 
-	slots = V.Rows * V.Cols
 	active = math.min(math.max(1, math.floor(num('LastCategory', 1))), #cats)
+	applyGeometry(cats[active])
 	-- scorrimento salvato di ogni categoria
 	for _, c in ipairs(cats) do
 		c.offset = math.floor(num('Scroll_' .. c.name, 0))
@@ -1200,6 +1222,7 @@ function SetCategory(i)
 	end
 	saveScroll()
 	active = i
+	applyGeometry(cats[i])
 	SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), resources .. 'State.inc')
 	offset = normalizeOffset(cats[i].offset)
 	pos, base = offset, -1

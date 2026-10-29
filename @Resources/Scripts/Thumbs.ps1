@@ -3,6 +3,7 @@
 # Ogni riga del file di lavoro: sorgente|destinazione|larghezza|altezza|modo
 #   cover   = riempie esattamente w x h ritagliando al centro (sfondi)
 #   contain = sta dentro w x h mantenendo le proporzioni (loghi, PNG trasparenti)
+#   overscanNNN = copre w x h e lo supera del NNN% (sfondi che scivolano)
 # Le miniature gia' esistenti vengono saltate; quelle non piu' elencate vengono
 # cancellate.
 
@@ -38,6 +39,12 @@ foreach ($line in Get-Content -LiteralPath $JobFile -Encoding UTF8) {
             $sw = $w / $scale; $sh = $h / $scale
             $srcRect = New-Object System.Drawing.RectangleF ((($iw - $sw) / 2), (($ih - $sh) / 2), $sw, $sh)
             $tw = $w; $th = $h
+        } elseif ($mode -like 'overscan*') {
+            # copre w x h e lo supera della percentuale indicata (es. overscan115)
+            $scale = [Math]::Max($w / $iw, $h / $ih) * ([int]$mode.Substring(8) / 100.0)
+            $srcRect = New-Object System.Drawing.RectangleF (0, 0, $iw, $ih)
+            $tw = [Math]::Max(1, [int][Math]::Round($iw * $scale))
+            $th = [Math]::Max(1, [int][Math]::Round($ih * $scale))
         } else {
             $scale = [Math]::Min($w / $iw, $h / $ih)
             $srcRect = New-Object System.Drawing.RectangleF (0, 0, $iw, $ih)

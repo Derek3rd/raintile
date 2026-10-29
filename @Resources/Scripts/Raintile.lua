@@ -140,6 +140,51 @@ local function fileSize(path)
 	return size
 end
 
+-- Dimensioni in pixel di un'immagine PNG, JPEG, BMP o GIF leggendone
+-- l'intestazione (nil se il formato non e' riconosciuto).
+local function imageSize(path)
+	local f = io.open(path, 'rb')
+	if not f then return nil end
+	local head = f:read(32) or ''
+	local function b(i) return head:byte(i) or 0 end
+	local w, h
+	if head:sub(1, 8) == '\137PNG\r\n\26\n' then
+		w = ((b(17) * 256 + b(18)) * 256 + b(19)) * 256 + b(20)
+		h = ((b(21) * 256 + b(22)) * 256 + b(23)) * 256 + b(24)
+	elseif head:sub(1, 2) == 'BM' then
+		w = b(19) + b(20) * 256 + b(21) * 65536 + b(22) * 16777216
+		h = b(23) + b(24) * 256 + b(25) * 65536 + b(26) * 16777216
+		if h >= 2147483648 then h = 4294967296 - h end -- bitmap dall'alto in basso
+	elseif head:sub(1, 3) == 'GIF' then
+		w, h = b(7) + b(8) * 256, b(9) + b(10) * 256
+	elseif head:sub(1, 2) == '\255\216' then
+		-- JPEG: scorre i segmenti fino al marcatore SOF con le dimensioni
+		f:seek('set', 2)
+		while true do
+			local marker = f:read(2)
+			if not marker or #marker < 2 or marker:byte(1) ~= 255 then break end
+			local m = marker:byte(2)
+			if m ~= 216 and m ~= 1 and not (m >= 208 and m <= 215) then
+				local len = f:read(2)
+				if not len or #len < 2 then break end
+				len = len:byte(1) * 256 + len:byte(2)
+				if m >= 192 and m <= 207 and m ~= 196 and m ~= 200 and m ~= 204 then
+					local d = f:read(5) or ''
+					if #d == 5 then
+						h = d:byte(2) * 256 + d:byte(3)
+						w = d:byte(4) * 256 + d:byte(5)
+					end
+					break
+				end
+				f:seek('cur', len - 2)
+			end
+		end
+	end
+	f:close()
+	if w and h and w > 0 and h > 0 then return { w, h } end
+	return nil
+end
+
 -- Miniature ------------------------------------------------------------------
 -- Rainmeter decodifica le immagini a piena risoluzione e le ridimensiona a ogni
 -- disegno. Per questo sfondi e loghi vengono convertiti (in background, da
@@ -159,8 +204,9 @@ end
 local function thumbnail(src, tile, field, dir, name, w, h, mode)
 	if not src or not V.Thumbnails then return src end
 	local ext = src:lower():match('%.png$') and '.png' or '.jpg'
-	local dst = string.format('%sGenerated\\Thumbs\\%s\\%s_%d_%dx%d%s',
-		resources, dir, safeName(name), fileSize(src) or 0, w, h, ext)
+	local tag = (mode == 'cover' or mode == 'contain') and '' or ('_' .. mode)
+	local dst = string.format('%sGenerated\\Thumbs\\%s\\%s_%d_%dx%d%s%s',
+		resources, dir, safeName(name), fileSize(src) or 0, w, h, tag, ext)
 	thumbJobs[#thumbJobs + 1] = table.concat({ src, dst, w, h, mode }, '|')
 	if fileExists(dst) then return dst end
 	pending[#pending + 1] = { tile = tile, field = field, dst = dst }
@@ -198,7 +244,7 @@ local function loadCategory(file)
 			-- originali, usati a schermo intero dall'animazione di avvio
 			t.backgroundFull, t.logoFull = t.background, t.logo
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
-				V.TileW, V.TileH, 'cover')
+				V.TileW, V.TileH, V.BgThumbMode)
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
 				V.LogoMaxSize, V.LogoMaxSize, 'contain')
 			if label ~= '' then
@@ -390,6 +436,49 @@ local function easeOut(p)
 	return 1 - (1 - p) ^ 3
 end
 
+local function easeInOut(p)
+	if p < 0.5 then return 4 * p ^ 3 end
+	return 1 - (-2 * p + 2) ^ 3 / 2
+end
+
+-- Sfondi "a finestra" (BgStyle diverso da Crop): l'immagine resta piu' grande
+-- della tile (BgOverscan) e la tile ne mostra una parte con ImageCrop,
+-- spostandola (Pan, Parallax) o restringendola (Zoom).
+-- x, y = posizione della tile nella griglia. Restituisce "x,y,w,h" o nil.
+local function bgWindow(t, x, y)
+	if t.bgSize == nil then t.bgSize = imageSize(t.background) or false end
+	local d = t.bgSize
+	if not d then return nil end
+	local iw, ih = d[1], d[2]
+	local scale = math.max(V.TileW / iw, V.TileH / ih) * V.BgOverscan
+	if V.BgStyle == 'zoom' then
+		scale = scale * (1 + (V.BgHoverZoom - 1) * (t.zoom or 0))
+	end
+	local cw, ch = V.TileW / scale, V.TileH / scale
+	local px, py = 0.5, 0.5
+	if V.BgStyle == 'pan' then
+		-- dal centro verso un'estremita', lungo l'asse con piu' margine
+		local e = 0.5 * easeInOut(t.pan or 0)
+		if (iw - cw) / iw >= (ih - ch) / ih then px = 0.5 + e else py = 0.5 + e end
+	elseif V.BgStyle == 'parallax' then
+		-- la parte mostrata dipende da dove si trova la tile nella griglia
+		if V.Horizontal then
+			px = math.min(1, math.max(0, (x + V.TileW / 2) / V.GridW))
+		else
+			py = math.min(1, math.max(0, (y + V.TileH / 2) / V.GridH))
+		end
+	end
+	return string.format('%d,%d,%d,%d', math.floor((iw - cw) * px + 0.5), math.floor((ih - ch) * py + 0.5),
+		math.floor(cw + 0.5), math.floor(ch + 0.5))
+end
+
+-- Numero >= 0 con 3 decimali e il punto come separatore, a prescindere dalla
+-- lingua di sistema (string.format('%.3f') potrebbe usare la virgola).
+local function dec(v)
+	local n = math.floor(v * 1000 + 0.5)
+	return string.format('%d.%03d', math.floor(n / 1000), n % 1000)
+end
+
 -- Matrice di colore (righe 1-3 di ColorMatrix) con saturazione sat: 0 = bianco
 -- e nero (luminanza), 1 = colori originali.
 local LUMA = { 0.299, 0.587, 0.114 }
@@ -399,7 +488,7 @@ local function saturationRows(sat)
 		local k = LUMA[i] * (1 - sat)
 		local v = { k, k, k }
 		v[i] = k + sat
-		rows[i] = string.format('%.3f;%.3f;%.3f;0;0', v[1], v[2], v[3])
+		rows[i] = dec(v[1]) .. ';' .. dec(v[2]) .. ';' .. dec(v[3]) .. ';0;0'
 	end
 	return rows
 end
@@ -594,6 +683,9 @@ local function placeSlots()
 			set(tile, 'Y', tostring(y))
 			set(tile, 'ImageAlpha', alpha)
 			set(tile, 'SolidColor', fade(t.color, f))
+			local crop = V.BgStyle ~= 'crop' and t.background and bgWindow(t, x, y)
+			set(tile, 'PreserveAspectRatio', crop and '0' or '2')
+			set(tile, 'ImageCrop', crop or '')
 			if t.logo then
 				local size = math.floor(V.IconSize * (1 + (V.HoverLogoScale - 1) * (t.zoom or 0)) + 0.5)
 				set(icon, 'X', tostring(x + math.floor((V.TileW - size) / 2)))
@@ -713,7 +805,15 @@ local function advance()
 		local target = (hover.on and tiles[hover.idx] == t) and 1 or 0
 		t.zoom, moving = approach(t.zoom or 0, target, 0.01)
 		busy = busy or moving
-		if t.zoom == 0 and target == 0 then zooming[t] = nil end
+		if V.BgStyle == 'pan' then
+			-- velocita' costante: lenta in andata, tre volte piu' rapida al ritorno
+			local p = t.pan or 0
+			local step = target == 1 and 1 / V.BgPanFrames or 3 / V.BgPanFrames
+			p = target == 1 and math.min(1, p + step) or math.max(0, p - step)
+			t.pan = p
+			busy = busy or p ~= target
+		end
+		if t.zoom == 0 and (t.pan or 0) == 0 and target == 0 then zooming[t] = nil end
 	end
 
 	if pillPos and laidOut then
@@ -810,6 +910,19 @@ function Initialize()
 	V.AnimSmooth = math.min(1, math.max(0.05, num('AnimSmooth', 0.3)))
 	V.AnimLogoZoom = num('AnimLogoZoom', 1) ~= 0
 	V.LogoGreyscale = num('LogoGreyscale', 1) ~= 0
+	local bg = SKIN:GetVariable('BgStyle', 'Crop'):lower()
+	V.BgStyle = (bg == 'pan' or bg == 'parallax' or bg == 'zoom') and bg or 'crop'
+	V.BgOverscan = math.max(1, num('BgOverscan', 1.15))
+	V.BgPanFrames = math.max(1, math.floor(num('BgPanFrames', 180)))
+	V.BgHoverZoom = math.max(1, num('BgHoverZoom', 1.08))
+	-- miniature degli sfondi: ritagliate alla tile (Crop) oppure piu' grandi,
+	-- con il margine per scivolare/ingrandire (percentuale nel nome del modo)
+	if V.BgStyle == 'crop' then
+		V.BgThumbMode = 'cover'
+	else
+		local over = V.BgOverscan * (V.BgStyle == 'zoom' and V.BgHoverZoom or 1)
+		V.BgThumbMode = 'overscan' .. math.floor(over * 100 + 0.5)
+	end
 	V.HoverLogoScale = V.AnimLogoZoom and math.max(1, num('HoverLogoScale', 1.25)) or 1
 	-- le miniature dei loghi sono create alla dimensione massima (zoom incluso)
 	V.LogoMaxSize = math.floor(V.IconSize * V.HoverLogoScale + 0.5)
@@ -886,7 +999,7 @@ function Show()
 	launching = nil
 	hideSplash()
 	hover.on, hover.a = false, 0
-	for t in pairs(zooming) do t.zoom = 0 end
+	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	if V.AnimOpen then appear = 0 end
 	frame() -- primo fotogramma disegnato prima di mostrare la finestra
@@ -957,6 +1070,7 @@ function OnThumbnails()
 	for _, p in ipairs(pending) do
 		if fileExists(p.dst) then
 			p.tile[p.field] = p.dst
+			if p.field == 'background' then p.tile.bgSize = nil end
 			changed = true
 		end
 	end
@@ -986,7 +1100,8 @@ function HoverTile(slot)
 	if V.TileHover then
 		if V.AnimHover then animate = true else hover.a = 1 end
 	end
-	if (V.AnimLogoZoom or V.LogoGreyscale) and t.logo then
+	if (t.logo and (V.AnimLogoZoom or V.LogoGreyscale))
+			or (t.background and (V.BgStyle == 'pan' or V.BgStyle == 'zoom')) then
 		zooming[t] = true
 		animate = true
 	end
@@ -1021,7 +1136,7 @@ function SetCategory(i)
 	end
 	offset, pos, base = 0, 0, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
-	for t in pairs(zooming) do t.zoom = 0 end
+	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	if V.AnimCategory then
 		appear = 0

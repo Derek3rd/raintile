@@ -57,6 +57,19 @@ Tutte disattivabili in `Settings.inc` e attive solo mentre qualcosa si muove (un
 | `LogoGreyscale` | i loghi sono in bianco e nero e si colorano gradualmente con il mouse sopra |
 | `AnimLogoZoom` | il logo della tile sotto il mouse si ingrandisce (`HoverLogoScale`, default 1.25); quello appena lasciato torna alla misura normale |
 
+### Stile degli sfondi
+
+Con `BgStyle` la tile può fare da "finestra" su un'immagine più grande (`BgOverscan`, default 1.15) invece di ritagliarla:
+
+| `BgStyle` | Effetto |
+| --- | --- |
+| `Crop` | ritaglio fisso al centro dell'immagine |
+| `Pan` (default) | con il mouse sopra la tile scivola lentamente sull'immagine (`BgPanFrames`, 180 ≈ 3 s), poi torna al centro |
+| `Parallax` | scorrendo la griglia l'immagine si muove più lenta della tile |
+| `Zoom` | con il mouse sopra lo sfondo si ingrandisce leggermente (`BgHoverZoom`) |
+
+Le miniature degli sfondi vengono create già con il margine necessario, quindi restano nitide; cambiando stile vengono rifatte da sole.
+
 Regolazioni: `AnimAppearFrames` (durata della comparsa di ogni tile, passi da 16 ms), `AnimStagger` (ritardo tra una tile e la successiva), `AnimSlide` (pixel di salita), `AnimSmooth` (morbidezza di hover, pillola e scorrimento: 0.1 lento, 1 istantaneo).
 
 Lo scorrimento fluido usa una riga (o colonna) di tile in più e l'opzione `Container` per tagliarle ai bordi della griglia: serve **Rainmeter 4.5 o successivo**.

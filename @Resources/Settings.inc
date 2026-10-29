@@ -100,6 +100,19 @@ AnimSlide=30
 ; Morbidezza di hover, pillola e scorrimento: 0.1 = lento, 1 = istantaneo
 AnimSmooth=0.3
 
+; --- Sfondi delle tile ------------------------------------------------------------
+; BgStyle: Crop     = ritaglio fisso al centro dell'immagine
+;          Pan      = con il mouse sopra la tile scivola lentamente sull'immagine
+;          Parallax = scorrendo la griglia l'immagine si muove piu' lenta della tile
+;          Zoom     = con il mouse sopra lo sfondo si ingrandisce leggermente
+BgStyle=Pan
+; Quanto l'immagine e' piu' grande della tile (margine per scivolare)
+BgOverscan=1.15
+; Pan: durata della corsa in passi da 16 ms (180 = circa 3 secondi)
+BgPanFrames=180
+; Zoom: ingrandimento dello sfondo con il mouse sopra
+BgHoverZoom=1.08
+
 ; --- Prestazioni ----------------------------------------------------------------
 ; 1 = usa miniature di sfondi e loghi alla misura esatta delle tile (create in
 ; background in Generated\Thumbs\ la prima volta), 0 = immagini originali

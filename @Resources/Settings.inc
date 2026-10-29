@@ -97,10 +97,20 @@ LogoGreyscale=1
 AnimAppearFrames=12
 AnimStagger=2
 AnimSlide=30
-; Morbidezza di hover e pillola: 0.1 = lento, 1 = istantaneo
+; Morbidezza delle animazioni: 0.05 = molto morbida e lenta, 1 = istantanea.
+; AnimSmooth e' il valore di base, usato da quelle lasciate vuote.
 AnimSmooth=0.3
-; Morbidezza del solo scorrimento (stessa scala; piu' basso = piu' morbido)
+; Scorrimento con la rotellina
 AnimScrollSmooth=0.15
+; Riquadro di evidenziazione che scivola tra le tile
+AnimHoverSmooth=0.3
+; Pillola del menu al cambio categoria
+AnimPillSmooth=0.25
+; Zoom e colore del logo con il mouse sopra (anche lo Zoom dello sfondo)
+AnimLogoSmooth=0.2
+; Le altre animazioni hanno una durata fissa in passi da 16 ms:
+; AnimAppearFrames (comparsa delle tile), BgPanFrames (Pan dello sfondo),
+; LaunchAnimFrames (espansione all'avvio)
 
 ; --- Sfondi delle tile ------------------------------------------------------------
 ; BgStyle: Crop     = ritaglio fisso al centro dell'immagine

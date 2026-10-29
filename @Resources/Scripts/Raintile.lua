@@ -791,11 +791,11 @@ local function advance()
 
 	if hover.idx ~= 0 then
 		local tx, ty = indexToGrid(hover.idx)
-		hover.gx, moving = approach(hover.gx, tx, 0.002)
+		hover.gx, moving = approach(hover.gx, tx, 0.002, V.AnimHoverSmooth)
 		busy = busy or moving
-		hover.gy, moving = approach(hover.gy, ty, 0.002)
+		hover.gy, moving = approach(hover.gy, ty, 0.002, V.AnimHoverSmooth)
 		busy = busy or moving
-		hover.a, moving = approach(hover.a, hover.on and 1 or 0, 0.02)
+		hover.a, moving = approach(hover.a, hover.on and 1 or 0, 0.02, V.AnimHoverSmooth)
 		busy = busy or moving
 	end
 
@@ -803,7 +803,7 @@ local function advance()
 	local tiles = cats[active].tiles
 	for t in pairs(zooming) do
 		local target = (hover.on and tiles[hover.idx] == t) and 1 or 0
-		t.zoom, moving = approach(t.zoom or 0, target, 0.01)
+		t.zoom, moving = approach(t.zoom or 0, target, 0.01, V.AnimLogoSmooth)
 		busy = busy or moving
 		if V.BgStyle == 'pan' then
 			-- velocita' costante: lenta in andata, tre volte piu' rapida al ritorno
@@ -818,9 +818,9 @@ local function advance()
 
 	if pillPos and laidOut then
 		local x, w = pillTarget(active)
-		pillPos.x, moving = approach(pillPos.x, x, 0.5)
+		pillPos.x, moving = approach(pillPos.x, x, 0.5, V.AnimPillSmooth)
 		busy = busy or moving
-		pillPos.w, moving = approach(pillPos.w, w, 0.5)
+		pillPos.w, moving = approach(pillPos.w, w, 0.5, V.AnimPillSmooth)
 		busy = busy or moving
 		drawPill('CatPillActive', pillPos.x, pillPos.w, V.ActiveCategoryColor)
 		SKIN:Bang('!UpdateMeter', 'CatPillActive')
@@ -908,7 +908,14 @@ function Initialize()
 	V.AnimStagger = math.max(0, num('AnimStagger', 2))
 	V.AnimSlide = num('AnimSlide', 30)
 	V.AnimSmooth = math.min(1, math.max(0.05, num('AnimSmooth', 0.3)))
-	V.AnimScrollSmooth = math.min(1, math.max(0.02, num('AnimScrollSmooth', V.AnimSmooth)))
+	-- Morbidezza di ciascuna animazione; se vuota vale AnimSmooth
+	local function smooth(name)
+		return math.min(1, math.max(0.02, num(name, V.AnimSmooth)))
+	end
+	V.AnimScrollSmooth = smooth('AnimScrollSmooth')
+	V.AnimHoverSmooth = smooth('AnimHoverSmooth')
+	V.AnimPillSmooth = smooth('AnimPillSmooth')
+	V.AnimLogoSmooth = smooth('AnimLogoSmooth')
 	V.AnimLogoZoom = num('AnimLogoZoom', 1) ~= 0
 	V.LogoGreyscale = num('LogoGreyscale', 1) ~= 0
 	local bg = SKIN:GetVariable('BgStyle', 'Crop'):lower()

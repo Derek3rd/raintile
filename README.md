@@ -70,7 +70,7 @@ Con `BgStyle` la tile può fare da "finestra" su un'immagine più grande (`BgOve
 
 Le miniature degli sfondi vengono create già con il margine necessario, quindi restano nitide; cambiando stile vengono rifatte da sole.
 
-Regolazioni: `AnimAppearFrames` (durata della comparsa di ogni tile, passi da 16 ms), `AnimStagger` (ritardo tra una tile e la successiva), `AnimSlide` (pixel di salita), `AnimSmooth` (morbidezza di hover e pillola: 0.1 lento, 1 istantaneo), `AnimScrollSmooth` (lo stesso, solo per lo scorrimento).
+Regolazioni: `AnimAppearFrames` (durata della comparsa di ogni tile, passi da 16 ms), `AnimStagger` (ritardo tra una tile e la successiva), `AnimSlide` (pixel di salita), morbidezza di ogni animazione (0.05 molto morbida, 1 istantanea): `AnimScrollSmooth` (scorrimento), `AnimHoverSmooth` (riquadro di evidenziazione), `AnimPillSmooth` (pillola del menu), `AnimLogoSmooth` (zoom e colore del logo, Zoom dello sfondo); `AnimSmooth` è il valore di base per quelle lasciate vuote.
 
 Lo scorrimento fluido usa una riga (o colonna) di tile in più e l'opzione `Container` per tagliarle ai bordi della griglia: serve **Rainmeter 4.5 o successivo**.
 

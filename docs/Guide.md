@@ -191,11 +191,30 @@ Settings: `ImportCategory`, `ImportStores` (e.g. `Steam|Epic`), `ImportOnStart=1
 
 ## Options window (WIP)
 
-The **gear** next to the X, or right click > **Options...**, opens a Windows window (`Scripts\Options.ps1`, PowerShell). It is a **work in progress**: it works, but its look and features will change.
+The **gear** next to the X, or right click > **Options...**, opens the Options window (`Scripts\Options.ps1`, WPF; its look is in `Scripts\Options.xaml`). It is a **work in progress**: it works, but features will still change.
 
-- **Settings** tab: every entry of `Settings.inc`, grouped by section, with the description taken from the file's comments; checkboxes for switches, drop-downs for fixed choices (`BgStyle`, `MenuMode`, `ScrollDir`, `ShowZPos`), colour pickers for colours. Saving only changes the values: comments and order of the file stay as they were.
-- **Categories** tab: create, delete (to the Recycle Bin) and reorder categories and edit their name, icon and grid; add, delete, reorder and edit tiles (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`. Imported games are listed read-only.
-- **Import games** runs the store import and shows the result; **Save and refresh** writes the files and refreshes the skin.
+The sections are on the left:
+
+| Section | What it holds |
+| --- | --- |
+| General | area covered (whole screen or work area, monitor), opening and closing behaviour, fade |
+| Layout | default grid, scrolling, spacing |
+| Menu | category menu, X and gear buttons |
+| Appearance | fonts, tile colours, launcher colours |
+| Animations | effects, appearing tiles, smoothing, tile launch |
+| Backgrounds | background style and its amounts |
+| Keybindings | open/close shortcut, close key, navigation keys |
+| Gamepad | support, open/close buttons, dead zone, repeat |
+| Search | search bar |
+| Import | store import settings and **Import games** |
+| Advanced | performance, debug log, entries without a page of their own, links to the files |
+| Categories & tiles | categories and their tiles, with a preview |
+
+- Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
+- **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
+- The arrow next to a setting appears when it differs from the default, and restores it.
+- **Categories & tiles**: create, delete (to the Recycle Bin) and reorder categories and edit their name, icon, grid and logo size; add, delete, reorder and edit tiles (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it. Imported games are listed read-only.
+- **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 
 The window hides the launcher while open. You can always keep editing the files by hand.
 
@@ -380,6 +399,7 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
   Scripts/Import.ps1         store import
   Scripts/Helper.ps1         gamepad and focus-loss helper
   Scripts/Options.ps1        Options window
+  Scripts/Options.xaml       look of the Options window
   Generated/Grid.inc         generated meters
   Generated/Sizes.inc        percentage sizes and #hex colours converted for Rainmeter
   Generated/Thumbs/          thumbnails (safe to delete: they are rebuilt)
@@ -392,7 +412,7 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
 - **Esc, keyboard navigation or the gamepad don't work after an update**: in Rainmeter use **Refresh all** (not just *Refresh skin*) so it sees new or renamed mini-skins and scripts. Check that the HotKey plugin is installed.
 - **A category icon doesn't show**: the icon goes in `Images\<file name>\icon.png` — the folder is named after the category *file* (`Games`), not its menu label. The log shows exactly where it looked (`Raintile: no icon for category ...`).
 - **A tile image doesn't show**: check the file name matches the tile name (or its `Image`/`Background`/`Logo` key); explicit names that are not found are logged.
-- **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`.
+- **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. It needs Windows PowerShell 5.1 (included in Windows 10/11).
 - **Imported games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey`. Import messages are in the log (`Raintile: import:`).
 - **Thumbnails are not created**: they are made by PowerShell in the background; errors are listed in the log. Deleting `Generated\Thumbs\` forces a rebuild.
 - **Slow or choppy animations on very large screens**: every animation step redraws the whole full-screen window. Turn off the heaviest ones (`AnimScroll`, `BgStyle=Crop`), lower `AnimAppearFrames`/`LaunchAnimFrames` or raise the `Anim*Smooth` values.

@@ -181,7 +181,29 @@ if ($NoGui) { return }
 # ==============================================================================
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing, Microsoft.VisualBasic
+
+# Un errore durante la costruzione della finestra non deve passare inosservato
+# (lo script gira senza console): lo si mostra e lo si scrive in un log.
+trap {
+    $msg = "$($_.Exception.Message)`r`n`r`n$($_.InvocationInfo.PositionMessage)"
+    try { [IO.File]::WriteAllText((Join-Path $Resources 'Generated\Options.log'), $msg, $utf8) } catch { }
+    [void][System.Windows.Forms.MessageBox]::Show("Errore nella finestra delle opzioni:`r`n`r`n$msg", 'Raintile')
+    exit 1
+}
+
 [System.Windows.Forms.Application]::EnableVisualStyles()
+
+# Avviato senza console (RunCommand, finestra nascosta): Windows potrebbe
+# applicare il "nascosto" anche alla prima finestra mostrata, quindi la si
+# rende visibile e in primo piano esplicitamente.
+Add-Type -Namespace RaintileOptions -Name Win32 -MemberDefinition @'
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+'@
+
+function Pad([int]$left, [int]$top, [int]$right, [int]$bottom) {
+    return New-Object System.Windows.Forms.Padding($left, $top, $right, $bottom)
+}
 
 $dirty = $false
 function Set-Dirty { $script:dirty = $true; $form.Text = 'Raintile - Opzioni *' }
@@ -198,7 +220,7 @@ $tabs.Dock = 'Fill'
 $form.Controls.Add($tabs)
 
 $bottom = New-Object System.Windows.Forms.FlowLayoutPanel
-$bottom.Dock = 'Bottom'; $bottom.Height = 44; $bottom.FlowDirection = 'RightToLeft'; $bottom.Padding = '8,6,8,6'
+$bottom.Dock = 'Bottom'; $bottom.Height = 44; $bottom.FlowDirection = 'RightToLeft'; $bottom.Padding = (Pad 8 6 8 6)
 $form.Controls.Add($bottom)
 $btnClose = New-Object System.Windows.Forms.Button; $btnClose.Text = 'Chiudi'; $btnClose.Width = 110
 $btnSave = New-Object System.Windows.Forms.Button; $btnSave.Text = 'Salva e aggiorna'; $btnSave.Width = 140
@@ -215,7 +237,7 @@ $pageSettings = New-Object System.Windows.Forms.TabPage
 $pageSettings.Text = 'Impostazioni'
 $tabs.TabPages.Add($pageSettings)
 $panel = New-Object System.Windows.Forms.TableLayoutPanel
-$panel.Dock = 'Fill'; $panel.AutoScroll = $true; $panel.ColumnCount = 3; $panel.Padding = '12,8,24,8'
+$panel.Dock = 'Fill'; $panel.AutoScroll = $true; $panel.ColumnCount = 3; $panel.Padding = (Pad 12 8 24 8)
 [void]$panel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Absolute', 210)))
 [void]$panel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Absolute', 300)))
 [void]$panel.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Percent', 100)))
@@ -225,13 +247,13 @@ $lastSection = $null
 foreach ($item in $settings) {
     if ($item.Section -ne $lastSection) {
         $h = New-Object System.Windows.Forms.Label
-        $h.Text = $item.Section; $h.AutoSize = $true; $h.Margin = '0,14,0,4'
+        $h.Text = $item.Section; $h.AutoSize = $true; $h.Margin = (Pad 0 14 0 4)
         $h.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 11)
         $panel.Controls.Add($h); $panel.SetColumnSpan($h, 3)
         $lastSection = $item.Section
     }
     $label = New-Object System.Windows.Forms.Label
-    $label.Text = $item.Key; $label.AutoSize = $true; $label.Margin = '0,6,0,0'
+    $label.Text = $item.Key; $label.AutoSize = $true; $label.Margin = (Pad 0 6 0 0)
     $panel.Controls.Add($label)
 
     switch (Get-ControlKind $item) {
@@ -253,7 +275,7 @@ foreach ($item in $settings) {
             $c.Width = 280; $c.Text = $item.Value; $c.Tag = $item.Value; $c.TextAlign = 'MiddleRight'
             $p = $item.Value -split '\s*,\s*' | ForEach-Object { [int]$_ }
             $c.BackColor = [System.Drawing.Color]::FromArgb(255, $p[0], $p[1], $p[2])
-            $c.ForeColor = if (($p[0] + $p[1] + $p[2]) -gt 380) { 'Black' } else { 'White' }
+            $c.ForeColor = if (($p[0] + $p[1] + $p[2]) -gt 380) { [System.Drawing.Color]::Black } else { [System.Drawing.Color]::White }
             $c.Add_Click({
                     $btn = $this
                     $v = $btn.Tag -split '\s*,\s*' | ForEach-Object { [int]$_ }
@@ -265,7 +287,7 @@ foreach ($item in $settings) {
                         $btn.Tag = "$($dlg.Color.R),$($dlg.Color.G),$($dlg.Color.B)$alpha"
                         $btn.Text = $btn.Tag
                         $btn.BackColor = [System.Drawing.Color]::FromArgb(255, $dlg.Color.R, $dlg.Color.G, $dlg.Color.B)
-                        $btn.ForeColor = if (($dlg.Color.R + $dlg.Color.G + $dlg.Color.B) -gt 380) { 'Black' } else { 'White' }
+                        $btn.ForeColor = if (($dlg.Color.R + $dlg.Color.G + $dlg.Color.B) -gt 380) { [System.Drawing.Color]::Black } else { [System.Drawing.Color]::White }
                         Set-Dirty
                     }
                 })
@@ -280,7 +302,7 @@ foreach ($item in $settings) {
     $settingControls[$item.Key] = $c
 
     $d = New-Object System.Windows.Forms.Label
-    $d.Text = $item.Description; $d.AutoSize = $true; $d.MaximumSize = '520,0'; $d.Margin = '8,6,0,6'
+    $d.Text = $item.Description; $d.AutoSize = $true; $d.MaximumSize = (New-Object System.Drawing.Size(520, 0)); $d.Margin = (Pad 8 6 0 6)
     $d.ForeColor = [System.Drawing.Color]::DimGray
     $panel.Controls.Add($d)
 }
@@ -315,7 +337,7 @@ $pageCats.Text = 'Categorie'
 $tabs.TabPages.Add($pageCats)
 
 $split = New-Object System.Windows.Forms.TableLayoutPanel
-$split.Dock = 'Fill'; $split.ColumnCount = 3; $split.Padding = '8'
+$split.Dock = 'Fill'; $split.ColumnCount = 3; $split.Padding = (Pad 8 8 8 8)
 [void]$split.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Absolute', 240)))
 [void]$split.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Absolute', 280)))
 [void]$split.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Percent', 100)))
@@ -362,7 +384,7 @@ $split.Controls.Add($colTiles, 1, 0)
 
 # Colonna 3: dettagli (categoria in alto, tile sotto)
 $details = New-Object System.Windows.Forms.TableLayoutPanel
-$details.Dock = 'Fill'; $details.ColumnCount = 3; $details.AutoScroll = $true; $details.Padding = '8,0,8,0'
+$details.Dock = 'Fill'; $details.ColumnCount = 3; $details.AutoScroll = $true; $details.Padding = (Pad 8 0 8 0)
 [void]$details.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Absolute', 110)))
 [void]$details.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Percent', 100)))
 [void]$details.ColumnStyles.Add((New-Object System.Windows.Forms.ColumnStyle('Absolute', 90)))
@@ -371,13 +393,13 @@ $split.Controls.Add($details, 2, 0)
 $fields = @{}
 function Add-Header([string]$text) {
     $h = New-Object System.Windows.Forms.Label
-    $h.Text = $text; $h.AutoSize = $true; $h.Margin = '0,10,0,4'
+    $h.Text = $text; $h.AutoSize = $true; $h.Margin = (Pad 0 10 0 4)
     $h.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 10)
     $details.Controls.Add($h); $details.SetColumnSpan($h, 3)
 }
 function Add-Field([string]$id, [string]$label, [string]$help, [string]$button = '') {
     $l = New-Object System.Windows.Forms.Label
-    $l.Text = $label; $l.AutoSize = $true; $l.Margin = '0,6,0,0'
+    $l.Text = $label; $l.AutoSize = $true; $l.Margin = (Pad 0 6 0 0)
     $details.Controls.Add($l)
     $t = New-Object System.Windows.Forms.TextBox
     $t.Dock = 'Fill'
@@ -407,7 +429,7 @@ Add-Field 'tile.Color' 'Colore' 'Colore di fondo senza sfondo (R,G,B,A)' 'Scegli
 Add-Field 'tile.Background' 'Sfondo' 'Vuoto = Images\<categoria>\background\<Nome>.*' 'Sfoglia...'
 Add-Field 'tile.Logo' 'Logo' 'Vuoto = Images\<categoria>\logo\<Nome>.*' 'Sfoglia...'
 $note = New-Object System.Windows.Forms.Label
-$note.AutoSize = $true; $note.MaximumSize = '520,0'; $note.ForeColor = [System.Drawing.Color]::DimGray; $note.Margin = '0,10,0,0'
+$note.AutoSize = $true; $note.MaximumSize = (New-Object System.Drawing.Size(520, 0)); $note.ForeColor = [System.Drawing.Color]::DimGray; $note.Margin = (Pad 0 10 0 0)
 $details.Controls.Add($note); $details.SetColumnSpan($note, 3)
 
 $loading = $false
@@ -675,11 +697,11 @@ $btnSave.Add_Click({ Save-All })
 $btnClose.Add_Click({ $form.Close() })
 $btnImport.Add_Click({
         if ($dirty) { Save-All }
-        $form.Cursor = 'WaitCursor'
+        $form.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
         $values = @{}; foreach ($item in $settings) { $values[$item.Key] = $item.Value }
         $out = & (Join-Path $Resources 'Scripts\Import.ps1') -Resources $Resources -Category $values['ImportCategory'] `
             -Stores $values['ImportStores'] -SteamGridDBKey $values['SteamGridDBKey'] 2>&1
-        $form.Cursor = 'Default'
+        $form.Cursor = [System.Windows.Forms.Cursors]::Default
         $models.Clear()
         Refresh-Cats $listCats.SelectedIndex
         [void][System.Windows.Forms.MessageBox]::Show($form, (($out | Where-Object { "$_" -notmatch '^RESULT:' }) -join "`r`n"), 'Importa giochi')
@@ -692,7 +714,12 @@ $form.Add_FormClosing({
         if ($r -eq 'Cancel') { $e.Cancel = $true }
         elseif ($r -eq 'Yes') { Save-All }
     })
-$form.Add_Shown({ $form.Activate(); $form.TopMost = $false })
+$form.Add_Shown({
+        [void][RaintileOptions.Win32]::ShowWindow($form.Handle, 1) # SW_SHOWNORMAL
+        [void][RaintileOptions.Win32]::SetForegroundWindow($form.Handle)
+        $form.Activate()
+        $form.TopMost = $false
+    })
 
 Refresh-Cats
 $tabs.SelectedIndex = 0

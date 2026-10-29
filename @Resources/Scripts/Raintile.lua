@@ -964,6 +964,7 @@ function Initialize()
 	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
 	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
 	V.DebugLog = num('DebugLog', 0) ~= 0
+	V.ImportOnStart = num('ImportOnStart', 0) ~= 0
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.LabelPad = num('LabelPad', 14)
@@ -1145,6 +1146,28 @@ function OnCategoryList()
 		loadCategories(files)
 		regenerate(files)
 	end
+end
+
+-- Import automatico in background a ogni caricamento (ImportOnStart=1). Se
+-- trova novita' la skin si ricarica e l'import riparte, ma la seconda volta non
+-- cambia nulla e quindi non ricarica: niente cicli.
+function AutoImport()
+	if not ready or not V.ImportOnStart then return end
+	SKIN:Bang('!CommandMeasure', 'MeasureImport', 'Run')
+end
+
+-- Fine di Import.ps1: riporta l'esito nel log e ricarica se qualcosa e' cambiato.
+function OnImport()
+	local output = SKIN:GetMeasure('MeasureImport'):GetStringValue()
+	local changed = false
+	for line in output:gmatch('[^\r\n]+') do
+		if line:match('^RESULT:CHANGED') then
+			changed = true
+		elseif not line:match('^RESULT:') then
+			print('Raintile: import: ' .. line)
+		end
+	end
+	if changed then SKIN:Bang('!Refresh') end
 end
 
 -- Crea in background le miniature mancanti (chiamata da OnRefreshAction).

@@ -120,6 +120,17 @@ Ogni categoria può avere la sua griglia: per esempio Giochi `NX=4` `NY=1` (tile
 
 Ogni sezione diversa da `[Category]` è una tile, nell'ordine del file.
 
+### Importare i giochi dagli store
+
+Tasto destro sulla skin > **Importa giochi dagli store**. Lo script (`Scripts\Import.ps1`, in background) legge i giochi installati da **Steam**, **Epic Games**, **GOG Galaxy** e **Ubisoft Connect** e li scrive in fondo al file della categoria `ImportCategory` (default `Games.ini`):
+
+- le tile scritte a mano non vengono mai toccate, e un gioco già presente tra queste (stesso nome o stesso `Command`) non viene duplicato;
+- il blocco importato viene riscritto a ogni import: i giochi disinstallati spariscono, quelli nuovi compaiono. Per personalizzare un gioco importato, spostane la sezione sopra la riga `; ===== IMPORTATI AUTOMATICAMENTE =====`;
+- **immagini**: per Steam sfondo e logo vengono presi dalla cache locale della libreria; per gli altri store (e i giochi Steam senza immagini locali) vengono scaricati da [SteamGridDB](https://www.steamgriddb.com/) se in `SteamGridDBKey` c'è una chiave API (gratuita, dalle preferenze del sito). Un'immagine messa a mano in `background\<Nome>.*` o `logo\<Nome>.*` ha sempre la precedenza;
+- l'esito finisce nel log di Rainmeter (righe `Raintile: import:`); la skin si ricarica solo se qualcosa è cambiato.
+
+Impostazioni: `ImportCategory`, `ImportStores` (es. `Steam|Epic`), `ImportOnStart=1` per importare in automatico a ogni caricamento, `SteamGridDBKey`.
+
 ### Immagini
 
 Per la categoria `Games.ini` la struttura è:

@@ -157,6 +157,19 @@ TileHover=1
 ; Viene copiata in Rainmeter.ini e vale dal caricamento successivo.
 FadeDuration=0
 
+; --- Import dagli store -------------------------------------------------------------
+; Tasto destro sulla skin > "Importa giochi dagli store". I giochi installati
+; vengono scritti in fondo al file della categoria ImportCategory, in un blocco
+; che viene riscritto a ogni import; le tile scritte a mano non vengono toccate.
+ImportCategory=Games
+; Store da leggere, separati da |
+ImportStores=Steam|Epic|GOG|Ubisoft
+; 1 = importa anche in automatico, in background, a ogni caricamento della skin
+ImportOnStart=0
+; Chiave API gratuita di SteamGridDB (steamgriddb.com > Preferenze > API):
+; scarica sfondo e logo dei giochi senza immagini locali (Epic, GOG, Ubisoft)
+SteamGridDBKey=
+
 ; --- Diagnostica -----------------------------------------------------------------
 ; 1 = scrive nel log di Rainmeter (Gestisci > Log) cosa succede alla conferma,
 ; all'avvio di una tile e a mostra/nascondi, e i tasti visti dal plugin HotKey

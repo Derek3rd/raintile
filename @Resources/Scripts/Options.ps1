@@ -903,6 +903,18 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
         </DockPanel>
       </Border>
     </Grid>
+    <!-- Shown after "Save and refresh" while the skin reloads -->
+    <Grid x:Name="Overlay" Grid.ColumnSpan="2" Background="#D915151B" Visibility="Collapsed">
+      <Border Style="{StaticResource Card}" Width="400" Padding="28,24" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel>
+          <TextBlock Text="Saving and refreshing" FontSize="17" FontWeight="SemiBold"/>
+          <TextBlock Text="The launcher opens in a moment." Foreground="{StaticResource DimBrush}" Margin="0,4,0,18"/>
+          <Border x:Name="ProgressTrack" Height="6" CornerRadius="3" Background="{StaticResource FieldBg}">
+            <Border x:Name="ProgressBar" Width="0" HorizontalAlignment="Left" CornerRadius="3" Background="{StaticResource AccentBrush}"/>
+          </Border>
+        </StackPanel>
+      </Border>
+    </Grid>
   </Grid>
 </Window>
 '@)
@@ -2150,6 +2162,36 @@ function Save-All([switch]$NoRefresh) {
     if (-not $NoRefresh) { Invoke-Rainmeter "!Refresh `"$Config`"" }
 }
 
+# "Save and refresh": saves, refreshes the skin, shows a progress bar for 3
+# seconds (the time the skin needs to reload) and then shows the launcher.
+$overlay = $win.FindName('Overlay')
+$progressTrack = $win.FindName('ProgressTrack')
+$progressBar = $win.FindName('ProgressBar')
+$script:refreshing = $false
+$script:refreshStart = [DateTime]::Now
+$refreshTimer = New-Object System.Windows.Threading.DispatcherTimer
+$refreshTimer.Interval = [TimeSpan]::FromMilliseconds(30)
+$refreshTimer.Add_Tick({
+        $p = [Math]::Min(1, ([DateTime]::Now - $script:refreshStart).TotalMilliseconds / 3000)
+        $progressBar.Width = $p * $progressTrack.ActualWidth
+        if ($p -ge 1) {
+            $refreshTimer.Stop()
+            $overlay.Visibility = 'Collapsed'
+            $script:refreshing = $false
+            Invoke-Rainmeter "!CommandMeasure MeasureScript `"Show()`" `"$Config`""
+        }
+    })
+
+function Start-SaveAndRefresh {
+    if ($script:refreshing) { return }
+    Save-All
+    $script:refreshing = $true
+    $progressBar.Width = 0
+    $overlay.Visibility = 'Visible'
+    $script:refreshStart = [DateTime]::Now
+    $refreshTimer.Start()
+}
+
 function Invoke-Action([string]$action) {
     switch ($action) {
         'Import' {
@@ -2351,13 +2393,14 @@ $nav.Add_SelectionChanged({
         Show-NavTarget $tag
     })
 
-$btnSave.Add_Click({ Save-All })
+$btnSave.Add_Click({ Start-SaveAndRefresh })
 $win.FindName('BtnClose').Add_Click({ $win.Close() })
 $win.Add_PreviewKeyDown({
         param($s, $e)
+        if ($script:refreshing) { $e.Handled = $true; return }   # waiting for the skin
         if ($e.Key -eq 'S' -and [System.Windows.Input.Keyboard]::Modifiers -eq 'Control' -and -not $script:capturing) {
             $e.Handled = $true
-            Save-All
+            Start-SaveAndRefresh
         }
     })
 $win.Add_Closing({

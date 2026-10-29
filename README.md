@@ -117,6 +117,16 @@ Regolazioni: `AnimAppearFrames` (durata della comparsa di ogni tile, passi da 16
 
 Lo scorrimento fluido usa una riga (o colonna) di tile in più e l'opzione `Container` per tagliarle ai bordi della griglia: serve **Rainmeter 4.5 o successivo**.
 
+## Opzioni
+
+Il pulsante con l'**ingranaggio** (a sinistra della X) o tasto destro > **Opzioni...** aprono una finestra di Windows (`Scripts\Options.ps1`, PowerShell) con due schede:
+
+- **Impostazioni**: tutte le voci di `Settings.inc`, divise per sezione e con la descrizione presa dai commenti del file; caselle per gli interruttori, menu per le scelte (`BgStyle`, `MenuMode`, `ScrollDir`, `ShowZPos`), selettore per i colori. Salvando cambiano solo i valori: commenti e ordine del file restano com'erano.
+- **Categorie**: crea, elimina (nel Cestino) e riordina le categorie e ne modifica nome, icona e griglia; aggiunge, elimina, riordina e modifica le tile (nome, comando con *Sfoglia...* per `.exe`/`.lnk`/`.url`, etichetta, colore, sfondo, logo). Le immagini scelte vengono copiate in `Images\<categoria>\background|logo\<NomeTile>.<ext>`. I giochi importati sono visibili ma in sola lettura.
+- **Importa giochi** lancia l'import dagli store e mostra l'esito; **Salva e aggiorna** scrive i file e ricarica la skin.
+
+Si può sempre continuare a modificare i file a mano.
+
 ## Configurazione
 
 | Dove | Cosa |

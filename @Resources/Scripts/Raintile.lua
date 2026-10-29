@@ -32,6 +32,7 @@ local ticking = false -- animation clock (ActionTimer) running
 local visible = true  -- launcher shown (Show/Hide)
 local searchCat = nil -- search results, shown instead of the active category
 local query = ''      -- searched text
+local typing = false  -- search text field open (until shortly after it closes)
 local leaveSearch     -- defined in the Search section
 
 -- Category shown in the grid: the search results or the active one.
@@ -1193,6 +1194,7 @@ function Show()
 	visible = true
 	-- start clean: no hover, zoom or launch left over from last time
 	launching = nil
+	typing = false
 	hideSplash()
 	hover.on, hover.a = false, 0
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
@@ -1639,6 +1641,7 @@ end
 
 function SearchOpen()
 	if not ready or launching or not visible then return end
+	typing = true
 	hotKey(false) -- the keys are needed by the text field
 	SKIN:Bang('!SetOption', 'MeasureSearchInput', 'DefaultValue', query)
 	SKIN:Bang('!UpdateMeasure', 'MeasureSearchInput')
@@ -1657,15 +1660,18 @@ end
 
 -- Turns the keys back on after the search (called by MeasureKeysDelay).
 function KeysReady()
+	typing = false
 	if ready and visible then hotKey(true) end
 end
 
 -- The launcher lost focus (from Helper.ps1, AutoHide=1). Ignored during the
 -- launch animation: the game window, or its launcher's, popping up must not
--- interrupt it.
+-- interrupt it. Also ignored around the search: when the text field closes,
+-- Windows hands the foreground back to the program that had it before.
 function FocusLost()
-	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
-	if not ready or not visible or launching then return end
+	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil)
+		.. ' typing=' .. tostring(typing))
+	if not ready or not visible or launching or typing then return end
 	Hide()
 end
 

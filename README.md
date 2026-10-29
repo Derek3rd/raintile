@@ -84,7 +84,7 @@ Lo scorrimento fluido usa una riga (o colonna) di tile in più e l'opzione `Cont
 
 | Dove | Cosa |
 | --- | --- |
-| `@Resources\Settings.inc` | schermo, griglia (`NX`, `NY`, `ScrollDir`), menu (`MenuMode`), chiusura, colori, font |
+| `@Resources\Settings.inc` | schermo, griglia di default (`NX`, `NY`, `ScrollDir`), menu (`MenuMode`), chiusura, colori, font |
 | `@Resources\Categories\*.ini` | **un file per categoria**: voce del menu e tile |
 | `@Resources\Images\<categoria>\` | immagini della categoria |
 
@@ -97,10 +97,15 @@ Le categorie sono i file presenti in `Categories\`: per aggiungerne una basta cr
 Name=Giochi        ; testo nel menu (default: nome del file)
 Icon=              ; default: Images\Games\icon.png
 Order=1            ; posizione nel menu (default: ordine alfabetico)
+NX=4               ; griglia della categoria (default: NX/NY di Settings.inc)
+NY=1
+IconSize=160       ; lato del logo nelle tile (default: IconSize di Settings.inc)
 
 [Diablo]
 Command=steam://rungameid/2344520
 ```
+
+Ogni categoria può avere la sua griglia: per esempio Giochi `NX=4` `NY=1` (tile grandi) e App `NX=5` `NY=2`. Le tile si ridimensionano per riempire lo schermo; la skin crea gli slot che servono alla griglia più grande e nelle altre categorie quelli in più restano nascosti.
 
 Ogni sezione diversa da `[Category]` è una tile, nell'ordine del file.
 

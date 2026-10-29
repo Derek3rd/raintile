@@ -916,8 +916,12 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
         <StackPanel>
           <TextBlock Text="Saving and refreshing" FontSize="17" FontWeight="SemiBold"/>
           <TextBlock Text="The launcher opens in a moment." Foreground="{StaticResource DimBrush}" Margin="0,4,0,18"/>
-          <Border x:Name="ProgressTrack" Height="6" CornerRadius="3" Background="{StaticResource FieldBg}">
-            <Border x:Name="ProgressBar" Width="0" HorizontalAlignment="Left" CornerRadius="3" Background="{StaticResource AccentBrush}"/>
+          <DockPanel Margin="0,0,0,8">
+            <TextBlock x:Name="ProgressPercent" DockPanel.Dock="Right" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
+            <TextBlock x:Name="ProgressStage" Foreground="{StaticResource DimBrush}" FontSize="12.5"/>
+          </DockPanel>
+          <Border x:Name="ProgressTrack" Height="10" CornerRadius="5" Background="{StaticResource FieldBg}" ClipToBounds="True">
+            <Border x:Name="ProgressBar" Width="0" HorizontalAlignment="Left" CornerRadius="5" Background="{StaticResource AccentBrush}"/>
           </Border>
         </StackPanel>
       </Border>
@@ -2169,19 +2173,60 @@ function Save-All([switch]$NoRefresh) {
     if (-not $NoRefresh) { Invoke-Rainmeter "!Refresh `"$Config`"" }
 }
 
-# "Save and refresh": saves, refreshes the skin, shows a progress bar for 3
-# seconds (the time the skin needs to reload), then shows the launcher and
-# closes the window.
+# "Save and refresh": saves, refreshes the skin, shows a progress bar for 2.5
+# to 3.5 seconds (the time the skin needs to reload), then shows the launcher
+# and closes the window. The bar does not fill evenly: it goes through a few
+# random steps, some quick, some slow, like a real loading.
 $overlay = $win.FindName('Overlay')
 $progressTrack = $win.FindName('ProgressTrack')
 $progressBar = $win.FindName('ProgressBar')
+$progressPercent = $win.FindName('ProgressPercent')
+$progressStage = $win.FindName('ProgressStage')
 $script:refreshing = $false
 $script:refreshStart = [DateTime]::Now
+$random = New-Object System.Random
+
+# Steps of the bar: Times (ms from the start) and Values (0-1), both rising
+function New-ProgressPlan {
+    $total = 2500 + $random.Next(0, 1001)
+    $steps = 5 + $random.Next(0, 3)
+    $timeWeights = @(1..$steps | ForEach-Object { 0.4 + $random.NextDouble() })
+    # some steps barely move: pauses
+    $valueWeights = @(1..$steps | ForEach-Object { if ($random.NextDouble() -lt 0.3) { 0.02 } else { 0.2 + $random.NextDouble() } })
+    $tSum = ($timeWeights | Measure-Object -Sum).Sum
+    $vSum = ($valueWeights | Measure-Object -Sum).Sum
+    $times = @(0.0); $vals = @(0.0); $t = 0.0; $v = 0.0
+    for ($i = 0; $i -lt $steps; $i++) {
+        $t += $timeWeights[$i] / $tSum * $total
+        $v += $valueWeights[$i] / $vSum
+        $times += $t; $vals += $v
+    }
+    $vals[$steps] = 1.0
+    return @{ Total = $total; Times = $times; Values = $vals }
+}
+
+# Progress (0-1) after 'elapsed' ms: each step eases out
+function Get-PlannedProgress($plan, [double]$elapsed) {
+    if ($elapsed -ge $plan.Total) { return 1.0 }
+    for ($i = 0; $i -lt $plan.Times.Count - 1; $i++) {
+        if ($elapsed -lt $plan.Times[$i + 1]) {
+            $f = ($elapsed - $plan.Times[$i]) / ($plan.Times[$i + 1] - $plan.Times[$i])
+            $f = 1 - (1 - $f) * (1 - $f)
+            return $plan.Values[$i] + ($plan.Values[$i + 1] - $plan.Values[$i]) * $f
+        }
+    }
+    return 1.0
+}
+
 $refreshTimer = New-Object System.Windows.Threading.DispatcherTimer
 $refreshTimer.Interval = [TimeSpan]::FromMilliseconds(30)
 $refreshTimer.Add_Tick({
-        $p = [Math]::Min(1, ([DateTime]::Now - $script:refreshStart).TotalMilliseconds / 3000)
+        $p = Get-PlannedProgress $script:progressPlan ([DateTime]::Now - $script:refreshStart).TotalMilliseconds
         $progressBar.Width = $p * $progressTrack.ActualWidth
+        $progressPercent.Text = "$([int][Math]::Floor($p * 100))%"
+        $progressStage.Text = if ($p -lt 0.3) { 'Saving the settings' + [char]0x2026 }
+        elseif ($p -lt 0.85) { 'Refreshing the skin' + [char]0x2026 }
+        else { 'Opening the launcher' + [char]0x2026 }
         if ($p -ge 1) {
             $refreshTimer.Stop()
             $overlay.Visibility = 'Collapsed'
@@ -2195,7 +2240,10 @@ function Start-SaveAndRefresh {
     if ($script:refreshing) { return }
     Save-All
     $script:refreshing = $true
+    $script:progressPlan = New-ProgressPlan
     $progressBar.Width = 0
+    $progressPercent.Text = '0%'
+    $progressStage.Text = 'Saving the settings' + [char]0x2026
     $overlay.Visibility = 'Visible'
     $script:refreshStart = [DateTime]::Now
     $refreshTimer.Start()

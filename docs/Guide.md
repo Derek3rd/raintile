@@ -216,7 +216,7 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default, and restores it.
 - **Categories**: create, delete (to the Recycle Bin) and reorder categories; double-click one (or pick it in the menu) to open it. In a category you edit its name, icon, grid and logo size, and add, delete, reorder and edit tiles (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it. Imported games are listed read-only.
-- **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 3 seconds while the skin reloads, then the launcher is shown and the window closes. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
+- **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds while the skin reloads, then the launcher is shown and the window closes. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 
 The window hides the launcher while open. You can always keep editing the files by hand.
 

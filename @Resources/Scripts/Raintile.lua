@@ -957,6 +957,8 @@ function Initialize()
 	V.HotKey = trim(SKIN:GetVariable('CloseHotKey', ''))
 	-- La mini-skin del tasto di chiusura: attiva solo mentre il launcher e' visibile
 	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
+	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
+	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.LabelPad = num('LabelPad', 14)
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
@@ -1028,11 +1030,20 @@ end
 -- Accende o spegne la mini-skin che registra il tasto di chiusura (Esc).
 -- Da spenta il tasto torna libero per le altre applicazioni.
 local function hotKey(on)
-	if V.HotKey == '' then return end
-	if on then
-		SKIN:Bang('!ActivateConfig', V.HotKeyConfig, 'Hotkey.ini')
-	else
-		SKIN:Bang('!DeactivateConfig', V.HotKeyConfig)
+	if V.HotKey ~= '' then
+		if on then
+			SKIN:Bang('!ActivateConfig', V.HotKeyConfig, 'Hotkey.ini')
+		else
+			SKIN:Bang('!DeactivateConfig', V.HotKeyConfig)
+		end
+	end
+	-- tasti di navigazione (WASD, frecce, Spazio/Invio, Q/E): stessa logica
+	if V.KeyboardNav then
+		if on then
+			SKIN:Bang('!ActivateConfig', V.NavConfig, 'Navigation.ini')
+		else
+			SKIN:Bang('!DeactivateConfig', V.NavConfig)
+		end
 	end
 end
 
@@ -1160,12 +1171,11 @@ end
 -- script. Gli eventi ripetuti per la stessa tile non costano nulla; con
 -- AnimHover scivola da una tile all'altra e compare/sparisce in dissolvenza.
 -- Con AnimLogoZoom il logo della tile sotto il mouse si ingrandisce.
-function HoverTile(slot)
-	local t = ready and not launching and tileAt(slot)
-	if not t then return end
-	local idx = indexAt(slot)
-	if hover.on and hover.idx == idx then return end
-	hover.tx, hover.ty = slotToGrid(slot)
+-- Porta l'evidenziazione (mouse o tastiera) sulla tile t, indice idx, alle
+-- coordinate di griglia tx, ty.
+local function focus(t, idx, tx, ty)
+	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty then return end
+	hover.tx, hover.ty = tx, ty
 	if hover.a < 0.05 or not V.AnimHover then
 		-- era spenta: compare direttamente sulla nuova tile
 		hover.gx, hover.gy = hover.tx, hover.ty
@@ -1182,6 +1192,13 @@ function HoverTile(slot)
 		animate = true
 	end
 	if animate then startTicker() else frame() end
+end
+
+function HoverTile(slot)
+	local t = ready and not launching and tileAt(slot)
+	if not t then return end
+	local tx, ty = slotToGrid(slot)
+	focus(t, indexAt(slot), tx, ty)
 end
 
 function LeaveTile(slot)
@@ -1290,9 +1307,9 @@ local function drawSplash(p)
 	SKIN:Bang('!Redraw')
 end
 
-function Launch(slot)
-	if not ready or launching then return end
-	local t = tileAt(slot)
+-- Avvia la tile t; x, y = sua posizione (in pixel) nella griglia, da cui
+-- parte l'espansione.
+local function launchTile(t, x, y)
 	if not t or not t.command then return end
 
 	SKIN:Bang(t.command)
@@ -1302,9 +1319,6 @@ function Launch(slot)
 	end
 
 	stopTicker()
-	local r, c = slotRC(slot)
-	local x, y = c * V.StepX, r * V.StepY
-	if V.Horizontal then x = x - (pos - base) * V.StepX else y = y - (pos - base) * V.StepY end
 	launching = { tile = t, x = V.PadX + math.floor(x), y = V.GridY + math.floor(y), frame = 0 }
 	hover.on, hover.a = false, 0
 	show('TileHover', false)
@@ -1320,6 +1334,76 @@ function Launch(slot)
 
 	drawSplash(V.LaunchAnimFrames > 0 and 0 or 1)
 	SKIN:Bang('!CommandMeasure', 'MeasureLaunchAnim', 'Execute 1')
+end
+
+function Launch(slot)
+	if not ready or launching then return end
+	local r, c = slotRC(slot)
+	local x, y = c * V.StepX, r * V.StepY
+	if V.Horizontal then x = x - (pos - base) * V.StepX else y = y - (pos - base) * V.StepY end
+	launchTile(tileAt(slot), x, y)
+end
+
+-- Tastiera -------------------------------------------------------------------
+-- WASD/frecce spostano l'evidenziazione (la stessa del mouse), Spazio/Invio
+-- avviano la tile evidenziata, Q/E cambiano categoria. I tasti sono registrati
+-- dalla mini-skin Raintile\Navigation, attiva solo a launcher visibile.
+
+-- Sposta l'evidenziazione di dx colonne e dy righe, scorrendo la griglia
+-- quanto basta perche' resti visibile.
+function Nav(dx, dy)
+	if not ready or launching or not visible then return end
+	local tiles = cats[active].tiles
+	if #tiles == 0 then return end
+	local L, per, vis = lineCount(), (V.Horizontal and V.NY or V.NX), visibleLines()
+
+	-- line = riga (o colonna, in orizzontale) nel senso dello scorrimento
+	local line, cross
+	if hover.idx ~= 0 then
+		line = (V.Horizontal and hover.tx or hover.ty) + (V.Horizontal and dx or dy)
+		cross = (V.Horizontal and hover.ty or hover.tx) + (V.Horizontal and dy or dx)
+	else
+		-- nessuna tile evidenziata: parte dalla prima visibile
+		line, cross = offset, 0
+	end
+	cross = math.min(math.max(0, cross), per - 1)
+	if not infinite() then line = math.min(math.max(0, line), L - 1) end
+	-- ultima riga incompleta: si ferma sull'ultima tile presente
+	local wrapped = line % L
+	cross = math.min(cross, #tiles - wrapped * per - 1)
+
+	if line < offset then
+		offset = line
+	elseif line > offset + vis - 1 then
+		offset = line - vis + 1
+	end
+	if pos ~= offset then
+		if V.AnimScroll then startTicker() else pos = offset end
+	end
+
+	local idx = wrapped * per + cross + 1
+	if V.Horizontal then
+		focus(tiles[idx], idx, line, cross)
+	else
+		focus(tiles[idx], idx, cross, line)
+	end
+end
+
+-- Avvia la tile evidenziata (o, se non ce n'e' una, evidenzia la prima).
+function Confirm()
+	if not ready or launching or not visible then return end
+	if hover.idx == 0 or not hover.on then
+		Nav(0, 0)
+		return
+	end
+	local x, y = gridToPx(hover.tx, hover.ty)
+	launchTile(cats[active].tiles[hover.idx], x, y)
+end
+
+-- Categoria precedente (-1) o successiva (+1), ricominciando dal fondo.
+function NextCategory(delta)
+	if not ready or launching or not visible then return end
+	SetCategory((active - 1 + delta) % #cats + 1)
 end
 
 function LaunchStep()

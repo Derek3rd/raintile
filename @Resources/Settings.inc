@@ -61,6 +61,24 @@ CloseSize=14
 ; Tasto che chiude il launcher (plugin HotKey), registrato solo mentre il
 ; launcher e' visibile. Vuoto = nessun tasto.
 CloseHotKey=ESCAPE
+; Navigazione da tastiera, attiva solo a launcher visibile (plugin HotKey):
+; 1 = attiva, 0 = disattiva. Ogni azione ha due tasti (nomi del plugin HotKey:
+; lettere, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
+KeyboardNav=1
+NavUp=W
+NavUp2=UP
+NavDown=S
+NavDown2=DOWN
+NavLeft=A
+NavLeft2=LEFT
+NavRight=D
+NavRight2=RIGHT
+; Avvia la tile evidenziata
+NavConfirm=SPACE
+NavConfirm2=ENTER
+; Categoria precedente / successiva
+NavPrevCategory=Q
+NavNextCategory=E
 ; 1 = nasconde il launcher dopo aver avviato una tile, 0 = resta aperto
 CloseOnLaunch=1
 ; 1 = all'avvio di Rainmeter il launcher resta nascosto fino alla scorciatoia

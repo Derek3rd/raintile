@@ -31,6 +31,17 @@ Il launcher si carica **una volta sola** (all'avvio di Rainmeter o con *Aggiorna
 - `ShowZPos=1`: quando si mostra va sopra le altre finestre (`-2` = sul desktop).
 - `CloseAction=[!DeactivateConfig]` torna al vecchio comportamento (scarica la skin a ogni chiusura).
 
+## Tastiera
+
+| Tasti | Azione |
+| --- | --- |
+| `W` `A` `S` `D` / frecce | spostano l'evidenziazione tra le tile (la griglia scorre quando serve, anche con lo scroll infinito) |
+| `Spazio` / `Invio` | avviano la tile evidenziata (la prima pressione, se nulla è evidenziato, evidenzia la prima tile visibile) |
+| `Q` / `E` | categoria precedente / successiva |
+| `Esc` | chiude il launcher |
+
+Mouse e tastiera muovono la stessa evidenziazione. I tasti sono registrati (plugin HotKey) dalla mini-skin invisibile `Raintile\Navigation`, attiva **solo mentre il launcher è visibile**: a launcher chiuso WASD e frecce tornano alle altre applicazioni. Si cambiano in `Settings.inc` (`NavUp`, `NavUp2`, ...); `KeyboardNav=0` disattiva tutto.
+
 ## Avvio di una tile
 
 Al click la tile si espande fino a riempire lo schermo (con sfondo e logo a piena risoluzione), resta visibile per `LaunchHold` ms e poi il launcher si chiude. Il comando parte subito, all'inizio dell'animazione. Impostazioni in `Settings.inc`:
@@ -150,6 +161,7 @@ Dopo aver salvato: tasto destro > *Aggiorna skin*.
 ```
 Raintile.ini                 skin principale (stili, sfondo, scrollbar)
 Hotkey/Hotkey.ini            mini-skin del tasto Esc (attivata dal launcher)
+Navigation/Navigation.ini    mini-skin dei tasti di navigazione (attivata dal launcher)
 @Resources/
   Settings.inc               impostazioni
   Categories/*.ini           un file per categoria (voce di menu + tile)

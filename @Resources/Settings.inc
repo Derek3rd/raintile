@@ -159,6 +159,20 @@ TileHover=1
 ; Viene copiata in Rainmeter.ini e vale dal caricamento successivo.
 FadeDuration=0
 
+; --- Gamepad (XInput: controller Xbox e compatibili) -----------------------------
+; Croce/levetta sinistra = sposta, A = avvia, B = indietro/chiudi,
+; LB/RB = categoria precedente/successiva, GamepadToggle = apri/chiudi.
+; 1 = attivo (programma di supporto in background), 0 = disattivato
+Gamepad=1
+; Pulsanti da tenere premuti insieme per aprire/chiudere il launcher
+; (A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT)
+GamepadToggle=BACK START
+; Zona morta della levetta (0-32767) e ripetizione tenendo premuta una
+; direzione: primo ritardo e intervallo, in ms
+GamepadDeadZone=12000
+GamepadRepeatDelay=350
+GamepadRepeatRate=110
+
 ; --- Ricerca ----------------------------------------------------------------------
 ; Barra in alto a sinistra (o tasto NavSearch): Invio cerca in tutte le
 ; categorie, Esc o un clic su una categoria tornano indietro

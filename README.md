@@ -43,6 +43,22 @@ Il launcher si carica **una volta sola** (all'avvio di Rainmeter o con *Aggiorna
 
 Mouse e tastiera muovono la stessa evidenziazione. I tasti sono registrati (plugin HotKey) dalla mini-skin invisibile `Raintile\Navigation`, attiva **solo mentre il launcher è visibile**: a launcher chiuso WASD e frecce tornano alle altre applicazioni. Si cambiano in `Settings.inc` (`NavUp`, `NavUp2`, ...); `KeyboardNav=0` disattiva tutto.
 
+## Gamepad
+
+Controller Xbox e compatibili (XInput):
+
+| Pulsante | Azione |
+| --- | --- |
+| `Back` + `Start` (View + Menu) | apre / chiude il launcher (`GamepadToggle`) |
+| croce / levetta sinistra | spostano l'evidenziazione (tenendo premuto si ripete) |
+| `A` | avvia la tile evidenziata |
+| `B` | chiude la ricerca, oppure il launcher |
+| `LB` / `RB` | categoria precedente / successiva |
+
+Rainmeter non legge i controller: lo fa un piccolo programma di supporto (`Scripts\Gamepad.ps1`, C# compilato da PowerShell al primo avvio) che parte in background con la skin, legge i controller ogni 16 ms a bassa priorità e manda i comandi a Rainmeter con un messaggio di Windows (`WM_COPYDATA`), senza avviare processi. Ne gira una sola copia: aggiornando la skin la vecchia viene chiusa, e si chiude da sola se Rainmeter non è in esecuzione. A launcher nascosto i comandi diversi da apri/chiudi vengono ignorati, quindi non interferisce con i giochi.
+
+Impostazioni: `Gamepad=0` lo disattiva (e chiude il programma di supporto), `GamepadToggle`, `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`.
+
 ## Ricerca
 
 Clic sulla barra **Cerca** in alto a sinistra, oppure tasto `F` (`NavSearch`): si apre un campo di testo. Premendo **Invio** la griglia mostra le tile di **tutte le categorie** che contengono tutte le parole scritte (nel nome della tile, nell'etichetta o nel nome della categoria: `giochi steam` trova le tile di Steam nella categoria Giochi). Prima vengono i nomi che iniziano con la prima parola, poi gli altri in ordine alfabetico.

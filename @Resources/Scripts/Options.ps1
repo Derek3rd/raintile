@@ -1,4 +1,4 @@
-# Raintile: Options window (settings and categories). Work in progress.
+# Raintile: Options window (settings and categories).
 #
 # Opened from the gear button or the right-click menu. A WPF window (look in
 # Options.xaml) with a menu on the left ($navTree: sections, some with
@@ -872,13 +872,7 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
     <Border Background="{StaticResource SideBg}" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,0,1,0">
       <DockPanel Margin="12,20,12,14">
         <StackPanel DockPanel.Dock="Top" Margin="10,0,0,20">
-          <StackPanel Orientation="Horizontal">
-            <TextBlock Text="Raintile" FontSize="21" FontWeight="SemiBold"/>
-            <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="4" Padding="6,1" Margin="10,3,0,0"
-                    VerticalAlignment="Center" ToolTip="Work in progress: this window is still being developed.">
-              <TextBlock Text="WIP" Foreground="{StaticResource AccentBrush}" FontSize="10.5" FontWeight="SemiBold"/>
-            </Border>
-          </StackPanel>
+          <TextBlock Text="Raintile" FontSize="21" FontWeight="SemiBold"/>
           <TextBlock x:Name="Version" Foreground="{StaticResource DimBrush}" FontSize="12" Margin="0,2,0,0"/>
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">

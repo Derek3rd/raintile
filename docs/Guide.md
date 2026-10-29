@@ -17,7 +17,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
   - [Commands](#commands)
   - [Images](#images)
 - [Importing games from stores](#importing-games-from-stores)
-- [Options window (WIP)](#options-window-wip)
+- [Options window](#options-window)
 - [Settings reference](#settings-reference)
 - [Sizes in pixels or percentages](#sizes-in-pixels-or-percentages)
 - [How it works](#how-it-works)
@@ -189,9 +189,9 @@ How the result is written:
 
 Settings: `ImportCategory`, `ImportStores` (e.g. `Steam|Epic`), `ImportOnStart=1` to import automatically in the background on every load, `SteamGridDBKey`.
 
-## Options window (WIP)
+## Options window
 
-The **gear** next to the X, or right click > **Options...**, opens the Options window (`Scripts\Options.ps1`, WPF; its look is in `Scripts\Options.xaml`). It is a **work in progress**: it works, but features will still change.
+The **gear** next to the X, or right click > **Options...**, opens the Options window (`Scripts\Options.ps1`, WPF; its look is in `Scripts\Options.xaml`).
 
 The sections are in the menu on the left; **Keybindings** and **Categories** open into sub-entries (click them again to close them):
 
@@ -429,4 +429,3 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
 - **Non-ASCII characters** (accents, etc.) in category names and labels may display incorrectly: category files are read as UTF-8.
 - **Store import** does not cover Battle.net, EA app and Xbox/Microsoft Store yet; use `.lnk` shortcuts for those.
 - **Fonts** sizes cannot be percentages.
-- **Options window** is a work in progress.

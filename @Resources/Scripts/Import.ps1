@@ -1,31 +1,40 @@
-# Raintile: importa i giochi installati dagli store in un file di categoria.
+# Raintile: imports the games installed from stores into a category file.
 #
-# Store letti: Steam, Epic Games, GOG Galaxy, Ubisoft Connect.
-# I giochi trovati vengono scritti in fondo al file di categoria, dopo la riga
-# segnaposto IMPORT_MARKER: tutto cio' che sta sopra (le tile scritte a mano)
-# non viene mai toccato, il blocco sotto viene riscritto a ogni import.
-# Un gioco gia' presente tra le tile a mano (stesso nome o stesso comando) non
-# viene importato di nuovo.
+# Stores read: Steam, Epic Games, GOG Galaxy, Ubisoft Connect.
+# The games found are written at the end of the category file, after the
+# IMPORT_MARKER line: everything above it (the hand-written tiles) is never
+# touched, the block below is rewritten on every import.
+# A game already among the hand-written tiles (same name or same command) is
+# not imported again.
 #
-# Immagini: Steam le tiene gia' in locale (appcache\librarycache). Per gli
-# altri store, e per i giochi Steam senza immagini locali, se c'e' una chiave
-# API di SteamGridDB vengono scaricate in Images\<categoria>\imported\.
-# Un'immagine messa a mano in background\<Nome>.* o logo\<Nome>.* ha sempre la
-# precedenza.
+# Images: Steam keeps them locally (appcache\librarycache). For the other
+# stores, and for Steam games without local images, they are downloaded to
+# Images\<category>\imported\ if a SteamGridDB API key is set.
+# An image placed by hand in background\<Name>.* or logo\<Name>.* always takes
+# precedence.
 
 param(
     [Parameter(Mandatory = $true)][string]$Resources,
     [string]$Category = 'Games',
     [string]$Stores = 'Steam|Epic|GOG|Ubisoft',
     [string]$SteamGridDBKey = '',
-    # solo per i test: percorsi alternativi al posto di registro e ProgramData
+    # tests only: alternative paths instead of the registry and ProgramData
     [string]$SteamPath = '',
     [string]$EpicManifests = ''
 )
 
 $ErrorActionPreference = 'Stop'
 try { (Get-Process -Id $PID).PriorityClass = 'BelowNormal' } catch { }
-$IMPORT_MARKER = '; ===== IMPORTATI AUTOMATICAMENTE ====='
+$IMPORT_MARKER = '; ===== IMPORTED AUTOMATICALLY ====='
+# Marker written by older Italian versions, still recognised
+$OLD_IMPORT_MARKER = '; ===== IMPORTATI AUTOMATICAMENTE ====='
+
+# Position of the import marker in a category file (-1 if missing)
+function Find-ImportMarker([string]$text) {
+    $i = $text.IndexOf($IMPORT_MARKER)
+    if ($i -lt 0) { $i = $text.IndexOf($OLD_IMPORT_MARKER) }
+    return $i
+}
 $imageExts = '.png', '.jpg', '.jpeg', '.bmp', '.ico', '.gif'
 $utf8 = New-Object System.Text.UTF8Encoding $false
 
@@ -39,7 +48,7 @@ function Get-RegValue($path, $name) {
     try { return (Get-ItemProperty -LiteralPath $path -Name $name -ErrorAction Stop).$name } catch { return $null }
 }
 
-# Nome utilizzabile come sezione INI e come nome di file
+# Name usable as an INI section and as a file name
 function Get-TileName([string]$name) {
     $n = $name -replace '[\[\]]', '' -replace '[\u2122\u00AE\u00A9]', '' -replace '[\\/:*?"<>|]', ' '
     $n = ($n -replace '\s+', ' ').Trim().TrimStart(';')
@@ -68,7 +77,7 @@ function Add-Game($store, $id, $name, $command, $hero, $logo, $steamAppId) {
 function Read-Steam {
     $root = $SteamPath
     if (-not $root) { $root = Get-RegValue 'HKCU:\Software\Valve\Steam' 'SteamPath' }
-    if (-not $root -or -not (Test-Path -LiteralPath $root)) { return 'non installato' }
+    if (-not $root -or -not (Test-Path -LiteralPath $root)) { return 'not installed' }
     $root = $root -replace '/', '\'
 
     $libraries = @($root)
@@ -92,8 +101,8 @@ function Read-Steam {
             if (-not $appid -or -not $name -or $seen[$appid] -or $name -match $skip) { continue }
             $seen[$appid] = $true
 
-            # Cache della libreria: vecchio formato <appid>_library_hero.jpg,
-            # nuovo formato <appid>\...\library_hero.jpg
+            # Library cache: old layout <appid>_library_hero.jpg,
+            # new layout <appid>\...\library_hero.jpg
             $hero = $null; $logo = $null
             foreach ($f in @("${appid}_library_hero.jpg", "${appid}_library_hero.png")) {
                 $p = Join-Path $cache $f
@@ -111,18 +120,18 @@ function Read-Steam {
             $count++
         }
     }
-    return "$count trovati"
+    return "$count found"
 }
 
 function Read-Epic {
     $dir = $EpicManifests
     if (-not $dir) { $dir = Join-Path $env:ProgramData 'Epic\EpicGamesLauncher\Data\Manifests' }
-    if (-not $dir -or -not (Test-Path -LiteralPath $dir)) { return 'non installato' }
+    if (-not $dir -or -not (Test-Path -LiteralPath $dir)) { return 'not installed' }
     $count = 0
     foreach ($item in Get-ChildItem -LiteralPath $dir -Filter '*.item' -File) {
         try { $m = Get-Content -LiteralPath $item.FullName -Raw | ConvertFrom-Json } catch { continue }
         if (-not $m.DisplayName -or -not $m.AppName) { continue }
-        # solo giochi principali (niente DLC, niente applicazioni)
+        # main games only (no DLC, no applications)
         if ($m.AppCategories -and ($m.AppCategories -notcontains 'games')) { continue }
         if ($m.MainGameAppName -and $m.MainGameAppName -ne $m.AppName) { continue }
         $cmd = 'com.epicgames.launcher://apps/{0}%3A{1}%3A{2}?action=launch&silent=true' -f `
@@ -130,12 +139,12 @@ function Read-Epic {
         Add-Game 'Epic' $m.AppName $m.DisplayName $cmd $null $null $null
         $count++
     }
-    return "$count trovati"
+    return "$count found"
 }
 
 function Read-GOG {
     $key = 'HKLM:\SOFTWARE\WOW6432Node\GOG.com\Games'
-    if (-not (Test-Path $key)) { return 'non installato' }
+    if (-not (Test-Path $key)) { return 'not installed' }
     $client = Get-RegValue 'HKLM:\SOFTWARE\WOW6432Node\GOG.com\GalaxyClient\paths' 'client'
     $count = 0
     foreach ($g in Get-ChildItem $key) {
@@ -150,12 +159,12 @@ function Read-GOG {
         Add-Game 'GOG' $p.gameID $p.gameName $cmd $null $null $null
         $count++
     }
-    return "$count trovati"
+    return "$count found"
 }
 
 function Read-Ubisoft {
     $key = 'HKLM:\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs'
-    if (-not (Test-Path $key)) { return 'non installato' }
+    if (-not (Test-Path $key)) { return 'not installed' }
     $count = 0
     foreach ($g in Get-ChildItem $key) {
         $dir = Get-RegValue $g.PSPath 'InstallDir'
@@ -164,7 +173,7 @@ function Read-Ubisoft {
         Add-Game 'Ubisoft' $g.PSChildName $name "uplay://launch/$($g.PSChildName)/0" $null $null $null
         $count++
     }
-    return "$count trovati"
+    return "$count found"
 }
 
 # --- SteamGridDB -------------------------------------------------------------
@@ -176,7 +185,7 @@ function Invoke-SGDB([string]$path) {
     return $null
 }
 
-# Scarica (una volta sola) eroe e logo del gioco in Images\<categoria>\imported\
+# Downloads (only once) the game's hero and logo to Images\<category>\imported\
 function Get-SGDBImages($game, [string]$tileName) {
     $result = @{}
     if (-not $SteamGridDBKey) { return $result }
@@ -202,25 +211,25 @@ function Get-SGDBImages($game, [string]$tileName) {
             Invoke-WebRequest -Uri $img.url -OutFile "$base.$suffix$ext" -UseBasicParsing -TimeoutSec 30
         }
     } catch {
-        Write-Output "SteamGridDB: immagini non scaricate per $($game.Name): $($_.Exception.Message)"
+        Write-Output "SteamGridDB: images not downloaded for $($game.Name): $($_.Exception.Message)"
     }
     return @{ Hero = (Find-Image $importedDir "$tileName.hero"); Logo = (Find-Image $importedDir "$tileName.logo") }
 }
 
-# --- Scrittura del file di categoria ------------------------------------------
+# --- Writing the category file -----------------------------------------------
 
 $summary = @()
 foreach ($store in 'Steam', 'Epic', 'GOG', 'Ubisoft') {
     if (-not $enabled[$store.ToLowerInvariant()]) { continue }
     try { $summary += "${store}: " + (& "Read-$store") }
-    catch { $summary += "${store}: errore ($($_.Exception.Message))" }
+    catch { $summary += "${store}: error ($($_.Exception.Message))" }
 }
 
-# Parte scritta a mano (tutto prima del segnaposto) e sue tile
+# Hand-written part (everything before the marker) and its tiles
 $manual = ''
 if (Test-Path -LiteralPath $categoryFile) {
     $text = [IO.File]::ReadAllText($categoryFile)
-    $i = $text.IndexOf($IMPORT_MARKER)
+    $i = Find-ImportMarker $text
     $manual = if ($i -ge 0) { $text.Substring(0, $i) } else { $text }
 } else {
     $manual = "[Category]`r`nName=$Category`r`n"
@@ -238,8 +247,8 @@ foreach ($line in $manual -split "`r?`n") {
 $out = New-Object System.Text.StringBuilder
 [void]$out.Append($manual)
 [void]$out.Append("`r`n$IMPORT_MARKER`r`n")
-[void]$out.Append("; Scritti da Importa giochi: questo blocco viene riscritto a ogni import.`r`n")
-[void]$out.Append("; Per personalizzare un gioco spostane la sezione sopra questa riga.`r`n")
+[void]$out.Append("; Written by Import games: this block is rewritten on every import.`r`n")
+[void]$out.Append("; To customise a game, move its section above this line.`r`n")
 
 $used = @{}
 $imported = 0; $skipped = 0
@@ -261,7 +270,7 @@ foreach ($g in ($games | Sort-Object Name)) {
 
     [void]$out.Append("`r`n[$name]`r`n")
     [void]$out.Append("Command=$($g.Command)`r`n")
-    # un'immagine messa a mano nella cartella di default ha la precedenza
+    # an image placed by hand in the default folder takes precedence
     if ($hero -and -not (Find-Image (Join-Path $imagesDir 'background') $name)) {
         [void]$out.Append("Background=$hero`r`n")
     }
@@ -272,7 +281,7 @@ foreach ($g in ($games | Sort-Object Name)) {
     $imported++
 }
 
-# Riscrive il file solo se e' cambiato: la skin si ricarica solo in quel caso
+# Rewrite the file only if it changed: the skin only refreshes in that case
 $new = $out.ToString()
 $old = if (Test-Path -LiteralPath $categoryFile) { [IO.File]::ReadAllText($categoryFile) } else { '' }
 $changed = $new -ne $old
@@ -284,6 +293,6 @@ if ($changed) {
 }
 
 foreach ($s in $summary) { Write-Output $s }
-Write-Output "Importati $imported giochi in $Category.ini ($skipped gia' presenti tra le tile a mano)"
-# ultima riga letta dalla skin
+Write-Output "Imported $imported games into $Category.ini ($skipped already among the hand-written tiles)"
+# last line, read by the skin
 if ($changed) { Write-Output 'RESULT:CHANGED' } else { Write-Output 'RESULT:UNCHANGED' }

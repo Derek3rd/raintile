@@ -1,11 +1,12 @@
-# Raintile: crea le miniature di sfondi e loghi (lanciato in background dalla skin).
+# Raintile: creates background and logo thumbnails (started in the background
+# by the skin).
 #
-# Ogni riga del file di lavoro: sorgente|destinazione|larghezza|altezza|modo
-#   cover   = riempie esattamente w x h ritagliando al centro (sfondi)
-#   contain = sta dentro w x h mantenendo le proporzioni (loghi, PNG trasparenti)
-#   overscanNNN = copre w x h e lo supera del NNN% (sfondi che scivolano)
-# Le miniature gia' esistenti vengono saltate; quelle non piu' elencate vengono
-# cancellate.
+# Each line of the job file: source|destination|width|height|mode
+#   cover       = fills exactly w x h, cropping at the centre (backgrounds)
+#   contain     = fits inside w x h keeping the proportions (logos, transparent PNG)
+#   overscanNNN = covers w x h and exceeds it by NNN% (sliding backgrounds)
+# Thumbnails that already exist are skipped; those no longer listed are
+# deleted.
 
 param([Parameter(Mandatory = $true)][string]$JobFile)
 
@@ -40,7 +41,7 @@ foreach ($line in Get-Content -LiteralPath $JobFile -Encoding UTF8) {
             $srcRect = New-Object System.Drawing.RectangleF ((($iw - $sw) / 2), (($ih - $sh) / 2), $sw, $sh)
             $tw = $w; $th = $h
         } elseif ($mode -like 'overscan*') {
-            # copre w x h e lo supera della percentuale indicata (es. overscan115)
+            # covers w x h and exceeds it by the given percentage (e.g. overscan115)
             $scale = [Math]::Max($w / $iw, $h / $ih) * ([int]$mode.Substring(8) / 100.0)
             $srcRect = New-Object System.Drawing.RectangleF (0, 0, $iw, $ih)
             $tw = [Math]::Max(1, [int][Math]::Round($iw * $scale))
@@ -62,7 +63,7 @@ foreach ($line in Get-Content -LiteralPath $JobFile -Encoding UTF8) {
         $g.DrawImage($img, $destRect, $srcRect, [System.Drawing.GraphicsUnit]::Pixel)
 
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
-        # Scrive su un file temporaneo e rinomina: la skin non vede mai file a meta'
+        # Write to a temporary file and rename: the skin never sees half-written files
         $tmp = "$dst.tmp"
         if ($dst.ToLowerInvariant().EndsWith('.png')) {
             $bmp.Save($tmp, [System.Drawing.Imaging.ImageFormat]::Png)
@@ -71,7 +72,7 @@ foreach ($line in Get-Content -LiteralPath $JobFile -Encoding UTF8) {
         }
         Move-Item -LiteralPath $tmp -Destination $dst -Force
     } catch {
-        Write-Output "Raintile: miniatura non creata per ${src}: $($_.Exception.Message)"
+        Write-Output "Raintile: thumbnail not created for ${src}: $($_.Exception.Message)"
     } finally {
         if ($g) { $g.Dispose() }
         if ($bmp) { $bmp.Dispose() }
@@ -79,7 +80,7 @@ foreach ($line in Get-Content -LiteralPath $JobFile -Encoding UTF8) {
     }
 }
 
-# Rimuove le miniature non piu' usate (immagini cambiate, tile tolte, nuova risoluzione)
+# Remove thumbnails no longer used (changed images, removed tiles, new resolution)
 if (Test-Path -LiteralPath $thumbRoot) {
     Get-ChildItem -LiteralPath $thumbRoot -Recurse -File |
         Where-Object { -not $wanted.ContainsKey($_.FullName.ToLowerInvariant()) } |

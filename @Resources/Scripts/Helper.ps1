@@ -1,25 +1,25 @@
-# Raintile: programma di supporto in background (avviato dalla skin con
-# RunCommand). Manda i comandi a Rainmeter con WM_COPYDATA (come
-# "Rainmeter.exe !bang", ma senza avviare un processo ogni volta).
+# Raintile: background helper (started by the skin with RunCommand). Sends
+# commands to Rainmeter with WM_COPYDATA (like "Rainmeter.exe !bang", but
+# without starting a process every time).
 #
-# Gamepad (XInput: controller Xbox e compatibili), letto ogni 16 ms:
-#   Back + Start (GamepadToggle)  apre/chiude il launcher
-#   croce / levetta sinistra      sposta l'evidenziazione (con ripetizione)
-#   A                             avvia la tile evidenziata
-#   B                             chiude la ricerca o il launcher
-#   LB / RB                       categoria precedente / successiva
-# A launcher nascosto i comandi diversi da apri/chiudi vengono ignorati dalla
-# skin.
+# Gamepad (XInput: Xbox and compatible controllers), read every 16 ms:
+#   Back + Start (GamepadToggle)  opens/closes the launcher
+#   D-pad / left stick            moves the highlight (with repeat)
+#   A                             launches the highlighted tile
+#   B                             closes the search or the launcher
+#   LB / RB                       previous / next category
+# While the launcher is hidden, commands other than open/close are ignored by
+# the skin.
 #
-# Chiusura alla perdita del focus (AutoHide): a launcher visibile, un clic
-# fuori dalla sua finestra (es. sul secondo schermo) o un altro programma in
-# primo piano lo fanno nascondere.
+# Hide on focus loss (AutoHide): while the launcher is visible, a click
+# outside its window (e.g. on the second monitor) or another program coming
+# to the foreground hides it.
 #
-# Ne gira una sola copia: una nuova (es. dopo "Aggiorna skin") chiude la
-# precedente; si chiude da sola se Rainmeter non e' piu' in esecuzione.
+# Only one copy runs: a new one (e.g. after "Refresh skin") closes the
+# previous one; it exits by itself when Rainmeter is no longer running.
 
 param(
-    # 0 e 0 = chiude soltanto la copia gia' in esecuzione
+    # 0 and 0 = only close the copy already running
     [int]$Gamepad = 1,
     [int]$AutoHide = 1,
     [string]$Config = 'Raintile',
@@ -49,7 +49,7 @@ using System.Threading;
 
 public class RaintilePad
 {
-    // Pulsanti XInput
+    // XInput buttons
     public const int UP = 0x1, DOWN = 0x2, LEFT = 0x4, RIGHT = 0x8, START = 0x10, BACK = 0x20,
         LS = 0x40, RS = 0x80, LB = 0x100, RB = 0x200, A = 0x1000, B = 0x2000, X = 0x4000, Y = 0x8000;
 
@@ -79,7 +79,7 @@ public class RaintilePad
         return mask;
     }
 
-    // --- Logica dei tasti (senza dipendenze da Windows: testabile) ---------
+    // --- Button logic (no Windows dependencies: testable) ----------------
 
     readonly string config;
     readonly int toggleMask, deadZone, repeatDelay, repeatRate;
@@ -101,12 +101,12 @@ public class RaintilePad
         return "[!CommandMeasure MeasureScript \"" + function + "\" \"" + config + "\"]";
     }
 
-    // Stato dei pulsanti (tutti i controller insieme) e levetta sinistra al
-    // tempo 'now' (ms) -> comandi da mandare a Rainmeter.
+    // Button state (all controllers together) and left stick at time 'now'
+    // (ms) -> commands to send to Rainmeter.
     public List<string> Step(int buttons, int lx, int ly, long now)
     {
         var bangs = new List<string>();
-        // la levetta sinistra vale come la croce
+        // the left stick counts as the D-pad
         if (lx < -deadZone) buttons |= LEFT;
         if (lx > deadZone) buttons |= RIGHT;
         if (ly > deadZone) buttons |= UP;
@@ -114,7 +114,7 @@ public class RaintilePad
         int pressed = buttons & ~previous;
         previous = buttons;
 
-        // Combinazione apri/chiudi: mentre e' premuta non vale nient'altro
+        // Open/close combination: while it is held nothing else counts
         if (toggleMask != 0 && (buttons & toggleMask) == toggleMask)
         {
             if (!toggleHeld) bangs.Add(Call("Toggle()"));
@@ -123,11 +123,11 @@ public class RaintilePad
         }
         if (toggleHeld)
         {
-            if ((buttons & toggleMask) != 0) return bangs; // si aspetta il rilascio
+            if ((buttons & toggleMask) != 0) return bangs; // wait for the release
             toggleHeld = false;
         }
 
-        // Direzioni, con ripetizione tenendo premuto
+        // Directions, repeating while held
         int[] dirs = { UP, DOWN, LEFT, RIGHT };
         string[] moves = { "Nav(0,-1)", "Nav(0,1)", "Nav(-1,0)", "Nav(1,0)" };
         for (int i = 0; i < 4; i++)
@@ -150,7 +150,7 @@ public class RaintilePad
         return bangs;
     }
 
-    // --- Windows: XInput e invio a Rainmeter ------------------------------
+    // --- Windows: XInput and sending to Rainmeter -------------------------
 
     [StructLayout(LayoutKind.Sequential)]
     struct XInputState
@@ -193,7 +193,7 @@ public class RaintilePad
         return FindWindow("DummyRainWClass", null);
     }
 
-    // --- Perdita del focus ------------------------------------------------
+    // --- Focus loss --------------------------------------------------------
 
     [StructLayout(LayoutKind.Sequential)]
     struct Rect { public int Left, Top, Right, Bottom; }
@@ -229,8 +229,8 @@ public class RaintilePad
         return id;
     }
 
-    // La finestra del launcher: la piu' grande tra le skin visibili di
-    // Rainmeter (il launcher copre lo schermo).
+    // The launcher window: the largest of Rainmeter's visible skins (the
+    // launcher covers the screen).
     static IntPtr LauncherWindow(uint rainmeter)
     {
         IntPtr best = IntPtr.Zero, window = IntPtr.Zero;
@@ -247,7 +247,7 @@ public class RaintilePad
 
     static bool MouseDown()
     {
-        // tasto sinistro, destro, centrale
+        // left, right, middle button
         return (GetAsyncKeyState(0x01) & 0x8000) != 0 || (GetAsyncKeyState(0x02) & 0x8000) != 0
             || (GetAsyncKeyState(0x04) & 0x8000) != 0;
     }
@@ -257,12 +257,12 @@ public class RaintilePad
     bool launcherShown, mouseWasDown;
     long nextLauncherScan;
 
-    // A launcher visibile: true se un clic fuori dalla sua finestra o un altro
-    // programma in primo piano gli hanno tolto il focus.
+    // While the launcher is visible: true if a click outside its window or
+    // another program in the foreground took its focus away.
     bool FocusLost(IntPtr rainmeterWindow, long now)
     {
         uint rainmeter = ProcessOf(rainmeterWindow);
-        // la finestra del launcher si cerca ogni mezzo secondo, non a ogni giro
+        // the launcher window is looked up every half second, not on every loop
         if (now >= nextLauncherScan || (launcher != IntPtr.Zero && !IsWindowVisible(launcher)))
         {
             launcher = LauncherWindow(rainmeter);
@@ -273,7 +273,7 @@ public class RaintilePad
         bool lost = false;
         if (shown && !launcherShown)
         {
-            // appena mostrato: conta solo cio' che cambia da qui in poi
+            // just shown: only what changes from now on counts
             foreground = GetForegroundWindow();
         }
         else if (shown)
@@ -304,12 +304,12 @@ public class RaintilePad
         finally { Marshal.FreeHGlobal(text); }
     }
 
-    // Ciclo principale: termina quando 'quit' viene segnalato (nuova copia
-    // avviata) o quando Rainmeter non c'e' piu'.
+    // Main loop: ends when 'quit' is signalled (a new copy started) or when
+    // Rainmeter is gone.
     public void Run(WaitHandle quit)
     {
         var connected = new bool[4];
-        var clock = Stopwatch.StartNew(); // non si azzera dopo 25 giorni come TickCount
+        var clock = Stopwatch.StartNew(); // does not wrap after 25 days like TickCount
         long nextScan = 0, lastRainmeter = 0;
         while (!quit.WaitOne(16))
         {
@@ -321,8 +321,8 @@ public class RaintilePad
             if (AutoHide && window != IntPtr.Zero && FocusLost(window, now)) Send(window, Call("FocusLost()"));
             if (!PadEnabled) continue;
 
-            // i controller non collegati si ricontrollano ogni 2 s (la
-            // chiamata su uno slot vuoto e' lenta)
+            // disconnected controllers are checked again every 2 s (the call
+            // on an empty slot is slow)
             bool scan = now >= nextScan;
             if (scan) nextScan = now + 2000;
             int buttons = 0, lx = 0, ly = 0;
@@ -345,13 +345,13 @@ public class RaintilePad
 
 Add-Type -TypeDefinition $source -Language CSharp
 
-# Una sola copia: chiede alla precedente di chiudersi e ne prende il posto
+# Single copy: ask the previous one to quit and take its place
 $quit = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\Raintile.Gamepad.Quit')
 $mutex = New-Object System.Threading.Mutex($false, 'Local\Raintile.Gamepad')
 [void]$quit.Set()
 try { $owned = $mutex.WaitOne(5000) } catch [System.Threading.AbandonedMutexException] { $owned = $true }
 if (-not $owned) { exit }
-[void]$quit.Reset() # se non c'era una copia precedente, il segnale e' ancora qui
+[void]$quit.Reset() # if there was no previous copy, the signal is still set
 
 $pad = New-Object RaintilePad($Config, [RaintilePad]::ParseButtons($Toggle), $DeadZone, $RepeatDelay, $RepeatRate)
 $pad.PadEnabled = [bool]$Gamepad

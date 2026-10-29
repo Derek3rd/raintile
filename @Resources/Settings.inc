@@ -83,6 +83,9 @@ NavNextCategory=E
 NavSearch=F
 ; 1 = nasconde il launcher dopo aver avviato una tile, 0 = resta aperto
 CloseOnLaunch=1
+; 1 = si nasconde quando perde il focus: clic fuori dalla sua finestra (es.
+; sul secondo schermo) o un altro programma in primo piano
+AutoHide=1
 ; 1 = all'avvio di Rainmeter il launcher resta nascosto fino alla scorciatoia
 StartHidden=0
 ; Livello della finestra quando viene mostrato: 1 = sopra le altre finestre,

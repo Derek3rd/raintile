@@ -27,6 +27,7 @@ Il launcher si carica **una volta sola** (all'avvio di Rainmeter o con *Aggiorna
   poi *Proprietà* > *Tasto di scelta rapida* (es. `Ctrl+Alt+Spazio`). Lo stesso tasto apre e chiude.
 - **Chiudere**: la X in alto a destra, **Esc**, oppure in automatico dopo aver avviato una tile (`CloseOnLaunch=1`).
 - **Esc** (plugin HotKey, tasto in `CloseHotKey`) è registrato da una mini-skin invisibile, `Raintile\Hotkey`, che il launcher attiva quando si mostra e disattiva quando si nasconde: a launcher chiuso Esc torna alle altre applicazioni. Non va caricata a mano.
+- `AutoHide=1` (default): il launcher si nasconde quando **perde il focus**, cioè con un clic fuori dalla sua finestra (per esempio sul secondo schermo) o quando un altro programma passa in primo piano. Non durante l'animazione di avvio di una tile. Lo controlla lo stesso programma di supporto del gamepad (`Scripts\Helper.ps1`).
 - `StartHidden=1`: all'avvio di Rainmeter il launcher resta nascosto fino alla scorciatoia.
 - `ShowZPos=1`: quando si mostra va sopra le altre finestre (`-2` = sul desktop).
 - `CloseAction=[!DeactivateConfig]` torna al vecchio comportamento (scarica la skin a ogni chiusura).
@@ -55,9 +56,9 @@ Controller Xbox e compatibili (XInput):
 | `B` | chiude la ricerca, oppure il launcher |
 | `LB` / `RB` | categoria precedente / successiva |
 
-Rainmeter non legge i controller: lo fa un piccolo programma di supporto (`Scripts\Gamepad.ps1`, C# compilato da PowerShell al primo avvio) che parte in background con la skin, legge i controller ogni 16 ms a bassa priorità e manda i comandi a Rainmeter con un messaggio di Windows (`WM_COPYDATA`), senza avviare processi. Ne gira una sola copia: aggiornando la skin la vecchia viene chiusa, e si chiude da sola se Rainmeter non è in esecuzione. A launcher nascosto i comandi diversi da apri/chiudi vengono ignorati, quindi non interferisce con i giochi.
+Rainmeter non legge i controller: lo fa un piccolo programma di supporto (`Scripts\Helper.ps1`, C# compilato da PowerShell al primo avvio) che parte in background con la skin, legge i controller ogni 16 ms a bassa priorità e manda i comandi a Rainmeter con un messaggio di Windows (`WM_COPYDATA`), senza avviare processi. Ne gira una sola copia: aggiornando la skin la vecchia viene chiusa, e si chiude da sola se Rainmeter non è in esecuzione. A launcher nascosto i comandi diversi da apri/chiudi vengono ignorati, quindi non interferisce con i giochi.
 
-Impostazioni: `Gamepad=0` lo disattiva (e chiude il programma di supporto), `GamepadToggle`, `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`.
+Impostazioni: `Gamepad=0` lo disattiva, `GamepadToggle`, `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. Con `Gamepad=0` e `AutoHide=0` il programma di supporto non gira affatto.
 
 ## Ricerca
 

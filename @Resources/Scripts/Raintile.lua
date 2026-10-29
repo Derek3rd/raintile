@@ -16,6 +16,7 @@ local pos = 0         -- posizione di scorrimento mostrata (frazionaria durante 
 local base = -1       -- riga/colonna mostrata dal primo slot (-1 = contenuti da reimpostare)
 local slots = 0
 local cache = {}      -- ultimo valore impostato per meter/opzione
+local dirty = {}      -- meter con opzioni cambiate, da aggiornare al prossimo disegno
 local hovered = 0     -- categoria sotto il mouse
 local launching = nil -- animazione di avvio in corso: { tile, x, y, frame }
 local laidOut = false -- menu gia' misurato e centrato
@@ -447,6 +448,7 @@ local function set(meter, option, value)
 	local key = meter .. '|' .. option
 	if cache[key] ~= value then
 		cache[key] = value
+		dirty[meter] = true
 		SKIN:Bang('!SetOption', meter, option, value)
 	end
 end
@@ -829,7 +831,9 @@ local function frame()
 	placeSlots()
 	placeHover()
 	renderScrollBar()
-	SKIN:Bang('!UpdateMeterGroup', 'Tiles')
+	-- si aggiornano solo i meter cambiati (es. durante il Pan uno solo)
+	for meter in pairs(dirty) do SKIN:Bang('!UpdateMeter', meter) end
+	dirty = {}
 	SKIN:Bang('!Redraw')
 end
 
@@ -848,12 +852,18 @@ local function render(menu)
 end
 
 -- Animazioni --------------------------------------------------------------------
--- Un solo "orologio" (ActionTimer, Tick ogni 16 ms) fa avanzare tutte le
--- animazioni e si ferma da solo quando nulla si muove piu'.
+-- Un solo "orologio" fa avanzare tutte le animazioni e si ferma da solo quando
+-- nulla si muove piu'. Ogni passo programma il successivo (16 ms dopo) solo
+-- quando ha finito di disegnare: se un passo e' lento l'animazione rallenta,
+-- ma i passi non si accodano e mouse e tastiera restano reattivi. Le due liste
+-- di MeasureAnim si alternano, perche' una lista non si puo' riavviare mentre
+-- sta ancora eseguendo la sua ultima azione.
+local tickList = 1
 
 startTicker = function()
 	if ticking then return end
 	ticking = true
+	tickList = 1
 	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Execute 1')
 end
 
@@ -861,6 +871,7 @@ local function stopTicker()
 	if not ticking then return end
 	ticking = false
 	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Stop 1')
+	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Stop 2')
 end
 
 -- Fa avanzare tutte le animazioni di un passo; true se qualcosa si muove ancora.
@@ -915,15 +926,21 @@ local function advance()
 	return busy
 end
 
-function Tick()
-	if not ticking then return end -- passi rimasti in coda dopo lo stop
+function Tick(list)
+	-- passi arrivati dopo lo stop, o da una lista non piu' attuale
+	if not ticking or (list and list ~= tickList) then return end
 	if not ready or launching then
 		stopTicker()
 		return
 	end
 	local busy = advance()
 	frame()
-	if not busy then stopTicker() end
+	if busy then
+		tickList = 3 - tickList
+		SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Execute ' .. tickList)
+	else
+		ticking = false
+	end
 end
 
 -- Ciclo di vita di Rainmeter --------------------------------------------------
@@ -1572,6 +1589,15 @@ end
 -- Riaccende i tasti dopo la ricerca (chiamata da MeasureKeysDelay).
 function KeysReady()
 	if ready and visible then hotKey(true) end
+end
+
+-- Il launcher ha perso il focus (da Helper.ps1, AutoHide=1). Durante
+-- l'animazione di avvio si ignora: la finestra del gioco o del suo launcher
+-- che compare non deve interromperla.
+function FocusLost()
+	dbg('focus perso: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
+	if not ready or not visible or launching then return end
+	Hide()
 end
 
 -- Esc: chiude la ricerca se e' aperta, altrimenti nasconde il launcher.

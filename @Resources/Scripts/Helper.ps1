@@ -1,20 +1,27 @@
-# Raintile: supporto gamepad (XInput: controller Xbox e compatibili).
+# Raintile: programma di supporto in background (avviato dalla skin con
+# RunCommand). Manda i comandi a Rainmeter con WM_COPYDATA (come
+# "Rainmeter.exe !bang", ma senza avviare un processo ogni volta).
 #
-# Avviato in background dalla skin (RunCommand). Legge i controller ogni 16 ms
-# e manda i comandi a Rainmeter con WM_COPYDATA (come "Rainmeter.exe !bang",
-# ma senza avviare un processo per ogni tasto):
+# Gamepad (XInput: controller Xbox e compatibili), letto ogni 16 ms:
 #   Back + Start (GamepadToggle)  apre/chiude il launcher
 #   croce / levetta sinistra      sposta l'evidenziazione (con ripetizione)
 #   A                             avvia la tile evidenziata
 #   B                             chiude la ricerca o il launcher
 #   LB / RB                       categoria precedente / successiva
 # A launcher nascosto i comandi diversi da apri/chiudi vengono ignorati dalla
-# skin. Ne gira una sola copia: una nuova (es. dopo "Aggiorna skin") chiude la
+# skin.
+#
+# Chiusura alla perdita del focus (AutoHide): a launcher visibile, un clic
+# fuori dalla sua finestra (es. sul secondo schermo) o un altro programma in
+# primo piano lo fanno nascondere.
+#
+# Ne gira una sola copia: una nuova (es. dopo "Aggiorna skin") chiude la
 # precedente; si chiude da sola se Rainmeter non e' piu' in esecuzione.
 
 param(
-    # 0 = chiude soltanto la copia gia' in esecuzione (gamepad disattivato)
-    [int]$Enabled = 1,
+    # 0 e 0 = chiude soltanto la copia gia' in esecuzione
+    [int]$Gamepad = 1,
+    [int]$AutoHide = 1,
     [string]$Config = 'Raintile',
     [string]$Toggle = 'BACK START',
     [int]$DeadZone = 12000,
@@ -25,7 +32,7 @@ param(
 $ErrorActionPreference = 'Stop'
 try { (Get-Process -Id $PID).PriorityClass = 'BelowNormal' } catch { }
 
-if (-not $Enabled) {
+if (-not $Gamepad -and -not $AutoHide) {
     $quit = $null
     if ([System.Threading.EventWaitHandle]::TryOpenExisting('Local\Raintile.Gamepad.Quit', [ref]$quit)) {
         [void]$quit.Set()
@@ -186,6 +193,106 @@ public class RaintilePad
         return FindWindow("DummyRainWClass", null);
     }
 
+    // --- Perdita del focus ------------------------------------------------
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct Rect { public int Left, Top, Right, Bottom; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct Point { public int X, Y; }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string className, string windowName);
+
+    [DllImport("user32.dll")]
+    static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+
+    [DllImport("user32.dll")]
+    static extern bool IsWindowVisible(IntPtr window);
+
+    [DllImport("user32.dll")]
+    static extern bool GetWindowRect(IntPtr window, out Rect rect);
+
+    [DllImport("user32.dll")]
+    static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    static extern short GetAsyncKeyState(int key);
+
+    [DllImport("user32.dll")]
+    static extern bool GetCursorPos(out Point point);
+
+    static uint ProcessOf(IntPtr window)
+    {
+        uint id;
+        GetWindowThreadProcessId(window, out id);
+        return id;
+    }
+
+    // La finestra del launcher: la piu' grande tra le skin visibili di
+    // Rainmeter (il launcher copre lo schermo).
+    static IntPtr LauncherWindow(uint rainmeter)
+    {
+        IntPtr best = IntPtr.Zero, window = IntPtr.Zero;
+        long bestArea = 0;
+        while ((window = FindWindowEx(IntPtr.Zero, window, "RainmeterMeterWindow", null)) != IntPtr.Zero)
+        {
+            Rect r;
+            if (ProcessOf(window) != rainmeter || !IsWindowVisible(window) || !GetWindowRect(window, out r)) continue;
+            long area = (long)(r.Right - r.Left) * (r.Bottom - r.Top);
+            if (area > bestArea) { bestArea = area; best = window; }
+        }
+        return best;
+    }
+
+    static bool MouseDown()
+    {
+        // tasto sinistro, destro, centrale
+        return (GetAsyncKeyState(0x01) & 0x8000) != 0 || (GetAsyncKeyState(0x02) & 0x8000) != 0
+            || (GetAsyncKeyState(0x04) & 0x8000) != 0;
+    }
+
+    public bool PadEnabled = true, AutoHide = true;
+    IntPtr launcher, foreground;
+    bool launcherShown, mouseWasDown;
+    long nextLauncherScan;
+
+    // A launcher visibile: true se un clic fuori dalla sua finestra o un altro
+    // programma in primo piano gli hanno tolto il focus.
+    bool FocusLost(IntPtr rainmeterWindow, long now)
+    {
+        uint rainmeter = ProcessOf(rainmeterWindow);
+        // la finestra del launcher si cerca ogni mezzo secondo, non a ogni giro
+        if (now >= nextLauncherScan || (launcher != IntPtr.Zero && !IsWindowVisible(launcher)))
+        {
+            launcher = LauncherWindow(rainmeter);
+            nextLauncherScan = now + 500;
+        }
+        bool shown = launcher != IntPtr.Zero && IsWindowVisible(launcher);
+        bool down = MouseDown();
+        bool lost = false;
+        if (shown && !launcherShown)
+        {
+            // appena mostrato: conta solo cio' che cambia da qui in poi
+            foreground = GetForegroundWindow();
+        }
+        else if (shown)
+        {
+            IntPtr fg = GetForegroundWindow();
+            if (fg != foreground && fg != IntPtr.Zero && ProcessOf(fg) != rainmeter) lost = true;
+            foreground = fg;
+            if (down && !mouseWasDown)
+            {
+                Point p; Rect r;
+                if (GetCursorPos(out p) && GetWindowRect(launcher, out r)
+                    && (p.X < r.Left || p.X >= r.Right || p.Y < r.Top || p.Y >= r.Bottom)) lost = true;
+            }
+        }
+        launcherShown = shown;
+        mouseWasDown = down;
+        return lost;
+    }
+
     static void Send(IntPtr window, string bang)
     {
         IntPtr text = Marshal.StringToHGlobalUni(bang);
@@ -210,6 +317,9 @@ public class RaintilePad
             IntPtr window = RainmeterWindow();
             if (window != IntPtr.Zero) lastRainmeter = now;
             else if (now - lastRainmeter > 10000) return;
+
+            if (AutoHide && window != IntPtr.Zero && FocusLost(window, now)) Send(window, Call("FocusLost()"));
+            if (!PadEnabled) continue;
 
             // i controller non collegati si ricontrollano ogni 2 s (la
             // chiamata su uno slot vuoto e' lenta)
@@ -244,4 +354,6 @@ if (-not $owned) { exit }
 [void]$quit.Reset() # se non c'era una copia precedente, il segnale e' ancora qui
 
 $pad = New-Object RaintilePad($Config, [RaintilePad]::ParseButtons($Toggle), $DeadZone, $RepeatDelay, $RepeatRate)
+$pad.PadEnabled = [bool]$Gamepad
+$pad.AutoHide = [bool]$AutoHide
 try { $pad.Run($quit) } finally { $mutex.ReleaseMutex() }

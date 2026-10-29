@@ -1,4 +1,4 @@
 [Variables]
-; Scritto automaticamente: ultima categoria selezionata e, per ogni
-; categoria, fin dove era stata scorsa (Scroll_<file>).
+; Written automatically: last selected category and, for each category, how
+; far it was scrolled (Scroll_<file>).
 LastCategory=1

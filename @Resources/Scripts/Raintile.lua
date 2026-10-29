@@ -1,37 +1,47 @@
--- Raintile: logica del launcher.
+-- Raintile: launcher logic.
 --
--- La griglia ha un numero fisso di "slot" (NX * NY meter). Scorrendo o
--- cambiando categoria non si creano meter: si cambiano solo le opzioni degli
--- slot esistenti, e solo quelle il cui valore e' davvero cambiato.
--- I meter degli slot e del menu vengono scritti in Generated\Grid.inc, che
--- viene rigenerato (con un refresh della skin) quando cambiano NX, NY, la
--- modalita' del menu o le categorie.
+-- The grid has a fixed number of "slots" (meters). Scrolling or switching
+-- category never creates meters: only the options of the existing slots
+-- change, and only those whose value actually changed.
+-- Slot and menu meters are written to Generated\Grid.inc, which is
+-- regenerated (with a skin refresh) when the grids, the menu mode or the
+-- categories change.
 
-local V = {}          -- impostazioni
-local ready = false   -- categorie caricate e griglia pronta
+local V = {}          -- settings
+local ready = false   -- categories loaded and grid ready
 local cats = {}       -- { { name, label, icon, parts, tiles = { ... } }, ... }
-local active = 1      -- categoria attiva
-local offset = 0      -- righe (V) o colonne (H) scorse: destinazione
-local pos = 0         -- posizione di scorrimento mostrata (frazionaria durante l'animazione)
-local base = -1       -- riga/colonna mostrata dal primo slot (-1 = contenuti da reimpostare)
+local active = 1      -- active category
+local offset = 0      -- rows (V) or columns (H) scrolled: target
+local pos = 0         -- displayed scroll position (fractional while animating)
+local base = -1       -- row/column shown by the first slot (-1 = contents must be reset)
 local slots = 0
-local cache = {}      -- ultimo valore impostato per meter/opzione
-local hovered = 0     -- categoria sotto il mouse
-local launching = nil -- animazione di avvio in corso: { tile, x, y, frame }
-local laidOut = false -- menu gia' misurato e centrato
-local appear = nil    -- passi dall'inizio della comparsa delle tile (nil = nessuna)
--- Evidenziazione della tile sotto il mouse, in unita' di griglia (colonna,
--- riga) cosi' segue le tile durante lo scorrimento; a = opacita' 0-1.
+local cache = {}      -- last value set per meter/option
+local dirty = {}      -- meters with changed options, updated on the next draw
+local hovered = 0     -- category under the mouse
+local launching = nil -- launch animation in progress: { tile, x, y, frame }
+local laidOut = false -- menu already measured and centred
+local appear = nil    -- steps since the tiles started appearing (nil = none)
+-- Highlight of the tile under the mouse, in grid units (column, row) so it
+-- follows the tiles while scrolling; a = opacity 0-1.
 local hover = { idx = 0, on = false, gx = 0, gy = 0, tx = 0, ty = 0, a = 0 }
-local pillPos = nil   -- { x, w } della pillola della categoria attiva
--- Tile il cui logo e' (o sta tornando) "acceso" dall'hover: [tile] = true.
--- tile.zoom (0-1) e' l'avanzamento, usato per ingrandimento e colore del logo.
+local pillPos = nil   -- { x, w } of the active category pill
+-- Tiles whose logo is (or is going back from being) lit by hover: [tile] = true.
+-- tile.zoom (0-1) is the progress, used for the logo's zoom and colour.
 local zooming = {}
-local ticking = false -- orologio delle animazioni (ActionTimer) attivo
-local visible = true  -- launcher mostrato (Show/Hide)
+local ticking = false -- animation clock (ActionTimer) running
+local visible = true  -- launcher shown (Show/Hide)
+local searchCat = nil -- search results, shown instead of the active category
+local query = ''      -- searched text
+local typing = false  -- search text field open (until shortly after it closes)
+local leaveSearch     -- defined in the Search section
+
+-- Category shown in the grid: the search results or the active one.
+local function cur()
+	return searchCat or cats[active]
+end
 local resources
 
--- Messaggi di diagnostica nel log di Rainmeter (DebugLog=1 in Settings.inc).
+-- Diagnostic messages in the Rainmeter log (DebugLog=1 in Settings.inc).
 local function dbg(msg)
 	if V.DebugLog then print('Raintile: ' .. msg) end
 end
@@ -40,18 +50,61 @@ local function trim(s)
 	return (s:gsub('^%s+', ''):gsub('%s+$', ''))
 end
 
+-- Colour as "R,G,B,A" from R,G,B, R,G,B,A or hex RRGGBB / RRGGBBAA (with or
+-- without # or 0x in front); nil if it is not a colour.
+local function parseColor(s)
+	s = trim(s or '')
+	local r, g, b, a = s:match('^(%d+)%s*,%s*(%d+)%s*,%s*(%d+)%s*,?%s*(%d*)$')
+	if r then
+		return string.format('%d,%d,%d,%d', tonumber(r), tonumber(g), tonumber(b), tonumber(a) or 255)
+	end
+	local hex = s:gsub('^#', ''):gsub('^0[xX]', '')
+	if hex:match('^%x+$') and (#hex == 6 or #hex == 8) then
+		local c = {}
+		for i = 1, #hex, 2 do c[#c + 1] = tonumber(hex:sub(i, i + 1), 16) end
+		return string.format('%d,%d,%d,%d', c[1], c[2], c[3], c[4] or 255)
+	end
+	return nil
+end
+
 local function unquote(s)
 	return (s:gsub('^"(.*)"$', '%1'))
 end
 
--- Legge una variabile numerica; accetta anche formule come (Floor(#ScreenW#/4)).
-local function num(name, default)
-	local raw = trim(SKIN:ReplaceVariables(SKIN:GetVariable(name, '')))
+-- Number from a text; formulas like (Floor(#ScreenW#/4)) are accepted too.
+local function toNumber(raw)
+	raw = trim(SKIN:ReplaceVariables(raw or ''))
 	local n = tonumber(raw)
 	if not n and raw ~= '' then
 		if raw:sub(1, 1) ~= '(' then raw = '(' .. raw .. ')' end
 		n = tonumber(SKIN:ParseFormula(raw))
 	end
+	return n
+end
+
+-- Sizes that can also be written as a percentage of the screen (e.g. 3%):
+-- 'W' = of the width, 'H' = of the height.
+local SIZE_AXIS = {
+	PadX = 'W', SearchW = 'W', MenuItemPad = 'W', MenuGap = 'W', MenuIconGap = 'W',
+	PadY = 'H', Gap = 'H', MenuH = 'H', MenuIconSize = 'H', MenuRadius = 'H', IconSize = 'H',
+	LabelPad = 'H', ScrollBarSize = 'H', LaunchLogoSize = 'H',
+}
+
+-- Pixels of a size: a number, a formula or a percentage of the screen.
+local function size(raw, axis)
+	local pct = trim(raw or ''):match('^([%d%.]+)%s*%%$')
+	if pct then
+		local total = axis == 'W' and V.ScreenW or V.ScreenH
+		return math.floor((toNumber(pct) or 0) * total / 100 + 0.5)
+	end
+	return toNumber(raw)
+end
+
+-- Reads a numeric variable (SIZE_AXIS sizes may also be percentages).
+local function num(name, default)
+	local raw = SKIN:GetVariable(name, '')
+	local n
+	if SIZE_AXIS[name] and V.ScreenW then n = size(raw, SIZE_AXIS[name]) else n = toNumber(raw) end
 	return n or default
 end
 
@@ -61,15 +114,15 @@ local function fileExists(path)
 	return false
 end
 
--- Parser INI minimale che mantiene l'ordine delle sezioni. Legge UTF-8 e,
--- in modo semplificato (solo caratteri ASCII), UTF-16 LE come Rainmeter.ini.
+-- Minimal INI parser that keeps the section order. Reads UTF-8 and, in a
+-- simplified way (ASCII characters only), UTF-16 LE like Rainmeter.ini.
 local function parseIni(path)
 	local f = io.open(path, 'rb')
 	if not f then return nil end
 	local text = f:read('*a')
 	f:close()
 	if text:sub(1, 2) == '\255\254' then
-		text = text:sub(3):gsub('%z', '') -- Lua 5.1: lo zero nei pattern e' %z
+		text = text:sub(3):gsub('%z', '') -- Lua 5.1: NUL in patterns is %z
 	end
 	text = text:gsub('^\239\187\191', '')
 
@@ -90,9 +143,9 @@ local function parseIni(path)
 	return list
 end
 
--- La durata della dissolvenza di apertura/chiusura e' un'impostazione della
--- skin in Rainmeter.ini, non un'opzione del file .ini della skin: la si
--- allinea a FadeDuration di Settings.inc. Vale dal caricamento successivo.
+-- The open/close fade duration is a per-skin setting in Rainmeter.ini, not an
+-- option of the skin's .ini file: it is synced with FadeDuration from
+-- Settings.inc. It applies from the next load.
 local function applyFadeDuration()
 	local want = tostring(math.max(0, math.floor(num('FadeDuration', 0))))
 	local path = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Rainmeter.ini'
@@ -111,8 +164,8 @@ local function isAbsolute(path)
 	return path:match('^%a:[\\/]') ~= nil or path:match('^\\\\') ~= nil
 end
 
--- Cerca 'name' in 'dir' (o come percorso assoluto). Se il nome non ha
--- estensione prova le estensioni di IMAGE_EXTS.
+-- Looks for 'name' in 'dir' (or as an absolute path). If the name has no
+-- extension, the IMAGE_EXTS extensions are tried.
 local function lookupImage(dir, name)
 	local path = unquote(trim(SKIN:ReplaceVariables(name)))
 	if not isAbsolute(path) then path = dir .. path end
@@ -125,14 +178,14 @@ local function lookupImage(dir, name)
 	return nil
 end
 
--- Immagine di una tile/categoria: 'value' se indicato (errore nel log se
--- manca), altrimenti il nome di default, che puo' semplicemente non esserci.
+-- Image of a tile/category: 'value' if given (logged if missing), otherwise
+-- the default name, which may simply not exist.
 local function findImage(value, dir, defaultName, owner)
 	value = value and trim(value) or ''
 	if value == '' then return lookupImage(dir, defaultName) end
 	local path = lookupImage(dir, value)
 	if not path then
-		print('Raintile: immagine "' .. value .. '" non trovata in ' .. dir .. ' per [' .. owner .. ']')
+		print('Raintile: image "' .. value .. '" not found in ' .. dir .. ' for [' .. owner .. ']')
 	end
 	return path
 end
@@ -145,8 +198,8 @@ local function fileSize(path)
 	return size
 end
 
--- Dimensioni in pixel di un'immagine PNG, JPEG, BMP o GIF leggendone
--- l'intestazione (nil se il formato non e' riconosciuto).
+-- Pixel size of a PNG, JPEG, BMP or GIF image, read from its header (nil if
+-- the format is not recognised).
 local function imageSize(path)
 	local f = io.open(path, 'rb')
 	if not f then return nil end
@@ -159,11 +212,11 @@ local function imageSize(path)
 	elseif head:sub(1, 2) == 'BM' then
 		w = b(19) + b(20) * 256 + b(21) * 65536 + b(22) * 16777216
 		h = b(23) + b(24) * 256 + b(25) * 65536 + b(26) * 16777216
-		if h >= 2147483648 then h = 4294967296 - h end -- bitmap dall'alto in basso
+		if h >= 2147483648 then h = 4294967296 - h end -- top-down bitmap
 	elseif head:sub(1, 3) == 'GIF' then
 		w, h = b(7) + b(8) * 256, b(9) + b(10) * 256
 	elseif head:sub(1, 2) == '\255\216' then
-		-- JPEG: scorre i segmenti fino al marcatore SOF con le dimensioni
+		-- JPEG: walk the segments up to the SOF marker holding the size
 		f:seek('set', 2)
 		while true do
 			local marker = f:read(2)
@@ -190,22 +243,22 @@ local function imageSize(path)
 	return nil
 end
 
--- Miniature ------------------------------------------------------------------
--- Rainmeter decodifica le immagini a piena risoluzione e le ridimensiona a ogni
--- disegno. Per questo sfondi e loghi vengono convertiti (in background, da
--- Thumbs.ps1) in miniature della misura esatta in cui vengono mostrati, in
--- Generated\Thumbs\. Il nome della miniatura contiene dimensione del file
--- originale e misura di destinazione: se cambia l'una o l'altra, viene rifatta.
+-- Thumbnails -----------------------------------------------------------------
+-- Rainmeter decodes images at full resolution and rescales them on every draw.
+-- That is why backgrounds and logos are converted (in the background, by
+-- Thumbs.ps1) into thumbnails of the exact size they are shown at, in
+-- Generated\Thumbs\. The thumbnail name holds the source file size and the
+-- target size: if either changes, it is rebuilt.
 
-local thumbJobs = {}  -- tutte le miniature desiderate, "src|dst|w|h|modo"
-local pending = {}    -- miniature ancora da creare: { tile, field, dst }
+local thumbJobs = {}  -- every wanted thumbnail, "src|dst|w|h|mode"
+local pending = {}    -- thumbnails still to create: { tile, field, dst }
 
 local function safeName(s)
 	return (s:gsub('[\\/:%*%?"<>|]', '_'))
 end
 
--- Restituisce l'immagine da mostrare: la miniatura se esiste gia', altrimenti
--- l'originale (e la miniatura viene messa in coda).
+-- Returns the image to show: the thumbnail if it already exists, otherwise
+-- the original (and the thumbnail is queued).
 local function thumbnail(src, tile, field, dir, name, w, h, mode)
 	if not src or not V.Thumbnails then return src end
 	local ext = src:lower():match('%.png$') and '.png' or '.jpg'
@@ -218,34 +271,66 @@ local function thumbnail(src, tile, field, dir, name, w, h, mode)
 	return src
 end
 
--- Griglia di una categoria: NX x NY tile visibili (default quelli di
--- Settings.inc), dimensionate per riempire l'area della griglia.
+-- Automatic tile colour (AutoTileColor=1): a tile without a background image
+-- and without Color= gets a dark colour taken from its logo. Thumbs.ps1
+-- computes it in the background and keeps the results in
+-- Generated\Colors.txt, one "size|R,G,B,A|logo path" line per logo (the size
+-- of the logo file: if it changes, the colour is computed again).
+local logoColors = {} -- "size|logo path" -> colour
+
+local function readLogoColors()
+	logoColors = {}
+	local f = io.open(resources .. 'Generated\\Colors.txt', 'r')
+	if not f then return end
+	for line in f:lines() do
+		local sz, color, src = line:gsub('\r$', ''):match('^(%d+)|([^|]*)|(.+)$')
+		if sz then logoColors[sz .. '|' .. src:lower()] = color end
+	end
+	f:close()
+end
+
+-- Colour of tile t from its logo: the cached one, otherwise the tile keeps
+-- the default colour until Thumbs.ps1 has computed it.
+local function autoColor(t, logo)
+	local sz = fileSize(logo) or 0
+	local key = sz .. '|' .. logo
+	thumbJobs[#thumbJobs + 1] = table.concat({ logo, sz, 0, 0, 'color' }, '|')
+	local color = logoColors[key:lower()]
+	if color then
+		if color ~= '' then t.color = color end
+		return
+	end
+	pending[#pending + 1] = { tile = t, field = 'color', key = key:lower() }
+end
+
+-- Grid of a category: NX x NY visible tiles (Settings.inc by default), sized
+-- to fill the grid area.
 local function categoryGeometry(c, nx, ny, iconSize)
 	c.nx = math.max(1, math.floor(nx or V.DefNX))
 	c.ny = math.max(1, math.floor(ny or V.DefNY))
 	c.tw = math.floor((V.AreaW - (c.nx - 1) * V.Gap) / c.nx)
 	c.th = math.floor((V.AreaH - (c.ny - 1) * V.Gap) / c.ny)
-	-- una riga (o colonna) di slot in piu' per lo scorrimento fluido
+	-- one extra row (or column) of slots for smooth scrolling
 	c.rows = c.ny + (V.Horizontal and 0 or 1)
 	c.cols = c.nx + (V.Horizontal and 1 or 0)
 	c.iconSize = math.floor(iconSize or V.DefIconSize)
-	-- le miniature dei loghi sono create alla dimensione massima (zoom incluso)
+	-- logo thumbnails are made at the largest size (zoom included)
 	c.logoMax = math.floor(c.iconSize * V.HoverLogoScale + 0.5)
 end
 
--- Rende "corrente" la griglia della categoria c: il resto dello script usa
--- V.NX, V.TileW, ... della categoria attiva.
+-- Makes category c's grid the "current" one: the rest of the script uses
+-- V.NX, V.TileW, ... of the active category.
 local function applyGeometry(c)
 	V.NX, V.NY, V.TileW, V.TileH = c.nx, c.ny, c.tw, c.th
 	V.StepX, V.StepY = c.tw + V.Gap, c.th + V.Gap
 	V.Rows, V.Cols = c.rows, c.cols
-	V.Slots = c.rows * c.cols -- slot usati (gli altri restano nascosti)
+	V.Slots = c.rows * c.cols -- slots in use (the others stay hidden)
 	V.GridW = c.nx * c.tw + (c.nx - 1) * V.Gap
 	V.GridH = c.ny * c.th + (c.ny - 1) * V.Gap
 	V.IconSize = c.iconSize
 end
 
--- Legge un file di categoria (Categories\<file>.ini).
+-- Reads a category file (Categories\<file>.ini).
 local function loadCategory(file)
 	local ini = parseIni(resources .. 'Categories\\' .. file)
 	if not ini then return nil end
@@ -254,7 +339,7 @@ local function loadCategory(file)
 	local images = resources .. 'Images\\' .. base .. '\\'
 	local c = { file = file, name = base, label = base, order = math.huge, tiles = {} }
 
-	-- [Category] per primo: la griglia della categoria serve gia' per le miniature
+	-- [Category] first: the category grid is already needed for the thumbnails
 	local catKeys = {}
 	for _, s in ipairs(ini) do
 		if s.name:lower() == 'category' then catKeys = s.keys end
@@ -264,22 +349,29 @@ local function loadCategory(file)
 	c.order = tonumber(catKeys.order or '') or math.huge
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
-		tonumber(catKeys.iconsize or ''))
+		size(catKeys.iconsize, 'H'))
 
 	for _, s in ipairs(ini) do
 		local k = s.keys
 		if s.name:lower() ~= 'category' then
 			local label = trim(k.label or '')
 			local command = trim(SKIN:ReplaceVariables(k.command or ''))
-			-- Nome di default delle immagini: Image= oppure il nome della tile
+			-- Default image name: Image= or the tile name
 			local image = trim(k.image or '') ~= '' and trim(k.image) or s.name
+			local color = parseColor(k.color)
+			if not color and trim(k.color or '') ~= '' then
+				print('Raintile: colour "' .. k.color .. '" of [' .. s.name .. '] not recognised (R,G,B,A or #RRGGBBAA)')
+			end
 			local t = {
 				background = findImage(k.background, images .. 'background\\', image, s.name),
 				logo = findImage(k.logo, images .. 'logo\\', image, s.name),
-				color = trim(k.color or '') ~= '' and trim(k.color) or V.TileColor,
+				color = color or V.TileColor,
 				command = command ~= '' and command or nil,
 			}
-			-- originali, usati a schermo intero dall'animazione di avvio
+			if V.AutoTileColor and not color and t.logo and not t.background then
+				autoColor(t, t.logo)
+			end
+			-- originals, used full screen by the launch animation
 			t.backgroundFull, t.logoFull = t.background, t.logo
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
 				c.tw, c.th, V.BgThumbMode)
@@ -288,15 +380,16 @@ local function loadCategory(file)
 			if label ~= '' then
 				t.label = label
 			elseif not t.background and not t.logo then
-				t.label = s.name -- tile senza immagini: mostra almeno il nome
+				t.label = s.name -- tile without images: show at least its name
 			end
+			t.name, t.catLabel = s.name, c.label -- for search
 			c.tiles[#c.tiles + 1] = t
 		end
 	end
 
 	c.icon = findImage(iconValue, images, 'icon', base)
 	if not c.icon and V.MenuMode ~= 'text' and trim(iconValue or '') == '' then
-		print('Raintile: nessuna icona per la categoria "' .. base .. '": cercata ' .. images
+		print('Raintile: no icon for category "' .. base .. '": looked for ' .. images
 			.. 'icon' .. '(' .. table.concat(IMAGE_EXTS, '|') .. ')')
 	end
 	return c
@@ -305,6 +398,7 @@ end
 local function loadCategories(files)
 	cats = {}
 	thumbJobs, pending = {}, {}
+	readLogoColors()
 	for _, file in ipairs(files) do
 		local c = loadCategory(file)
 		if c then cats[#cats + 1] = c end
@@ -314,14 +408,17 @@ local function loadCategories(files)
 		return a.name:lower() < b.name:lower()
 	end)
 	if #cats == 0 then
-		cats[1] = { file = '', name = 'Vuoto', label = 'Nessuna categoria', order = 0, tiles = {} }
+		cats[1] = { file = '', name = 'Empty', label = 'No categories', order = 0, tiles = {} }
 		categoryGeometry(cats[1])
 	end
-	-- Slot da generare: quanti ne servono alla griglia piu' grande
+	-- Slots to generate: as many as the largest grid needs
 	slots = 0
 	for _, c in ipairs(cats) do slots = math.max(slots, c.rows * c.cols) end
+	local default = {} -- default grid, used by search results
+	categoryGeometry(default)
+	slots = math.max(slots, default.rows * default.cols)
 
-	-- Meter che compongono ogni voce del menu, secondo MenuMode
+	-- Meters making up each menu entry, according to MenuMode
 	for i, c in ipairs(cats) do
 		c.showIcon = V.MenuMode ~= 'text' and c.icon ~= nil
 		c.showText = V.MenuMode ~= 'icon' or c.icon == nil
@@ -340,9 +437,9 @@ local function splitList(s)
 	return list
 end
 
--- Generazione di Grid.inc ---------------------------------------------------
+-- Grid.inc generation ------------------------------------------------------
 
--- Da incrementare quando cambia il formato dei meter scritti da writeGrid().
+-- Bump when the format of the meters written by writeGrid() changes.
 local GRID_VERSION = 4
 
 local function signature()
@@ -357,16 +454,16 @@ local function writeGrid(path, sig, files)
 	local o = {}
 	local function w(s) o[#o + 1] = s end
 
-	w('; GENERATO AUTOMATICAMENTE da Raintile.lua: non modificare a mano.')
+	w('; GENERATED BY Raintile.lua: do not edit by hand.')
 	w('[Variables]')
 	w('GridSignature=' .. sig)
-	-- Elenco dei file di categoria visto l'ultima volta: permette di disegnare
-	-- subito al caricamento, mentre la cartella viene ricontrollata in background.
+	-- Category files seen last time: lets the skin draw right away on load,
+	-- while the folder is checked again in the background.
 	w('CategoryFiles=' .. table.concat(files, '|'))
 	w('')
 
-	-- Voci del menu: una catena di meter con X relativa. Lo script, dopo averli
-	-- misurati, sposta solo il primo per centrare tutta la catena.
+	-- Menu entries: a chain of meters with relative X. After measuring them the
+	-- script only moves the first one to centre the whole chain.
 	for i, c in ipairs(cats) do
 		local x = i == 1 and '#PadX#' or '(#MenuGap#+2*#MenuItemPad#)R'
 		if c.showIcon then
@@ -390,7 +487,7 @@ local function writeGrid(path, sig, files)
 		end
 	end
 
-	-- Aree cliccabili delle voci (posizionate dallo script)
+	-- Clickable areas of the entries (placed by the script)
 	for i = 1, #cats do
 		w('[CatHit' .. i .. ']')
 		w('Meter=Shape')
@@ -401,9 +498,9 @@ local function writeGrid(path, sig, files)
 		w('')
 	end
 
-	-- Slot della griglia, dentro il contenitore GridClip: tanti quanti ne servono
-	-- alla categoria con la griglia piu' grande. Posizione e misura di ogni slot
-	-- le imposta lo script, secondo la griglia della categoria attiva.
+	-- Grid slots, inside the GridClip container: as many as the category with
+	-- the largest grid needs. The script sets each slot's position and size
+	-- according to the active category's grid.
 	for slot = 1, slots do
 		w('[Tile' .. slot .. ']')
 		w('Meter=Image')
@@ -435,6 +532,7 @@ local function set(meter, option, value)
 	local key = meter .. '|' .. option
 	if cache[key] ~= value then
 		cache[key] = value
+		dirty[meter] = true
 		SKIN:Bang('!SetOption', meter, option, value)
 	end
 end
@@ -454,7 +552,7 @@ local function rect(meter, x, y, w, h, color)
 		w, h, math.min(V.MenuRadius, math.floor(h / 2)), color))
 end
 
--- Colore "R,G,B,A" con l'opacita' moltiplicata per f (0-1).
+-- "R,G,B,A" colour with the opacity multiplied by f (0-1).
 local function fade(color, f)
 	local r, g, b, a = color:match('(%d+)%s*,%s*(%d+)%s*,%s*(%d+)%s*,?%s*(%d*)')
 	if not r then return color end
@@ -471,10 +569,10 @@ local function easeInOut(p)
 	return 1 - (-2 * p + 2) ^ 3 / 2
 end
 
--- Sfondi "a finestra" (BgStyle diverso da Crop): l'immagine resta piu' grande
--- della tile (BgOverscan) e la tile ne mostra una parte con ImageCrop,
--- spostandola (Pan, Parallax) o restringendola (Zoom).
--- x, y = posizione della tile nella griglia. Restituisce "x,y,w,h" o nil.
+-- "Window" backgrounds (BgStyle other than Crop): the image stays larger than
+-- the tile (BgOverscan) and the tile shows part of it with ImageCrop, moving
+-- it (Pan, Parallax) or shrinking it (Zoom).
+-- x, y = tile position in the grid. Returns "x,y,w,h" or nil.
 local function bgWindow(t, x, y)
 	if t.bgSize == nil then t.bgSize = imageSize(t.background) or false end
 	local d = t.bgSize
@@ -487,11 +585,11 @@ local function bgWindow(t, x, y)
 	local cw, ch = V.TileW / scale, V.TileH / scale
 	local px, py = 0.5, 0.5
 	if V.BgStyle == 'pan' then
-		-- dal centro verso un'estremita', lungo l'asse con piu' margine
+		-- from the centre towards one end, along the axis with more room
 		local e = 0.5 * easeInOut(t.pan or 0)
 		if (iw - cw) / iw >= (ih - ch) / ih then px = 0.5 + e else py = 0.5 + e end
 	elseif V.BgStyle == 'parallax' then
-		-- la parte mostrata dipende da dove si trova la tile nella griglia
+		-- the visible part depends on where the tile is in the grid
 		if V.Horizontal then
 			px = math.min(1, math.max(0, (x + V.TileW / 2) / V.GridW))
 		else
@@ -502,15 +600,15 @@ local function bgWindow(t, x, y)
 		math.floor(cw + 0.5), math.floor(ch + 0.5))
 end
 
--- Numero >= 0 con 3 decimali e il punto come separatore, a prescindere dalla
--- lingua di sistema (string.format('%.3f') potrebbe usare la virgola).
+-- Number >= 0 with 3 decimals and a dot separator, whatever the system
+-- language (string.format('%.3f') could use a comma).
 local function dec(v)
 	local n = math.floor(v * 1000 + 0.5)
 	return string.format('%d.%03d', math.floor(n / 1000), n % 1000)
 end
 
--- Matrice di colore (righe 1-3 di ColorMatrix) con saturazione sat: 0 = bianco
--- e nero (luminanza), 1 = colori originali.
+-- Colour matrix (ColorMatrix rows 1-3) with saturation sat: 0 = greyscale
+-- (luminance), 1 = original colours.
 local LUMA = { 0.299, 0.587, 0.114 }
 local function saturationRows(sat)
 	local rows = {}
@@ -523,17 +621,17 @@ local function saturationRows(sat)
 	return rows
 end
 
--- Avvicina cur a target di una frazione per passo (k, default AnimSmooth);
--- restituisce il nuovo valore e true se non e' ancora arrivato.
+-- Moves cur towards target by a fraction per step (k, default AnimSmooth);
+-- returns the new value and true if it has not arrived yet.
 local function approach(cur, target, eps, k)
 	if math.abs(target - cur) <= eps then return target, false end
 	return cur + (target - cur) * (k or V.AnimSmooth), true
 end
 
--- Righe (V) o colonne (H) di tile della categoria attiva, e quante ne
--- stanno sullo schermo.
+-- Rows (V) or columns (H) of tiles of the active category, and how many fit
+-- on screen.
 local function lineCount()
-	return math.ceil(#cats[active].tiles / (V.Horizontal and V.NY or V.NX))
+	return math.ceil(#cur().tiles / (V.Horizontal and V.NY or V.NX))
 end
 
 local function visibleLines()
@@ -544,13 +642,13 @@ local function maxOffset()
 	return math.max(0, lineCount() - visibleLines())
 end
 
--- Scroll infinito: dopo l'ultima riga ricomincia la prima. Solo se le tile
--- non stanno tutte sullo schermo (altrimenti si vedrebbero ripetute).
+-- Infinite scroll: after the last row the first one comes back. Only if the
+-- tiles don't all fit on screen (otherwise they would show up twice).
 local function infinite()
 	return V.InfiniteScroll and lineCount() > visibleLines()
 end
 
--- Porta uno scorrimento salvato nei limiti della categoria attiva.
+-- Brings a saved scroll position within the active category's limits.
 local function normalizeOffset(o)
 	o = math.floor(o or 0)
 	if infinite() then return o % lineCount() end
@@ -562,9 +660,10 @@ local function slotRC(slot)
 	return math.floor(s / V.Cols), s % V.Cols
 end
 
--- Ricorda lo scorrimento della categoria attiva (anche in State.inc, cosi'
--- resta dopo un aggiornamento della skin).
+-- Remembers the active category's scroll position (in State.inc too, so it
+-- survives a skin refresh).
 local function saveScroll()
+	if searchCat then return end -- search results are not remembered
 	local c = cats[active]
 	local o = normalizeOffset(offset)
 	if c.offset ~= o then
@@ -573,7 +672,7 @@ local function saveScroll()
 	end
 end
 
--- Indice (in cats[active].tiles) della tile nello slot, con i contenuti attuali.
+-- Index (in cur().tiles) of the tile in the slot, with the current contents.
 local function indexAt(slot)
 	local r, c = slotRC(slot)
 	local line = base + (V.Horizontal and c or r)
@@ -583,25 +682,25 @@ local function indexAt(slot)
 end
 
 local function tileAt(slot)
-	return cats[active].tiles[indexAt(slot)]
+	return cur().tiles[indexAt(slot)]
 end
 
--- Posizione in pixel (relativa alla griglia) di un punto in unita' di griglia
--- (colonna, riga), alla posizione di scorrimento corrente.
+-- Pixel position (relative to the grid) of a point in grid units (column,
+-- row), at the current scroll position.
 local function gridToPx(gx, gy)
 	if V.Horizontal then gx = gx - pos else gy = gy - pos end
 	return gx * V.StepX, gy * V.StepY
 end
 
--- Coordinate di griglia (colonna, riga) dello slot con i contenuti attuali;
--- con lo scroll infinito la riga (o colonna) non viene riportata nel giro.
+-- Grid coordinates (column, row) of the slot with the current contents; with
+-- infinite scroll the row (or column) is not wrapped back.
 local function slotToGrid(slot)
 	local r, c = slotRC(slot)
 	if V.Horizontal then return base + c, r end
 	return c, base + r
 end
 
--- Misura le voci del menu (gia' aggiornate) e centra la catena orizzontalmente.
+-- Measures the (already updated) menu entries and centres the chain horizontally.
 local function layoutMenu()
 	for _, c in ipairs(cats) do
 		c.l, c.r = nil, nil
@@ -639,7 +738,7 @@ local function drawPill(meter, x, w, color)
 	show(meter, true)
 end
 
-local startTicker -- definita piu' sotto
+local startTicker -- defined further down
 
 local function renderCategories()
 	for i, c in ipairs(cats) do
@@ -657,9 +756,12 @@ local function renderCategories()
 		return
 	end
 
-	-- Pillola attiva: scivola verso la nuova voce (Tick) o salta subito
+	-- Active pill: slides to the new entry (Tick) or jumps straight there.
+	-- No category is active during a search.
 	local x, w = pillTarget(active)
-	if pillPos and V.AnimCategory and (pillPos.x ~= x or pillPos.w ~= w) then
+	if searchCat then
+		show('CatPillActive', false)
+	elseif pillPos and V.AnimCategory and (pillPos.x ~= x or pillPos.w ~= w) then
 		startTicker()
 	else
 		pillPos = { x = x, w = w }
@@ -682,7 +784,7 @@ local function renderScrollBar()
 	end
 
 	local total = lineCount()
-	-- frazione di corsa del cursore (con lo scroll infinito: posizione nel giro)
+	-- fraction of the thumb travel (with infinite scroll: position within the loop)
 	local at = infinite() and (pos % total) / maxOff or pos / maxOff
 	at = math.min(1, math.max(0, at))
 	local size = V.ScrollBarSize
@@ -711,7 +813,7 @@ local function renderScrollBar()
 	show('MeterScrollBar', true)
 end
 
--- Contenuti degli slot (immagini, testi) per la riga/colonna 'base'.
+-- Slot contents (images, texts) for the 'base' row/column.
 local function fillSlots()
 	for slot = 1, V.Slots do
 		local t = tileAt(slot)
@@ -723,14 +825,14 @@ local function fillSlots()
 	end
 end
 
--- Posizione, opacita' e visibilita' degli slot (anche a ogni passo di animazione).
+-- Position, opacity and visibility of the slots (also on every animation step).
 local function placeSlots()
 	local frac = pos - base
 	for slot = 1, slots do
-		local inUse = slot <= V.Slots -- slot oltre la griglia della categoria: nascosti
+		local inUse = slot <= V.Slots -- slots beyond the category grid: hidden
 		local t = inUse and tileAt(slot)
 		local r, c = slotRC(slot)
-		local extra = r >= V.NY or c >= V.NX -- riga/colonna in piu'
+		local extra = r >= V.NY or c >= V.NX -- extra row/column
 		local visible = t and (not extra or frac > 0)
 		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
 
@@ -803,7 +905,7 @@ local function placeHover()
 	show('TileHover', true)
 end
 
--- Applica lo stato corrente alla griglia e ridisegna.
+-- Applies the current state to the grid and redraws.
 local function frame()
 	local b = math.floor(pos)
 	if b ~= base then
@@ -813,15 +915,17 @@ local function frame()
 	placeSlots()
 	placeHover()
 	renderScrollBar()
-	SKIN:Bang('!UpdateMeterGroup', 'Tiles')
+	-- only changed meters are updated (e.g. a single one during Pan)
+	for meter in pairs(dirty) do SKIN:Bang('!UpdateMeter', meter) end
+	dirty = {}
 	SKIN:Bang('!Redraw')
 end
 
--- Ridisegna tutto. 'menu' = aggiorna anche il menu (cambio categoria).
+-- Redraws everything. 'menu' = update the menu too (category change).
 local function render(menu)
 	if menu then
 		if not laidOut then
-			-- I meter del menu devono essere aggiornati per poterli misurare
+			-- Menu meters must be updated before they can be measured
 			SKIN:Bang('!UpdateMeterGroup', 'Menu')
 			layoutMenu()
 		end
@@ -831,13 +935,19 @@ local function render(menu)
 	frame()
 end
 
--- Animazioni --------------------------------------------------------------------
--- Un solo "orologio" (ActionTimer, Tick ogni 16 ms) fa avanzare tutte le
--- animazioni e si ferma da solo quando nulla si muove piu'.
+-- Animations ---------------------------------------------------------------------
+-- A single "clock" advances every animation and stops by itself when nothing
+-- moves any more. Each step schedules the next one (16 ms later) only after it
+-- has finished drawing: a slow step slows the animation down, but steps never
+-- queue up and mouse and keyboard stay responsive. MeasureAnim's two lists
+-- alternate, because a list cannot be restarted while it is still running its
+-- last action.
+local tickList = 1
 
 startTicker = function()
 	if ticking then return end
 	ticking = true
+	tickList = 1
 	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Execute 1')
 end
 
@@ -845,9 +955,10 @@ local function stopTicker()
 	if not ticking then return end
 	ticking = false
 	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Stop 1')
+	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Stop 2')
 end
 
--- Fa avanzare tutte le animazioni di un passo; true se qualcosa si muove ancora.
+-- Advances every animation by one step; true if something is still moving.
 local function advance()
 	local busy, moving = false, false
 
@@ -869,14 +980,14 @@ local function advance()
 		busy = busy or moving
 	end
 
-	-- Zoom dei loghi: cresce sulla tile sotto il mouse, rientra sulle altre
-	local tiles = cats[active].tiles
+	-- Logo zoom: grows on the tile under the mouse, shrinks back on the others
+	local tiles = cur().tiles
 	for t in pairs(zooming) do
 		local target = (hover.on and tiles[hover.idx] == t) and 1 or 0
 		t.zoom, moving = approach(t.zoom or 0, target, 0.01, V.AnimLogoSmooth)
 		busy = busy or moving
 		if V.BgStyle == 'pan' then
-			-- velocita' costante: lenta in andata, tre volte piu' rapida al ritorno
+			-- constant speed: slow on the way out, three times faster on the way back
 			local p = t.pan or 0
 			local step = target == 1 and 1 / V.BgPanFrames or 3 / V.BgPanFrames
 			p = target == 1 and math.min(1, p + step) or math.max(0, p - step)
@@ -886,7 +997,7 @@ local function advance()
 		if t.zoom == 0 and (t.pan or 0) == 0 and target == 0 then zooming[t] = nil end
 	end
 
-	if pillPos and laidOut then
+	if pillPos and laidOut and not searchCat then
 		local x, w = pillTarget(active)
 		pillPos.x, moving = approach(pillPos.x, x, 0.5, V.AnimPillSmooth)
 		busy = busy or moving
@@ -899,22 +1010,77 @@ local function advance()
 	return busy
 end
 
-function Tick()
-	if not ticking then return end -- passi rimasti in coda dopo lo stop
+function Tick(list)
+	-- steps arriving after the stop, or from a list no longer current
+	if not ticking or (list and list ~= tickList) then return end
 	if not ready or launching then
 		stopTicker()
 		return
 	end
 	local busy = advance()
 	frame()
-	if not busy then stopTicker() end
+	if busy then
+		tickList = 3 - tickList
+		SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Execute ' .. tickList)
+	else
+		ticking = false
+	end
 end
 
--- Ciclo di vita di Rainmeter --------------------------------------------------
+-- Rainmeter lifecycle --------------------------------------------------------
 
 local knownFiles = {}
 
--- Riscrive Grid.inc e ricarica la skin se menu, griglia o file sono cambiati.
+-- Percentage sizes, converted to pixels, also go to the skin (which uses
+-- #PadX#, #MenuH#, ... in formulas and does not understand "3%"), and so do
+-- colours written as #RRGGBBAA (Rainmeter reads hex colours only without #):
+-- Generated\Sizes.inc is included after Settings.inc and takes precedence. It
+-- is only rewritten (and the skin refreshed) when something changes: a
+-- percentage or the screen resolution.
+local function writeSizes()
+	local values = {}
+	for _, s in ipairs(parseIni(resources .. 'Settings.inc') or {}) do
+		for key, value in pairs(s.keys) do values[key] = value end -- lower-case keys
+	end
+	local names = {}
+	for name in pairs(SIZE_AXIS) do names[#names + 1] = name end
+	table.sort(names)
+	local lines = {
+		'; GENERATED BY Raintile.lua: percentage sizes and #hex colours from',
+		'; Settings.inc converted for Rainmeter. Do not edit by hand.',
+		'[Variables]',
+	}
+	for _, name in ipairs(names) do
+		local raw = values[name:lower()]
+		if raw and raw:match('%%%s*$') then
+			lines[#lines + 1] = name .. '=' .. size(raw, SIZE_AXIS[name])
+		end
+	end
+	local colors = {}
+	for key, raw in pairs(values) do
+		if key:match('color$') and trim(raw):match('^#') and parseColor(raw) then colors[#colors + 1] = key end
+	end
+	table.sort(colors)
+	for _, key in ipairs(colors) do lines[#lines + 1] = key .. '=' .. parseColor(values[key]) end
+	local text = table.concat(lines, '\n') .. '\n'
+
+	local path = resources .. 'Generated\\Sizes.inc'
+	local f = io.open(path, 'rb')
+	local old = f and f:read('*a') or ''
+	if f then f:close() end
+	if old == text then return false end
+	f = io.open(path, 'wb')
+	if not f then
+		print('Raintile: cannot write Generated\\Sizes.inc')
+		return false
+	end
+	f:write(text)
+	f:close()
+	SKIN:Bang('!Refresh')
+	return true
+end
+
+-- Rewrites Grid.inc and refreshes the skin if menu, grid or files changed.
 local function regenerate(files)
 	local sig = signature()
 	if SKIN:GetVariable('GridSignature', '') == sig
@@ -924,7 +1090,7 @@ local function regenerate(files)
 	if writeGrid(resources .. 'Generated\\Grid.inc', sig, files) then
 		SKIN:Bang('!Refresh')
 	else
-		print('Raintile: impossibile scrivere Generated\\Grid.inc')
+		print('Raintile: cannot write Generated\\Grid.inc')
 	end
 	return true
 end
@@ -933,12 +1099,13 @@ function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
 	laidOut, pillPos = false, nil
 
-	-- griglia di default; ogni categoria puo' avere la sua (NX/NY in [Category])
+	-- default grid; each category can have its own (NX/NY in [Category])
 	V.DefNX = math.max(1, math.floor(num('NX', 4)))
 	V.DefNY = math.max(1, math.floor(num('NY', 2)))
 	V.Horizontal = SKIN:GetVariable('ScrollDir', 'V'):upper():sub(1, 1) == 'H'
 	V.ScrollStep = math.max(1, math.floor(num('ScrollStep', 1)))
 	V.ScreenW = num('ScreenW', 1920)
+	V.ScreenH = num('ScreenH', 1080) -- before the sizes: percentages need it
 	V.Gap = num('Gap', 16)
 	V.PadX = num('PadX', 40)
 	V.PadY = num('PadY', 24)
@@ -954,16 +1121,18 @@ function Initialize()
 	V.LaunchAnimation = num('LaunchAnimation', 1) ~= 0
 	V.LaunchAnimFrames = math.max(0, math.floor(num('LaunchAnimFrames', 15)))
 	V.LaunchLogoSize = math.floor(num('LaunchLogoSize', 400))
-	V.ScreenH = num('ScreenH', 1080)
 	V.CloseOnLaunch = num('CloseOnLaunch', 1) ~= 0
 	V.CloseAction = SKIN:GetVariable('CloseAction', '[!CommandMeasure MeasureScript "Hide()"]')
 	V.StartHidden = num('StartHidden', 0) ~= 0
 	V.ShowZPos = SKIN:GetVariable('ShowZPos', '')
 	V.HotKey = trim(SKIN:GetVariable('CloseHotKey', ''))
-	-- La mini-skin del tasto di chiusura: attiva solo mentre il launcher e' visibile
+	-- The close key mini-skin: only active while the launcher is visible
 	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
 	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
 	V.DebugLog = num('DebugLog', 0) ~= 0
+	V.ImportOnStart = num('ImportOnStart', 0) ~= 0
+	V.SearchW = math.floor(num('SearchW', 320))
+	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.LabelPad = num('LabelPad', 14)
@@ -976,7 +1145,7 @@ function Initialize()
 	V.AnimSlide = num('AnimSlide', 30)
 	V.AnimSmooth = math.min(1, math.max(0.05, num('AnimSmooth', 0.3)))
 	V.InfiniteScroll = num('InfiniteScroll', 1) ~= 0
-	-- Morbidezza di ciascuna animazione; se vuota vale AnimSmooth
+	-- Smoothing of each animation; AnimSmooth if empty
 	local function smooth(name)
 		return math.min(1, math.max(0.02, num(name, V.AnimSmooth)))
 	end
@@ -991,8 +1160,8 @@ function Initialize()
 	V.BgOverscan = math.max(1, num('BgOverscan', 1.15))
 	V.BgPanFrames = math.max(1, math.floor(num('BgPanFrames', 180)))
 	V.BgHoverZoom = math.max(1, num('BgHoverZoom', 1.08))
-	-- miniature degli sfondi: ritagliate alla tile (Crop) oppure piu' grandi,
-	-- con il margine per scivolare/ingrandire (percentuale nel nome del modo)
+	-- background thumbnails: cropped to the tile (Crop) or larger, with room to
+	-- slide/zoom (percentage in the mode name)
 	if V.BgStyle == 'crop' then
 		V.BgThumbMode = 'cover'
 	else
@@ -1000,31 +1169,33 @@ function Initialize()
 		V.BgThumbMode = 'overscan' .. math.floor(over * 100 + 0.5)
 	end
 	V.HoverLogoScale = V.AnimLogoZoom and math.max(1, num('HoverLogoScale', 1.25)) or 1
-	-- area disponibile per la griglia (le tile di ogni categoria la riempiono)
+	-- area available for the grid (each category's tiles fill it)
 	V.AreaW = V.ScreenW - 2 * V.PadX
 	V.AreaH = V.ScreenH - 2 * V.PadY - V.MenuH - V.Gap
 	for _, name in ipairs({ 'TileColor', 'ActiveCategoryColor', 'HoverCategoryColor', 'TextColor',
 			'TextDimColor', 'ScrollTrackColor', 'ScrollThumbColor', 'HoverColor', 'AccentColor' }) do
-		V[name] = SKIN:GetVariable(name, '255,255,255,255')
+		V[name] = parseColor(SKIN:GetVariable(name, '')) or '255,255,255,255'
 	end
+	V.AutoTileColor = num('AutoTileColor', 1) ~= 0
 	local mode = SKIN:GetVariable('MenuMode', 'IconText'):lower()
 	V.MenuMode = (mode == 'icon' or mode == 'text') and mode or 'icontext'
 
-	-- Parte dall'elenco di file memorizzato; OnCategoryList() lo ricontrolla.
+	-- Starts from the stored file list; OnCategoryList() checks it again.
 	knownFiles = {}
 	for _, file in ipairs(splitList(SKIN:GetVariable('CategoryFiles', ''))) do
 		if fileExists(resources .. 'Categories\\' .. file) then knownFiles[#knownFiles + 1] = file end
 	end
-	if #knownFiles == 0 then return end -- primo avvio: si aspetta l'elenco
+	if #knownFiles == 0 then return end -- first run: wait for the list
 
 	applyFadeDuration()
+	if writeSizes() then return end
 
 	loadCategories(knownFiles)
 	if regenerate(knownFiles) then return end
 
 	active = math.min(math.max(1, math.floor(num('LastCategory', 1))), #cats)
 	applyGeometry(cats[active])
-	-- scorrimento salvato di ogni categoria
+	-- saved scroll position of each category
 	for _, c in ipairs(cats) do
 		c.offset = math.floor(num('Scroll_' .. c.name, 0))
 	end
@@ -1033,8 +1204,8 @@ function Initialize()
 	ready = true
 end
 
--- Accende o spegne la mini-skin che registra il tasto di chiusura (Esc).
--- Da spenta il tasto torna libero per le altre applicazioni.
+-- Turns on or off the mini-skin that registers the close key (Esc). When it
+-- is off the key is free again for other applications.
 local function hotKey(on)
 	if V.HotKey ~= '' then
 		if on then
@@ -1043,7 +1214,7 @@ local function hotKey(on)
 			SKIN:Bang('!DeactivateConfig', V.HotKeyConfig)
 		end
 	end
-	-- tasti di navigazione (WASD, frecce, Spazio/Invio, Q/E): stessa logica
+	-- navigation keys (WASD, arrows, Space/Enter, Q/E): same logic
 	if V.KeyboardNav then
 		if on then
 			SKIN:Bang('!ActivateConfig', V.NavConfig, 'Navigation.ini')
@@ -1054,7 +1225,7 @@ local function hotKey(on)
 end
 
 function Update()
-	-- Con UpdateDivider=-1 viene chiamata una sola volta, al caricamento.
+	-- With UpdateDivider=-1 this is only called once, on load.
 	if ready then
 		if V.AnimOpen and not V.StartHidden then appear = 0 end
 		render(true)
@@ -1070,10 +1241,10 @@ function Update()
 	return active
 end
 
--- Mostra/nascondi ------------------------------------------------------------
--- Il launcher si carica una volta sola e poi resta in memoria: aprirlo e
--- chiuderlo lo mostra e lo nasconde, senza rileggere file ne' ricalcolare nulla.
--- Dalla riga di comando o da una scorciatoia:
+-- Show/hide ------------------------------------------------------------------
+-- The launcher loads only once and then stays in memory: opening and closing
+-- it shows and hides it, without re-reading files or recomputing anything.
+-- From the command line or a shortcut:
 --   Rainmeter.exe !CommandMeasure MeasureScript "Toggle()" "Raintile"
 
 local function hideSplash()
@@ -1086,14 +1257,15 @@ function Show()
 	dbg('Show: visible=' .. tostring(visible))
 	if not ready or visible then return end
 	visible = true
-	-- riparte pulito: niente hover, zoom o avvio rimasti dalla volta prima
+	-- start clean: no hover, zoom or launch left over from last time
 	launching = nil
+	typing = false
 	hideSplash()
 	hover.on, hover.a = false, 0
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	if V.AnimOpen then appear = 0 end
-	frame() -- primo fotogramma disegnato prima di mostrare la finestra
+	frame() -- first frame drawn before showing the window
 	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
 	SKIN:Bang('!Show')
 	hotKey(true)
@@ -1105,7 +1277,8 @@ function Hide()
 	if not ready or not visible then return end
 	visible = false
 	stopTicker()
-	pos = offset -- uno scorrimento a meta' riparte gia' concluso
+	leaveSearch() -- next time it opens on the category
+	pos = offset -- a half-done scroll restarts already finished
 	saveScroll()
 	if launching then
 		SKIN:Bang('!CommandMeasure', 'MeasureLaunchAnim', 'Stop 1')
@@ -1120,8 +1293,8 @@ function Toggle()
 end
 
 local function close()
-	-- l'azione di default richiama Hide() di questo stesso script: la si
-	-- chiama direttamente invece di passare da Rainmeter
+	-- the default action calls this same script's Hide(): call it directly
+	-- instead of going through Rainmeter
 	if V.CloseAction:match('MeasureScript%s+"Hide%(%)"') then
 		Hide()
 	else
@@ -1129,9 +1302,9 @@ local function close()
 	end
 end
 
--- Funzioni chiamate con !CommandMeasure ---------------------------------------
+-- Functions called with !CommandMeasure -------------------------------------
 
--- Riceve l'elenco dei file in Categories\ (dal plugin RunCommand).
+-- Receives the list of files in Categories\ (from the RunCommand plugin).
 function OnCategoryList()
 	local files = {}
 	local output = SKIN:GetMeasure('MeasureCategoryList'):GetStringValue()
@@ -1147,7 +1320,29 @@ function OnCategoryList()
 	end
 end
 
--- Crea in background le miniature mancanti (chiamata da OnRefreshAction).
+-- Automatic background import on every load (ImportOnStart=1). If it finds
+-- something new the skin refreshes and the import runs again, but the second
+-- time nothing changes and so nothing refreshes: no loops.
+function AutoImport()
+	if not ready or not V.ImportOnStart then return end
+	SKIN:Bang('!CommandMeasure', 'MeasureImport', 'Run')
+end
+
+-- End of Import.ps1: logs the result and refreshes if something changed.
+function OnImport()
+	local output = SKIN:GetMeasure('MeasureImport'):GetStringValue()
+	local changed = false
+	for line in output:gmatch('[^\r\n]+') do
+		if line:match('^RESULT:CHANGED') then
+			changed = true
+		elseif not line:match('^RESULT:') then
+			print('Raintile: import: ' .. line)
+		end
+	end
+	if changed then SKIN:Bang('!Refresh') end
+end
+
+-- Creates the missing thumbnails in the background (called by OnRefreshAction).
 function BuildThumbnails()
 	if not ready or #pending == 0 then return end
 	local f = io.open(resources .. 'Generated\\Thumbs.txt', 'w')
@@ -1157,12 +1352,19 @@ function BuildThumbnails()
 	SKIN:Bang('!CommandMeasure', 'MeasureThumbs', 'Run')
 end
 
--- Fine di Thumbs.ps1: passa alle miniature appena create.
+-- End of Thumbs.ps1: switch to the thumbnails just created.
 function OnThumbnails()
 	if not ready then return end
 	local changed = false
+	readLogoColors()
 	for _, p in ipairs(pending) do
-		if fileExists(p.dst) then
+		if p.field == 'color' then
+			local color = logoColors[p.key]
+			if color and color ~= '' then
+				p.tile.color = color
+				changed = true
+			end
+		elseif fileExists(p.dst) then
 			p.tile[p.field] = p.dst
 			if p.field == 'background' then p.tile.bgSize = nil end
 			changed = true
@@ -1175,17 +1377,17 @@ function OnThumbnails()
 	end
 end
 
--- Evidenziazione della tile sotto il mouse: un solo riquadro, gestito dallo
--- script. Gli eventi ripetuti per la stessa tile non costano nulla; con
--- AnimHover scivola da una tile all'altra e compare/sparisce in dissolvenza.
--- Con AnimLogoZoom il logo della tile sotto il mouse si ingrandisce.
--- Porta l'evidenziazione (mouse o tastiera) sulla tile t, indice idx, alle
--- coordinate di griglia tx, ty.
+-- Highlight of the tile under the mouse: a single box, handled by the script.
+-- Repeated events for the same tile cost nothing; with AnimHover it slides
+-- from one tile to the next and fades in/out. With AnimLogoZoom the logo of
+-- the tile under the mouse grows.
+-- Moves the highlight (mouse or keyboard) to tile t, index idx, at grid
+-- coordinates tx, ty.
 local function focus(t, idx, tx, ty)
 	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty then return end
 	hover.tx, hover.ty = tx, ty
 	if hover.a < 0.05 or not V.AnimHover then
-		-- era spenta: compare direttamente sulla nuova tile
+		-- it was off: appear directly on the new tile
 		hover.gx, hover.gy = hover.tx, hover.ty
 	end
 	hover.idx, hover.on = idx, true
@@ -1219,7 +1421,7 @@ function LeaveTile(slot)
 	if animate then startTicker() else frame() end
 end
 
--- Ricentra il menu (chiamata anche da OnRefreshAction, a skin gia' disegnata).
+-- Re-centres the menu (also called by OnRefreshAction, once the skin is drawn).
 function Layout()
 	if not ready then return end
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
@@ -1231,9 +1433,15 @@ end
 
 function SetCategory(i)
 	if not ready or launching or i < 1 or i > #cats then return end
+	if leaveSearch() and i == active then
+		-- click on the category the search started from: go back there
+		if V.AnimCategory then appear = 0 startTicker() end
+		render(true)
+		return
+	end
 	if i == active then
-		-- clic sulla categoria gia' aperta: torna all'inizio (con lo scroll
-		-- infinito, all'inizio del giro piu' vicino)
+		-- click on the category already open: back to the start (with infinite
+		-- scroll, to the nearest start of the loop)
 		local target = 0
 		if infinite() then
 			local L, o = lineCount(), offset % lineCount()
@@ -1284,14 +1492,14 @@ function Scroll(delta)
 	end
 end
 
--- Animazione di avvio ----------------------------------------------------------
--- La tile cliccata si espande fino a riempire lo schermo (LaunchAnimFrames
--- passi da 16 ms, scanditi dal plugin ActionTimer), resta visibile per
--- LaunchHold ms e poi il launcher si chiude.
+-- Launch animation -----------------------------------------------------------
+-- The clicked tile expands to fill the screen (LaunchAnimFrames steps of 16 ms,
+-- paced by the ActionTimer plugin), stays visible for LaunchHold ms and then
+-- the launcher closes.
 
 local function drawSplash(p)
 	local a = launching
-	local e = 1 - (1 - p) ^ 3 -- ease-out cubica
+	local e = 1 - (1 - p) ^ 3 -- cubic ease-out
 	local function lerp(from, to) return math.floor(from + (to - from) * e + 0.5) end
 	local x, y = lerp(a.x, 0), lerp(a.y, 0)
 	local w, h = lerp(V.TileW, V.ScreenW), lerp(V.TileH, V.ScreenH)
@@ -1315,14 +1523,14 @@ local function drawSplash(p)
 	SKIN:Bang('!Redraw')
 end
 
--- Avvia la tile t; x, y = sua posizione (in pixel) nella griglia, da cui
--- parte l'espansione.
+-- Launches tile t; x, y = its position (in pixels) in the grid, where the
+-- expansion starts.
 local function launchTile(t, x, y)
 	if not t or not t.command then
-		dbg('avvio ignorato: tile senza Command')
+		dbg('launch ignored: tile without Command')
 		return
 	end
-	dbg('avvio: ' .. t.command)
+	dbg('launch: ' .. t.command)
 
 	SKIN:Bang(t.command)
 	if not V.LaunchAnimation then
@@ -1356,31 +1564,31 @@ function Launch(slot)
 	launchTile(tileAt(slot), x, y)
 end
 
--- Tastiera -------------------------------------------------------------------
--- WASD/frecce spostano l'evidenziazione (la stessa del mouse), Spazio/Invio
--- avviano la tile evidenziata, Q/E cambiano categoria. I tasti sono registrati
--- dalla mini-skin Raintile\Navigation, attiva solo a launcher visibile.
+-- Keyboard -------------------------------------------------------------------
+-- WASD/arrows move the highlight (the same one as the mouse), Space/Enter
+-- launch the highlighted tile, Q/E switch category. The keys are registered by
+-- the Raintile\Navigation mini-skin, only active while the launcher is visible.
 
--- Sposta l'evidenziazione di dx colonne e dy righe, scorrendo la griglia
--- quanto basta perche' resti visibile.
+-- Moves the highlight by dx columns and dy rows, scrolling the grid just
+-- enough to keep it visible.
 function Nav(dx, dy)
 	if not ready or launching or not visible then return end
-	local tiles = cats[active].tiles
+	local tiles = cur().tiles
 	if #tiles == 0 then return end
 	local L, per, vis = lineCount(), (V.Horizontal and V.NY or V.NX), visibleLines()
 
-	-- line = riga (o colonna, in orizzontale) nel senso dello scorrimento
+	-- line = row (or column, when horizontal) along the scroll direction
 	local line, cross
 	if hover.idx ~= 0 then
 		line = (V.Horizontal and hover.tx or hover.ty) + (V.Horizontal and dx or dy)
 		cross = (V.Horizontal and hover.ty or hover.tx) + (V.Horizontal and dy or dx)
 	else
-		-- nessuna tile evidenziata: parte dalla prima visibile
+		-- no highlighted tile: start from the first visible one
 		line, cross = offset, 0
 	end
 	cross = math.min(math.max(0, cross), per - 1)
 	if not infinite() then line = math.min(math.max(0, line), L - 1) end
-	-- ultima riga incompleta: si ferma sull'ultima tile presente
+	-- incomplete last row: stop on the last existing tile
 	local wrapped = line % L
 	cross = math.min(cross, #tiles - wrapped * per - 1)
 
@@ -1401,7 +1609,7 @@ function Nav(dx, dy)
 	end
 end
 
--- Avvia la tile evidenziata (o, se non ce n'e' una, evidenzia la prima).
+-- Launches the highlighted tile (or, if there is none, highlights the first).
 function Confirm()
 	dbg(string.format('Confirm: ready=%s launching=%s visible=%s hover=%d on=%s', tostring(ready),
 		tostring(launching ~= nil), tostring(visible), hover.idx, tostring(hover.on)))
@@ -1411,13 +1619,144 @@ function Confirm()
 		return
 	end
 	local x, y = gridToPx(hover.tx, hover.ty)
-	launchTile(cats[active].tiles[hover.idx], x, y)
+	launchTile(cur().tiles[hover.idx], x, y)
 end
 
--- Categoria precedente (-1) o successiva (+1), ricominciando dal fondo.
+-- Previous (-1) or next (+1) category, wrapping around.
 function NextCategory(delta)
 	if not ready or launching or not visible then return end
 	SetCategory((active - 1 + delta) % #cats + 1)
+end
+
+-- Search -----------------------------------------------------------------------
+-- The bar at the top left (or the NavSearch key) opens a text field (InputText
+-- plugin). On Enter the grid shows the tiles of every category that contain
+-- all the searched words (tile name, label or category); Esc, a click on a
+-- category or an empty search go back to the category. While typing, the
+-- navigation and Esc keys are off, and they come back shortly after
+-- (MeasureKeysDelay) so the Enter release is not picked up.
+
+local function updateSearchBar()
+	set('SearchText', 'Text', query ~= '' and query or V.SearchPlaceholder)
+	set('SearchText', 'FontColor', query ~= '' and V.TextColor or V.TextDimColor)
+	set('SearchPill', 'Shape', string.format(
+		'Rectangle 0,0,%d,%d,%d | Fill Color %s | StrokeWidth 0', V.SearchW, V.MenuH,
+		math.min(V.MenuRadius, math.floor(V.MenuH / 2)),
+		searchCat and V.ActiveCategoryColor or V.HoverCategoryColor))
+end
+
+-- Goes back from the search to the active category (without redrawing).
+leaveSearch = function()
+	if not searchCat then return false end
+	searchCat, query = nil, ''
+	applyGeometry(cats[active])
+	offset = normalizeOffset(cats[active].offset)
+	pos, base = offset, -1
+	hover.idx, hover.on, hover.a = 0, false, 0
+	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
+	zooming = {}
+	updateSearchBar()
+	show('SearchEmpty', false)
+	return true
+end
+
+local function runSearch(text)
+	local words = {}
+	for w in trim(text or ''):lower():gmatch('%S+') do words[#words + 1] = w end
+	if #words == 0 then
+		if leaveSearch() then
+			if V.AnimCategory then appear = 0 startTicker() end
+			render(true)
+		end
+		return
+	end
+
+	local results = {}
+	for _, c in ipairs(cats) do
+		for _, t in ipairs(c.tiles) do
+			local hay = (t.name .. ' ' .. (t.label or '') .. ' ' .. t.catLabel):lower()
+			local ok = true
+			for _, w in ipairs(words) do
+				if not hay:find(w, 1, true) then ok = false break end
+			end
+			if ok then results[#results + 1] = t end
+		end
+	end
+	-- names starting with the first word first, then alphabetically
+	local first = words[1]
+	table.sort(results, function(a, b)
+		local na, nb = a.name:lower(), b.name:lower()
+		local pa, pb = na:sub(1, #first) == first, nb:sub(1, #first) == first
+		if pa ~= pb then return pa end
+		return na < nb
+	end)
+
+	saveScroll() -- remember the position of the category being left
+	query = trim(text)
+	searchCat = { name = '', label = '', tiles = results }
+	categoryGeometry(searchCat)
+	applyGeometry(searchCat)
+	offset, pos, base = 0, 0, -1
+	hover.idx, hover.on, hover.a = 0, false, 0
+	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
+	zooming = {}
+	updateSearchBar()
+	show('SearchEmpty', #results == 0)
+	if V.AnimCategory then
+		appear = 0
+		startTicker()
+	end
+	render(true)
+	-- the first result is already highlighted: Enter/Space launches it
+	if #results > 0 then Nav(0, 0) end
+end
+
+function SearchOpen()
+	if not ready or launching or not visible then return end
+	typing = true
+	hotKey(false) -- the keys are needed by the text field
+	SKIN:Bang('!SetOption', 'MeasureSearchInput', 'DefaultValue', query)
+	SKIN:Bang('!UpdateMeasure', 'MeasureSearchInput')
+	SKIN:Bang('!CommandMeasure', 'MeasureSearchInput', 'ExecuteBatch 1')
+end
+
+function SearchSubmit(text)
+	dbg('search: ' .. tostring(text))
+	if ready and visible then runSearch(text) end
+	SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1')
+end
+
+function SearchDismiss()
+	SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1')
+end
+
+-- Turns the keys back on after the search (called by MeasureKeysDelay).
+function KeysReady()
+	typing = false
+	if ready and visible then hotKey(true) end
+end
+
+-- The launcher lost focus (from Helper.ps1, AutoHide=1). Ignored during the
+-- launch animation: the game window, or its launcher's, popping up must not
+-- interrupt it. Also ignored around the search: when the text field closes,
+-- Windows hands the foreground back to the program that had it before.
+function FocusLost()
+	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil)
+		.. ' typing=' .. tostring(typing))
+	if not ready or not visible or launching or typing then return end
+	Hide()
+end
+
+-- Esc: closes the search if open, otherwise hides the launcher.
+function Escape()
+	if not ready then return end
+	if searchCat and not launching then
+		leaveSearch()
+		if V.AnimCategory then appear = 0 startTicker() end
+		render(true)
+	else
+		Hide()
+	end
 end
 
 function LaunchStep()
@@ -1427,7 +1766,7 @@ function LaunchStep()
 end
 
 function LaunchFinish()
-	dbg('fine animazione di avvio: launching=' .. tostring(launching ~= nil) .. ' visible=' .. tostring(visible))
+	dbg('end of launch animation: launching=' .. tostring(launching ~= nil) .. ' visible=' .. tostring(visible))
 	if not launching then return end
 	launching = nil
 	if V.CloseOnLaunch then

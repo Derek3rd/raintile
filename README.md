@@ -1,179 +1,50 @@
 # Raintile
 
-Skin per [Rainmeter](https://www.rainmeter.net/) che sostituisce le icone del desktop con un launcher a tile **a schermo intero**:
+**Raintile** is a full-screen tile launcher for [Rainmeter](https://www.rainmeter.net/), meant to replace the icons on your Windows desktop.
 
-- un menu centrato in alto con le **categorie** (Giochi, App, Link, Sistema, ...), mostrate come icona, testo o entrambi
-- una griglia di **NX × NY tile** visibili che si ridimensionano da sole per riempire lo schermo, con scorrimento **verticale o orizzontale** tramite la rotellina
-- ogni tile ha **sfondo**, **icona**, **etichetta** e **comando**
+Your games, apps, links and system tools become large tiles with background art and logos, organised in categories you switch between from a menu at the top. Open it with a shortcut, pick a tile with the mouse, the keyboard or a gamepad, and it gets out of the way.
 
-## Installazione
+## Features
 
-1. Clona o copia questa cartella in `Documenti\Rainmeter\Skins\Raintile`
-2. In Rainmeter: *Aggiorna tutto*, poi carica `Raintile\Raintile.ini`
-3. La skin si posiziona da sola nell'angolo in alto a sinistra e copre lo schermo (`ScreenX/Y/W/H` in `Settings.inc`; usa `WORKAREA` invece di `SCREENAREA` per lasciare libera la barra delle applicazioni)
-4. Consigliato: tasto destro sulla skin > *Impostazioni* > *Posizione* > *Sul desktop*, così resta sotto le finestre come le icone
+- **Categories** in a centred menu at the top (icon, text or both), each with its own grid size.
+- **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs.
+- **Import games** from Steam, Epic Games, GOG Galaxy and Ubisoft Connect, with background and logo (from the local Steam cache or [SteamGridDB](https://www.steamgriddb.com/)).
+- **Search** across all categories.
+- **Mouse, keyboard and gamepad**: WASD/arrows, Space/Enter, Xbox-compatible controllers (open the launcher with Back + Start).
+- **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.
+- **Lightweight**: no update cycle (0% CPU at rest), a fixed number of meters however many tiles you have, thumbnails at the exact displayed size, loaded once and then just shown/hidden.
+- **Options window** to edit settings and categories without touching files (*work in progress*).
 
-## Aprire e chiudere
+## Requirements
 
-Il launcher si carica **una volta sola** (all'avvio di Rainmeter o con *Aggiorna skin*) e poi resta in memoria: aprirlo e chiuderlo lo **mostra e nasconde**, senza rileggere file né ricalcolare nulla.
+- Windows 10 or 11
+- [Rainmeter](https://www.rainmeter.net/) **4.5** or later
+- The **HotKey** plugin, for the open shortcut, Esc and keyboard navigation ([HotKey.dll](https://github.com/brianferguson/HotKey.dll))
+- Windows PowerShell 5.1 (included in Windows), used for thumbnails, game import, the gamepad helper and the Options window
 
-- **Aprire/chiudere con `Ctrl+Alt+G`** (plugin HotKey): la combinazione si cambia con `OpenHotKey` in `Settings.inc` (tasti separati da spazio, es. `CTRL ALT G`, `CTRL SHIFT F1`).
-- **In alternativa, senza plugin**: crea un collegamento (desktop o menu Start) con destinazione
+## Installation
 
-  ```
-  "C:\Program Files\Rainmeter\Rainmeter.exe" !CommandMeasure MeasureScript "Toggle()" "Raintile"
-  ```
+> A ready-to-install `.rmskin` package is coming soon. Until then, install it manually:
 
-  poi *Proprietà* > *Tasto di scelta rapida* (es. `Ctrl+Alt+Spazio`). Lo stesso tasto apre e chiude.
-- **Chiudere**: la X in alto a destra, **Esc**, oppure in automatico dopo aver avviato una tile (`CloseOnLaunch=1`).
-- **Esc** (plugin HotKey, tasto in `CloseHotKey`) è registrato da una mini-skin invisibile, `Raintile\Hotkey`, che il launcher attiva quando si mostra e disattiva quando si nasconde: a launcher chiuso Esc torna alle altre applicazioni. Non va caricata a mano.
-- `StartHidden=1`: all'avvio di Rainmeter il launcher resta nascosto fino alla scorciatoia.
-- `ShowZPos=1`: quando si mostra va sopra le altre finestre (`-2` = sul desktop).
-- `CloseAction=[!DeactivateConfig]` torna al vecchio comportamento (scarica la skin a ogni chiusura).
+1. Download or clone this repository into your Rainmeter skins folder, so that `Raintile.ini` ends up in:
 
-## Tastiera
+   ```
+   Documents\Rainmeter\Skins\Raintile\Raintile.ini
+   ```
 
-| Tasti | Azione |
-| --- | --- |
-| `W` `A` `S` `D` / frecce | spostano l'evidenziazione tra le tile (la griglia scorre quando serve, anche con lo scroll infinito) |
-| `Spazio` / `Invio` | avviano la tile evidenziata (la prima pressione, se nulla è evidenziato, evidenzia la prima tile visibile) |
-| `Q` / `E` | categoria precedente / successiva |
-| `Esc` | chiude il launcher |
+2. Install the HotKey plugin if you don't have it yet.
+3. In Rainmeter: **Manage** > **Refresh all**, then load `Raintile\Raintile.ini`.
+4. Press **Ctrl+Alt+G** to show or hide the launcher.
 
-Mouse e tastiera muovono la stessa evidenziazione. I tasti sono registrati (plugin HotKey) dalla mini-skin invisibile `Raintile\Navigation`, attiva **solo mentre il launcher è visibile**: a launcher chiuso WASD e frecce tornano alle altre applicazioni. Si cambiano in `Settings.inc` (`NavUp`, `NavUp2`, ...); `KeyboardNav=0` disattiva tutto.
+The launcher places itself at the top-left corner and covers the screen. Do not load the `Raintile\Hotkey` and `Raintile\Navigation` skins by hand: the launcher turns them on and off by itself.
 
-## Avvio di una tile
+## Quick start
 
-Al click la tile si espande fino a riempire lo schermo (con sfondo e logo a piena risoluzione), resta visibile per `LaunchHold` ms e poi il launcher si chiude. Il comando parte subito, all'inizio dell'animazione. Impostazioni in `Settings.inc`:
+- **Add tiles**: right click on the launcher > **Options...**, or edit the files in `@Resources\Categories\` (one file per category).
+- **Import your games**: right click > **Import games from stores**.
+- **Images**: put them in `@Resources\Images\<category>\background\<TileName>.jpg` and `...\logo\<TileName>.png`; they are picked up automatically.
+- **Settings**: right click > **Options...**, or edit `@Resources\Settings.inc`.
 
-| Variabile | Default | Effetto |
-| --- | --- | --- |
-| `LaunchAnimation` | `1` | `0` = nessuna animazione, chiusura immediata |
-| `LaunchAnimFrames` | `15` | passi dell'espansione da 16 ms (15 ≈ 250 ms) |
-| `LaunchHold` | `1500` | ms a schermo intero prima di chiudere |
-| `LaunchLogoSize` | 1/3 dell'altezza | dimensione finale del logo |
+## Documentation
 
-L'animazione usa il plugin ActionTimer (incluso in Rainmeter) e gira solo durante l'avvio: a riposo la skin resta senza aggiornamenti.
-
-## Animazioni
-
-Tutte disattivabili in `Settings.inc` e attive solo mentre qualcosa si muove (un solo "orologio" ActionTimer che lo script ferma appena tutto è fermo):
-
-| Variabile | Animazione |
-| --- | --- |
-| `AnimOpen` | all'apertura le tile compaiono una dopo l'altra, salendo in dissolvenza |
-| `AnimCategory` | al cambio categoria le tile ricompaiono e la pillola del menu scivola sulla nuova voce |
-| `AnimHover` | il riquadro di evidenziazione scivola da una tile all'altra e compare/sparisce in dissolvenza |
-| `AnimScroll` | scorrimento fluido con la rotellina |
-| `LogoGreyscale` | i loghi sono in bianco e nero e si colorano gradualmente con il mouse sopra |
-| `AnimLogoZoom` | il logo della tile sotto il mouse si ingrandisce (`HoverLogoScale`, default 1.25); quello appena lasciato torna alla misura normale |
-
-### Scorrimento
-
-- `InfiniteScroll=1` (default): dopo l'ultima riga ricomincia la prima, in entrambe le direzioni. Vale solo per le categorie con più tile di quante ne stanno sullo schermo; con `0` lo scorrimento si ferma alla fine.
-- Ogni categoria **ricorda fin dove l'avevi scorsa**: cambiando categoria e tornando indietro ritrovi la stessa posizione, anche dopo aver nascosto il launcher o aggiornato la skin (salvata in `State.inc`).
-- Un clic sulla categoria già aperta torna all'inizio.
-
-### Stile degli sfondi
-
-Con `BgStyle` la tile può fare da "finestra" su un'immagine più grande (`BgOverscan`, default 1.15) invece di ritagliarla:
-
-| `BgStyle` | Effetto |
-| --- | --- |
-| `Crop` | ritaglio fisso al centro dell'immagine |
-| `Pan` (default) | con il mouse sopra la tile scivola lentamente sull'immagine (`BgPanFrames`, 180 ≈ 3 s), poi torna al centro |
-| `Parallax` | scorrendo la griglia l'immagine si muove più lenta della tile |
-| `Zoom` | con il mouse sopra lo sfondo si ingrandisce leggermente (`BgHoverZoom`) |
-
-Le miniature degli sfondi vengono create già con il margine necessario, quindi restano nitide; cambiando stile vengono rifatte da sole.
-
-Regolazioni: `AnimAppearFrames` (durata della comparsa di ogni tile, passi da 16 ms), `AnimStagger` (ritardo tra una tile e la successiva), `AnimSlide` (pixel di salita), morbidezza di ogni animazione (0.05 molto morbida, 1 istantanea): `AnimScrollSmooth` (scorrimento), `AnimHoverSmooth` (riquadro di evidenziazione), `AnimPillSmooth` (pillola del menu), `AnimLogoSmooth` (zoom e colore del logo, Zoom dello sfondo); `AnimSmooth` è il valore di base per quelle lasciate vuote.
-
-Lo scorrimento fluido usa una riga (o colonna) di tile in più e l'opzione `Container` per tagliarle ai bordi della griglia: serve **Rainmeter 4.5 o successivo**.
-
-## Configurazione
-
-| Dove | Cosa |
-| --- | --- |
-| `@Resources\Settings.inc` | schermo, griglia di default (`NX`, `NY`, `ScrollDir`), menu (`MenuMode`), chiusura, colori, font |
-| `@Resources\Categories\*.ini` | **un file per categoria**: voce del menu e tile |
-| `@Resources\Images\<categoria>\` | immagini della categoria |
-
-Le categorie sono i file presenti in `Categories\`: per aggiungerne una basta creare un nuovo `.ini` (es. `Emulatori.ini`) e aggiornare la skin.
-
-### File di categoria
-
-```ini
-[Category]
-Name=Giochi        ; testo nel menu (default: nome del file)
-Icon=              ; default: Images\Games\icon.png
-Order=1            ; posizione nel menu (default: ordine alfabetico)
-NX=4               ; griglia della categoria (default: NX/NY di Settings.inc)
-NY=1
-IconSize=160       ; lato del logo nelle tile (default: IconSize di Settings.inc)
-
-[Diablo]
-Command=steam://rungameid/2344520
-```
-
-Ogni categoria può avere la sua griglia: per esempio Giochi `NX=4` `NY=1` (tile grandi) e App `NX=5` `NY=2`. Le tile si ridimensionano per riempire lo schermo; la skin crea gli slot che servono alla griglia più grande e nelle altre categorie quelli in più restano nascosti.
-
-Ogni sezione diversa da `[Category]` è una tile, nell'ordine del file.
-
-### Immagini
-
-Per la categoria `Games.ini` la struttura è:
-
-```
-Images\Games\
-  icon.png                 icona nel menu
-  background\Diablo.jpg    sfondo della tile [Diablo]
-  logo\Diablo.png          logo centrato della tile [Diablo]
-```
-
-Di default ogni tile cerca le immagini col **proprio nome** (estensioni `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`). Per usare nomi diversi:
-
-| Chiave | Effetto |
-| --- | --- |
-| `Image=diablo4` | altro nome per entrambe: `background\diablo4.*` e `logo\diablo4.*` |
-| `Background=d4_key_art` | sfondo specifico (estensione facoltativa, anche percorso assoluto) |
-| `Logo=d4_logo.png` | logo specifico |
-
-Le altre chiavi della tile sono `Command`, `Label` (testo in basso; una tile senza immagini mostra il proprio nome) e `Color` (colore di fondo senza sfondo).
-
-`Command` accetta un programma (con argomenti), un collegamento `.lnk`/`.url`, un URL o protocollo (`steam://`, `https://`, `ms-settings:`), una cartella, oppure bang di Rainmeter tra parentesi quadre.
-
-Dopo aver salvato: tasto destro > *Aggiorna skin*.
-
-## Come funziona (e perché è leggera)
-
-- **Nessun ciclo di aggiornamento** (`Update=-1`): la skin non fa nulla finché non clicchi, scorri o passi col mouse. A riposo usa 0% di CPU.
-- **Numero fisso di meter**: esistono solo gli NX × NY slot visibili, a prescindere da quante tile hai. Scorrere o cambiare categoria cambia soltanto le opzioni degli slot esistenti.
-- **Solo le differenze**: lo script ricorda l'ultimo valore impostato su ogni meter e manda a Rainmeter solo quello che è cambiato.
-- **I file di categoria vengono letti una volta**, al caricamento. L'elenco dei file è memorizzato, così la skin si disegna subito; la cartella viene ricontrollata in background (plugin RunCommand, incluso in Rainmeter) e, se è cambiata, la skin si ricarica da sola.
-- **Griglia generata**: i meter di menu e slot stanno in `@Resources\Generated\Grid.inc`, scritto da `Raintile.lua`. Se `NX`, `NY`, `MenuMode` o le categorie cambiano, lo script lo riscrive e ricarica la skin. Non va modificato a mano.
-- **Dimensioni calcolate una volta**: la misura delle tile è una formula su `ScreenW`/`ScreenH` risolta al caricamento; il menu viene misurato e centrato una sola volta dopo il primo disegno.
-- **Ridisegni ridotti al minimo**: ogni ridisegno di una skin a schermo intero costa, quindi l'evidenziazione della tile sotto il mouse è un solo riquadro gestito dallo script, che ridisegna solo quando cambia davvero tile (`TileHover=0` la disattiva). Scorrendo si aggiornano solo le tile, non il menu. La dissolvenza di apertura e chiusura è disattivata (`FadeDuration=0`, che la skin copia nelle sue impostazioni in `Rainmeter.ini`: vale dal caricamento successivo).
-- **Miniature automatiche** (`Thumbnails=1`): Rainmeter decodifica ogni immagine a piena risoluzione quando una tile la mostra e la ridimensiona a ogni disegno. Per questo la skin crea in background (`Scripts\Thumbs.ps1`, PowerShell a bassa priorità) una copia di sfondi e loghi alla misura esatta in cui vengono mostrati, in `Generated\Thumbs\`, e carica quelle. Al primo avvio dopo aver aggiunto immagini si vedono gli originali per qualche secondo, poi la skin passa alle miniature da sola. Se cambi un'immagine, la risoluzione o `NX`/`NY`, le miniature vengono rifatte; quelle non più usate vengono cancellate.
-
-## Struttura
-
-```
-Raintile.ini                 skin principale (stili, sfondo, scrollbar)
-Hotkey/Hotkey.ini            mini-skin del tasto Esc (attivata dal launcher)
-Navigation/Navigation.ini    mini-skin dei tasti di navigazione (attivata dal launcher)
-@Resources/
-  Settings.inc               impostazioni
-  Categories/*.ini           un file per categoria (voce di menu + tile)
-  State.inc                  ultima categoria aperta (scritto dalla skin)
-  Scripts/Raintile.lua       logica: lettura tile, rendering, scroll, avvio
-  Scripts/Thumbs.ps1         creazione delle miniature
-  Generated/Grid.inc         meter generati automaticamente
-  Generated/Thumbs/          miniature (si possono cancellare: vengono rifatte)
-  Images/<categoria>/        icon.png, background/, logo/
-```
-
-## Limiti noti
-
-- Rainmeter non estrae le icone dagli `.exe`: l'icona va fornita come immagine.
-- Usa nomi di categorie ed etichette senza lettere accentate: lo script legge i file di categoria come UTF-8 e Rainmeter potrebbe mostrarle in modo errato.
+Everything else — every setting, category and tile files, import, keyboard and gamepad controls, search, animations, how it works and troubleshooting — is in the **[Guide](docs/Guide.md)**.

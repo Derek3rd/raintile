@@ -1,69 +1,71 @@
 [Variables]
-; --- Schermo -------------------------------------------------------------------
-; Il launcher occupa tutto lo schermo. Per lasciare libera la barra delle
-; applicazioni usa WORKAREA al posto di SCREENAREA; per un altro monitor
-; aggiungi @N (es. #SCREENAREAWIDTH@2#).
+; --- Screen ---------------------------------------------------------------------
+; The launcher covers the whole screen. To keep the taskbar free use WORKAREA
+; instead of SCREENAREA; for another monitor add @N (e.g. #SCREENAREAWIDTH@2#).
 ScreenX=#SCREENAREAX#
 ScreenY=#SCREENAREAY#
 ScreenW=#SCREENAREAWIDTH#
 ScreenH=#SCREENAREAHEIGHT#
 
-; --- Griglia -----------------------------------------------------------------
-; Tile visibili di default: NX colonne x NY righe. Ogni categoria puo' avere
-; la sua griglia (NX=, NY= nella sezione [Category] del suo file). Le tile si
-; ridimensionano da sole per riempire lo schermo.
+; --- Grid -----------------------------------------------------------------------
+; Default visible tiles: NX columns x NY rows. Each category can have its own
+; grid (NX=, NY= in the [Category] section of its file). Tiles resize
+; themselves to fill the screen.
 NX=4
 NY=2
-; Direzione di scorrimento: V (verticale, per righe) oppure H (orizzontale, per colonne)
+; Scroll direction: V (vertical, by rows) or H (horizontal, by columns)
 ScrollDir=V
-; Righe/colonne fatte scorrere per ogni scatto della rotellina
+; Rows/columns scrolled per mouse wheel notch
 ScrollStep=1
-; 1 = scroll infinito: dopo l'ultima riga ricomincia la prima (solo nelle
-; categorie con piu' tile di quante ne stanno sullo schermo); 0 = si ferma
+; 1 = infinite scroll: after the last row the first comes back (only in
+; categories with more tiles than fit on screen); 0 = stop at the end
 InfiniteScroll=1
 
-; --- Spaziature (pixel) --------------------------------------------------------
+; --- Spacing --------------------------------------------------------------------
+; Sizes are written in pixels (e.g. 40) or as a percentage of the screen
+; (e.g. 2%): of the width for PadX, SearchW, MenuItemPad, MenuGap and
+; MenuIconGap, of the height for all the others.
 Gap=18
-; Margini esterni: PadX ospita la scrollbar verticale, PadY quella orizzontale.
+; Outer margins: PadX holds the vertical scrollbar, PadY the horizontal one.
 PadX=40
 PadY=24
-; Lato del riquadro del logo nelle tile (per categoria: IconSize= in [Category])
+; Side of the logo box in the tiles (per category: IconSize= in [Category])
 IconSize=96
 LabelPad=14
 ScrollBarSize=4
 
-; --- Menu categorie --------------------------------------------------------------
-; MenuMode: IconText (icona + testo), Icon (solo icona), Text (solo testo).
-; Una categoria senza icona mostra comunque il testo.
+; --- Category menu --------------------------------------------------------------
+; MenuMode: IconText (icon + text), Icon (icon only), Text (text only).
+; A category without an icon always shows its text.
 MenuMode=IconText
 MenuH=44
 MenuIconSize=24
-; Spazio tra icona e testo di una voce
+; Space between the icon and the text of an entry
 MenuIconGap=8
-; Margine interno della "pillola" di ogni voce e spazio tra le voci
+; Inner padding of each entry's "pill" and space between entries
 MenuItemPad=16
 MenuGap=6
 MenuRadius=22
-; Trasparenza delle icone delle categorie non attive (0-255)
+; Opacity of the icons of inactive categories (0-255)
 MenuIconDimAlpha=150
 
-; --- Apertura e chiusura -------------------------------------------------------
-; Il launcher si carica una volta (all'avvio di Rainmeter) e poi viene solo
-; mostrato e nascosto. Per aprirlo/chiuderlo da una scorciatoia:
+; --- Open and close -------------------------------------------------------------
+; The launcher loads once (when Rainmeter starts) and is then only shown and
+; hidden. To open/close it from a shortcut:
 ;   Rainmeter.exe !CommandMeasure MeasureScript "Toggle()" "Raintile"
-; Combinazione di tasti che apre e chiude il launcher (plugin HotKey): tasti
-; separati da spazio, es. CTRL ALT G, WIN SPACE, CTRL SHIFT F1
+; Key combination that opens and closes the launcher (HotKey plugin): keys
+; separated by spaces, e.g. CTRL ALT G, WIN SPACE, CTRL SHIFT F1
 OpenHotKey=CTRL ALT G
-; Azione della X in alto a destra (default: nasconde il launcher).
-; Con [!DeactivateConfig] invece lo scarica dalla memoria.
+; Action of the X at the top right (default: hide the launcher).
+; With [!DeactivateConfig] it unloads it from memory instead.
 CloseAction=[!CommandMeasure MeasureScript "Hide()"]
 CloseSize=14
-; Tasto che chiude il launcher (plugin HotKey), registrato solo mentre il
-; launcher e' visibile. Vuoto = nessun tasto.
+; Key that closes the launcher (HotKey plugin), registered only while the
+; launcher is visible. Empty = no key.
 CloseHotKey=ESCAPE
-; Navigazione da tastiera, attiva solo a launcher visibile (plugin HotKey):
-; 1 = attiva, 0 = disattiva. Ogni azione ha due tasti (nomi del plugin HotKey:
-; lettere, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
+; Keyboard navigation, only active while the launcher is visible (HotKey
+; plugin): 1 = on, 0 = off. Each action has two keys (HotKey plugin names:
+; letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
 KeyboardNav=1
 NavUp=W
 NavUp2=UP
@@ -73,103 +75,147 @@ NavLeft=A
 NavLeft2=LEFT
 NavRight=D
 NavRight2=RIGHT
-; Avvia la tile evidenziata
+; Launch the highlighted tile
 NavConfirm=SPACE
 NavConfirm2=ENTER
-; Categoria precedente / successiva
+; Previous / next category
 NavPrevCategory=Q
 NavNextCategory=E
-; 1 = nasconde il launcher dopo aver avviato una tile, 0 = resta aperto
+; Open the search
+NavSearch=F
+; 1 = hide the launcher after launching a tile, 0 = keep it open
 CloseOnLaunch=1
-; 1 = all'avvio di Rainmeter il launcher resta nascosto fino alla scorciatoia
+; 1 = hide when it loses focus: a click outside its window (e.g. on the second
+; monitor) or another program coming to the foreground
+AutoHide=1
+; 1 = when Rainmeter starts the launcher stays hidden until the shortcut
 StartHidden=0
-; Livello della finestra quando viene mostrato: 1 = sopra le altre finestre,
-; -2 = sul desktop, vuoto = non cambiarlo
+; Window level when it is shown: 1 = above other windows, -2 = on the
+; desktop, empty = leave it as is
 ShowZPos=1
 
-; --- Avvio di una tile ----------------------------------------------------------
-; 1 = al click la tile si espande a schermo intero, resta visibile per
-; LaunchHold ms e poi il launcher si chiude (se CloseOnLaunch=1); 0 = subito
+; --- Tile launch ----------------------------------------------------------------
+; 1 = on click the tile expands to full screen, stays visible for LaunchHold ms
+; and then the launcher closes (if CloseOnLaunch=1); 0 = immediately
 LaunchAnimation=1
-; Passi dell'espansione, 16 ms l'uno (15 = circa 250 ms)
+; Expansion steps, 16 ms each (15 = about 250 ms)
 LaunchAnimFrames=15
 LaunchHold=1500
-; Lato del riquadro del logo a fine espansione
-LaunchLogoSize=(Floor(#ScreenH#/3))
-; Testo al centro per le tile senza logo
+; Side of the logo box at the end of the expansion
+LaunchLogoSize=33%
+; Centre text for tiles without a logo
 LaunchFontSize=48
 
-; --- Animazioni ------------------------------------------------------------------
-; Ognuna si disattiva con 0. Girano solo mentre qualcosa si muove.
-; Apertura: le tile compaiono una dopo l'altra
+; --- Animations -----------------------------------------------------------------
+; Each one is turned off with 0. They only run while something moves.
+; Open: the tiles appear one after another
 AnimOpen=1
-; Cambio categoria: le tile ricompaiono e la pillola del menu scivola
+; Category change: the tiles appear again and the menu pill slides
 AnimCategory=1
-; Hover: il riquadro scivola da una tile all'altra, con dissolvenza
+; Hover: the highlight box slides from tile to tile, with a fade
 AnimHover=1
-; Scorrimento fluido con la rotellina
+; Smooth mouse wheel scrolling
 AnimScroll=1
-; Hover: il logo della tile sotto il mouse si ingrandisce di HoverLogoScale
+; Hover: the logo of the tile under the mouse grows by HoverLogoScale
 AnimLogoZoom=1
 HoverLogoScale=1.25
-; Loghi in bianco e nero, che si colorano con il mouse sopra
+; Greyscale logos that turn to colour under the mouse
 LogoGreyscale=1
-; Comparsa di ogni tile in passi da 16 ms, ritardo tra una tile e la
-; successiva (passi) e salita in pixel
+; Appearance of each tile in 16 ms steps, delay between one tile and the next
+; (steps) and upward slide in pixels
 AnimAppearFrames=12
 AnimStagger=2
 AnimSlide=30
-; Morbidezza delle animazioni: 0.05 = molto morbida e lenta, 1 = istantanea.
-; AnimSmooth e' il valore di base, usato da quelle lasciate vuote.
+; Animation smoothing: 0.05 = very smooth and slow, 1 = instant.
+; AnimSmooth is the base value, used by those left empty.
 AnimSmooth=0.3
-; Scorrimento con la rotellina
+; Mouse wheel scrolling
 AnimScrollSmooth=0.15
-; Riquadro di evidenziazione che scivola tra le tile
+; Highlight box sliding between tiles
 AnimHoverSmooth=0.3
-; Pillola del menu al cambio categoria
+; Menu pill on category change
 AnimPillSmooth=0.25
-; Zoom e colore del logo con il mouse sopra (anche lo Zoom dello sfondo)
+; Logo zoom and colour under the mouse (and the background Zoom)
 AnimLogoSmooth=0.2
-; Le altre animazioni hanno una durata fissa in passi da 16 ms:
-; AnimAppearFrames (comparsa delle tile), BgPanFrames (Pan dello sfondo),
-; LaunchAnimFrames (espansione all'avvio)
+; The other animations have a fixed length in 16 ms steps:
+; AnimAppearFrames (tiles appearing), BgPanFrames (background Pan),
+; LaunchAnimFrames (launch expansion)
 
-; --- Sfondi delle tile ------------------------------------------------------------
-; BgStyle: Crop     = ritaglio fisso al centro dell'immagine
-;          Pan      = con il mouse sopra la tile scivola lentamente sull'immagine
-;          Parallax = scorrendo la griglia l'immagine si muove piu' lenta della tile
-;          Zoom     = con il mouse sopra lo sfondo si ingrandisce leggermente
-BgStyle=Pan
-; Quanto l'immagine e' piu' grande della tile (margine per scivolare)
+; --- Tile backgrounds -----------------------------------------------------------
+; BgStyle: Crop     = fixed crop at the centre of the image
+;          Pan      = under the mouse the tile slowly slides over the image
+;          Parallax = while scrolling the image moves slower than the tile
+;          Zoom     = under the mouse the background slightly grows
+BgStyle=Parallax
+; How much larger the image is than the tile (room to slide)
 BgOverscan=1.15
-; Pan: durata della corsa in passi da 16 ms (180 = circa 3 secondi)
+; Pan: length of the slide in 16 ms steps (180 = about 3 seconds)
 BgPanFrames=180
-; Zoom: ingrandimento dello sfondo con il mouse sopra
+; Zoom: background zoom under the mouse
 BgHoverZoom=1.08
 
-; --- Prestazioni ----------------------------------------------------------------
-; 1 = usa miniature di sfondi e loghi alla misura esatta delle tile (create in
-; background in Generated\Thumbs\ la prima volta), 0 = immagini originali
+; --- Performance ----------------------------------------------------------------
+; 1 = use background and logo thumbnails at the exact tile size (created in
+; the background in Generated\Thumbs\ the first time), 0 = original images
 Thumbnails=1
-; 1 = evidenzia la tile sotto il mouse (un ridisegno a ogni cambio di tile)
+; 1 = highlight the tile under the mouse (one redraw per tile change)
 TileHover=1
-; Durata in ms della dissolvenza all'apertura/chiusura (0 = istantanea).
-; Viene copiata in Rainmeter.ini e vale dal caricamento successivo.
+; Open/close fade duration in ms (0 = instant).
+; It is copied to Rainmeter.ini and applies from the next load.
 FadeDuration=0
 
-; --- Diagnostica -----------------------------------------------------------------
-; 1 = scrive nel log di Rainmeter (Gestisci > Log) cosa succede alla conferma,
-; all'avvio di una tile e a mostra/nascondi, e i tasti visti dal plugin HotKey
+; --- Gamepad (XInput: Xbox and compatible controllers) --------------------------
+; D-pad/left stick = move, A = launch, B = back/close,
+; LB/RB = previous/next category, GamepadToggle = open/close.
+; 1 = on (background helper), 0 = off
+Gamepad=1
+; Buttons to hold together to open/close the launcher
+; (A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT)
+GamepadToggle=BACK START
+; Stick dead zone (0-32767) and repeat while holding a direction: first delay
+; and interval, in ms
+GamepadDeadZone=12000
+GamepadRepeatDelay=350
+GamepadRepeatRate=110
+
+; --- Search ---------------------------------------------------------------------
+; Bar at the top left (or the NavSearch key): Enter searches every category,
+; Esc or a click on a category goes back
+SearchW=320
+SearchPlaceholder=Search
+
+; --- Store import ---------------------------------------------------------------
+; Right click on the skin > "Import games from stores". Installed games are
+; written at the end of the ImportCategory file, in a block that is rewritten
+; on every import; hand-written tiles are never touched.
+ImportCategory=Games
+; Stores to read, separated by |
+ImportStores=Steam|Epic|GOG|Ubisoft
+; 1 = also import automatically, in the background, on every skin load
+ImportOnStart=0
+; Free SteamGridDB API key (steamgriddb.com > Preferences > API): downloads
+; background and logo of games without local images (Epic, GOG, Ubisoft)
+SteamGridDBKey=
+
+; --- Diagnostics ----------------------------------------------------------------
+; 1 = write to the Rainmeter log (Manage > Log) what happens on confirm, on
+; tile launch and on show/hide, and the keys seen by the HotKey plugin
 DebugLog=0
 
-; --- Aspetto -------------------------------------------------------------------
-; 1 = mostra l'etichetta della tile (Label= nel file di categoria), 0 = nascondi
+; --- Appearance -----------------------------------------------------------------
+; 1 = show the tile label (Label= in the category file), 0 = hide it
 ShowLabels=1
 FontFace=Segoe UI
 MenuFontSize=12
 LabelFontSize=14
+; Colours: R,G,B,A (alpha optional) or hex #RRGGBBAA / #RRGGBB (the # is
+; optional). The same formats work for Color= in the category files.
 BgColor=8,8,12,200
 TileColor=36,36,44,255
+; 1 = tiles with a logo but no background image (and no Color= in their
+; category file) get a dark colour taken from the logo, computed once in the
+; background; 0 = they use TileColor
+AutoTileColor=1
 HoverColor=255,255,255,25
 AccentColor=0,210,180,255
 ActiveCategoryColor=0,210,180,70
@@ -178,7 +224,3 @@ TextColor=240,240,245,255
 TextDimColor=150,150,160,255
 ScrollTrackColor=255,255,255,25
 ScrollThumbColor=0,210,180,200
-
-; --- Calcolati (non modificare) ------------------------------------------------
-TileW=(Floor((#ScreenW#-2*#PadX#-(#NX#-1)*#Gap#)/#NX#))
-TileH=(Floor((#ScreenH#-2*#PadY#-#MenuH#-#Gap#-(#NY#-1)*#Gap#)/#NY#))

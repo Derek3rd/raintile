@@ -97,8 +97,10 @@ LogoGreyscale=1
 AnimAppearFrames=12
 AnimStagger=2
 AnimSlide=30
-; Morbidezza di hover, pillola e scorrimento: 0.1 = lento, 1 = istantaneo
+; Morbidezza di hover e pillola: 0.1 = lento, 1 = istantaneo
 AnimSmooth=0.3
+; Morbidezza del solo scorrimento (stessa scala; piu' basso = piu' morbido)
+AnimScrollSmooth=0.15
 
 ; --- Sfondi delle tile ------------------------------------------------------------
 ; BgStyle: Crop     = ritaglio fisso al centro dell'immagine

@@ -493,11 +493,11 @@ local function saturationRows(sat)
 	return rows
 end
 
--- Avvicina cur a target di una frazione (AnimSmooth) per passo; restituisce
--- il nuovo valore e true se non e' ancora arrivato.
-local function approach(cur, target, eps)
+-- Avvicina cur a target di una frazione per passo (k, default AnimSmooth);
+-- restituisce il nuovo valore e true se non e' ancora arrivato.
+local function approach(cur, target, eps, k)
 	if math.abs(target - cur) <= eps then return target, false end
-	return cur + (target - cur) * V.AnimSmooth, true
+	return cur + (target - cur) * (k or V.AnimSmooth), true
 end
 
 local function maxOffset()
@@ -780,7 +780,7 @@ end
 local function advance()
 	local busy, moving = false, false
 
-	pos, moving = approach(pos, offset, 0.002)
+	pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth)
 	busy = busy or moving
 
 	if appear then
@@ -908,6 +908,7 @@ function Initialize()
 	V.AnimStagger = math.max(0, num('AnimStagger', 2))
 	V.AnimSlide = num('AnimSlide', 30)
 	V.AnimSmooth = math.min(1, math.max(0.05, num('AnimSmooth', 0.3)))
+	V.AnimScrollSmooth = math.min(1, math.max(0.02, num('AnimScrollSmooth', V.AnimSmooth)))
 	V.AnimLogoZoom = num('AnimLogoZoom', 1) ~= 0
 	V.LogoGreyscale = num('LogoGreyscale', 1) ~= 0
 	local bg = SKIN:GetVariable('BgStyle', 'Crop'):lower()

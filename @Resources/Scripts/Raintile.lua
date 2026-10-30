@@ -1130,7 +1130,7 @@ function Initialize()
 	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
 	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
 	V.DebugLog = num('DebugLog', 0) ~= 0
-	V.ImportOnStart = num('ImportOnStart', 0) ~= 0
+	V.ScanOnStart = num('ScanOnStart', 1) ~= 0
 	V.SearchW = math.floor(num('SearchW', 320))
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
@@ -1327,26 +1327,39 @@ function OnCategoryList()
 	end
 end
 
--- Automatic background import on every load (ImportOnStart=1). If it finds
--- something new the skin refreshes and the import runs again, but the second
--- time nothing changes and so nothing refreshes: no loops.
-function AutoImport()
-	if not ready or not V.ImportOnStart then return end
-	SKIN:Bang('!CommandMeasure', 'MeasureImport', 'Run')
+-- Background search of the installed games and apps on every load
+-- (ScanOnStart=1). Nothing is added: new ones light the dot on the gear, and
+-- are added from the Options window.
+function AutoScan()
+	if not ready or not V.ScanOnStart then return end
+	SKIN:Bang('!CommandMeasure', 'MeasureScan', 'Run')
 end
 
--- End of Import.ps1: logs the result and refreshes if something changed.
-function OnImport()
-	local output = SKIN:GetMeasure('MeasureImport'):GetStringValue()
-	local changed = false
+-- Dot on the gear: new games or apps found
+local function showNewFound(count)
+	show('MeterNewFound', count > 0)
+	SKIN:Bang('!UpdateMeter', 'MeterNewFound')
+	SKIN:Bang('!Redraw')
+end
+
+-- End of Scan.ps1: logs the result and shows the dot if something is new.
+function OnScan()
+	local output = SKIN:GetMeasure('MeasureScan'):GetStringValue()
+	local new = 0
 	for line in output:gmatch('[^\r\n]+') do
-		if line:match('^RESULT:CHANGED') then
-			changed = true
+		local n = line:match('^RESULT:NEW=(%d+)')
+		if n then
+			new = tonumber(n)
 		elseif not line:match('^RESULT:') then
-			print('Raintile: import: ' .. line)
+			dbg('scan: ' .. line)
 		end
 	end
-	if changed then SKIN:Bang('!Refresh') end
+	showNewFound(new)
+end
+
+-- The Options window showed the list: nothing is new any more
+function OnFoundSeen()
+	showNewFound(0)
 end
 
 -- Creates the missing thumbnails in the background (called by OnRefreshAction).

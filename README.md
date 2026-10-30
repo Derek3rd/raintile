@@ -8,7 +8,7 @@ Your games, apps, links and system tools become large tiles with background art 
 
 - **Categories** in a centred menu at the top (icon, text or both), each with its own grid size.
 - **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs.
-- **Import games** from Steam, Epic Games, GOG Galaxy and Ubisoft Connect, with background and logo (from the local Steam cache or [SteamGridDB](https://www.steamgriddb.com/)).
+- **Add games and apps** found on this PC — Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Battle.net, EA app, Xbox, and the programs of the Start menu — picking them from a list, with background and logo (local Steam cache, [SteamGridDB](https://www.steamgriddb.com/), program icons). New ones are signalled with a dot on the gear.
 - **Search** across all categories.
 - **Mouse, keyboard and gamepad**: WASD/arrows, Space/Enter, Xbox-compatible controllers (open the launcher with Back + Start).
 - **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.
@@ -20,7 +20,7 @@ Your games, apps, links and system tools become large tiles with background art 
 - Windows 10 or 11
 - [Rainmeter](https://www.rainmeter.net/) **4.5** or later
 - The **HotKey** plugin, for the open shortcut, Esc and keyboard navigation ([HotKey.dll](https://github.com/brianferguson/HotKey.dll))
-- Windows PowerShell 5.1 (included in Windows), used for thumbnails, game import, the gamepad helper and the Options window
+- Windows PowerShell 5.1 (included in Windows), used for thumbnails, the search of games and apps, the gamepad helper and the Options window
 
 ## Installation
 
@@ -41,10 +41,10 @@ The launcher places itself at the top-left corner and covers the screen. Do not 
 ## Quick start
 
 - **Add tiles**: right click on the launcher > **Options...**, or edit the files in `@Resources\Categories\` (one file per category).
-- **Import your games**: right click > **Import games from stores**.
+- **Add your games and apps**: right click > **Add games and apps...**, tick them and press **Add selected**.
 - **Images**: put them in `@Resources\Images\<category>\background\<TileName>.jpg` and `...\logo\<TileName>.png`; they are picked up automatically.
 - **Settings**: right click > **Options...**, or edit `@Resources\Settings.inc`.
 
 ## Documentation
 
-Everything else — every setting, category and tile files, import, keyboard and gamepad controls, search, animations, how it works and troubleshooting — is in the **[Guide](docs/Guide.md)**.
+Everything else — every setting, category and tile files, adding games and apps, keyboard and gamepad controls, search, animations, how it works and troubleshooting — is in the **[Guide](docs/Guide.md)**.

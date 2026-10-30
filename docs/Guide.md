@@ -16,7 +16,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
   - [Tile keys](#tile-keys)
   - [Commands](#commands)
   - [Images](#images)
-- [Importing games from stores](#importing-games-from-stores)
+- [Adding games and apps](#adding-games-and-apps)
 - [Options window](#options-window)
 - [Settings reference](#settings-reference)
 - [Sizes in pixels or percentages](#sizes-in-pixels-or-percentages)
@@ -53,7 +53,7 @@ Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter start
 - **Click** a tile to launch it; **wheel** to scroll.
 - **Click** a category in the menu to switch to it; clicking the category already open scrolls back to the start.
 - The **search bar** at the top left opens the search; the **gear** opens the Options window; the **X** closes the launcher.
-- Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Import games from stores*, *Categories folder*, plus Rainmeter's own menu.
+- Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Add games and apps...*, *Categories folder*, plus Rainmeter's own menu.
 
 ### Keyboard
 
@@ -141,7 +141,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `Image` | another name for both images: `Image=diablo4` looks for `background\diablo4.*` and `logo\diablo4.*` |
 | `Background` | specific background file (relative to `background\` or absolute; extension optional) |
 | `Logo` | specific logo file (relative to `logo\` or absolute) |
-| `Source` | written by the importer (`Steam:570`); informational |
+| `Source` | where an added game or app comes from (`Steam:570`); informational |
 
 ### Commands
 
@@ -168,26 +168,32 @@ Images\Games\
 
 Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
 
-## Importing games from stores
+## Adding games and apps
 
-Right click on the launcher > **Import games from stores** (or **Import games** in the Options window). The script (`Scripts\Import.ps1`, in the background) reads the games installed from:
+Right click on the launcher > **Add games and apps...**, or **Import** in the Options window, shows what is installed on this PC. Nothing is added by itself: tick the games and apps you want and press **Add selected**. They become normal tiles, which you can edit, move and keep even after uninstalling.
 
-| Store | Source | Images |
-| --- | --- | --- |
-| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` in every library | local library cache (both the old and the 2024+ layout) |
-| Epic Games | launcher manifests (main games only, no DLC or apps) | SteamGridDB |
-| GOG Galaxy | registry; launched through Galaxy if installed | SteamGridDB |
-| Ubisoft Connect | registry | SteamGridDB |
+The search (`Scripts\Scan.ps1`, in the background) looks in:
 
-How the result is written:
+| Source | How | Launched with | Images |
+| --- | --- | --- | --- |
+| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` in every library | `steam://rungameid/<id>` | local library cache (old and 2024+ layout) |
+| Epic Games | launcher manifests (main games only, no DLC or apps) | Epic launcher link | SteamGridDB |
+| GOG Galaxy | registry | Galaxy, or the game exe | SteamGridDB |
+| Ubisoft Connect | registry | `uplay://launch/<id>` | SteamGridDB |
+| Battle.net | uninstall entries of its games | Battle.net (`--exec="launch <code>"`), or the game's launcher | SteamGridDB |
+| EA app | uninstall entries of Electronic Arts games | the game exe | SteamGridDB |
+| Xbox / Microsoft Store | Store packages with a `MicrosoftGame.config` | `shell:AppsFolder` | SteamGridDB |
+| Apps | Start menu: program shortcuts and Store apps, without uninstallers, help files and the games already found | the shortcut / `shell:AppsFolder` | the program's own icon (as logo) |
 
-- Games go to the end of the `ImportCategory` file (default `Games.ini`), below the line `; ===== IMPORTED AUTOMATICALLY =====`. Everything above it — your hand-written tiles — is never touched.
-- The imported block is rebuilt on every import: uninstalled games disappear, new ones appear.
-- A game already present among your hand-written tiles, in any category (same name or same `Command`), is not imported again. To customise an imported game, use **Make it a normal tile** in the Options window, or move its section above the marker line by hand.
-- **Images** for stores other than Steam (and Steam games without local images) are downloaded from [SteamGridDB](https://www.steamgriddb.com/) into `Images\<category>\imported\` if `SteamGridDBKey` holds an API key (free, from the site's preferences). An image you put in `background\<Name>.*` or `logo\<Name>.*` always wins.
-- The file is only rewritten if something changed, and the skin only refreshes in that case. The outcome goes to the Rainmeter log (`Raintile: import:` lines).
+- **The list** shows the cover (Steam) or the icon of each item, with its source, and marks the new ones. Filter by type (All, Games, Apps) or by name; *Show added* also lists what is already in the launcher (dimmed, with its category); *Covers* off gives a compact text list.
+- **Where they go**: by type (games to `ImportCategory`, apps to `AppsCategory`; the category is created if missing) or all to one category.
+- **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. For games without local images, background and logo are downloaded from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences).
+- Something already in the launcher, in any category (same name or same command), is not listed again.
+- **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear. A click on it opens the list.
+- The added tiles are written at once; **Save and refresh** shows them in the launcher.
+- **Older versions** imported games automatically, in a block below the line `; ===== IMPORTED AUTOMATICALLY =====`. Opening **Import** turns those games into normal tiles, once.
 
-Settings: `ImportCategory`, `ImportStores` (e.g. `Steam|Epic`), `ImportOnStart=1` to import automatically in the background on every load, `SteamGridDBKey`.
+Settings: `ImportStores` (e.g. `Steam|Epic|Apps`), `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
 ## Options window
 
@@ -206,7 +212,7 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 | Keybindings > Keyboard | open/close shortcut, close key, navigation keys |
 | Keybindings > Gamepad | support, open/close buttons, dead zone, repeat |
 | Search | search bar |
-| Import | store import settings and **Import games** |
+| Import | the games and apps found on this PC, to add; where to look and where they go |
 | Advanced | performance, debug log, entries without a page of their own |
 | Categories | the list of categories (create, open, reorder, delete) and the settings of the selected one: name, icon, grid, logo size |
 | Categories > *each category* | its tiles, with a preview: edit, move to another category, turn imported games into normal tiles |
@@ -338,9 +344,9 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 | `SearchW` | `320` | search bar width *(size)* |
 | `SearchPlaceholder` | `Search` | text shown in the empty search bar |
 
-### Store import
+### Games and apps
 
-See [Importing games from stores](#importing-games-from-stores): `ImportCategory`, `ImportStores`, `ImportOnStart`, `SteamGridDBKey`.
+See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
 ### Diagnostics
 
@@ -397,10 +403,10 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
   Settings.inc               settings
   State.inc                  last category and scroll positions (written by the skin)
   Categories/*.ini           one file per category (menu entry + tiles)
-  Images/<category>/         icon.*, background/, logo/, imported/
+  Images/<category>/         icon.*, background/, logo/
   Scripts/Raintile.lua       launcher logic
   Scripts/Thumbs.ps1         thumbnail creation
-  Scripts/Import.ps1         store import
+  Scripts/Scan.ps1           search of the installed games and apps
   Scripts/Helper.ps1         gamepad and focus-loss helper
   Scripts/Options.ps1        Options window
   Scripts/Options.xaml       look of the Options window
@@ -408,6 +414,9 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
   Generated/Sizes.inc        percentage sizes and #hex colours converted for Rainmeter
   Generated/Thumbs/          thumbnails (safe to delete: they are rebuilt)
   Generated/Colors.txt       tile colours taken from logos (AutoTileColor)
+  Generated/Found.json       games and apps found by the last search
+  Generated/Found/           their icons
+  Generated/Seen.txt         items already shown in the list (no dot for them)
 ```
 
 ## Troubleshooting
@@ -417,7 +426,8 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
 - **A category icon doesn't show**: the icon goes in `Images\<file name>\icon.png` — the folder is named after the category *file* (`Games`), not its menu label. The log shows exactly where it looked (`Raintile: no icon for category ...`).
 - **A tile image doesn't show**: check the file name matches the tile name (or its `Image`/`Background`/`Logo` key); explicit names that are not found are logged.
 - **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. It needs Windows PowerShell 5.1 (included in Windows 10/11).
-- **Imported games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey`. Import messages are in the log (`Raintile: import:`).
+- **Added games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey` before adding them. With `DebugLog=1` the search writes what it found per store to the log (`Raintile: scan:` lines).
+- **A game or app is not in the list**: check that its source is ticked in Import > *Where to look*, then *Search again*. Anything else can always be added by hand with its `.lnk` shortcut.
 - **Thumbnails are not created**: they are made by PowerShell in the background; errors are listed in the log. Deleting `Generated\Thumbs\` forces a rebuild.
 - **Slow or choppy animations on very large screens**: every animation step redraws the whole full-screen window. Turn off the heaviest ones (`AnimScroll`, `BgStyle=Crop`), lower `AnimAppearFrames`/`LaunchAnimFrames` or raise the `Anim*Smooth` values.
 
@@ -427,5 +437,5 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
 - **Focus loss** (`AutoHide`) is detected only while the launcher is above other windows (`ShowZPos=1`, the default), not when it sits on the desktop (`-2`).
 - **Icons from `.exe` files** cannot be extracted by Rainmeter: provide an image.
 - **Non-ASCII characters** (accents, etc.) in category names and labels may display incorrectly: category files are read as UTF-8.
-- **Store import** does not cover Battle.net, EA app and Xbox/Microsoft Store yet; use `.lnk` shortcuts for those.
+- **Battle.net, EA app and Xbox** games are found through Windows' list of installed programs and Store packages: a game installed in an unusual way may be missing (add its shortcut by hand). Battle.net games without a known product code open through their own launcher.
 - **Fonts** sizes cannot be percentages.

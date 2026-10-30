@@ -11,7 +11,7 @@
 #    One sub-entry per category: its settings, and its tiles to add, delete,
 #    reorder and edit, with a preview. Picked
 #    images are copied to Images\<category>\background|logo\<TileName>.<ext>.
-#    Imported games (below the Import.ps1 marker) are listed but cannot be
+#    Games of the old automatic import (below its marker) are listed but cannot be
 #    edited.
 # "Save and refresh" writes the files and refreshes the skin.
 #
@@ -20,6 +20,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Resources,
     [string]$Config = 'Raintile',
+    # page to open on (e.g. import: the list of games and apps found)
+    [string]$Page = '',
     [switch]$NoGui
 )
 
@@ -33,6 +35,9 @@ $settingsFile = Join-Path $Resources 'Settings.inc'
 $categoriesDir = Join-Path $Resources 'Categories'
 $imagesRoot = Join-Path $Resources 'Images'
 $IMAGE_EXTS = '.png', '.jpg', '.jpeg', '.bmp', '.ico', '.gif'
+# Functions of the search (names, existing tiles, SteamGridDB) and its files:
+# $foundFile, $seenFile
+. (Join-Path $PSScriptRoot 'Scan.ps1') -Resources $Resources -NoRun
 
 # --- Settings.inc --------------------------------------------------------------
 
@@ -186,7 +191,11 @@ function Size([string]$key, [string]$label, [string]$axis, [string]$help = '') {
 }
 
 $GAMEPAD_BUTTONS = 'A', 'B', 'X', 'Y', 'LB', 'RB', 'BACK', 'START', 'LS', 'RS', 'UP', 'DOWN', 'LEFT', 'RIGHT'
-$STORES = 'Steam', 'Epic', 'GOG', 'Ubisoft'
+$STORES = 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'Apps'
+$STORE_LABELS = @{
+    Steam = 'Steam'; Epic = 'Epic Games'; GOG = 'GOG'; Ubisoft = 'Ubisoft Connect'; Battlenet = 'Battle.net'
+    'Battle.net' = 'Battle.net'; EA = 'EA app'; Xbox = 'Xbox / Store'; Apps = 'Start menu apps'
+}
 
 $schema = @(
     @{ Id = 'general'; Title = 'General'; Icon = 0xE713
@@ -365,16 +374,15 @@ $schema = @(
         )
     }
     @{ Id = 'import'; Title = 'Import'; Icon = 0xE896
-        Desc = 'Games installed from the stores are added at the end of a category, in a block rewritten on every import. Tiles you wrote yourself are never touched.'
+        Desc = 'Games and apps installed on this PC: pick the ones to add, they become normal tiles with their images. Nothing is added by itself.'
         Groups = @(
-            @{ Title = 'Store import'; Items = @(
-                    (S 'category' 'ImportCategory' 'Category' 'Where imported games go.'),
-                    (S 'stores' 'ImportStores' 'Stores'),
-                    (S 'bool' 'ImportOnStart' 'Import on every load' 'In the background, each time the skin loads.'),
-                    (S 'text' 'SteamGridDBKey' 'SteamGridDB API key' 'Free, from steamgriddb.com > Preferences > API. Downloads images for games without local ones.')
-                ) }
-            @{ Title = 'Import now'; Items = @(
-                    (S 'action' 'Import' 'Import games' 'Saves the changes, imports and refreshes the skin.')
+            @{ Found = $true; Items = @() }
+            @{ Title = 'Search'; Items = @(
+                    (S 'stores' 'ImportStores' 'Where to look'),
+                    (S 'bool' 'ScanOnStart' 'Look for new ones on start' 'In the background, each time the skin loads: new games or apps light a dot on the gear.'),
+                    (S 'category' 'ImportCategory' 'Category for games'),
+                    (S 'category' 'AppsCategory' 'Category for apps'),
+                    (S 'text' 'SteamGridDBKey' 'SteamGridDB API key' 'Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded.')
                 ) }
         )
     }
@@ -432,7 +440,8 @@ $defaults = @{
     Thumbnails = '1'; TileHover = '1'; FadeDuration = '0'
     Gamepad = '1'; GamepadToggle = 'BACK START'; GamepadDeadZone = '12000'; GamepadRepeatDelay = '350'; GamepadRepeatRate = '110'
     SearchW = '320'; SearchPlaceholder = 'Search'
-    ImportCategory = 'Games'; ImportStores = 'Steam|Epic|GOG|Ubisoft'; ImportOnStart = '0'; SteamGridDBKey = ''
+    ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps'
+    ScanOnStart = '1'; SteamGridDBKey = ''
     DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
     BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
     AccentColor = '0,210,180,255'; ActiveCategoryColor = '0,210,180,70'; HoverCategoryColor = '255,255,255,20'
@@ -951,7 +960,7 @@ $logoColors = Read-LogoColors
 
 function Update-Dirty {
     $changed = @($values.Keys | Where-Object { $values[$_] -ne $fileValues[$_] })
-    $dirty = $changed.Count -gt 0 -or $changedFiles.Count -gt 0
+    $dirty = $changed.Count -gt 0 -or $changedFiles.Count -gt 0 -or $script:needsRefresh
     $script:dirtySettings = $dirty
     $status.Text = if ($dirty) { 'Unsaved changes' } else { '' }
     $status.Foreground = if ($dirty) { Res 'AccentBrush' } else { Res 'DimBrush' }
@@ -1248,10 +1257,12 @@ function New-CategoryControl([string]$key) {
 
 function New-StoresControl([string]$key) {
     $wp = New-Object System.Windows.Controls.WrapPanel
-    $current = @("$($values[$key])" -split '\|' | ForEach-Object { $_.Trim() })
+    $wp.MaxWidth = 470
+    $wp.HorizontalAlignment = 'Right'
+    $current = @("$($values[$key])" -split '\|' | ForEach-Object { $_.Trim() -replace '\.', '' })
     foreach ($store in $STORES) {
         $cb = New-Object System.Windows.Controls.CheckBox
-        $cb.Content = $store
+        $cb.Content = $STORE_LABELS[$store]
         $cb.Margin = T 18 4 0 4
         $cb.Tag = @($key, $store)
         $cb.IsChecked = ($current -contains $store)
@@ -1536,6 +1547,11 @@ function New-SettingsPage($page) {
     foreach ($group in $page.Groups) {
         $card = New-Card $group.Title $group.Help
         $rows = 0
+        if ($group.Found) {
+            # list of the games and apps found (its own card)
+            [void](Add-To $sp (New-FoundCard))
+            continue
+        }
         if ($group.Other) {
             # Settings.inc entries without a page of their own
             foreach ($item in $settings) {
@@ -1550,11 +1566,6 @@ function New-SettingsPage($page) {
             }
         }
         if ($rows) { [void](Add-To $sp $card) }
-    }
-    if ($page.Id -eq 'import') {
-        $script:importResult = New-Text '' 12.5 (Res 'DimBrush') -Wrap
-        $script:importResult.Margin = T 4 0 4 0
-        [void](Add-To $sp $script:importResult)
     }
     return $sv
 }
@@ -2031,13 +2042,7 @@ function New-CategoryListPage {
             if (Test-Path -LiteralPath (Join-Path $categoriesDir "$file.ini")) {
                 [void](Show-Dialog 'Raintile' "The category '$file' already exists."); return
             }
-            $m = [pscustomobject]@{ Header = '; Format: see Games.ini'; Sections = (New-Object System.Collections.ArrayList); Imported = '' }
-            $c = Get-CategorySection $m
-            Set-Key $c 'Name' $r.Text
-            Set-Key $c 'Order' "$($cat.Cats.Items.Count + 1)"
-            Write-Category (Join-Path $categoriesDir "$file.ini") $m
-            foreach ($kind in 'background', 'logo') { New-Item -ItemType Directory -Force -Path (Join-Path $imagesRoot "$file\$kind") | Out-Null }
-            $models["$file.ini"] = $m
+            [void](New-CategoryFile $file $r.Text)
             Refresh-Cats "$file.ini"
             Build-Nav $script:navCurrent
         })
@@ -2101,7 +2106,7 @@ function New-CategoryPage {
     $cat.ImportedCard = $card
     $card.Visibility = 'Collapsed'
     [void](Add-To $details $card)
-    $txt = New-Text 'Written by Import games: this block is rewritten on every import, so it cannot be edited here. Make it a normal tile to edit it, move it or keep it when the game is uninstalled: its images are copied to the category folders and the import will not add it again.' 12.5 (Res 'DimBrush') -Wrap
+    $txt = New-Text 'From the old automatic import (written below its marker line), so it cannot be edited here. Make it a normal tile to edit or move it: its images are copied to the category folders. Opening Import turns all of them into normal tiles.' 12.5 (Res 'DimBrush') -Wrap
     $txt.Margin = T 0 0 0 10
     [void](Add-To $card.Child $txt)
     $btnConvert = New-Button 'Make it a normal tile' 'AccentButton'
@@ -2307,6 +2312,406 @@ function New-CategoryPage {
     return $grid
 }
 
+# --- Games and apps found (Import page) ---------------------------------------------
+# Scan.ps1 writes Generated\Found.json; the list shows what is not in the
+# launcher yet. The picked items become normal tiles: their images (local,
+# SteamGridDB for games, the program icon for apps) are copied to the
+# category folders and the category files are written at once.
+
+$found = @{ Items = @(); Scanned = ''; Selected = @{}; Kind = 'all'; ShowAdded = $false; Covers = $true; Filter = '' }
+$script:needsRefresh = $false   # tiles written by the list: the skin needs a refresh
+$script:scanProcess = $null
+$script:foundBuilding = $false
+
+function Read-Found {
+    $found.Items = @(); $found.Scanned = ''
+    if (-not (Test-Path -LiteralPath $foundFile)) { return }
+    try {
+        $j = [IO.File]::ReadAllText($foundFile) | ConvertFrom-Json
+        $found.Items = @($j.Items | Where-Object { $_ })
+        $found.Scanned = "$($j.Scanned)"
+    } catch { }
+}
+
+# Tiles of every category (as in the window, unsaved changes too):
+# name key / command -> category name
+function Get-PresentMap {
+    $map = @{ Names = @{}; Commands = @{} }
+    foreach ($e in Get-CategoryEntries) {
+        $m = Get-Model $e.File
+        foreach ($s in Get-Tiles $m) {
+            $map.Names[(Get-NameKey $s.Name)] = $e.Name
+            $cmd = Get-Key $s 'Command'
+            if ($cmd) { $map.Commands[$cmd.ToLowerInvariant()] = $e.Name }
+        }
+        foreach ($n in Get-ImportedNames $m) { $map.Names[(Get-NameKey $n)] = $e.Name }
+    }
+    return $map
+}
+function Get-PresentIn($item, $map) {
+    $c = $map.Commands["$($item.Command)".ToLowerInvariant()]
+    if ($c) { return $c }
+    return $map.Names[(Get-NameKey $item.Name)]
+}
+
+# Everything in the list has been seen: no dot on the gear until something
+# else turns up
+function Set-FoundSeen {
+    $ids = New-Object 'System.Collections.Generic.HashSet[string]'
+    if (Test-Path -LiteralPath $seenFile) { foreach ($l in [IO.File]::ReadAllLines($seenFile)) { if ($l) { [void]$ids.Add($l) } } }
+    $before = $ids.Count
+    foreach ($it in $found.Items) { [void]$ids.Add($it.Id) }
+    if ($ids.Count -eq $before) { return }
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $seenFile) | Out-Null
+    [IO.File]::WriteAllLines($seenFile, [string[]]@($ids), $utf8)
+    Invoke-Rainmeter "!CommandMeasure MeasureScript `"OnFoundSeen()`" `"$Config`""
+}
+
+# A new category file (Categories\<base>.ini) and its image folders
+function New-CategoryFile([string]$base, [string]$name) {
+    $m = [pscustomobject]@{ Header = '; Format: see Games.ini'; Sections = (New-Object System.Collections.ArrayList); Imported = '' }
+    $c = Get-CategorySection $m
+    Set-Key $c 'Name' $name
+    Set-Key $c 'Order' "$(@(Get-CategoryFiles).Count + 1)"
+    Write-Category (Join-Path $categoriesDir "$base.ini") $m
+    foreach ($kind in 'background', 'logo') { New-Item -ItemType Directory -Force -Path (Join-Path $imagesRoot "$base\$kind") | Out-Null }
+    $models["$base.ini"] = $m
+    return "$base.ini"
+}
+
+function Test-TileName($model, [string]$name) {
+    return [bool](($model.Sections | Where-Object { $_.Name -ieq $name }) -or ((Get-ImportedNames $model) -contains $name))
+}
+
+# The old automatic import block becomes normal tiles (once)
+function Convert-OldImports {
+    $n = 0
+    foreach ($f in Get-CategoryFiles) {
+        $m = Get-Model $f.Name
+        if (-not $m.Imported) { continue }
+        foreach ($name in @(Get-ImportedNames $m)) { if (Convert-ImportedTile $f.Name $name) { $n++ } }
+        $m.Imported = ''   # the marker and its comments go too
+        Write-Category (Join-Path $categoriesDir $f.Name) $m
+        $changedFiles.Remove($f.Name)
+        $script:needsRefresh = $true
+    }
+    Update-Dirty
+    return $n
+}
+
+function Update-FoundCount {
+    $n = $found.Selected.Count
+    $found.AddButton.Content = if ($n) { "Add $n selected" } else { 'Add selected' }
+    $found.AddButton.IsEnabled = $n -gt 0
+}
+
+function Update-FoundStatus([string]$extra = '') {
+    $games = @($found.Items | Where-Object { $_.Kind -eq 'game' }).Count
+    $apps = @($found.Items | Where-Object { $_.Kind -eq 'app' }).Count
+    $when = ''
+    try { $when = ', searched ' + ([DateTime]::Parse($found.Scanned)).ToString('g') } catch { }
+    $found.Status.Text = if ($found.Scanned) { "$games games and $apps apps found$when." } else { 'Not searched yet.' }
+    if ($extra) { $found.Status.Text = $extra + ' ' + $found.Status.Text }
+}
+
+function New-FoundEntry($it, [string]$in) {
+    $li = New-Object System.Windows.Controls.ListBoxItem
+    $li.Tag = $it
+    $li.Padding = T 8 6
+    $g = New-Grid @('Auto', 'Auto', '*', 'Auto')
+    $tick = New-Object System.Windows.Controls.CheckBox
+    $tick.Style = Res 'Tick'
+    $tick.IsHitTestVisible = $false
+    $tick.VerticalAlignment = 'Center'
+    $tick.Margin = T 2 0 12 0
+    $binding = New-Object System.Windows.Data.Binding('IsSelected')
+    $binding.RelativeSource = New-Object System.Windows.Data.RelativeSource([System.Windows.Data.RelativeSourceMode]::FindAncestor, [System.Windows.Controls.ListBoxItem], 1)
+    [void]$tick.SetBinding([System.Windows.Controls.Primitives.ToggleButton]::IsCheckedProperty, $binding)
+    [void]$g.Children.Add($tick)
+    if ($found.Covers) {
+        $b = New-Object System.Windows.Controls.Border
+        $b.Width = 96; $b.Height = 45
+        $b.CornerRadius = New-Object System.Windows.CornerRadius(4)
+        $b.ClipToBounds = $true
+        $b.Background = Res 'FieldBg'
+        $b.Margin = T 0 0 12 0
+        $img = New-Object System.Windows.Controls.Image
+        if ($it.Hero -and (Test-Path -LiteralPath $it.Hero)) {
+            $img.Stretch = 'UniformToFill'
+            $img.Source = Get-Bitmap $it.Hero 192
+        } else {
+            $img.Stretch = 'Uniform'
+            $img.Margin = T 8 5 8 5
+            $img.Source = Get-Bitmap $(if ($it.Logo) { $it.Logo } else { $it.Icon }) 96
+        }
+        $b.Child = $img
+        Set-Col $b 1
+        [void]$g.Children.Add($b)
+    }
+    $texts = New-Panel
+    $texts.VerticalAlignment = 'Center'
+    $title = New-Panel 'Horizontal'
+    $t = New-Text $it.Name 13.5
+    $t.TextTrimming = 'CharacterEllipsis'
+    [void](Add-To $title $t)
+    if ($it.New) {
+        $badge = New-Object System.Windows.Controls.Border
+        $badge.Background = Res 'AccentSoftBrush'
+        $badge.CornerRadius = New-Object System.Windows.CornerRadius(3)
+        $badge.Padding = T 5 0 5 1
+        $badge.Margin = T 8 0 0 0
+        $badge.VerticalAlignment = 'Center'
+        $badge.Child = New-Text 'NEW' 10 (Res 'AccentBrush') -Bold
+        [void](Add-To $title $badge)
+    }
+    [void](Add-To $texts $title)
+    $store = $STORE_LABELS["$($it.Store)"]
+    if (-not $store) { $store = "$($it.Store)" }
+    [void](Add-To $texts (New-Text "$store   $([char]0xB7)   $(if ($it.Kind -eq 'game') { 'game' } else { 'app' })" 11.5 (Res 'DimBrush')))
+    Set-Col $texts 2
+    [void]$g.Children.Add($texts)
+    if ($in) {
+        $note = New-Text "in $in" 12 (Res 'DimBrush')
+        $note.VerticalAlignment = 'Center'
+        $note.Margin = T 12 0 4 0
+        Set-Col $note 3
+        [void]$g.Children.Add($note)
+        $li.IsEnabled = $false
+        $li.Opacity = 0.55
+    }
+    $li.Content = $g
+    return $li
+}
+
+function Refresh-FoundList {
+    $list = $found.List
+    if (-not $list) { return }
+    $script:foundBuilding = $true
+    try {
+        $list.Items.Clear()
+        $present = Get-PresentMap
+        $words = @($found.Filter.ToLowerInvariant() -split '\s+' | Where-Object { $_ })
+        foreach ($it in $found.Items) {
+            if ($found.Kind -ne 'all' -and $it.Kind -ne $found.Kind) { continue }
+            $in = Get-PresentIn $it $present
+            if ($in) { $found.Selected.Remove($it.Id) }
+            if ($in -and -not $found.ShowAdded) { continue }
+            $hay = "$($it.Name) $($it.Store)".ToLowerInvariant()
+            if (@($words | Where-Object { -not $hay.Contains($_) }).Count) { continue }
+            $item = New-FoundEntry $it $in
+            [void]$list.Items.Add($item)
+            if (-not $in -and $found.Selected.ContainsKey($it.Id)) { $item.IsSelected = $true }
+        }
+        $found.Empty.Visibility = if ($list.Items.Count) { 'Collapsed' } else { 'Visible' }
+        $found.Empty.Text = if ($script:scanProcess -and -not $script:scanProcess.HasExited) { 'Searching' + [char]0x2026 }
+        elseif (-not $found.Items.Count) { 'Nothing found yet: press Search again.' }
+        else { 'Nothing to show: everything is already in the launcher, or hidden by the filters.' }
+    } finally { $script:foundBuilding = $false }
+    Update-FoundCount
+}
+
+# Search in the background (a separate PowerShell): the window stays usable
+$scanTimer = New-Object System.Windows.Threading.DispatcherTimer
+$scanTimer.Interval = [TimeSpan]::FromMilliseconds(300)
+$scanTimer.Add_Tick({
+        if (-not $script:scanProcess -or -not $script:scanProcess.HasExited) { return }
+        $scanTimer.Stop()
+        $found.ScanButton.IsEnabled = $true
+        Read-Found
+        Refresh-FoundList
+        Update-FoundStatus
+        Set-FoundSeen
+    })
+
+function Start-FoundScan {
+    if ($script:scanProcess -and -not $script:scanProcess.HasExited) { return }
+    $found.ScanButton.IsEnabled = $false
+    $found.Status.Text = 'Searching the stores and the Start menu' + [char]0x2026
+    $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $argList = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f (Join-Path $PSScriptRoot 'Scan.ps1')),
+        '-Resources', ('"{0}"' -f $Resources), '-Stores', ('"{0}"' -f $values['ImportStores']))
+    $script:scanProcess = Start-Process -FilePath $exe -ArgumentList $argList -WindowStyle Hidden -PassThru
+    Refresh-FoundList
+    $scanTimer.Start()
+}
+
+# Category file for an added item; created if it does not exist yet
+function Get-CategoryFileFor([string]$base) {
+    if ($models.ContainsKey("$base.ini") -or (Test-Path -LiteralPath (Join-Path $categoriesDir "$base.ini"))) { return "$base.ini" }
+    $file = New-CategoryFile $base $base
+    Build-Nav $script:navCurrent
+    return $file
+}
+
+function Add-SelectedFound {
+    $sel = @($found.Items | Where-Object { $found.Selected.ContainsKey($_.Id) })
+    if (-not $sel.Count) { return }
+    $target = [string]$found.Target.SelectedItem.Tag
+    $key = $values['SteamGridDBKey']
+    $present = Get-PresentMap
+    $touched = @{}
+    $added = 0
+    $win.Cursor = [System.Windows.Input.Cursors]::Wait
+    try {
+        for ($i = 0; $i -lt $sel.Count; $i++) {
+            $it = $sel[$i]
+            $found.Status.Text = "Adding $($i + 1) of $($sel.Count): $($it.Name)" + [char]0x2026
+            $win.Dispatcher.Invoke([action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
+            $found.Selected.Remove($it.Id)
+            if (Get-PresentIn $it $present) { continue }
+            $base = if ($target -ne 'auto') { [IO.Path]::GetFileNameWithoutExtension($target) }
+            elseif ($it.Kind -eq 'game') { "$($values['ImportCategory'])" } else { "$($values['AppsCategory'])" }
+            if (-not $base) { $base = if ($it.Kind -eq 'game') { 'Games' } else { 'Apps' } }
+            $file = Get-CategoryFileFor $base
+            $m = Get-Model $file
+            $name = $it.Name
+            if (Test-TileName $m $name) { $name = "$name ($($it.Store))" }
+            if (Test-TileName $m $name) { continue }
+            $s = [pscustomobject]@{ Name = $name; Comments = @(); Keys = (New-Object System.Collections.ArrayList) }
+            Set-Key $s 'Command' $it.Command
+            Set-Key $s 'Source' $it.Id
+            # images in the default folders, named after the tile
+            if ($it.Hero -and (Test-Path -LiteralPath $it.Hero)) { [void](Copy-TileImage $base 'background' $name $it.Hero) }
+            elseif ($it.Kind -eq 'game' -and $key) {
+                try { [void](Get-SGDBImage $key 'heroes' $name $it.SteamAppId (Join-Path $imagesRoot "$base\background\$name")) } catch { }
+            }
+            if ($it.Logo -and (Test-Path -LiteralPath $it.Logo)) { [void](Copy-TileImage $base 'logo' $name $it.Logo) }
+            elseif ($it.Kind -eq 'game' -and $key) {
+                try { [void](Get-SGDBImage $key 'logos' $name $it.SteamAppId (Join-Path $imagesRoot "$base\logo\$name")) } catch { }
+            }
+            if (-not (Find-Image (Join-Path $imagesRoot "$base\logo") $name) -and $it.Icon -and (Test-Path -LiteralPath $it.Icon)) {
+                [void](Copy-TileImage $base 'logo' $name $it.Icon)
+            }
+            [void]$m.Sections.Add($s)
+            $present.Names[(Get-NameKey $name)] = $base
+            $present.Commands["$($it.Command)".ToLowerInvariant()] = $base
+            $touched[$file] = $true
+            $added++
+        }
+    } finally { $win.Cursor = $null }
+    foreach ($f in @($touched.Keys)) {
+        Write-Category (Join-Path $categoriesDir $f) (Get-Model $f)
+        $changedFiles.Remove($f)
+    }
+    if ($added) { $script:needsRefresh = $true }
+    Update-Dirty
+    Refresh-FoundList
+    Update-FoundStatus $(if ($added) { "Added ${added}: save and refresh to see them in the launcher." } else { 'Nothing added: already in the launcher.' })
+}
+
+function New-FoundCard {
+    $card = New-Card 'Found on this PC' ''
+    $f = $card.Child
+
+    $converted = Convert-OldImports
+    if ($converted) {
+        $note = New-Text "$converted games of the old automatic import are now normal tiles: you can edit and move them." 12.5 (Res 'AccentBrush') -Wrap
+        $note.Margin = T 0 0 0 8
+        [void](Add-To $f $note)
+    }
+
+    # search again + status
+    $head = New-Grid @('Auto', '*')
+    $head.Margin = T 0 2 0 10
+    $found.ScanButton = New-Button 'Search again'
+    [void]$head.Children.Add($found.ScanButton)
+    $found.Status = New-Text '' 12 (Res 'DimBrush') -Wrap
+    $found.Status.VerticalAlignment = 'Center'
+    $found.Status.Margin = T 12 0 0 0
+    Set-Col $found.Status 1
+    [void]$head.Children.Add($found.Status)
+    [void](Add-To $f $head)
+
+    # filters: type, text, already added, covers
+    $filters = New-Object System.Windows.Controls.WrapPanel
+    $filters.Margin = T 0 0 0 10
+    foreach ($k in @(@('all', 'All'), @('game', 'Games'), @('app', 'Apps'))) {
+        $rb = New-Object System.Windows.Controls.RadioButton
+        $rb.Style = Res 'Segment'; $rb.Content = $k[1]; $rb.GroupName = 'found_kind'; $rb.Tag = $k[0]
+        $rb.IsChecked = ($found.Kind -eq $k[0])
+        $rb.Add_Click({ param($s, $e) $found.Kind = $s.Tag; Refresh-FoundList })
+        [void]$filters.Children.Add($rb)
+    }
+    $search = New-Object System.Windows.Controls.TextBox
+    $search.Width = 200
+    $search.Margin = T 10 2 16 2
+    $search.ToolTip = 'Filter by name or store'
+    $search.Add_TextChanged({ param($s, $e) $found.Filter = $s.Text; Refresh-FoundList })
+    [void]$filters.Children.Add($search)
+    foreach ($o in @(@('ShowAdded', 'Show added'), @('Covers', 'Covers'))) {
+        $cb = New-Object System.Windows.Controls.CheckBox
+        $cb.Content = $o[1]; $cb.Tag = $o[0]; $cb.Margin = T 0 4 16 4
+        $cb.IsChecked = [bool]$found[$o[0]]
+        $cb.Add_Click({ param($s, $e) $found[$s.Tag] = [bool]$s.IsChecked; Refresh-FoundList })
+        [void]$filters.Children.Add($cb)
+    }
+    [void](Add-To $f $filters)
+
+    # the list
+    $frame = New-Object System.Windows.Controls.Border
+    $frame.BorderBrush = Res 'LineBrush'
+    $frame.BorderThickness = T 1
+    $frame.CornerRadius = New-Object System.Windows.CornerRadius(8)
+    $frame.Padding = T 4
+    $frame.Height = 440
+    $grid = New-Object System.Windows.Controls.Grid
+    $frame.Child = $grid
+    $found.List = New-Object System.Windows.Controls.ListBox
+    $found.List.SelectionMode = 'Multiple'
+    [void]$grid.Children.Add($found.List)
+    $found.Empty = New-Text '' 13 (Res 'DimBrush') -Wrap
+    $found.Empty.HorizontalAlignment = 'Center'
+    $found.Empty.VerticalAlignment = 'Center'
+    $found.Empty.IsHitTestVisible = $false
+    [void]$grid.Children.Add($found.Empty)
+    [void](Add-To $f $frame)
+    $found.List.Add_SelectionChanged({
+            param($s, $e)
+            if ($script:foundBuilding) { return }
+            foreach ($i in $e.AddedItems) { $found.Selected[$i.Tag.Id] = $true }
+            foreach ($i in $e.RemovedItems) { $found.Selected.Remove($i.Tag.Id) }
+            Update-FoundCount
+        })
+
+    # select all / none, where, add
+    $bottom = New-Grid @('Auto', 'Auto', '*', 'Auto', 'Auto')
+    $bottom.Margin = T 0 10 0 6
+    $all = New-Button 'Select all' 'LinkButton'
+    $none = New-Button 'Select none' 'LinkButton'
+    Set-Col $none 1
+    [void]$bottom.Children.Add($all); [void]$bottom.Children.Add($none)
+    $all.Add_Click({ foreach ($i in $found.List.Items) { if ($i.IsEnabled) { $i.IsSelected = $true } } })
+    $none.Add_Click({ $found.List.UnselectAll(); $found.Selected.Clear(); Update-FoundCount })
+    $found.Target = New-Object System.Windows.Controls.ComboBox
+    $found.Target.Width = 290
+    $found.Target.Margin = T 0 0 10 0
+    $ci = New-Object System.Windows.Controls.ComboBoxItem
+    $ci.Content = "By type: games to $($values['ImportCategory']), apps to $($values['AppsCategory'])"
+    $ci.Tag = 'auto'
+    [void]$found.Target.Items.Add($ci)
+    foreach ($e in Get-CategoryEntries) {
+        $ci = New-Object System.Windows.Controls.ComboBoxItem
+        $ci.Content = "All to $($e.Name)"
+        $ci.Tag = $e.File
+        [void]$found.Target.Items.Add($ci)
+    }
+    $found.Target.SelectedIndex = 0
+    Set-Col $found.Target 3
+    [void]$bottom.Children.Add($found.Target)
+    $found.AddButton = New-Button 'Add selected' 'AccentButton'
+    $found.AddButton.Add_Click({ Add-SelectedFound })
+    Set-Col $found.AddButton 4
+    [void]$bottom.Children.Add($found.AddButton)
+    [void](Add-To $f $bottom)
+
+    $found.ScanButton.Add_Click({ Start-FoundScan })
+    Read-Found
+    Update-FoundStatus
+    Refresh-FoundList
+    if ($found.Items.Count) { Set-FoundSeen } else { Start-FoundScan }
+    return $card
+}
+
 # --- Saving, actions ----------------------------------------------------------------
 
 function Invoke-Rainmeter([string]$bang) {
@@ -2327,6 +2732,7 @@ function Save-All([switch]$NoRefresh) {
         if (Test-Path -LiteralPath $path) { Write-Category $path $models[$file] }
     }
     $changedFiles.Clear()
+    if (-not $NoRefresh) { $script:needsRefresh = $false }
     Update-Dirty
     $status.Text = 'Saved'
     if (-not $NoRefresh) { Invoke-Rainmeter "!Refresh `"$Config`"" }
@@ -2410,24 +2816,6 @@ function Start-SaveAndRefresh {
 
 function Invoke-Action([string]$action) {
     switch ($action) {
-        'Import' {
-            Save-All -NoRefresh
-            $win.Cursor = [System.Windows.Input.Cursors]::Wait
-            $script:importResult.Text = 'Importing' + [char]0x2026
-            # let the window draw the message before the import blocks it
-            $win.Dispatcher.Invoke([action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
-            try {
-                $out = & (Join-Path $Resources 'Scripts\Import.ps1') -Resources $Resources -Category $values['ImportCategory'] `
-                    -Stores $values['ImportStores'] -SteamGridDBKey $values['SteamGridDBKey'] 2>&1
-                $script:importResult.Text = (($out | Where-Object { "$_" -notmatch '^RESULT:' } | ForEach-Object { "$_" -replace '^Raintile: (import: )?', '' }) -join "`r`n")
-            } finally { $win.Cursor = $null }
-            $models.Clear()
-            $changedFiles.Clear()
-            Build-Nav $script:navCurrent
-            Refresh-Cats
-            if ($script:currentFile) { Show-Category }
-            Invoke-Rainmeter "!Refresh `"$Config`""
-        }
         'OpenSettings' { Start-Process notepad.exe -ArgumentList "`"$settingsFile`"" }
         'OpenFolder' { Start-Process explorer.exe -ArgumentList "`"$Resources`"" }
         'OpenRainmeter' { Invoke-Rainmeter '!Manage' }
@@ -2579,7 +2967,7 @@ function New-InfoPage {
     $about = New-Text $(if ($information) { $information } else { 'Full-screen tile launcher for Rainmeter.' }) 13.5 (Res 'DimBrush') -Wrap
     $about.Margin = T 0 8 0 0
     [void](Add-To $card.Child $about)
-    $more = New-Text 'Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, import from the game stores. Every setting is described in docs\Guide.md.' 12.5 (Res 'DimBrush') -Wrap
+    $more = New-Text 'Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, games and apps found on this PC. Every setting is described in docs\Guide.md.' 12.5 (Res 'DimBrush') -Wrap
     $more.Margin = T 0 6 0 0
     [void](Add-To $card.Child $more)
     [void](Add-To $sp $card)
@@ -2706,7 +3094,7 @@ $win.Add_ContentRendered({
     })
 
 $script:updating = $false
-Build-Nav 'page:general'
+Build-Nav $(if ($Page -eq 'import') { 'page:import' } else { 'page:general' })
 Show-NavTarget $nav.SelectedItem.Tag
 Update-Dirty
 [void]$win.ShowDialog()

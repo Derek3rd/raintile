@@ -38,7 +38,7 @@ Your games, apps, links and system tools become large tiles with background art 
 3. In Rainmeter: **Manage** > **Refresh all**, then load `Raintile\Raintile.ini`.
 4. Press **Ctrl+Alt+G** to show or hide the launcher.
 
-**Updates**: Raintile checks GitHub once a day and shows a dot on the gear when a new version is out; Options > Info installs it with one click. Your settings, categories and images live in `%APPDATA%\Rainmeter\Raintile\`, so updating never touches them.
+**Updates** (experimental): Raintile checks GitHub once a day and shows a dot on the gear when a new version is out; Options > Info installs it with one click. This is still being tested and could cause problems: keep a copy of your data before updating. Your settings, categories and images live in `%APPDATA%\Rainmeter\Raintile\`, so updating never touches them.
 
 The launcher places itself at the top-left corner and covers the screen. Do not load the `Raintile\Hotkey` and `Raintile\Navigation` skins by hand: the launcher turns them on and off by itself.
 

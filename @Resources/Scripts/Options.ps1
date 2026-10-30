@@ -20,8 +20,9 @@
 param(
     [Parameter(Mandatory = $true)][string]$Resources,
     [string]$Config = 'Raintile',
-    # page to open on (e.g. import: the list of games and apps found)
-    [string]$Page = '',
+    # page to open on (e.g. -Page import: the list of games and apps found).
+    # Not $Page: variable names ignore case, and the menu code uses $page.
+    [Alias('Page')][string]$OpenPage = '',
     [switch]$NoGui
 )
 
@@ -36,7 +37,8 @@ $categoriesDir = Join-Path $Resources 'Categories'
 $imagesRoot = Join-Path $Resources 'Images'
 $IMAGE_EXTS = '.png', '.jpg', '.jpeg', '.bmp', '.ico', '.gif'
 # Functions of the search (names, existing tiles, SteamGridDB) and its files:
-# $foundFile, $seenFile
+# $foundFile, $seenFile. Its parameters become variables here too ($Stores,
+# $NoRun, ...: typed [string], so no other variable may use those names).
 . (Join-Path $PSScriptRoot 'Scan.ps1') -Resources $Resources -NoRun
 
 # --- Settings.inc --------------------------------------------------------------
@@ -191,7 +193,7 @@ function Size([string]$key, [string]$label, [string]$axis, [string]$help = '') {
 }
 
 $GAMEPAD_BUTTONS = 'A', 'B', 'X', 'Y', 'LB', 'RB', 'BACK', 'START', 'LS', 'RS', 'UP', 'DOWN', 'LEFT', 'RIGHT'
-$STORES = 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'Apps'
+$SOURCES = 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'Apps'
 $STORE_LABELS = @{
     Steam = 'Steam'; Epic = 'Epic Games'; GOG = 'GOG'; Ubisoft = 'Ubisoft Connect'; Battlenet = 'Battle.net'
     'Battle.net' = 'Battle.net'; EA = 'EA app'; Xbox = 'Xbox / Store'; Apps = 'Start menu apps'
@@ -1260,7 +1262,7 @@ function New-StoresControl([string]$key) {
     $wp.MaxWidth = 470
     $wp.HorizontalAlignment = 'Right'
     $current = @("$($values[$key])" -split '\|' | ForEach-Object { $_.Trim() -replace '\.', '' })
-    foreach ($store in $STORES) {
+    foreach ($store in $SOURCES) {
         $cb = New-Object System.Windows.Controls.CheckBox
         $cb.Content = $STORE_LABELS[$store]
         $cb.Margin = T 18 4 0 4
@@ -3094,7 +3096,7 @@ $win.Add_ContentRendered({
     })
 
 $script:updating = $false
-Build-Nav $(if ($Page -eq 'import') { 'page:import' } else { 'page:general' })
+Build-Nav $(if ($OpenPage -eq 'import') { 'page:import' } else { 'page:general' })
 Show-NavTarget $nav.SelectedItem.Tag
 Update-Dirty
 [void]$win.ShowDialog()

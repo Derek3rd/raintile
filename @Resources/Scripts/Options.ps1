@@ -2835,6 +2835,7 @@ function Invoke-Action([string]$action) {
         'OpenFolder' { Start-Process explorer.exe -ArgumentList "`"$Data`"" }
         'OpenSkinFolder' { Start-Process explorer.exe -ArgumentList "`"$(Split-Path -Parent $Resources)`"" }
         'OpenRainmeter' { Invoke-Rainmeter '!Manage' }
+        'OpenGuide' { Start-Process 'https://github.com/Derek3rd/raintile/blob/main/docs/Guide.md' }
     }
 }
 
@@ -3095,7 +3096,7 @@ function New-InfoPage {
     $about = New-Text $(if ($information) { $information } else { 'Full-screen tile launcher for Rainmeter.' }) 13.5 (Res 'DimBrush') -Wrap
     $about.Margin = T 0 8 0 0
     [void](Add-To $card.Child $about)
-    $more = New-Text 'Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, games and apps found on this PC. Every setting is described in docs\Guide.md.' 12.5 (Res 'DimBrush') -Wrap
+    $more = New-Text 'Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, games and apps found on this PC. Every setting is described in the Guide, on GitHub.' 12.5 (Res 'DimBrush') -Wrap
     $more.Margin = T 0 6 0 0
     [void](Add-To $card.Child $more)
     [void](Add-To $sp $card)
@@ -3126,6 +3127,7 @@ function New-InfoPage {
     [void]$card.Child.Children.Add((New-Row 'Your data' 'Settings, categories and images: updates never touch this folder.' (New-ActionControl 'OpenFolder' 'Open the folder') $null))
     [void]$card.Child.Children.Add((New-Row 'Skin folder' 'Scripts and the default files of this version.' (New-ActionControl 'OpenSkinFolder' 'Open the folder') $null))
     [void]$card.Child.Children.Add((New-Row 'Rainmeter' 'The Manage window: skins, Rainmeter settings and log.' (New-ActionControl 'OpenRainmeter' 'Open Rainmeter') $null))
+    [void]$card.Child.Children.Add((New-Row 'Guide' 'Every setting, the controls and troubleshooting, on GitHub.' (New-ActionControl 'OpenGuide' 'Open the Guide') $null))
     [void](Add-To $sp $card)
     return $sv
 }

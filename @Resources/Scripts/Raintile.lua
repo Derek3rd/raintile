@@ -40,6 +40,10 @@ local function cur()
 	return searchCat or cats[active]
 end
 local resources
+-- Folder with your data (Settings.inc, Categories\, Images\, State.inc):
+-- #SETTINGSPATH#Raintile\, which installing an update never touches. Until
+-- Data.ps1 has prepared it, the skin's own files (resources) are used.
+local data
 
 -- Diagnostic messages in the Rainmeter log (DebugLog=1 in Settings.inc).
 local function dbg(msg)
@@ -332,11 +336,11 @@ end
 
 -- Reads a category file (Categories\<file>.ini).
 local function loadCategory(file)
-	local ini = parseIni(resources .. 'Categories\\' .. file)
+	local ini = parseIni(data .. 'Categories\\' .. file)
 	if not ini then return nil end
 
 	local base = file:gsub('%.[iI][nN][iI]$', '')
-	local images = resources .. 'Images\\' .. base .. '\\'
+	local images = data .. 'Images\\' .. base .. '\\'
 	local c = { file = file, name = base, label = base, order = math.huge, tiles = {} }
 
 	-- [Category] first: the category grid is already needed for the thumbnails
@@ -668,7 +672,7 @@ local function saveScroll()
 	local o = normalizeOffset(offset)
 	if c.offset ~= o then
 		c.offset = o
-		SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(o), resources .. 'State.inc')
+		SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(o), data .. 'State.inc')
 	end
 end
 
@@ -1039,7 +1043,7 @@ local knownFiles = {}
 -- percentage or the screen resolution.
 local function writeSizes()
 	local values = {}
-	for _, s in ipairs(parseIni(resources .. 'Settings.inc') or {}) do
+	for _, s in ipairs(parseIni(data .. 'Settings.inc') or {}) do
 		for key, value in pairs(s.keys) do values[key] = value end -- lower-case keys
 	end
 	local names = {}
@@ -1095,8 +1099,29 @@ local function regenerate(files)
 	return true
 end
 
+-- True if the skin's Settings.inc has keys that yours does not (an update
+-- added settings): Data.ps1 adds them.
+local function settingsOutdated(userFile)
+	local have = {}
+	for _, s in ipairs(parseIni(userFile) or {}) do
+		for key in pairs(s.keys) do have[key] = true end
+	end
+	for _, s in ipairs(parseIni(resources .. 'Settings.inc') or {}) do
+		for key in pairs(s.keys) do
+			if not have[key] then return true end
+		end
+	end
+	return false
+end
+
 function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
+	local userData = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Raintile\\'
+	data = fileExists(userData .. 'Settings.inc') and userData or resources
+	V.NeedsSetup = data ~= userData or settingsOutdated(userData .. 'Settings.inc')
+	-- the background listing of the category files looks in the data folder
+	SKIN:Bang('!SetOption', 'MeasureCategoryList', 'Parameter', '/c dir /b /a-d "' .. data .. 'Categories\\*.ini"')
+	SKIN:Bang('!UpdateMeasure', 'MeasureCategoryList')
 	laidOut, pillPos = false, nil
 
 	-- default grid; each category can have its own (NX/NY in [Category])
@@ -1130,7 +1155,8 @@ function Initialize()
 	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
 	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
 	V.DebugLog = num('DebugLog', 0) ~= 0
-	V.ImportOnStart = num('ImportOnStart', 0) ~= 0
+	V.ScanOnStart = num('ScanOnStart', 1) ~= 0
+	V.CheckUpdates = num('CheckUpdates', 1) ~= 0
 	V.SearchW = math.floor(num('SearchW', 320))
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
@@ -1183,7 +1209,7 @@ function Initialize()
 	-- Starts from the stored file list; OnCategoryList() checks it again.
 	knownFiles = {}
 	for _, file in ipairs(splitList(SKIN:GetVariable('CategoryFiles', ''))) do
-		if fileExists(resources .. 'Categories\\' .. file) then knownFiles[#knownFiles + 1] = file end
+		if fileExists(data .. 'Categories\\' .. file) then knownFiles[#knownFiles + 1] = file end
 	end
 	if #knownFiles == 0 then return end -- first run: wait for the list
 
@@ -1227,9 +1253,19 @@ end
 function Update()
 	-- With UpdateDivider=-1 this is only called once, on load.
 	if ready then
-		if V.AnimOpen and not V.StartHidden then appear = 0 end
+		-- left by the Options window ("Save and refresh"): show the launcher
+		-- once loaded, also if it was hidden before the refresh
+		local flag = resources .. 'Generated\\ShowOnLoad'
+		local showNow = fileExists(flag)
+		if showNow then os.remove(flag) end
+		local startHidden = V.StartHidden and not showNow
+		if V.AnimOpen and not startHidden then appear = 0 end
 		render(true)
-		if V.StartHidden then
+		if showNow then
+			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+			SKIN:Bang('!Show')
+		end
+		if startHidden then
 			visible = false
 			SKIN:Bang('!Hide')
 			hotKey(false)
@@ -1327,26 +1363,95 @@ function OnCategoryList()
 	end
 end
 
--- Automatic background import on every load (ImportOnStart=1). If it finds
--- something new the skin refreshes and the import runs again, but the second
--- time nothing changes and so nothing refreshes: no loops.
-function AutoImport()
-	if not ready or not V.ImportOnStart then return end
-	SKIN:Bang('!CommandMeasure', 'MeasureImport', 'Run')
+-- Prepares the data folder when needed (first run, settings added by an
+-- update): Data.ps1, then a refresh to use it. Called by OnRefreshAction.
+function Setup()
+	if V.NeedsSetup then SKIN:Bang('!CommandMeasure', 'MeasureSetup', 'Run') end
 end
 
--- End of Import.ps1: logs the result and refreshes if something changed.
-function OnImport()
-	local output = SKIN:GetMeasure('MeasureImport'):GetStringValue()
-	local changed = false
+function OnSetup()
+	local output = SKIN:GetMeasure('MeasureSetup'):GetStringValue()
+	local ok = false
 	for line in output:gmatch('[^\r\n]+') do
-		if line:match('^RESULT:CHANGED') then
-			changed = true
+		if line == 'RESULT:OK' then ok = true
+		elseif not line:match('^RESULT:') then print('Raintile: ' .. line) end
+	end
+	-- the skin reloads with the data folder; on errors it keeps its own files
+	if ok then SKIN:Bang('!Refresh') end
+end
+
+-- Background search of the installed games and apps on every load
+-- (ScanOnStart=1). Nothing is added: new ones light the dot on the gear, and
+-- are added from the Options window.
+function AutoScan()
+	if not ready or not V.ScanOnStart then return end
+	SKIN:Bang('!CommandMeasure', 'MeasureScan', 'Run')
+end
+
+-- Dot on the gear: an update, or new games or apps found. A click opens the
+-- Options window where they are (Info or Import).
+local notice = { found = 0, update = nil }
+local function showNotice()
+	local tip
+	if notice.update then
+		tip = 'Raintile ' .. notice.update .. ' is available: click for details'
+	elseif notice.found > 0 then
+		tip = 'New games or apps found: click to add them'
+	end
+	if tip then SKIN:Bang('!SetOption', 'MeterNotice', 'ToolTipText', tip) end
+	show('MeterNotice', tip ~= nil)
+	SKIN:Bang('!UpdateMeter', 'MeterNotice')
+	SKIN:Bang('!Redraw')
+end
+
+function OpenNotice()
+	SKIN:Bang(SKIN:GetVariable(notice.update and 'OptionsInfoAction' or 'OptionsImportAction'))
+end
+
+-- Update check on every load (CheckUpdates=1); Update.ps1 asks GitHub at
+-- most once a day.
+function AutoUpdateCheck()
+	if not ready or not V.CheckUpdates then return end
+	SKIN:Bang('!CommandMeasure', 'MeasureUpdate', 'Run')
+end
+
+function OnUpdateCheck()
+	local output = SKIN:GetMeasure('MeasureUpdate'):GetStringValue()
+	notice.update = nil
+	for line in output:gmatch('[^\r\n]+') do
+		local v = line:match('^RESULT:UPDATE=(.+)$')
+		if v then notice.update = v
+		elseif not line:match('^RESULT:') then dbg('update: ' .. line) end
+	end
+	showNotice()
+end
+
+-- End of Scan.ps1: logs the result and shows the dot if something is new.
+function OnScan()
+	local output = SKIN:GetMeasure('MeasureScan'):GetStringValue()
+	local new = 0
+	for line in output:gmatch('[^\r\n]+') do
+		local n = line:match('^RESULT:NEW=(%d+)')
+		if n then
+			new = tonumber(n)
 		elseif not line:match('^RESULT:') then
-			print('Raintile: import: ' .. line)
+			dbg('scan: ' .. line)
 		end
 	end
-	if changed then SKIN:Bang('!Refresh') end
+	notice.found = new
+	showNotice()
+end
+
+-- The Options window showed the list: nothing is new any more
+function OnFoundSeen()
+	notice.found = 0
+	showNotice()
+end
+
+-- The Options window checked again and found no update
+function OnUpdateSeen()
+	notice.update = nil
+	showNotice()
 end
 
 -- Creates the missing thumbnails in the background (called by OnRefreshAction).
@@ -1463,7 +1568,7 @@ function SetCategory(i)
 	saveScroll()
 	active = i
 	applyGeometry(cats[i])
-	SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), resources .. 'State.inc')
+	SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), data .. 'State.inc')
 	offset = normalizeOffset(cats[i].offset)
 	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0

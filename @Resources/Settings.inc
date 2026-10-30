@@ -184,18 +184,27 @@ GamepadRepeatRate=110
 SearchW=320
 SearchPlaceholder=Search
 
-; --- Store import ---------------------------------------------------------------
-; Right click on the skin > "Import games from stores". Installed games are
-; written at the end of the ImportCategory file, in a block that is rewritten
-; on every import; hand-written tiles are never touched.
+; --- Games and apps ---------------------------------------------------------------
+; Right click on the skin > "Add games and apps..." (or Options > Import):
+; the games and apps installed on this PC are listed, and the ones you pick
+; become normal tiles. Nothing is added by itself.
+; Where to look, separated by |: Steam Epic GOG Ubisoft Battlenet EA Xbox
+; (games) and Apps (the Start menu)
+ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps
+; 1 = look for new games and apps in the background on every skin load: new
+; ones light a dot on the gear (nothing is added)
+ScanOnStart=1
+; Categories where games and apps go when added
 ImportCategory=Games
-; Stores to read, separated by |
-ImportStores=Steam|Epic|GOG|Ubisoft
-; 1 = also import automatically, in the background, on every skin load
-ImportOnStart=0
-; Free SteamGridDB API key (steamgriddb.com > Preferences > API): downloads
-; background and logo of games without local images (Epic, GOG, Ubisoft)
+AppsCategory=Apps
+; Free SteamGridDB API key (steamgriddb.com > Preferences > API): when adding a
+; game without local images, its background and logo are downloaded
 SteamGridDBKey=
+
+; --- Updates --------------------------------------------------------------------
+; 1 = check GitHub for a new version (at most once a day): a dot on the gear
+; and Options > Info show it, and install it with one click
+CheckUpdates=1
 
 ; --- Diagnostics ----------------------------------------------------------------
 ; 1 = write to the Rainmeter log (Manage > Log) what happens on confirm, on

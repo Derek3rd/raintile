@@ -16,8 +16,9 @@ Complete reference for Raintile. For a presentation and installation steps see t
   - [Tile keys](#tile-keys)
   - [Commands](#commands)
   - [Images](#images)
-- [Importing games from stores](#importing-games-from-stores)
+- [Adding games and apps](#adding-games-and-apps)
 - [Options window](#options-window)
+- [Your data and updates](#your-data-and-updates)
 - [Settings reference](#settings-reference)
 - [Sizes in pixels or percentages](#sizes-in-pixels-or-percentages)
 - [How it works](#how-it-works)
@@ -53,7 +54,7 @@ Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter start
 - **Click** a tile to launch it; **wheel** to scroll.
 - **Click** a category in the menu to switch to it; clicking the category already open scrolls back to the start.
 - The **search bar** at the top left opens the search; the **gear** opens the Options window; the **X** closes the launcher.
-- Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Import games from stores*, *Categories folder*, plus Rainmeter's own menu.
+- Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Add games and apps...*, *Categories folder*, plus Rainmeter's own menu.
 
 ### Keyboard
 
@@ -113,7 +114,7 @@ On click the tile expands to full screen (with background and logo at full resol
 
 ### Category files
 
-Each `.ini` file in `@Resources\Categories\` is a category; the file name (without `.ini`) identifies it and its image folder `@Resources\Images\<file>\`. To add a category, create a new file (e.g. `Emulators.ini`) and refresh the skin — the folder is re-checked in the background on every load.
+Each `.ini` file in `Categories\` of [your data folder](#your-data-and-updates) is a category; the file name (without `.ini`) identifies it and its image folder `Images\<file>\`. To add a category, create a new file (e.g. `Emulators.ini`) and refresh the skin — the folder is re-checked in the background on every load.
 
 ```ini
 [Category]
@@ -141,7 +142,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `Image` | another name for both images: `Image=diablo4` looks for `background\diablo4.*` and `logo\diablo4.*` |
 | `Background` | specific background file (relative to `background\` or absolute; extension optional) |
 | `Logo` | specific logo file (relative to `logo\` or absolute) |
-| `Source` | written by the importer (`Steam:570`); informational |
+| `Source` | where an added game or app comes from (`Steam:570`); informational |
 
 ### Commands
 
@@ -168,26 +169,32 @@ Images\Games\
 
 Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
 
-## Importing games from stores
+## Adding games and apps
 
-Right click on the launcher > **Import games from stores** (or **Import games** in the Options window). The script (`Scripts\Import.ps1`, in the background) reads the games installed from:
+Right click on the launcher > **Add games and apps...**, or **Import** in the Options window, shows what is installed on this PC. Nothing is added by itself: tick the games and apps you want and press **Add selected**. They become normal tiles, which you can edit, move and keep even after uninstalling.
 
-| Store | Source | Images |
-| --- | --- | --- |
-| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` in every library | local library cache (both the old and the 2024+ layout) |
-| Epic Games | launcher manifests (main games only, no DLC or apps) | SteamGridDB |
-| GOG Galaxy | registry; launched through Galaxy if installed | SteamGridDB |
-| Ubisoft Connect | registry | SteamGridDB |
+The search (`Scripts\Scan.ps1`, in the background) looks in:
 
-How the result is written:
+| Source | How | Launched with | Images |
+| --- | --- | --- | --- |
+| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` in every library | `steam://rungameid/<id>` | local library cache (old and 2024+ layout) |
+| Epic Games | launcher manifests (main games only, no DLC or apps) | Epic launcher link | SteamGridDB |
+| GOG Galaxy | registry | Galaxy, or the game exe | SteamGridDB |
+| Ubisoft Connect | registry | `uplay://launch/<id>` | SteamGridDB |
+| Battle.net | uninstall entries of its games | Battle.net (`--exec="launch <code>"`), or the game's launcher | SteamGridDB |
+| EA app | uninstall entries of Electronic Arts games | the game exe | SteamGridDB |
+| Xbox / Microsoft Store | Store packages with a `MicrosoftGame.config` | `shell:AppsFolder` | SteamGridDB |
+| Apps | Start menu: program shortcuts and Store apps, without uninstallers, help files and the games already found | the shortcut / `shell:AppsFolder` | the program's own icon (as logo) |
 
-- Games go to the end of the `ImportCategory` file (default `Games.ini`), below the line `; ===== IMPORTED AUTOMATICALLY =====`. Everything above it — your hand-written tiles — is never touched.
-- The imported block is rebuilt on every import: uninstalled games disappear, new ones appear.
-- A game already present among your hand-written tiles, in any category (same name or same `Command`), is not imported again. To customise an imported game, use **Make it a normal tile** in the Options window, or move its section above the marker line by hand.
-- **Images** for stores other than Steam (and Steam games without local images) are downloaded from [SteamGridDB](https://www.steamgriddb.com/) into `Images\<category>\imported\` if `SteamGridDBKey` holds an API key (free, from the site's preferences). An image you put in `background\<Name>.*` or `logo\<Name>.*` always wins.
-- The file is only rewritten if something changed, and the skin only refreshes in that case. The outcome goes to the Rainmeter log (`Raintile: import:` lines).
+- **The list** shows the cover (Steam) or the icon of each item, with its source, and marks the new ones. Filter by type (All, Games, Apps) or by name; *Show added* also lists what is already in the launcher (dimmed, with its category); *Covers* off gives a compact text list.
+- **Where they go**: by type (games to `ImportCategory`, apps to `AppsCategory`; the category is created if missing) or all to one category.
+- **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. For games without local images, background and logo are downloaded from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences).
+- Something already in the launcher, in any category (same name or same command), is not listed again.
+- **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear. A click on it opens the list.
+- The added tiles are written at once; **Save and refresh** shows them in the launcher.
+- **Older versions** imported games automatically, in a block below the line `; ===== IMPORTED AUTOMATICALLY =====`. Opening **Import** turns those games into normal tiles, once.
 
-Settings: `ImportCategory`, `ImportStores` (e.g. `Steam|Epic`), `ImportOnStart=1` to import automatically in the background on every load, `SteamGridDBKey`.
+Settings: `ImportStores` (e.g. `Steam|Epic|Apps`), `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
 ## Options window
 
@@ -206,11 +213,11 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 | Keybindings > Keyboard | open/close shortcut, close key, navigation keys |
 | Keybindings > Gamepad | support, open/close buttons, dead zone, repeat |
 | Search | search bar |
-| Import | store import settings and **Import games** |
+| Import | the games and apps found on this PC, to add; where to look and where they go |
 | Advanced | performance, debug log, entries without a page of their own |
 | Categories | the list of categories (create, open, reorder, delete) and the settings of the selected one: name, icon, grid, logo size |
 | Categories > *each category* | its tiles, with a preview: edit, move to another category, turn imported games into normal tiles |
-| Info (at the bottom) | version, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the skin folder and Rainmeter's Manage window |
+| Info (at the bottom) | version and updates, your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide |
 
 - Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
@@ -218,13 +225,53 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 - **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
   - **Move to**: moves a tile, and its images, to another category; both category files are saved at once.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
-- **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds while the skin reloads, then the launcher is shown and the window closes. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
+- **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 
 The window hides the launcher while open. You can always keep editing the files by hand.
 
+## Your data and updates
+
+### Where your data is
+
+Your settings, categories, images and positions are kept in **`%APPDATA%\Rainmeter\Raintile\`** (Rainmeter's `#SETTINGSPATH#Raintile\`), not in the skin folder:
+
+```
+Settings.inc      your settings (every key, with its comments)
+State.inc         last category and scroll positions
+Categories\*.ini  your categories and tiles
+Images\           their icons, backgrounds and logos
+Seen.txt          games and apps already shown in the Import list
+Update.json       result of the last update check
+```
+
+Installing an update replaces the skin folder, so nothing of yours may live there. The files in the skin's `@Resources\` (`Settings.inc`, `Categories\`, `Images\`) are the defaults: the first time, `Scripts\Data.ps1` copies them to the data folder — or, when updating from a version that kept them in the skin folder, copies your own from the backup the installer has just made (`Skins\@Backup\Raintile\`). Right click > *Categories folder*, *Images folder* and *Edit Settings.inc*, and Options > Info, open the data folder.
+
+When an update adds settings, they are added to your `Settings.inc` with their default value (and settings it removes go), keeping your values; this happens by itself on the first load after the update. To start over from the defaults, delete the data folder and refresh the skin.
+
+### Updates
+
+> **Experimental**: installing updates from the Options window is still being tested and could cause problems. Before installing, keep a copy of your data folder (Options > Info > *Your data*); if something goes wrong, install the package from the [releases page](https://github.com/Derek3rd/raintile/releases) by hand.
+
+With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps); a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
+
+- **Download and install** downloads the release's `.rmskin` and opens it with the Rainmeter installer; the Options window closes. Keep the installer's default options. Your data is not touched.
+- **Check now** asks GitHub again; **Release page** opens the release on GitHub.
+
+### Publishing a release
+
+For the check to work, each release on GitHub needs:
+
+- a tag with the version number, like **`v1.0.2`** (if the tag has no number, the number in the release title is used, e.g. "1.0.1 - ...");
+- the same version in `Version=` in the `[Metadata]` of `Raintile.ini`;
+- the `.rmskin` package attached to the release (otherwise *Download and install* opens the release page).
+
+The package holds the skin only: `README.md` and `docs\` stay on GitHub (Options > Info opens the Guide there).
+
+In the package no *VariableFiles* are needed (settings are in the data folder) and the installer's default backup should be kept: the first update to this version recovers the user's categories and images from that backup.
+
 ## Settings reference
 
-All settings live in `@Resources\Settings.inc`. Switches are `1` (on) / `0` (off). Sizes marked *(size)* accept pixels or percentages ([see below](#sizes-in-pixels-or-percentages)). After editing the file by hand, refresh the skin.
+All settings live in `Settings.inc` in [your data folder](#your-data-and-updates) (right click > *Edit Settings.inc*); `@Resources\Settings.inc` holds the defaults. Switches are `1` (on) / `0` (off). Sizes marked *(size)* accept pixels or percentages ([see below](#sizes-in-pixels-or-percentages)). After editing the file by hand, refresh the skin.
 
 ### Screen
 
@@ -338,9 +385,15 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 | `SearchW` | `320` | search bar width *(size)* |
 | `SearchPlaceholder` | `Search` | text shown in the empty search bar |
 
-### Store import
+### Games and apps
 
-See [Importing games from stores](#importing-games-from-stores): `ImportCategory`, `ImportStores`, `ImportOnStart`, `SteamGridDBKey`.
+See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
+
+### Updates
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `CheckUpdates` | `1` | check GitHub for a newer version, at most once a day ([see above](#updates)) |
 
 ### Diagnostics
 
@@ -394,13 +447,15 @@ Raintile.ini                 main skin (styles, measures, fixed meters)
 Hotkey/Hotkey.ini            Esc mini-skin (activated by the launcher)
 Navigation/Navigation.ini    navigation keys mini-skin (activated by the launcher)
 @Resources/
-  Settings.inc               settings
-  State.inc                  last category and scroll positions (written by the skin)
-  Categories/*.ini           one file per category (menu entry + tiles)
-  Images/<category>/         icon.*, background/, logo/, imported/
+  Settings.inc               default settings (yours are in the data folder)
+  State.inc                  default positions
+  Categories/*.ini           default categories, copied to the data folder the first time
+  Images/<category>/         their icons, backgrounds and logos
+  Scripts/Data.ps1           prepares the data folder
+  Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic
   Scripts/Thumbs.ps1         thumbnail creation
-  Scripts/Import.ps1         store import
+  Scripts/Scan.ps1           search of the installed games and apps
   Scripts/Helper.ps1         gamepad and focus-loss helper
   Scripts/Options.ps1        Options window
   Scripts/Options.xaml       look of the Options window
@@ -408,7 +463,11 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
   Generated/Sizes.inc        percentage sizes and #hex colours converted for Rainmeter
   Generated/Thumbs/          thumbnails (safe to delete: they are rebuilt)
   Generated/Colors.txt       tile colours taken from logos (AutoTileColor)
+  Generated/Found.json       games and apps found by the last search
+  Generated/Found/           their icons
 ```
+
+The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your data is](#where-your-data-is).
 
 ## Troubleshooting
 
@@ -417,7 +476,10 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
 - **A category icon doesn't show**: the icon goes in `Images\<file name>\icon.png` — the folder is named after the category *file* (`Games`), not its menu label. The log shows exactly where it looked (`Raintile: no icon for category ...`).
 - **A tile image doesn't show**: check the file name matches the tile name (or its `Image`/`Background`/`Logo` key); explicit names that are not found are logged.
 - **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. It needs Windows PowerShell 5.1 (included in Windows 10/11).
-- **Imported games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey`. Import messages are in the log (`Raintile: import:`).
+- **Your categories are gone after an update**: they are copied from `Skins\@Backup\Raintile\@Resources\` the first time the new version loads; if the backup option was turned off in the installer, copy `Categories\` and `Images\` from your old copy into the data folder by hand.
+- **The update check fails**: Options > Info shows the error (no connection, GitHub not reachable). It is retried on the next load after a day, or with *Check now*.
+- **Added games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey` before adding them. With `DebugLog=1` the search writes what it found per store to the log (`Raintile: scan:` lines).
+- **A game or app is not in the list**: check that its source is ticked in Import > *Where to look*, then *Search again*. Anything else can always be added by hand with its `.lnk` shortcut.
 - **Thumbnails are not created**: they are made by PowerShell in the background; errors are listed in the log. Deleting `Generated\Thumbs\` forces a rebuild.
 - **Slow or choppy animations on very large screens**: every animation step redraws the whole full-screen window. Turn off the heaviest ones (`AnimScroll`, `BgStyle=Crop`), lower `AnimAppearFrames`/`LaunchAnimFrames` or raise the `Anim*Smooth` values.
 
@@ -427,5 +489,5 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
 - **Focus loss** (`AutoHide`) is detected only while the launcher is above other windows (`ShowZPos=1`, the default), not when it sits on the desktop (`-2`).
 - **Icons from `.exe` files** cannot be extracted by Rainmeter: provide an image.
 - **Non-ASCII characters** (accents, etc.) in category names and labels may display incorrectly: category files are read as UTF-8.
-- **Store import** does not cover Battle.net, EA app and Xbox/Microsoft Store yet; use `.lnk` shortcuts for those.
+- **Battle.net, EA app and Xbox** games are found through Windows' list of installed programs and Store packages: a game installed in an unusual way may be missing (add its shortcut by hand). Battle.net games without a known product code open through their own launcher.
 - **Fonts** sizes cannot be percentages.

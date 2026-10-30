@@ -18,6 +18,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
   - [Images](#images)
 - [Adding games and apps](#adding-games-and-apps)
 - [Options window](#options-window)
+- [Your data and updates](#your-data-and-updates)
 - [Settings reference](#settings-reference)
 - [Sizes in pixels or percentages](#sizes-in-pixels-or-percentages)
 - [How it works](#how-it-works)
@@ -113,7 +114,7 @@ On click the tile expands to full screen (with background and logo at full resol
 
 ### Category files
 
-Each `.ini` file in `@Resources\Categories\` is a category; the file name (without `.ini`) identifies it and its image folder `@Resources\Images\<file>\`. To add a category, create a new file (e.g. `Emulators.ini`) and refresh the skin — the folder is re-checked in the background on every load.
+Each `.ini` file in `Categories\` of [your data folder](#your-data-and-updates) is a category; the file name (without `.ini`) identifies it and its image folder `Images\<file>\`. To add a category, create a new file (e.g. `Emulators.ini`) and refresh the skin — the folder is re-checked in the background on every load.
 
 ```ini
 [Category]
@@ -216,7 +217,7 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 | Advanced | performance, debug log, entries without a page of their own |
 | Categories | the list of categories (create, open, reorder, delete) and the settings of the selected one: name, icon, grid, logo size |
 | Categories > *each category* | its tiles, with a preview: edit, move to another category, turn imported games into normal tiles |
-| Info (at the bottom) | version, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the skin folder and Rainmeter's Manage window |
+| Info (at the bottom) | version and updates, your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders and Rainmeter's Manage window |
 
 - Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
@@ -228,9 +229,45 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 
 The window hides the launcher while open. You can always keep editing the files by hand.
 
+## Your data and updates
+
+### Where your data is
+
+Your settings, categories, images and positions are kept in **`%APPDATA%\Rainmeter\Raintile\`** (Rainmeter's `#SETTINGSPATH#Raintile\`), not in the skin folder:
+
+```
+Settings.inc      your settings (every key, with its comments)
+State.inc         last category and scroll positions
+Categories\*.ini  your categories and tiles
+Images\           their icons, backgrounds and logos
+Seen.txt          games and apps already shown in the Import list
+Update.json       result of the last update check
+```
+
+Installing an update replaces the skin folder, so nothing of yours may live there. The files in the skin's `@Resources\` (`Settings.inc`, `Categories\`, `Images\`) are the defaults: the first time, `Scripts\Data.ps1` copies them to the data folder — or, when updating from a version that kept them in the skin folder, copies your own from the backup the installer has just made (`Skins\@Backup\Raintile\`). Right click > *Categories folder*, *Images folder* and *Edit Settings.inc*, and Options > Info, open the data folder.
+
+When an update adds settings, they are added to your `Settings.inc` with their default value (and settings it removes go), keeping your values; this happens by itself on the first load after the update. To start over from the defaults, delete the data folder and refresh the skin.
+
+### Updates
+
+With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps); a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
+
+- **Download and install** downloads the release's `.rmskin` and opens it with the Rainmeter installer; the Options window closes. Keep the installer's default options. Your data is not touched.
+- **Check now** asks GitHub again; **Release page** opens the release on GitHub.
+
+### Publishing a release
+
+For the check to work, each release on GitHub needs:
+
+- a tag with the version number, like **`v1.0.2`** (if the tag has no number, the number in the release title is used, e.g. "1.0.1 - ...");
+- the same version in `Version=` in the `[Metadata]` of `Raintile.ini`;
+- the `.rmskin` package attached to the release (otherwise *Download and install* opens the release page).
+
+In the package no *VariableFiles* are needed (settings are in the data folder) and the installer's default backup should be kept: the first update to this version recovers the user's categories and images from that backup.
+
 ## Settings reference
 
-All settings live in `@Resources\Settings.inc`. Switches are `1` (on) / `0` (off). Sizes marked *(size)* accept pixels or percentages ([see below](#sizes-in-pixels-or-percentages)). After editing the file by hand, refresh the skin.
+All settings live in `Settings.inc` in [your data folder](#your-data-and-updates) (right click > *Edit Settings.inc*); `@Resources\Settings.inc` holds the defaults. Switches are `1` (on) / `0` (off). Sizes marked *(size)* accept pixels or percentages ([see below](#sizes-in-pixels-or-percentages)). After editing the file by hand, refresh the skin.
 
 ### Screen
 
@@ -348,6 +385,12 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 
 See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
+### Updates
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `CheckUpdates` | `1` | check GitHub for a newer version, at most once a day ([see above](#updates)) |
+
 ### Diagnostics
 
 | Setting | Default | Description |
@@ -400,10 +443,12 @@ Raintile.ini                 main skin (styles, measures, fixed meters)
 Hotkey/Hotkey.ini            Esc mini-skin (activated by the launcher)
 Navigation/Navigation.ini    navigation keys mini-skin (activated by the launcher)
 @Resources/
-  Settings.inc               settings
-  State.inc                  last category and scroll positions (written by the skin)
-  Categories/*.ini           one file per category (menu entry + tiles)
-  Images/<category>/         icon.*, background/, logo/
+  Settings.inc               default settings (yours are in the data folder)
+  State.inc                  default positions
+  Categories/*.ini           default categories, copied to the data folder the first time
+  Images/<category>/         their icons, backgrounds and logos
+  Scripts/Data.ps1           prepares the data folder
+  Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic
   Scripts/Thumbs.ps1         thumbnail creation
   Scripts/Scan.ps1           search of the installed games and apps
@@ -416,8 +461,9 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
   Generated/Colors.txt       tile colours taken from logos (AutoTileColor)
   Generated/Found.json       games and apps found by the last search
   Generated/Found/           their icons
-  Generated/Seen.txt         items already shown in the list (no dot for them)
 ```
+
+The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your data is](#where-your-data-is).
 
 ## Troubleshooting
 
@@ -426,6 +472,8 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
 - **A category icon doesn't show**: the icon goes in `Images\<file name>\icon.png` — the folder is named after the category *file* (`Games`), not its menu label. The log shows exactly where it looked (`Raintile: no icon for category ...`).
 - **A tile image doesn't show**: check the file name matches the tile name (or its `Image`/`Background`/`Logo` key); explicit names that are not found are logged.
 - **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. It needs Windows PowerShell 5.1 (included in Windows 10/11).
+- **Your categories are gone after an update**: they are copied from `Skins\@Backup\Raintile\@Resources\` the first time the new version loads; if the backup option was turned off in the installer, copy `Categories\` and `Images\` from your old copy into the data folder by hand.
+- **The update check fails**: Options > Info shows the error (no connection, GitHub not reachable). It is retried on the next load after a day, or with *Check now*.
 - **Added games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey` before adding them. With `DebugLog=1` the search writes what it found per store to the log (`Raintile: scan:` lines).
 - **A game or app is not in the list**: check that its source is ticked in Import > *Where to look*, then *Search again*. Anything else can always be added by hand with its `.lnk` shortcut.
 - **Thumbnails are not created**: they are made by PowerShell in the background; errors are listed in the log. Deleting `Generated\Thumbs\` forces a rebuild.

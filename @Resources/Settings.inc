@@ -201,6 +201,11 @@ AppsCategory=Apps
 ; game without local images, its background and logo are downloaded
 SteamGridDBKey=
 
+; --- Updates --------------------------------------------------------------------
+; 1 = check GitHub for a new version (at most once a day): a dot on the gear
+; and Options > Info show it, and install it with one click
+CheckUpdates=1
+
 ; --- Diagnostics ----------------------------------------------------------------
 ; 1 = write to the Rainmeter log (Manage > Log) what happens on confirm, on
 ; tile launch and on show/hide, and the keys seen by the HotKey plugin

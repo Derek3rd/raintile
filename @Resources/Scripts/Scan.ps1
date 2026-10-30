@@ -10,13 +10,15 @@
 # Each item: Id, Kind (game/app), Store, Name, Command, Hero and Logo (local
 # images, Steam only), Icon (program icon, extracted to Generated\Found\),
 # SteamAppId, New. New = not among the tiles of any category and not seen yet
-# in the list (Generated\Seen.txt, written by the Options window).
+# in the list (Seen.txt in the data folder, written by the Options window).
 # The last output line, read by the skin, is RESULT:NEW=<number of new items>.
 #
 # With -NoRun only the functions are loaded (Options window, tests).
 
 param(
     [Parameter(Mandatory = $true)][string]$Resources,
+    # folder with your data (Categories\, Seen.txt); the skin's own if empty
+    [string]$Data = '',
     [string]$Stores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps',
     [switch]$NoRun,
     # tests only: alternative paths instead of the registry and ProgramData
@@ -29,9 +31,10 @@ $ErrorActionPreference = 'Stop'
 $imageExts = '.png', '.jpg', '.jpeg', '.bmp', '.ico', '.gif'
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $Resources = [IO.Path]::GetFullPath($Resources).TrimEnd('\', '/')
+$Data = if ($Data) { [IO.Path]::GetFullPath($Data).TrimEnd('\', '/') } else { $Resources }
 $generated = Join-Path $Resources 'Generated'
 $foundFile = Join-Path $generated 'Found.json'
-$seenFile = Join-Path $generated 'Seen.txt'
+$seenFile = Join-Path $Data 'Seen.txt'
 $iconDir = Join-Path $generated 'Found'
 
 function Get-RegValue($path, $name) {
@@ -422,7 +425,7 @@ function Save-Icons {
 # Names (keys) and commands (lower case) of the tiles of every category
 function Get-ExistingTiles {
     $names = @{}; $commands = @{}
-    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $Resources 'Categories') -Filter '*.ini' -File -ErrorAction SilentlyContinue)) {
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $Data 'Categories') -Filter '*.ini' -File -ErrorAction SilentlyContinue)) {
         $section = $null
         foreach ($line in [IO.File]::ReadAllLines($f.FullName)) {
             $t = $line.Trim()

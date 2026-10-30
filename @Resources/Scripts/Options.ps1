@@ -19,6 +19,8 @@
 
 param(
     [Parameter(Mandatory = $true)][string]$Resources,
+    # folder with your data (Settings.inc, Categories\, Images\): see Data.ps1
+    [string]$Data = '',
     [string]$Config = 'Raintile',
     # page to open on (e.g. -Page import: the list of games and apps found).
     # Not $Page: variable names ignore case, and the menu code uses $page.
@@ -32,14 +34,18 @@ $IMPORT_MARKER = '; ===== IMPORTED AUTOMATICALLY ====='
 $OLD_IMPORT_MARKER = '; ===== IMPORTATI AUTOMATICAMENTE ====='
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $Resources = [IO.Path]::GetFullPath($Resources).TrimEnd('\', '/')
-$settingsFile = Join-Path $Resources 'Settings.inc'
-$categoriesDir = Join-Path $Resources 'Categories'
-$imagesRoot = Join-Path $Resources 'Images'
+# until the data folder is prepared, the skin's own files are used
+$Data = if ($Data -and (Test-Path -LiteralPath (Join-Path $Data 'Settings.inc'))) { [IO.Path]::GetFullPath($Data).TrimEnd('\', '/') } else { $Resources }
+$settingsFile = Join-Path $Data 'Settings.inc'
+$categoriesDir = Join-Path $Data 'Categories'
+$imagesRoot = Join-Path $Data 'Images'
 $IMAGE_EXTS = '.png', '.jpg', '.jpeg', '.bmp', '.ico', '.gif'
 # Functions of the search (names, existing tiles, SteamGridDB) and its files:
 # $foundFile, $seenFile. Its parameters become variables here too ($Stores,
 # $NoRun, ...: typed [string], so no other variable may use those names).
-. (Join-Path $PSScriptRoot 'Scan.ps1') -Resources $Resources -NoRun
+. (Join-Path $PSScriptRoot 'Scan.ps1') -Resources $Resources -Data $Data -NoRun
+# Functions of the update check (Read-UpdateInfo, Invoke-UpdateCheck)
+. (Join-Path $PSScriptRoot 'Update.ps1') -Resources $Resources -Data $Data -NoRun
 
 # --- Settings.inc --------------------------------------------------------------
 
@@ -395,6 +401,9 @@ $schema = @(
                     (S 'bool' 'Thumbnails' 'Thumbnails' 'Uses copies of the images at the exact displayed size, made in the background.'),
                     (S 'bool' 'TileHover' 'Highlight the tile under the mouse')
                 ) }
+            @{ Title = 'Updates'; Items = @(
+                    (S 'bool' 'CheckUpdates' 'Check for updates' 'Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info.')
+                ) }
             @{ Title = 'Diagnostics'; Items = @(
                     (S 'bool' 'DebugLog' 'Debug log' 'Writes details to the Rainmeter log (Manage > Log).')
                 ) }
@@ -444,7 +453,7 @@ $defaults = @{
     SearchW = '320'; SearchPlaceholder = 'Search'
     ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps'
     ScanOnStart = '1'; SteamGridDBKey = ''
-    DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
+    CheckUpdates = '1'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
     BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
     AccentColor = '0,210,180,255'; ActiveCategoryColor = '0,210,180,70'; HoverCategoryColor = '255,255,255,20'
     TextColor = '240,240,245,255'; TextDimColor = '150,150,160,255'
@@ -2823,7 +2832,8 @@ function Start-SaveAndRefresh {
 function Invoke-Action([string]$action) {
     switch ($action) {
         'OpenSettings' { Start-Process notepad.exe -ArgumentList "`"$settingsFile`"" }
-        'OpenFolder' { Start-Process explorer.exe -ArgumentList "`"$Resources`"" }
+        'OpenFolder' { Start-Process explorer.exe -ArgumentList "`"$Data`"" }
+        'OpenSkinFolder' { Start-Process explorer.exe -ArgumentList "`"$(Split-Path -Parent $Resources)`"" }
         'OpenRainmeter' { Invoke-Rainmeter '!Manage' }
     }
 }
@@ -2945,6 +2955,118 @@ function Switch-NavGroup($item, $e) {
     }
 }
 
+# --- Updates (Info page) -----------------------------------------------------------
+# Update.ps1 keeps the last check in Update.json (data folder). "Download and
+# install" downloads the release's .rmskin and opens it: the Rainmeter
+# installer takes over (your data is not in the skin folder, so it stays).
+
+$upd = @{}
+
+function Show-UpdateInfo {
+    $info = Read-UpdateInfo
+    $installed = Get-InstalledVersion
+    $upd.Installed.Text = $installed
+    if (-not $info) {
+        $upd.Latest.Text = 'Not checked yet'
+    } elseif ($info.Error) {
+        $upd.Latest.Text = "Check failed: $($info.Error)"
+    } else {
+        $when = ''
+        try { $when = '   ' + [char]0xB7 + '   checked ' + ([DateTime]::Parse($info.Checked)).ToString('g') } catch { }
+        $upd.Latest.Text = $(if ($info.Latest) { $info.Latest } else { 'unknown' }) + $when
+    }
+    $newer = $info -and $info.Newer -and $info.Current -eq $installed
+    $upd.Status.Text = if ($newer) { "Raintile $($info.Latest) is available." } elseif ($info -and -not $info.Error) { 'Raintile is up to date.' } else { '' }
+    $upd.Status.Foreground = if ($newer) { Res 'AccentBrush' } else { Res 'DimBrush' }
+    $upd.Notes.Text = if ($newer -and $info.Notes) { $info.Notes } else { '' }
+    $upd.NotesBox.Visibility = if ($upd.Notes.Text) { 'Visible' } else { 'Collapsed' }
+    $upd.Install.Visibility = if ($newer) { 'Visible' } else { 'Collapsed' }
+    $upd.Install.Content = if ($newer -and $info.Asset) { 'Download and install' } else { 'Open the release page' }
+    $upd.Page.Visibility = if ($info -and $info.Page) { 'Visible' } else { 'Collapsed' }
+}
+
+function Invoke-CheckNow {
+    $upd.Status.Text = 'Checking' + [char]0x2026
+    $win.Cursor = [System.Windows.Input.Cursors]::Wait
+    $win.Dispatcher.Invoke([action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
+    try { $info = Invoke-UpdateCheck } finally { $win.Cursor = $null }
+    Show-UpdateInfo
+    # no dot on the gear without an update
+    if (-not $info.Error -and -not $info.Newer) { Invoke-Rainmeter "!CommandMeasure MeasureScript `"OnUpdateSeen()`" `"$Config`"" }
+}
+
+function Install-Update {
+    $info = Read-UpdateInfo
+    if (-not $info) { return }
+    if (-not $info.Asset) { Start-Process $info.Page; return }
+    $r = Show-Dialog 'Update Raintile' ("Download Raintile $($info.Latest) and open the Rainmeter installer?`r`n`r`n" +
+        "Your settings, categories and images stay: they are in $Data, which the installer does not touch. " +
+        "In the installer keep the default options and press Install.") @('Download and install', 'Cancel')
+    if ($r.Button -ne 'Download and install') { return }
+    $name = [IO.Path]::GetFileName(([uri]$info.Asset).AbsolutePath)
+    if ($name -notlike '*.rmskin') { $name = "Raintile_$($info.Latest).rmskin" }
+    $dest = Join-Path $env:TEMP $name
+    $upd.Status.Text = 'Downloading' + [char]0x2026
+    $win.Cursor = [System.Windows.Input.Cursors]::Wait
+    $win.Dispatcher.Invoke([action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        Invoke-WebRequest -Uri $info.Asset -OutFile $dest -UseBasicParsing -TimeoutSec 180
+    } catch {
+        $win.Cursor = $null
+        $upd.Status.Text = "Download failed: $($_.Exception.Message)"
+        return
+    }
+    $win.Cursor = $null
+    # .rmskin files open with the Rainmeter skin installer; this window closes
+    # so that nothing of the skin folder is in use
+    Start-Process -FilePath $dest
+    $win.Close()
+}
+
+function New-UpdateCard {
+    $card = New-Card 'Updates' ''
+    $f = $card.Child
+    foreach ($row in @(@('Installed', 'Installed'), @('Latest', 'Latest version'))) {
+        $v = New-Text '' 13 -Wrap
+        $v.MaxWidth = 460
+        $v.TextAlignment = 'Right'
+        $upd[$row[0]] = $v
+        [void]$f.Children.Add((New-Row $row[1] '' $v $null))
+    }
+    $upd.Status = New-Text '' 13.5 -Wrap
+    $upd.Status.Margin = T 0 12 0 6
+    [void](Add-To $f $upd.Status)
+    $notesBox = New-Object System.Windows.Controls.Border
+    $notesBox.Background = Res 'FieldBg'
+    $notesBox.CornerRadius = New-Object System.Windows.CornerRadius(8)
+    $notesBox.Padding = T 14 10
+    $notesBox.Margin = T 0 0 0 10
+    $sv = New-Object System.Windows.Controls.ScrollViewer
+    $sv.MaxHeight = 220
+    $sv.VerticalScrollBarVisibility = 'Auto'
+    $upd.Notes = New-Text '' 12.5 (Res 'DimBrush') -Wrap
+    $sv.Content = $upd.Notes
+    $notesBox.Child = $sv
+    $upd.NotesBox = $notesBox
+    [void](Add-To $f $notesBox)
+    $bar = New-Panel 'Horizontal'
+    $bar.Margin = T 0 4 0 10
+    $upd.Install = New-Button 'Download and install' 'AccentButton'
+    $upd.Install.Margin = T 0 0 8 0
+    $check = New-Button 'Check now'
+    $check.Margin = T 0 0 8 0
+    $upd.Page = New-Button 'Release page' 'LinkButton'
+    $upd.Page.VerticalAlignment = 'Center'
+    foreach ($b in $upd.Install, $check, $upd.Page) { [void](Add-To $bar $b) }
+    [void](Add-To $f $bar)
+    $upd.Install.Add_Click({ Install-Update })
+    $check.Add_Click({ Invoke-CheckNow })
+    $upd.Page.Add_Click({ $i = Read-UpdateInfo; if ($i -and $i.Page) { Start-Process $i.Page } })
+    Show-UpdateInfo
+    return $card
+}
+
 # Info page: what Raintile is, version, where it is, and its files
 function New-InfoPage {
     $sv = New-Object System.Windows.Controls.ScrollViewer
@@ -2985,6 +3107,7 @@ function New-InfoPage {
     foreach ($row in @(
             @('Version', $(if ($version) { $version.Substring(1) } else { 'unknown' })),
             @('Rainmeter skin', $Config),
+            @('Your data', $Data),
             @('Skin folder', (Split-Path -Parent $Resources)),
             @('Categories', "$(@($entries).Count)"),
             @('Tiles', "$([int]$tiles) written by hand, $([int]$imported) imported")
@@ -2996,9 +3119,12 @@ function New-InfoPage {
     }
     [void](Add-To $sp $card)
 
+    [void](Add-To $sp (New-UpdateCard))
+
     $card = New-Card 'Files' ''
     [void]$card.Child.Children.Add((New-Row 'Settings' 'Settings.inc, in Notepad.' (New-ActionControl 'OpenSettings' 'Open Settings.inc') $null))
-    [void]$card.Child.Children.Add((New-Row 'Skin folder' 'Categories, images and scripts.' (New-ActionControl 'OpenFolder' 'Open the folder') $null))
+    [void]$card.Child.Children.Add((New-Row 'Your data' 'Settings, categories and images: updates never touch this folder.' (New-ActionControl 'OpenFolder' 'Open the folder') $null))
+    [void]$card.Child.Children.Add((New-Row 'Skin folder' 'Scripts and the default files of this version.' (New-ActionControl 'OpenSkinFolder' 'Open the folder') $null))
     [void]$card.Child.Children.Add((New-Row 'Rainmeter' 'The Manage window: skins, Rainmeter settings and log.' (New-ActionControl 'OpenRainmeter' 'Open Rainmeter') $null))
     [void](Add-To $sp $card)
     return $sv
@@ -3100,8 +3226,14 @@ $win.Add_ContentRendered({
     })
 
 $script:updating = $false
-Build-Nav $(if ($OpenPage -eq 'import') { 'page:import' } else { 'page:general' })
-Show-NavTarget $nav.SelectedItem.Tag
+if ($OpenPage -eq 'info') {
+    # Info is in the list at the bottom: selecting it shows it
+    Build-Nav ''
+    $navBottom.SelectedIndex = 0
+} else {
+    Build-Nav $(if ($OpenPage -eq 'import') { 'page:import' } else { 'page:general' })
+    Show-NavTarget $nav.SelectedItem.Tag
+}
 Update-Dirty
 [void]$win.ShowDialog()
 $app.Shutdown()

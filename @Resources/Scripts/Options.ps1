@@ -2740,9 +2740,9 @@ function Save-All([switch]$NoRefresh) {
     if (-not $NoRefresh) { Invoke-Rainmeter "!Refresh `"$Config`"" }
 }
 
-# "Save and refresh": saves, refreshes the skin, shows a progress bar for 2.5
-# to 3.5 seconds (the time the skin needs to reload), then shows the launcher
-# and closes the window. The bar does not fill evenly: it goes through a few
+# "Save and refresh": saves, shows a progress bar for 2.5 to 3.5 seconds, then
+# closes the window and refreshes the skin, which shows the launcher once it
+# has reloaded. The bar does not fill evenly: it goes through a few
 # random steps, some quick, some slow, like a real loading.
 $overlay = $win.FindName('Overlay')
 $progressTrack = $win.FindName('ProgressTrack')
@@ -2798,14 +2798,18 @@ $refreshTimer.Add_Tick({
             $refreshTimer.Stop()
             $overlay.Visibility = 'Collapsed'
             $script:refreshing = $false
-            Invoke-Rainmeter "!CommandMeasure MeasureScript `"Show()`" `"$Config`""
+            # the launcher shows itself when it has reloaded (Generated\ShowOnLoad);
+            # the window closes first, so the launcher does not open over it
+            try { [IO.File]::WriteAllText((Join-Path $Resources 'Generated\ShowOnLoad'), '', $utf8) } catch { }
             $win.Close()
+            Invoke-Rainmeter "!Refresh `"$Config`""
         }
     })
 
 function Start-SaveAndRefresh {
     if ($script:refreshing) { return }
-    Save-All
+    $script:needsRefresh = $false
+    Save-All -NoRefresh   # the refresh comes at the end of the bar
     $script:refreshing = $true
     $script:progressPlan = New-ProgressPlan
     $progressBar.Width = 0

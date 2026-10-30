@@ -1227,9 +1227,19 @@ end
 function Update()
 	-- With UpdateDivider=-1 this is only called once, on load.
 	if ready then
-		if V.AnimOpen and not V.StartHidden then appear = 0 end
+		-- left by the Options window ("Save and refresh"): show the launcher
+		-- once loaded, also if it was hidden before the refresh
+		local flag = resources .. 'Generated\\ShowOnLoad'
+		local showNow = fileExists(flag)
+		if showNow then os.remove(flag) end
+		local startHidden = V.StartHidden and not showNow
+		if V.AnimOpen and not startHidden then appear = 0 end
 		render(true)
-		if V.StartHidden then
+		if showNow then
+			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+			SKIN:Bang('!Show')
+		end
+		if startHidden then
 			visible = false
 			SKIN:Bang('!Hide')
 			hotKey(false)

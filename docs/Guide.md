@@ -144,6 +144,8 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `Logo` | specific logo file (relative to `logo\` or absolute) |
 | `BgFocus` | framing of the background: the point of the image kept at the centre of the tile, `X,Y` in % of its width and height (default `50,50`); see [Framing a background](#framing-a-background) |
 | `BgZoom` | framing of the background: enlargement beyond filling the tile, `1` to `4` (default `1`) |
+| `LogoPos` | where the centre of the logo goes, `X,Y` in % of the tile's width and height (default `50,50`); see [Placing the logo](#placing-the-logo) |
+| `LogoScale` | size of the logo, times the category's `IconSize`, `0.25` to `3` (default `1`) |
 | `Source` | where an added game or app comes from (`Steam:570`); informational |
 
 ### Commands
@@ -166,16 +168,22 @@ For the `Games.ini` category:
 Images\Games\
   icon.png                 menu icon
   background\Diablo.jpg    background of the [Diablo] tile
-  logo\Diablo.png          centred logo of the [Diablo] tile
+  logo\Diablo.png          logo of the [Diablo] tile, centred
 ```
 
 Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
 
 ### Framing a background
 
-A background fills its tile and, by default, is cropped at the centre. When the subject is off-centre, or the image is much wider or taller than the tile, choose the part to show in Options > *the category* > *the tile* > **Framing** (or right click on the tile > **Edit \<tile\>...**): drag the preview to move the image, zoom with the mouse wheel (it zooms on the point under the mouse) or the slider, and **Reset** to go back to the centre. The preview has the proportions of this category's tiles on this screen.
+A background fills its tile and, by default, is cropped at the centre. When the subject is off-centre, or the image is much wider or taller than the tile, choose the part to show in Options > *the category* > *the tile* > **Framing** (or right click on the tile > **Edit \<tile\>...**): drag the background in the preview to move the image, zoom with the mouse wheel (it zooms on the point under the mouse) or the slider, and **Reset** to go back to the centre. The preview has the proportions of this category's tiles on this screen.
 
 The framing is saved in the tile as `BgFocus` (the point kept at the centre, in % of the image) and `BgZoom`. Both are relative, so it holds when the resolution, the margins or the grid change: only the edges of the image limit it. With the sliding styles (`BgStyle` `Pan`, `Parallax`, `Zoom`) the tile starts from the framed part and moves within `BgOverscan` of it, instead of across the whole image. Choosing or removing the background resets the framing. The launch animation still shows the whole image.
+
+### Placing the logo
+
+The logo is centred in its tile and as large as the category's `IconSize`. To move it, drag the logo itself in the same preview (Options > *the category* > *the tile*); to resize it, use the mouse wheel over it or the **Logo** slider, and **Reset** to centre it again at its normal size. It is independent of the framing: the background and the logo move separately.
+
+The placement is saved in the tile as `LogoPos` (where the centre of the logo goes, in % of the tile) and `LogoScale` (times the category's logo size). Both are relative, so the logo keeps its place when the resolution or the grid change. What is visible of the logo always stays inside the tile, also while it grows under the mouse: pushed into a corner, it stays in the corner at any size. The launch animation starts from where the logo is and brings it to the centre of the screen.
 
 ## Adding games and apps
 

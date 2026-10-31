@@ -313,6 +313,40 @@ local function frameRect(path, focus, zoom, tw, th)
 	return r
 end
 
+-- Placement of a logo (tile keys), independent of the background framing:
+-- LogoPos=X,Y is where the centre of the logo goes, in % of the tile's width
+-- and height; LogoScale (0.25-3) multiplies the category's logo size. Both are
+-- relative, so they hold at any resolution and grid. Sets t.logoX, t.logoY
+-- (0-1), t.logoScale and, for a moved logo, t.logoRatio (width / height of
+-- the image, to keep what is visible of it inside the tile).
+local function logoPlacement(t, pos, scale)
+	local x, y = trim(pos or ''):match('^([%d%.]+)%s*,%s*([%d%.]+)$')
+	t.logoX = math.min(100, math.max(0, tonumber(x) or 50)) / 100
+	t.logoY = math.min(100, math.max(0, tonumber(y) or 50)) / 100
+	t.logoScale = math.min(3, math.max(0.25, tonumber(trim(scale or '')) or 1))
+	if t.logo and (t.logoX ~= 0.5 or t.logoY ~= 0.5) then
+		local d = imageSize(t.logo)
+		if d then t.logoRatio = d[1] / d[2] end
+	end
+end
+
+-- Centre of tile t's logo in the tile, in pixels, for a logo box of the
+-- given size. The box is square and the image fits inside it, so the
+-- visible part is what has to stay in the tile: the slots are clipped by the
+-- grid, not by the tile, and the logo would spill onto the next one. A
+-- centred logo stays centred, also when larger than the tile.
+local function logoCentre(t, size)
+	local vw, vh = size, size
+	if t.logoRatio then
+		if t.logoRatio >= 1 then vh = size / t.logoRatio else vw = size * t.logoRatio end
+	end
+	local function place(p, n, total)
+		if n >= total then return total / 2 end
+		return math.min(total - n / 2, math.max(n / 2, p * total))
+	end
+	return place(t.logoX, vw, V.TileW), place(t.logoY, vh, V.TileH)
+end
+
 -- Automatic tile colour (AutoTileColor=1): a tile without a background image
 -- and without Color= gets a dark colour taken from its logo. Thumbs.ps1
 -- computes it in the background and keeps the results in
@@ -356,8 +390,6 @@ local function categoryGeometry(c, nx, ny, iconSize)
 	c.rows = c.ny + (V.Horizontal and 0 or 1)
 	c.cols = c.nx + (V.Horizontal and 1 or 0)
 	c.iconSize = math.floor(iconSize or V.DefIconSize)
-	-- logo thumbnails are made at the largest size (zoom included)
-	c.logoMax = math.floor(c.iconSize * V.HoverLogoScale + 0.5)
 end
 
 -- Makes category c's grid the "current" one: the rest of the script uses
@@ -418,8 +450,11 @@ local function loadCategory(file)
 			t.frame = frameRect(t.background, k.bgfocus, k.bgzoom, c.tw, c.th)
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
 				c.tw, c.th, V.BgThumbMode, t.frame)
+			logoPlacement(t, k.logopos, k.logoscale)
+			-- logo thumbnails are made at the largest size (zoom included)
+			local logoMax = math.floor(c.iconSize * t.logoScale * V.HoverLogoScale + 0.5)
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
-				c.logoMax, c.logoMax, 'contain')
+				logoMax, logoMax, 'contain')
 			if label ~= '' then
 				t.label = label
 			elseif not t.background and not t.logo then
@@ -916,9 +951,10 @@ local function placeSlots()
 			set(tile, 'PreserveAspectRatio', crop and '0' or '2')
 			set(tile, 'ImageCrop', crop or '')
 			if t.logo then
-				local size = math.floor(V.IconSize * (1 + (V.HoverLogoScale - 1) * (t.zoom or 0)) + 0.5)
-				set(icon, 'X', tostring(x + math.floor((V.TileW - size) / 2)))
-				set(icon, 'Y', tostring(y + math.floor((V.TileH - size) / 2)))
+				local size = math.floor(V.IconSize * t.logoScale * (1 + (V.HoverLogoScale - 1) * (t.zoom or 0)) + 0.5)
+				local lx, ly = logoCentre(t, size)
+				set(icon, 'X', tostring(x + math.floor(lx - size / 2)))
+				set(icon, 'Y', tostring(y + math.floor(ly - size / 2)))
 				set(icon, 'W', tostring(size))
 				set(icon, 'H', tostring(size))
 				set(icon, 'ImageAlpha', alpha)
@@ -1749,9 +1785,14 @@ local function drawSplash(p)
 	set('SplashBg', 'H', tostring(h))
 	local cx, cy = x + math.floor(w / 2), y + math.floor(h / 2)
 	if a.tile.logoFull then
-		local size = lerp(V.IconSize, V.LaunchLogoSize)
-		set('SplashLogo', 'X', tostring(cx - math.floor(size / 2)))
-		set('SplashLogo', 'Y', tostring(cy - math.floor(size / 2)))
+		local t = a.tile
+		local size = lerp(V.IconSize * t.logoScale, V.LaunchLogoSize)
+		-- the logo starts where it sits in the tile and ends at the centre
+		local lx, ly = logoCentre(t, V.IconSize * t.logoScale)
+		local fx = lx / V.TileW + (0.5 - lx / V.TileW) * e
+		local fy = ly / V.TileH + (0.5 - ly / V.TileH) * e
+		set('SplashLogo', 'X', tostring(x + math.floor(w * fx - size / 2)))
+		set('SplashLogo', 'Y', tostring(y + math.floor(h * fy - size / 2)))
 		set('SplashLogo', 'W', tostring(size))
 		set('SplashLogo', 'H', tostring(size))
 	elseif a.tile.label then

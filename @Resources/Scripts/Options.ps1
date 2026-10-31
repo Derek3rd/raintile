@@ -1930,7 +1930,7 @@ function Update-Framing {
     $img.Source = $bgFrame.Bitmap
     $has = [bool]$bgFrame.Bitmap
     $cat.FrameRow.IsEnabled = $has
-    $p.Cursor = if ($has) { [System.Windows.Input.Cursors]::SizeAll } else { $null }
+    $p.Cursor = if ($has -or $cat.PreviewLogo.Source) { [System.Windows.Input.Cursors]::SizeAll } else { $null }
     $bgFrame.Sync = $true
     $cat.ZoomSlider.Value = $bgFrame.Zoom
     $bgFrame.Sync = $false
@@ -1982,6 +1982,109 @@ function Reset-Framing($section) {
     $bgFrame.Path = $null
 }
 
+# --- Placement of the logo (LogoPos, LogoScale) -----------------------------------
+# Independent of the framing: dragging the logo in the preview moves LogoPos
+# (its centre, in % of the tile), the wheel over it and the slider set
+# LogoScale (times the category's logo size). The same maths as logoCentre
+# in Raintile.lua: what is visible of the logo stays inside the tile.
+
+$logoPlace = @{ X = 0.5; Y = 0.5; Scale = 1.0; Box = 96.0; Drag = $null; Moved = $false; Sync = $false }
+
+function Read-LogoPlace($section) {
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $logoPlace.X = 0.5; $logoPlace.Y = 0.5; $logoPlace.Scale = 1.0
+    if (-not $section) { return }
+    $x = 0.0; $y = 0.0; $z = 0.0
+    if ((Get-Key $section 'LogoPos') -match '^\s*([\d.]+)\s*,\s*([\d.]+)\s*$' -and
+        [double]::TryParse($Matches[1], 'Float', $inv, [ref]$x) -and [double]::TryParse($Matches[2], 'Float', $inv, [ref]$y)) {
+        $logoPlace.X = [Math]::Min(100.0, $x) / 100; $logoPlace.Y = [Math]::Min(100.0, $y) / 100
+    }
+    if ([double]::TryParse((Get-Key $section 'LogoScale'), 'Float', $inv, [ref]$z)) { $logoPlace.Scale = [Math]::Min(3.0, [Math]::Max(0.25, $z)) }
+}
+
+# Logo size of category $file in pixels (IconSize: pixels or % of the
+# screen height; empty = the default from Settings)
+function Get-LogoBox([string]$file) {
+    $raw = Get-Key (Get-CategorySection (Get-Model $file)) 'IconSize'
+    if (-not $raw) { $raw = "$($values['IconSize'])" }
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $n = 0.0
+    if ($raw -match '^\s*([\d.]+)\s*%\s*$' -and [double]::TryParse($Matches[1], 'Float', $inv, [ref]$n)) {
+        return [Math]::Max(1.0, $n * (Get-ScreenPixels).H / 100)
+    }
+    if ([double]::TryParse($raw.Trim(), 'Float', $inv, [ref]$n) -and $n -gt 0) { return $n }
+    return 96.0
+}
+
+# The logo in the preview: box side S and centre CX, CY, in preview pixels;
+# VW, VH = its visible part (the image fits in the square box)
+function Get-LogoRect {
+    $pw = [double]$cat.Preview.Width; $ph = [double]$cat.Preview.Height
+    $s = $logoPlace.Box * $logoPlace.Scale * $pw / $bgFrame.TW
+    $vw = $s; $vh = $s
+    $b = $cat.PreviewLogo.Source
+    if ($b -and $b.PixelHeight -gt 0) {
+        $r = [double]$b.PixelWidth / $b.PixelHeight
+        if ($r -ge 1) { $vh = $s / $r } else { $vw = $s * $r }
+    }
+    $place = { param([double]$p, [double]$n, [double]$total)
+        if ($n -ge $total) { return $total / 2 }
+        return [Math]::Min($total - $n / 2, [Math]::Max($n / 2, $p * $total)) }
+    return @{ S = $s; VW = $vw; VH = $vh; CX = (& $place $logoPlace.X $vw $pw); CY = (& $place $logoPlace.Y $vh $ph) }
+}
+
+# The position goes back to where the logo is shown: past an edge it would
+# move nothing (as Limit-Focus)
+function Limit-LogoPos {
+    $r = Get-LogoRect
+    $logoPlace.X = $r.CX / $cat.Preview.Width
+    $logoPlace.Y = $r.CY / $cat.Preview.Height
+}
+
+# Point $pt of the preview on the logo (a little margin for small logos)
+function Test-OnLogo($pt) {
+    if (-not $cat.PreviewLogo.Source) { return $false }
+    $r = Get-LogoRect
+    return ([Math]::Abs($pt.X - $r.CX) -le $r.VW / 2 + 6 -and [Math]::Abs($pt.Y - $r.CY) -le $r.VH / 2 + 6)
+}
+
+function Update-LogoPlace {
+    $img = $cat.PreviewLogo
+    $has = [bool]$img.Source
+    $cat.LogoRow.IsEnabled = $has
+    $logoPlace.Sync = $true
+    $cat.LogoSlider.Value = $logoPlace.Scale
+    $logoPlace.Sync = $false
+    $cat.LogoScaleText.Text = $logoPlace.Scale.ToString('0.00', [Globalization.CultureInfo]::InvariantCulture) + [char]0xD7
+    if (-not $has) { return }
+    $r = Get-LogoRect
+    $img.Width = $r.S; $img.Height = $r.S
+    [System.Windows.Controls.Canvas]::SetLeft($img, $r.CX - $r.S / 2)
+    [System.Windows.Controls.Canvas]::SetTop($img, $r.CY - $r.S / 2)
+}
+
+# Writes LogoPos/LogoScale; the centre at scale 1 (the default) removes them
+function Save-LogoPlace {
+    $t = Get-CurrentTile; if (-not $t) { return }
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $x = [Math]::Round($logoPlace.X * 100, 1); $y = [Math]::Round($logoPlace.Y * 100, 1)
+    $z = [Math]::Round($logoPlace.Scale, 2)
+    $pos = if ($x -eq 50 -and $y -eq 50) { '' } else { $x.ToString('0.#', $inv) + ',' + $y.ToString('0.#', $inv) }
+    $scale = if ($z -eq 1) { '' } else { $z.ToString('0.##', $inv) }
+    if ((Get-Key $t 'LogoPos') -ceq $pos -and (Get-Key $t 'LogoScale') -ceq $scale) { return }
+    Set-Key $t 'LogoPos' $pos
+    Set-Key $t 'LogoScale' $scale
+    Set-Changed (Get-CurrentFile)
+}
+
+# The position is not limited here: a logo pushed into a corner stays there
+# at any size
+function Set-LogoScale([double]$scale) {
+    $logoPlace.Scale = [Math]::Round([Math]::Min(3.0, [Math]::Max(0.25, $scale)), 2)
+    Update-LogoPlace
+    Save-LogoPlace
+}
+
 function Update-TilePreview {
     $s = Get-ShownTile
     $base = Get-CurrentBase
@@ -1995,8 +2098,11 @@ function Update-TilePreview {
     Read-Framing $s
     $size = if (Get-CurrentFile) { Get-TileSize (Get-CurrentFile) } else { @{ W = 16; H = 9 } }
     $bgFrame.TW = $size.W; $bgFrame.TH = $size.H
+    $cat.PreviewLogo.Source = Get-Bitmap $logo 384
+    Read-LogoPlace $s
+    $logoPlace.Box = if (Get-CurrentFile) { Get-LogoBox (Get-CurrentFile) } else { 96.0 }
     Update-Framing
-    $cat.PreviewLogo.Source = Get-Bitmap $logo 256
+    Update-LogoPlace
     $label = if ($s) { Get-Key $s 'Label' } else { '' }
     if (-not $label -and $s -and -not $bg -and -not $logo) { $label = $s.Name }
     $cat.PreviewLabel.Text = $label
@@ -2292,16 +2398,17 @@ function New-CategoryPage {
     $cat.PreviewBg = New-Object System.Windows.Controls.Image
     $cat.PreviewBg.Stretch = 'Fill'
     [void]$canvas.Children.Add($cat.PreviewBg)
+    # the logo on the same canvas, positioned by Update-LogoPlace
     $cat.PreviewLogo = New-Object System.Windows.Controls.Image
     $cat.PreviewLogo.Stretch = 'Uniform'
-    $cat.PreviewLogo.MaxWidth = 140; $cat.PreviewLogo.MaxHeight = 90
+    [void]$canvas.Children.Add($cat.PreviewLogo)
     $cat.PreviewLabel = New-Text '' 14 (New-ColorBrush "$($values['TextColor'])")
     $cat.PreviewLabel.HorizontalAlignment = 'Left'; $cat.PreviewLabel.VerticalAlignment = 'Bottom'
     $cat.PreviewLabel.Margin = T 12 0 0 10
     $cat.PreviewLabel.Effect = New-Object System.Windows.Media.Effects.DropShadowEffect -Property @{ BlurRadius = 6; ShadowDepth = 1; Opacity = 0.8 }
-    # logo and label must not catch the drag
+    # logo and label must not catch the drag (the preview tells them apart)
     $cat.PreviewLogo.IsHitTestVisible = $false; $cat.PreviewLabel.IsHitTestVisible = $false
-    [void]$pg.Children.Add($canvas); [void]$pg.Children.Add($cat.PreviewLogo); [void]$pg.Children.Add($cat.PreviewLabel)
+    [void]$pg.Children.Add($canvas); [void]$pg.Children.Add($cat.PreviewLabel)
     $cat.Preview = $p
     [void](Add-To $f $p)
 
@@ -2320,21 +2427,56 @@ function New-CategoryPage {
     $btnFrameReset.Margin = T 6 0 0 0
     [void](Add-To $frameRow $cat.ZoomSlider); [void](Add-To $frameRow $cat.ZoomText); [void](Add-To $frameRow $btnFrameReset)
     $cat.FrameRow = $frameRow
-    [void](Add-To $f (New-FormRow 'Framing' $frameRow 'Drag the preview to choose the part of the background shown; zoom with the wheel or the slider. The preview has the size of this category''s tiles on this screen.'))
+    [void](Add-To $f (New-FormRow 'Framing' $frameRow 'Drag the background in the preview to choose the part shown; zoom with the wheel or the slider. The preview has the size of this category''s tiles on this screen.'))
 
+    # logo: drag it in the preview, wheel over it or slider to resize
+    $logoRow = New-Panel 'Horizontal'
+    $cat.LogoSlider = New-Object System.Windows.Controls.Slider
+    $cat.LogoSlider.Width = 180
+    $cat.LogoSlider.Minimum = 0.25; $cat.LogoSlider.Maximum = 3
+    $cat.LogoSlider.SmallChange = 0.05; $cat.LogoSlider.LargeChange = 0.25
+    $cat.LogoSlider.VerticalAlignment = 'Center'
+    $cat.LogoScaleText = New-Text '' 12 (Res 'DimBrush')
+    $cat.LogoScaleText.Width = 48
+    $cat.LogoScaleText.Margin = T 10 0 0 0
+    $cat.LogoScaleText.VerticalAlignment = 'Center'
+    $btnLogoReset = New-Button 'Reset'
+    $btnLogoReset.Margin = T 6 0 0 0
+    [void](Add-To $logoRow $cat.LogoSlider); [void](Add-To $logoRow $cat.LogoScaleText); [void](Add-To $logoRow $btnLogoReset)
+    $cat.LogoRow = $logoRow
+    [void](Add-To $f (New-FormRow 'Logo' $logoRow 'Drag the logo in the preview to move it; resize it with the wheel over it or the slider (times the category''s logo size). Independent of the framing.'))
+
+    # a press on the logo moves the logo, anywhere else the background
     $p.Add_MouseLeftButtonDown({
             param($s, $e)
-            if (-not $bgFrame.Bitmap -or -not (Get-CurrentTile)) { return }
-            Limit-Focus
-            $bgFrame.Drag = @{ Point = $e.GetPosition($s); FX = $bgFrame.FX; FY = $bgFrame.FY }
-            $bgFrame.Moved = $false
+            if (-not (Get-CurrentTile)) { return }
+            $pt = $e.GetPosition($s)
+            if (Test-OnLogo $pt) {
+                Limit-LogoPos
+                $logoPlace.Drag = @{ Point = $pt; X = $logoPlace.X; Y = $logoPlace.Y }
+                $logoPlace.Moved = $false
+            } else {
+                if (-not $bgFrame.Bitmap) { return }
+                Limit-Focus
+                $bgFrame.Drag = @{ Point = $pt; FX = $bgFrame.FX; FY = $bgFrame.FY }
+                $bgFrame.Moved = $false
+            }
             [void]$s.CaptureMouse()
             $e.Handled = $true
         })
     $p.Add_MouseMove({
             param($s, $e)
-            $d = $bgFrame.Drag; if (-not $d) { return }
             $pt = $e.GetPosition($s)
+            $d = $logoPlace.Drag
+            if ($d) {
+                $logoPlace.X = $d.X + ($pt.X - $d.Point.X) / $s.Width
+                $logoPlace.Y = $d.Y + ($pt.Y - $d.Point.Y) / $s.Height
+                Limit-LogoPos
+                $logoPlace.Moved = $true
+                Update-LogoPlace
+                return
+            }
+            $d = $bgFrame.Drag; if (-not $d) { return }
             $v = Get-FrameWindow
             $bgFrame.FX = $d.FX - ($pt.X - $d.Point.X) / ($v.S * $v.IW)
             $bgFrame.FY = $d.FY - ($pt.Y - $d.Point.Y) / ($v.S * $v.IH)
@@ -2345,15 +2487,37 @@ function New-CategoryPage {
     $p.Add_MouseLeftButtonUp({ param($s, $e) $s.ReleaseMouseCapture() })
     # end of the drag (also when the capture is lost): written once
     $p.Add_LostMouseCapture({
+            if ($logoPlace.Drag) {
+                $logoPlace.Drag = $null
+                if ($logoPlace.Moved) { Save-LogoPlace }
+            }
             if (-not $bgFrame.Drag) { return }
             $bgFrame.Drag = $null
             if ($bgFrame.Moved) { Save-Framing }
         })
     $p.Add_MouseWheel({
             param($s, $e)
-            if (-not $bgFrame.Bitmap -or -not (Get-CurrentTile)) { return }
+            if (-not (Get-CurrentTile)) { return }
+            $pt = $e.GetPosition($s)
+            if (Test-OnLogo $pt) {
+                $e.Handled = $true
+                Set-LogoScale ($logoPlace.Scale * [Math]::Pow(1.1, $e.Delta / 120))
+                return
+            }
+            if (-not $bgFrame.Bitmap) { return }
             $e.Handled = $true   # the page must not scroll
-            Set-FrameZoom ($bgFrame.Zoom * [Math]::Pow(1.1, $e.Delta / 120)) $e.GetPosition($s)
+            Set-FrameZoom ($bgFrame.Zoom * [Math]::Pow(1.1, $e.Delta / 120)) $pt
+        })
+    $cat.LogoSlider.Add_ValueChanged({
+            param($s, $e)
+            if ($logoPlace.Sync -or -not $cat.PreviewLogo.Source -or -not (Get-CurrentTile)) { return }
+            Set-LogoScale $s.Value
+        })
+    $btnLogoReset.Add_Click({
+            if (-not $cat.PreviewLogo.Source -or -not (Get-CurrentTile)) { return }
+            $logoPlace.X = 0.5; $logoPlace.Y = 0.5; $logoPlace.Scale = 1.0
+            Update-LogoPlace
+            Save-LogoPlace
         })
     $cat.ZoomSlider.Add_ValueChanged({
             param($s, $e)

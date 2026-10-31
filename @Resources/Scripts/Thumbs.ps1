@@ -1,13 +1,15 @@
 # Raintile: creates background and logo thumbnails (started in the background
 # by the skin).
 #
-# Each line of the job file: source|destination|width|height|mode
+# Each line of the job file: source|destination|width|height|mode[|x,y,w,h]
 #   cover       = fills exactly w x h, cropping at the centre (backgrounds)
 #   contain     = fits inside w x h keeping the proportions (logos, transparent PNG)
 #   overscanNNN = covers w x h and exceeds it by NNN% (sliding backgrounds)
 #   color       = tile colour taken from a logo (AutoTileColor): the
 #                 destination is the size of the logo file, the result goes
 #                 to Generated\Colors.txt
+# x,y,w,h (optional): part of the source to use instead of the whole image
+# (framed backgrounds, BgFocus/BgZoom); the modes treat it as the image.
 # Thumbnails that already exist are skipped; those no longer listed are
 # deleted.
 
@@ -98,7 +100,7 @@ $colors = New-Object System.Collections.Generic.List[string]
 
 foreach ($line in Get-Content -LiteralPath $JobFile -Encoding UTF8) {
     if (-not $line.Trim()) { continue }
-    $src, $dst, $w, $h, $mode = $line.Split('|')
+    $src, $dst, $w, $h, $mode, $rect = $line.Split('|')
     if ($mode -eq 'color') {
         $key = "$dst|$src".ToLowerInvariant()
         $color = if ($oldColors.ContainsKey($key)) { $oldColors[$key] } else { Get-LogoColor $src }
@@ -113,22 +115,29 @@ foreach ($line in Get-Content -LiteralPath $JobFile -Encoding UTF8) {
     $img = $null; $bmp = $null; $g = $null
     try {
         $img = [System.Drawing.Image]::FromFile($src)
-        $iw = $img.Width; $ih = $img.Height
+        $ix = 0; $iy = 0; $iw = $img.Width; $ih = $img.Height
+        # framed part of the image, kept inside it
+        if ($rect -match '^(\d+),(\d+),(\d+),(\d+)$') {
+            $rx = [Math]::Min([int]$Matches[1], $iw - 1); $ry = [Math]::Min([int]$Matches[2], $ih - 1)
+            $ix = $rx; $iy = $ry
+            $iw = [Math]::Max(1, [Math]::Min([int]$Matches[3], $iw - $rx))
+            $ih = [Math]::Max(1, [Math]::Min([int]$Matches[4], $ih - $ry))
+        }
 
         if ($mode -eq 'cover') {
             $scale = [Math]::Max($w / $iw, $h / $ih)
             $sw = $w / $scale; $sh = $h / $scale
-            $srcRect = New-Object System.Drawing.RectangleF ((($iw - $sw) / 2), (($ih - $sh) / 2), $sw, $sh)
+            $srcRect = New-Object System.Drawing.RectangleF (($ix + ($iw - $sw) / 2), ($iy + ($ih - $sh) / 2), $sw, $sh)
             $tw = $w; $th = $h
         } elseif ($mode -like 'overscan*') {
             # covers w x h and exceeds it by the given percentage (e.g. overscan115)
             $scale = [Math]::Max($w / $iw, $h / $ih) * ([int]$mode.Substring(8) / 100.0)
-            $srcRect = New-Object System.Drawing.RectangleF (0, 0, $iw, $ih)
+            $srcRect = New-Object System.Drawing.RectangleF ($ix, $iy, $iw, $ih)
             $tw = [Math]::Max(1, [int][Math]::Round($iw * $scale))
             $th = [Math]::Max(1, [int][Math]::Round($ih * $scale))
         } else {
             $scale = [Math]::Min($w / $iw, $h / $ih)
-            $srcRect = New-Object System.Drawing.RectangleF (0, 0, $iw, $ih)
+            $srcRect = New-Object System.Drawing.RectangleF ($ix, $iy, $iw, $ih)
             $tw = [Math]::Max(1, [int][Math]::Round($iw * $scale))
             $th = [Math]::Max(1, [int][Math]::Round($ih * $scale))
         }

@@ -82,7 +82,8 @@ function Write-Settings([string]$path, [hashtable]$values) {
     for ($i = 0; $i -lt $lines.Count; $i++) {
         if ($lines[$i] -match '^(\s*)([^;=\[][^=]*?)(\s*=)(.*)$') {
             $key = $Matches[2].Trim()
-            if ($values.ContainsKey($key)) { $lines[$i] = $Matches[1] + $Matches[2] + $Matches[3] + $values[$key] }
+            # one line: a value can not add keys or sections
+            if ($values.ContainsKey($key)) { $lines[$i] = $Matches[1] + $Matches[2] + $Matches[3] + ("$($values[$key])" -replace '[\r\n]+', ' ') }
         }
     }
     [IO.File]::WriteAllText($path, (($lines -join "`r`n") + "`r`n"), $utf8)
@@ -183,7 +184,7 @@ function Format-HotKey([string]$value) {
 #   Unit), size (pixels or % of the screen width/height: Axis W/H), color,
 #   text, font, category, stores, pad (gamepad buttons), key, combo (key with
 #   modifiers), keys (two keys for one action: Pair), screen (ScreenX/Y/W/H),
-#   info (text only), action (button).
+#   info (text only), action (button), secret (hidden text, saved encrypted).
 
 function S([string]$kind, [string]$key, [string]$label, [string]$help = '', [hashtable]$more = @{}) {
     $item = @{ Kind = $kind; Key = $key; Label = $label; Help = $help }
@@ -390,7 +391,7 @@ $schema = @(
                     (S 'bool' 'ScanOnStart' 'Look for new ones on start' 'In the background, each time the skin loads: new games or apps light a dot on the gear.'),
                     (S 'category' 'ImportCategory' 'Category for games'),
                     (S 'category' 'AppsCategory' 'Category for apps'),
-                    (S 'text' 'SteamGridDBKey' 'SteamGridDB API key' 'Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded.')
+                    (S 'secret' 'SteamGridDBKey' 'SteamGridDB API key' 'Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded. Saved encrypted: only your Windows user on this PC can read it.')
                 ) }
         )
     }
@@ -502,6 +503,33 @@ function Format-Number([double]$value, [double]$step) {
     return $r.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
 }
 
+# --- Secrets ----------------------------------------------------------------------
+# The SteamGridDB key is kept encrypted in Settings.inc with Windows DPAPI
+# (current user): "dpapi:<base64>". Only your Windows account on this PC can
+# read it back. A value written by hand without the prefix is used as it is
+# and encrypted the next time the Options window saves.
+
+$SECRET_PREFIX = 'dpapi:'
+$SECRET_ENTROPY = [Text.Encoding]::UTF8.GetBytes('Raintile SteamGridDB key')
+try { Add-Type -AssemblyName System.Security } catch { }
+
+function Protect-Secret([string]$plain) {
+    if (-not $plain) { return '' }
+    $bytes = [Security.Cryptography.ProtectedData]::Protect([Text.Encoding]::UTF8.GetBytes($plain), $SECRET_ENTROPY, 'CurrentUser')
+    return $SECRET_PREFIX + [Convert]::ToBase64String($bytes)
+}
+
+# The plain text of a stored secret ('' if it cannot be decrypted, e.g. it
+# was encrypted by another Windows user)
+function Unprotect-Secret([string]$stored) {
+    if (-not $stored) { return '' }
+    if (-not $stored.StartsWith($SECRET_PREFIX)) { return $stored }
+    try {
+        $bytes = [Security.Cryptography.ProtectedData]::Unprotect([Convert]::FromBase64String($stored.Substring($SECRET_PREFIX.Length)), $SECRET_ENTROPY, 'CurrentUser')
+        return [Text.Encoding]::UTF8.GetString($bytes)
+    } catch { return '' }
+}
+
 # --- Category files ---------------------------------------------------------------
 
 # Model: Header (text before the first section), Sections (Name, Comments,
@@ -539,6 +567,7 @@ function Get-Key($section, [string]$key) {
 }
 
 function Set-Key($section, [string]$key, [string]$value) {
+    $value = $value -replace '[\r\n]+', ' '   # one line: no extra keys or sections
     for ($i = 0; $i -lt $section.Keys.Count; $i++) {
         if ($section.Keys[$i][0] -ieq $key) {
             if ($value -eq '') { $section.Keys.RemoveAt($i) } else { $section.Keys[$i] = @($section.Keys[$i][0], $value) }
@@ -609,12 +638,22 @@ function Get-CategoryIcon([string]$categoryBase, $catSection) {
 }
 
 # Copies a picked image to the tile's default folder
+# True if 'path' is a file directly inside 'folder' (a name with ..\ or a
+# full path can not lead anywhere else)
+function Test-InFolder([string]$path, [string]$folder) {
+    try {
+        $parent = [IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($path))
+        return $parent -ieq [IO.Path]::GetFullPath($folder).TrimEnd('\', '/')
+    } catch { return $false }
+}
+
 function Copy-TileImage([string]$category, [string]$kind, [string]$tile, [string]$source) {
     $dir = Join-Path $imagesRoot "$category\$kind"
+    $dest = Join-Path $dir ($tile + [IO.Path]::GetExtension($source).ToLowerInvariant())
+    if (-not (Test-InFolder $dest $dir)) { throw "Not a valid tile name for an image file: $tile" }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     # remove any previous image with another extension
     Get-ChildItem -LiteralPath $dir -File | Where-Object { $_.BaseName -ieq $tile } | Remove-Item -Force
-    $dest = Join-Path $dir ($tile + [IO.Path]::GetExtension($source).ToLowerInvariant())
     Copy-Item -LiteralPath $source -Destination $dest -Force
     return $dest
 }
@@ -626,6 +665,7 @@ function Rename-TileImages([string]$category, [string]$old, [string]$new) {
         if (-not (Test-Path -LiteralPath $dir)) { continue }
         foreach ($f in @(Get-ChildItem -LiteralPath $dir -File | Where-Object { $_.BaseName -ieq $old })) {
             $dest = Join-Path $dir ($new + $f.Extension)
+            if (-not (Test-InFolder $dest $dir)) { continue }
             if (-not (Test-Path -LiteralPath $dest)) { Move-Item -LiteralPath $f.FullName -Destination $dest }
         }
     }
@@ -957,6 +997,16 @@ $settings = Read-Settings $settingsFile
 $fileValues = @{}   # as in Settings.inc
 $values = @{}       # as in the window
 foreach ($item in $settings) { $fileValues[$item.Key] = $item.Value; $values[$item.Key] = $item.Value }
+# a SteamGridDB key written in clear (by hand, or by an older version) is
+# encrypted in Settings.inc right away
+if ($values['SteamGridDBKey'] -and -not "$($values['SteamGridDBKey'])".StartsWith($SECRET_PREFIX)) {
+    try {
+        $encrypted = Protect-Secret $values['SteamGridDBKey']
+        Write-Settings $settingsFile @{ SteamGridDBKey = $encrypted }
+        $values['SteamGridDBKey'] = $encrypted
+        $fileValues['SteamGridDBKey'] = $encrypted
+    } catch { }
+}
 $ctl = @{}          # key -> controls of that setting
 $resets = New-Object System.Collections.ArrayList # @{ KeyList; Button }
 $keyButtons = @{}   # key -> key capture button (for conflicts)
@@ -1043,6 +1093,7 @@ function Update-Control([string]$key) {
             }
             'color' { $c.Text.Text = $v; $c.Swatch.Background = New-ColorBrush $v -Opaque }
             { $_ -in 'text', 'font' } { $c.Box.Text = $v }
+            'secret' { $c.Box.Password = Unprotect-Secret $v }
             'category' { $c.Box.SelectedItem = $v }
             'stores' { foreach ($cb in $c.Panel.Children) { $cb.IsChecked = (@($v -split '\|') -contains $cb.Tag[1]) } }
             'pad' { foreach ($tb in $c.Panel.Children) { $tb.IsChecked = (@($v -split '\s+') -contains $tb.Tag[1]) } }
@@ -1226,6 +1277,17 @@ function New-ColorControl([string]$key) {
             }
         })
     return $sp
+}
+
+# Hidden text (the SteamGridDB key): shown as dots, saved encrypted
+function New-SecretControl([string]$key) {
+    $pb = New-Object System.Windows.Controls.PasswordBox
+    $pb.Width = 300
+    $pb.Tag = $key
+    $pb.Password = Unprotect-Secret "$($values[$key])"
+    $pb.Add_PasswordChanged({ param($s, $e) Set-Value $s.Tag (Protect-Secret $s.Password) })
+    $ctl[$key] = @{ Kind = 'secret'; Box = $pb }
+    return $pb
 }
 
 function New-TextControl([string]$key, [double]$width = 300) {
@@ -1536,6 +1598,7 @@ function New-ItemRow($item) {
         }
         'color' { New-ColorControl $k }
         'text' { New-TextControl $k }
+        'secret' { New-SecretControl $k }
         'font' { New-FontControl $k }
         'category' { New-CategoryControl $k }
         'stores' { New-StoresControl $k }
@@ -2255,7 +2318,7 @@ function New-CategoryPage {
     $cat['tile.Name'].Add_LostKeyboardFocus({
             param($s, $e)
             $t = Get-CurrentTile; if (-not $t) { return }
-            $new = ($s.Text -replace '[\[\]]', '').Trim()
+            $new = Get-TileName $s.Text
             if (-not $new -or $new -ceq $t.Name) { $s.Text = $t.Name; return }
             $m = Get-Model (Get-CurrentFile)
             if (($m.Sections | Where-Object { $_ -ne $t -and $_.Name -ieq $new }) -or ((Get-ImportedNames $m) -contains $new)) {
@@ -2283,9 +2346,8 @@ function New-CategoryPage {
             $file = Get-CurrentFile; if (-not $file) { return }
             $m = Get-Model $file
             $r = Show-Dialog 'New tile' 'Name of the new tile (also the name of its images):' @('Create', 'Cancel') ''
-            $name = "$($r.Text)" -replace '[\[\]]', ''
-            if ($r.Button -ne 'Create' -or -not $name.Trim()) { return }
-            $name = $name.Trim()
+            $name = Get-TileName "$($r.Text)"
+            if ($r.Button -ne 'Create' -or -not $name) { return }
             if (($m.Sections | Where-Object { $_.Name -ieq $name }) -or ((Get-ImportedNames $m) -contains $name)) {
                 [void](Show-Dialog 'Raintile' "There is already a tile called '$name'."); return
             }
@@ -2558,7 +2620,7 @@ function Add-SelectedFound {
     $sel = @($found.Items | Where-Object { $found.Selected.ContainsKey($_.Id) })
     if (-not $sel.Count) { return }
     $target = [string]$found.Target.SelectedItem.Tag
-    $key = $values['SteamGridDBKey']
+    $key = Unprotect-Secret "$($values['SteamGridDBKey'])"
     $present = Get-PresentMap
     $touched = @{}
     $added = 0
@@ -2575,7 +2637,8 @@ function Add-SelectedFound {
             if (-not $base) { $base = if ($it.Kind -eq 'game') { 'Games' } else { 'Apps' } }
             $file = Get-CategoryFileFor $base
             $m = Get-Model $file
-            $name = $it.Name
+            $name = Get-TileName $it.Name
+            if (-not $name) { continue }
             if (Test-TileName $m $name) { $name = "$name ($($it.Store))" }
             if (Test-TileName $m $name) { continue }
             $s = [pscustomobject]@{ Name = $name; Comments = @(); Keys = (New-Object System.Collections.ArrayList) }
@@ -2996,18 +3059,27 @@ function Invoke-CheckNow {
     if (-not $info.Error -and -not $info.Newer) { Invoke-Rainmeter "!CommandMeasure MeasureScript `"OnUpdateSeen()`" `"$Config`"" }
 }
 
+# Opens the release page (only a GitHub page of this repository)
+function Open-ReleasePage($info) {
+    $page = if ($info -and (Test-ReleaseUrl $info.Page)) { $info.Page } else { "https://github.com/$Repository/releases" }
+    Start-Process $page
+}
+
 function Install-Update {
     $info = Read-UpdateInfo
     if (-not $info) { return }
-    if (-not $info.Asset) { Start-Process $info.Page; return }
+    if (-not (Test-ReleaseUrl $info.Asset)) { Open-ReleasePage $info; return }
     $r = Show-Dialog 'Update Raintile' ("Download Raintile $($info.Latest) and open the Rainmeter installer?`r`n`r`n" +
         "Your settings, categories and images stay: they are in $Data, which the installer does not touch. " +
         "In the installer keep the default options and press Install.`r`n`r`n" +
         "This is still experimental: keep a copy of your data folder first.") @('Download and install', 'Cancel')
     if ($r.Button -ne 'Download and install') { return }
-    $name = [IO.Path]::GetFileName(([uri]$info.Asset).AbsolutePath)
-    if ($name -notlike '*.rmskin') { $name = "Raintile_$($info.Latest).rmskin" }
-    $dest = Join-Path $env:TEMP $name
+    # a new folder of its own, and a name made here: nothing else can be
+    # put in its place before it is opened
+    $version = Get-SafeVersion $info.Latest
+    $folder = Join-Path $env:TEMP ('Raintile-update-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $folder | Out-Null
+    $dest = Join-Path $folder $(if ($version) { "Raintile_$version.rmskin" } else { 'Raintile_update.rmskin' })
     $upd.Status.Text = 'Downloading' + [char]0x2026
     $win.Cursor = [System.Windows.Input.Cursors]::Wait
     $win.Dispatcher.Invoke([action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
@@ -3020,6 +3092,11 @@ function Install-Update {
         return
     }
     $win.Cursor = $null
+    if (-not (Test-RmskinPackage $dest)) {
+        Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
+        $upd.Status.Text = 'The downloaded file is not a Rainmeter package: nothing was installed.'
+        return
+    }
     # .rmskin files open with the Rainmeter skin installer; this window closes
     # so that nothing of the skin folder is in use
     Start-Process -FilePath $dest
@@ -3068,7 +3145,7 @@ function New-UpdateCard {
     [void](Add-To $f $bar)
     $upd.Install.Add_Click({ Install-Update })
     $check.Add_Click({ Invoke-CheckNow })
-    $upd.Page.Add_Click({ $i = Read-UpdateInfo; if ($i -and $i.Page) { Start-Process $i.Page } })
+    $upd.Page.Add_Click({ Open-ReleasePage (Read-UpdateInfo) })
     Show-UpdateInfo
     return $card
 }

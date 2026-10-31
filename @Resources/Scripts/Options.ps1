@@ -22,7 +22,8 @@ param(
     # folder with your data (Settings.inc, Categories\, Images\): see Data.ps1
     [string]$Data = '',
     [string]$Config = 'Raintile',
-    # page to open on (e.g. -Page import: the list of games and apps found).
+    # page to open on (e.g. -Page import: the list of games and apps found;
+    # -Page tile: the tile in Generated\EditTile.txt, from the skin's menu).
     # Not $Page: variable names ignore case, and the menu code uses $page.
     [Alias('Page')][string]$OpenPage = '',
     [switch]$NoGui
@@ -1914,6 +1915,136 @@ function Show-CategoryDetails {
     $script:loading = $false
 }
 
+# --- Framing of the background (BgFocus, BgZoom) ----------------------------------
+# The preview has the proportions of this category's tiles on the current
+# screen (the skin writes its grid area to Generated\Area.txt) and shows the
+# part of the image the launcher shows with BgStyle=Crop; the other styles
+# start from it. Dragging the preview moves BgFocus, the wheel and the slider
+# set BgZoom. The same maths as frameRect in Raintile.lua.
+
+$bgFrame = @{ Path = $null; Bitmap = $null; FX = 0.5; FY = 0.5; Zoom = 1.0; TW = 16; TH = 9; Drag = $null; Moved = $false; Sync = $false }
+
+# Size in pixels of a tile of category $file (only its proportions count)
+function Get-TileSize([string]$file) {
+    $area = $null
+    try {
+        $parts = [IO.File]::ReadAllText((Join-Path $Resources 'Generated\Area.txt')).Trim().Split(',')
+        if ($parts.Count -eq 3) { $area = @([double]$parts[0], [double]$parts[1], [double]$parts[2]) }
+    } catch { }
+    if (-not $area) {
+        # skin not loaded yet: the screen without menu and margins, roughly
+        $px = Get-ScreenPixels
+        $area = @(($px.W * 0.96), ($px.H * 0.88), 16)
+    }
+    $c = Get-CategorySection (Get-Model $file)
+    $n = @{}
+    foreach ($k in 'NX', 'NY') {
+        $v = 0
+        if (-not [int]::TryParse((Get-Key $c $k), [ref]$v) -or $v -lt 1) { [void][int]::TryParse("$($values[$k])", [ref]$v) }
+        $n[$k] = [Math]::Max(1, $v)
+    }
+    return @{
+        W = [Math]::Max(1, [Math]::Floor(($area[0] - ($n.NX - 1) * $area[2]) / $n.NX))
+        H = [Math]::Max(1, [Math]::Floor(($area[1] - ($n.NY - 1) * $area[2]) / $n.NY))
+    }
+}
+
+function Read-Framing($section) {
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $bgFrame.FX = 0.5; $bgFrame.FY = 0.5; $bgFrame.Zoom = 1.0
+    if (-not $section) { return }
+    $x = 0.0; $y = 0.0; $z = 0.0
+    if ((Get-Key $section 'BgFocus') -match '^\s*([\d.]+)\s*,\s*([\d.]+)\s*$' -and
+        [double]::TryParse($Matches[1], 'Float', $inv, [ref]$x) -and [double]::TryParse($Matches[2], 'Float', $inv, [ref]$y)) {
+        $bgFrame.FX = [Math]::Min(100.0, $x) / 100; $bgFrame.FY = [Math]::Min(100.0, $y) / 100
+    }
+    if ([double]::TryParse((Get-Key $section 'BgZoom'), 'Float', $inv, [ref]$z)) { $bgFrame.Zoom = [Math]::Min(4.0, [Math]::Max(1.0, $z)) }
+}
+
+# Part of the image shown, in image pixels; S = preview pixels per image pixel.
+# Doubles everywhere: with an integer first argument PowerShell picks the
+# Int32 overload of [Math]::Min/Max and truncates the other one.
+function Get-FrameWindow {
+    $iw = [double]$bgFrame.Bitmap.PixelWidth; $ih = [double]$bgFrame.Bitmap.PixelHeight
+    $pw = [double]$cat.Preview.Width; $ph = [double]$cat.Preview.Height
+    $s = [Math]::Max($pw / $iw, $ph / $ih) * $bgFrame.Zoom
+    $w = [Math]::Min($iw, $pw / $s); $h = [Math]::Min($ih, $ph / $s)
+    return @{
+        X = [Math]::Min($iw - $w, [Math]::Max(0.0, $bgFrame.FX * $iw - $w / 2))
+        Y = [Math]::Min($ih - $h, [Math]::Max(0.0, $bgFrame.FY * $ih - $h / 2))
+        W = $w; H = $h; S = $s; IW = $iw; IH = $ih
+    }
+}
+
+# The focus goes back to the centre of what is shown: past an edge it would
+# move nothing (and dragging back would first have to undo the excess)
+function Limit-Focus {
+    $v = Get-FrameWindow
+    $bgFrame.FX = ($v.X + $v.W / 2) / $v.IW
+    $bgFrame.FY = ($v.Y + $v.H / 2) / $v.IH
+}
+
+function Update-Framing {
+    $p = $cat.Preview
+    $k = [Math]::Min(384 / $bgFrame.TW, 260 / $bgFrame.TH)
+    $p.Width = [Math]::Max(40.0, [Math]::Round($bgFrame.TW * $k))
+    $p.Height = [Math]::Max(40.0, [Math]::Round($bgFrame.TH * $k))
+    $img = $cat.PreviewBg
+    $img.Source = $bgFrame.Bitmap
+    $has = [bool]$bgFrame.Bitmap
+    $cat.FrameRow.IsEnabled = $has
+    $p.Cursor = if ($has) { [System.Windows.Input.Cursors]::SizeAll } else { $null }
+    $bgFrame.Sync = $true
+    $cat.ZoomSlider.Value = $bgFrame.Zoom
+    $bgFrame.Sync = $false
+    $cat.ZoomText.Text = $bgFrame.Zoom.ToString('0.00', [Globalization.CultureInfo]::InvariantCulture) + [char]0xD7
+    if (-not $has) { return }
+    $v = Get-FrameWindow
+    $img.Width = $v.IW * $v.S; $img.Height = $v.IH * $v.S
+    [System.Windows.Controls.Canvas]::SetLeft($img, -$v.X * $v.S)
+    [System.Windows.Controls.Canvas]::SetTop($img, -$v.Y * $v.S)
+}
+
+# Writes BgFocus/BgZoom; the centre at zoom 1 (the default) removes them
+function Save-Framing {
+    $t = Get-CurrentTile; if (-not $t) { return }
+    $inv = [Globalization.CultureInfo]::InvariantCulture
+    $fx = [Math]::Round($bgFrame.FX * 100, 1); $fy = [Math]::Round($bgFrame.FY * 100, 1)
+    $z = [Math]::Round($bgFrame.Zoom, 2)
+    $focus = if ($fx -eq 50 -and $fy -eq 50) { '' } else { $fx.ToString('0.#', $inv) + ',' + $fy.ToString('0.#', $inv) }
+    $zoom = if ($z -le 1) { '' } else { $z.ToString('0.##', $inv) }
+    if ((Get-Key $t 'BgFocus') -ceq $focus -and (Get-Key $t 'BgZoom') -ceq $zoom) { return }
+    Set-Key $t 'BgFocus' $focus
+    Set-Key $t 'BgZoom' $zoom
+    Set-Changed (Get-CurrentFile)
+}
+
+# New zoom; $anchor (a point of the preview) keeps showing the same part of
+# the image, as when zooming with the wheel under the mouse
+function Set-FrameZoom([double]$zoom, $anchor = $null) {
+    $zoom = [Math]::Round([Math]::Min(4.0, [Math]::Max(1.0, $zoom)), 2)
+    if ($anchor) {
+        $v = Get-FrameWindow
+        $ix = $v.X + $anchor.X / $v.S; $iy = $v.Y + $anchor.Y / $v.S
+        $bgFrame.Zoom = $zoom
+        $v = Get-FrameWindow
+        $bgFrame.FX = ($ix - $anchor.X / $v.S + $v.W / 2) / $v.IW
+        $bgFrame.FY = ($iy - $anchor.Y / $v.S + $v.H / 2) / $v.IH
+    } else {
+        $bgFrame.Zoom = $zoom
+    }
+    Limit-Focus
+    Update-Framing
+    Save-Framing
+}
+
+# A new or removed background: the old framing no longer applies
+function Reset-Framing($section) {
+    Set-Key $section 'BgFocus' ''
+    Set-Key $section 'BgZoom' ''
+    $bgFrame.Path = $null
+}
+
 function Update-TilePreview {
     $s = Get-ShownTile
     $base = Get-CurrentBase
@@ -1921,7 +2052,13 @@ function Update-TilePreview {
     $logo = if ($s) { Get-TileImage $base $s 'Logo' } else { $null }
     $p = $cat.Preview
     $p.Background = if ($s) { Get-TileBrush $base $s $bg $logo } else { Res 'FieldBg' }
-    $cat.PreviewBg.Source = Get-Bitmap $bg 480
+    # decoded large enough to stay sharp when zoomed in
+    if ($bgFrame.Path -ne $bg) { $bgFrame.Path = $bg; $bgFrame.Bitmap = Get-Bitmap $bg 1200 }
+    if (-not $bg) { $bgFrame.Bitmap = $null }
+    Read-Framing $s
+    $size = if (Get-CurrentFile) { Get-TileSize (Get-CurrentFile) } else { @{ W = 16; H = 9 } }
+    $bgFrame.TW = $size.W; $bgFrame.TH = $size.H
+    Update-Framing
     $cat.PreviewLogo.Source = Get-Bitmap $logo 256
     $label = if ($s) { Get-Key $s 'Label' } else { '' }
     if (-not $label -and $s -and -not $bg -and -not $logo) { $label = $s.Name }
@@ -2204,7 +2341,8 @@ function New-CategoryPage {
     $cat.Note.Margin = T 0 0 0 8
     [void](Add-To $f $cat.Note)
 
-    # preview, as the tile looks in the launcher
+    # preview, as the tile looks in the launcher (sized by Update-Framing); the
+    # background sits on a canvas, positioned by the framing
     $p = New-Object System.Windows.Controls.Border
     $p.Width = 384; $p.Height = 216
     $p.CornerRadius = New-Object System.Windows.CornerRadius(8)
@@ -2213,8 +2351,10 @@ function New-CategoryPage {
     $p.ClipToBounds = $true
     $pg = New-Object System.Windows.Controls.Grid
     $p.Child = $pg
+    $canvas = New-Object System.Windows.Controls.Canvas
     $cat.PreviewBg = New-Object System.Windows.Controls.Image
-    $cat.PreviewBg.Stretch = 'UniformToFill'
+    $cat.PreviewBg.Stretch = 'Fill'
+    [void]$canvas.Children.Add($cat.PreviewBg)
     $cat.PreviewLogo = New-Object System.Windows.Controls.Image
     $cat.PreviewLogo.Stretch = 'Uniform'
     $cat.PreviewLogo.MaxWidth = 140; $cat.PreviewLogo.MaxHeight = 90
@@ -2222,9 +2362,73 @@ function New-CategoryPage {
     $cat.PreviewLabel.HorizontalAlignment = 'Left'; $cat.PreviewLabel.VerticalAlignment = 'Bottom'
     $cat.PreviewLabel.Margin = T 12 0 0 10
     $cat.PreviewLabel.Effect = New-Object System.Windows.Media.Effects.DropShadowEffect -Property @{ BlurRadius = 6; ShadowDepth = 1; Opacity = 0.8 }
-    [void]$pg.Children.Add($cat.PreviewBg); [void]$pg.Children.Add($cat.PreviewLogo); [void]$pg.Children.Add($cat.PreviewLabel)
+    # logo and label must not catch the drag
+    $cat.PreviewLogo.IsHitTestVisible = $false; $cat.PreviewLabel.IsHitTestVisible = $false
+    [void]$pg.Children.Add($canvas); [void]$pg.Children.Add($cat.PreviewLogo); [void]$pg.Children.Add($cat.PreviewLabel)
     $cat.Preview = $p
     [void](Add-To $f $p)
+
+    # framing: drag the preview, wheel or slider to zoom
+    $frameRow = New-Panel 'Horizontal'
+    $cat.ZoomSlider = New-Object System.Windows.Controls.Slider
+    $cat.ZoomSlider.Width = 180
+    $cat.ZoomSlider.Minimum = 1; $cat.ZoomSlider.Maximum = 4
+    $cat.ZoomSlider.SmallChange = 0.05; $cat.ZoomSlider.LargeChange = 0.25
+    $cat.ZoomSlider.VerticalAlignment = 'Center'
+    $cat.ZoomText = New-Text '' 12 (Res 'DimBrush')
+    $cat.ZoomText.Width = 48
+    $cat.ZoomText.Margin = T 10 0 0 0
+    $cat.ZoomText.VerticalAlignment = 'Center'
+    $btnFrameReset = New-Button 'Reset'
+    $btnFrameReset.Margin = T 6 0 0 0
+    [void](Add-To $frameRow $cat.ZoomSlider); [void](Add-To $frameRow $cat.ZoomText); [void](Add-To $frameRow $btnFrameReset)
+    $cat.FrameRow = $frameRow
+    [void](Add-To $f (New-FormRow 'Framing' $frameRow 'Drag the preview to choose the part of the background shown; zoom with the wheel or the slider. The preview has the size of this category''s tiles on this screen.'))
+
+    $p.Add_MouseLeftButtonDown({
+            param($s, $e)
+            if (-not $bgFrame.Bitmap -or -not (Get-CurrentTile)) { return }
+            Limit-Focus
+            $bgFrame.Drag = @{ Point = $e.GetPosition($s); FX = $bgFrame.FX; FY = $bgFrame.FY }
+            $bgFrame.Moved = $false
+            [void]$s.CaptureMouse()
+            $e.Handled = $true
+        })
+    $p.Add_MouseMove({
+            param($s, $e)
+            $d = $bgFrame.Drag; if (-not $d) { return }
+            $pt = $e.GetPosition($s)
+            $v = Get-FrameWindow
+            $bgFrame.FX = $d.FX - ($pt.X - $d.Point.X) / ($v.S * $v.IW)
+            $bgFrame.FY = $d.FY - ($pt.Y - $d.Point.Y) / ($v.S * $v.IH)
+            Limit-Focus
+            $bgFrame.Moved = $true
+            Update-Framing
+        })
+    $p.Add_MouseLeftButtonUp({ param($s, $e) $s.ReleaseMouseCapture() })
+    # end of the drag (also when the capture is lost): written once
+    $p.Add_LostMouseCapture({
+            if (-not $bgFrame.Drag) { return }
+            $bgFrame.Drag = $null
+            if ($bgFrame.Moved) { Save-Framing }
+        })
+    $p.Add_MouseWheel({
+            param($s, $e)
+            if (-not $bgFrame.Bitmap -or -not (Get-CurrentTile)) { return }
+            $e.Handled = $true   # the page must not scroll
+            Set-FrameZoom ($bgFrame.Zoom * [Math]::Pow(1.1, $e.Delta / 120)) $e.GetPosition($s)
+        })
+    $cat.ZoomSlider.Add_ValueChanged({
+            param($s, $e)
+            if ($bgFrame.Sync -or -not $bgFrame.Bitmap -or -not (Get-CurrentTile)) { return }
+            Set-FrameZoom $s.Value
+        })
+    $btnFrameReset.Add_Click({
+            if (-not $bgFrame.Bitmap -or -not (Get-CurrentTile)) { return }
+            $bgFrame.FX = 0.5; $bgFrame.FY = 0.5; $bgFrame.Zoom = 1.0
+            Update-Framing
+            Save-Framing
+        })
 
     foreach ($k in 'Name', 'Command', 'Label', 'Color') {
         $tb = New-Object System.Windows.Controls.TextBox
@@ -2283,6 +2487,7 @@ function New-CategoryPage {
                 $src = Select-File $imageFilter; if (-not $src) { return }
                 [void](Copy-TileImage (Get-CurrentBase) $s.Tag.ToLowerInvariant() $t.Name $src)
                 Set-Key $t $s.Tag ''   # the default image just copied applies
+                if ($s.Tag -eq 'Background') { Reset-Framing $t }
                 Set-Changed (Get-CurrentFile)
                 Update-TilePreview
             })
@@ -2296,6 +2501,7 @@ function New-CategoryPage {
                     [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($path, 'OnlyErrorDialogs', 'SendToRecycleBin')
                 }
                 Set-Key $t $s.Tag ''
+                if ($s.Tag -eq 'Background') { Reset-Framing $t }
                 Set-Changed (Get-CurrentFile)
                 Update-TilePreview
             })
@@ -3309,11 +3515,41 @@ $win.Add_ContentRendered({
         [void][RaintileOptions.Win32]::SetForegroundWindow((New-Object System.Windows.Interop.WindowInteropHelper($win)).Handle)
     })
 
+# Tile to open on (-Page tile): "file|name" left by the skin, used once. The
+# file must be one of the categories; a tile no longer there leaves the
+# first one selected.
+function Read-EditTile {
+    $path = Join-Path $Resources 'Generated\EditTile.txt'
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    try {
+        $parts = [IO.File]::ReadAllText($path).Split('|', 2)
+        Remove-Item -LiteralPath $path -Force
+    } catch { return $null }
+    if ($parts.Count -ne 2) { return $null }
+    $file = $parts[0].Trim()
+    $match = Get-CategoryFiles | Where-Object { $_.Name -ieq $file } | Select-Object -First 1
+    if (-not $match) { return $null }
+    return @{ File = $match.Name; Name = $parts[1].Trim() }
+}
+
 $script:updating = $false
+$editTile = if ($OpenPage -eq 'tile') { Read-EditTile } else { $null }
 if ($OpenPage -eq 'info') {
     # Info is in the list at the bottom: selecting it shows it
     Build-Nav ''
     $navBottom.SelectedIndex = 0
+} elseif ($editTile) {
+    $navOpen['categories'] = $true
+    Build-Nav "cat:$($editTile.File)"
+    if ($nav.SelectedItem) { Show-NavTarget $nav.SelectedItem.Tag }
+    for ($i = 0; $cat.Tiles -and $i -lt $cat.Tiles.Items.Count; $i++) {
+        $sec = $cat.Tiles.Items[$i].Tag.Section
+        if ($sec -and $sec.Name -ieq $editTile.Name) {
+            $cat.Tiles.SelectedIndex = $i
+            $cat.Tiles.ScrollIntoView($cat.Tiles.Items[$i])
+            break
+        }
+    }
 } else {
     Build-Nav $(if ($OpenPage -eq 'import') { 'page:import' } else { 'page:general' })
     Show-NavTarget $nav.SelectedItem.Tag

@@ -7,7 +7,7 @@ Your games, apps, links and system tools become large tiles with background art 
 ## Features
 
 - **Categories** in a centred menu at the top (icon, text or both), each with its own grid size.
-- **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs.
+- **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs. Backgrounds fit the tile by themselves; you can also frame each one by dragging and zooming it in Options, and move and resize its logo on its own.
 - **Add games and apps** found on this PC — Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Battle.net, EA app, Xbox, and the programs of the Start menu — picking them from a list, with background and logo (local Steam cache, [SteamGridDB](https://www.steamgriddb.com/), program icons). New ones are signalled with a dot on the gear.
 - **Search** across all categories.
 - **Mouse, keyboard and gamepad**: WASD/arrows, Space/Enter, Xbox-compatible controllers (open the launcher with Back + Start).
@@ -44,7 +44,7 @@ The launcher places itself at the top-left corner and covers the screen. Do not 
 
 ## Quick start
 
-- **Add tiles**: right click on the launcher > **Options...**, or edit the files of right click > **Categories folder** (one file per category).
+- **Add tiles**: right click on the launcher > **Options...**, or edit the files of right click > **Categories folder** (one file per category). Right click on a tile > **Edit \<tile\>...** opens it in Options.
 - **Add your games and apps**: right click > **Add games and apps...**, tick them and press **Add selected**.
 - **Images**: put them in right click > **Images folder** > `<category>\background\<TileName>.jpg` and `...\logo\<TileName>.png`; they are picked up automatically.
 - **Settings**: right click > **Options...**, or **Edit Settings.inc**.

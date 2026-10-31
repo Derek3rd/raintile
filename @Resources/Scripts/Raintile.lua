@@ -262,17 +262,89 @@ local function safeName(s)
 end
 
 -- Returns the image to show: the thumbnail if it already exists, otherwise
--- the original (and the thumbnail is queued).
-local function thumbnail(src, tile, field, dir, name, w, h, mode)
+-- the original (and the thumbnail is queued). rect (optional, framed
+-- backgrounds): the part of src to use, {x, y, w, h}.
+local function thumbnail(src, tile, field, dir, name, w, h, mode, rect)
 	if not src or not V.Thumbnails then return src end
 	local ext = src:lower():match('%.png$') and '.png' or '.jpg'
 	local tag = (mode == 'cover' or mode == 'contain') and '' or ('_' .. mode)
+	if rect then tag = tag .. '_f' .. table.concat(rect, '-') end
 	local dst = string.format('%sGenerated\\Thumbs\\%s\\%s_%d_%dx%d%s%s',
 		resources, dir, safeName(name), fileSize(src) or 0, w, h, tag, ext)
-	thumbJobs[#thumbJobs + 1] = table.concat({ src, dst, w, h, mode }, '|')
+	local job = table.concat({ src, dst, w, h, mode }, '|')
+	if rect then job = job .. '|' .. table.concat(rect, ',') end
+	thumbJobs[#thumbJobs + 1] = job
 	if fileExists(dst) then return dst end
 	pending[#pending + 1] = { tile = tile, field = field, dst = dst }
 	return src
+end
+
+-- Framing of a background (tile keys): BgFocus=X,Y is the point of the image,
+-- in % of its width and height, kept at the centre of the tile; BgZoom (1-4)
+-- enlarges the image beyond filling the tile. Both are relative, so the
+-- framing holds at any resolution and grid. Returns the part of the original
+-- the tile works with, {x, y, w, h} in pixels: the window the tile shows,
+-- plus BgOverscan of room around it where the image allows (sliding
+-- backgrounds); .px, .py = where the window sits in that part at rest (0-1,
+-- as in bgWindow). nil if the tile is not framed or the size is unknown.
+local function frameRect(path, focus, zoom, tw, th)
+	if not path then return nil end
+	local fx, fy = trim(focus or ''):match('^([%d%.]+)%s*,%s*([%d%.]+)$')
+	fx, fy, zoom = tonumber(fx) or 50, tonumber(fy) or 50, tonumber(trim(zoom or '')) or 1
+	if fx == 50 and fy == 50 and zoom <= 1 then return nil end
+	local d = imageSize(path)
+	if not d then return nil end
+	local iw, ih = d[1], d[2]
+	fx, fy = math.min(100, math.max(0, fx)) / 100, math.min(100, math.max(0, fy)) / 100
+	local scale = math.max(tw / iw, th / ih) * math.min(4, math.max(1, zoom))
+	local over = V.BgStyle == 'crop' and 1 or V.BgOverscan
+	-- start of a span of length n centred on c, kept inside 0..total
+	local function place(c, n, total) return math.min(total - n, math.max(0, c - n / 2)) end
+	local w = math.max(1, math.min(iw, math.floor(tw / scale * over + 0.5)))
+	local h = math.max(1, math.min(ih, math.floor(th / scale * over + 0.5)))
+	local x = math.floor(place(fx * iw, w, iw) + 0.5)
+	local y = math.floor(place(fy * ih, h, ih) + 0.5)
+	local r = { x, y, w, h, px = 0.5, py = 0.5 }
+	-- the window at rest stays where the framing put it, also near an edge
+	local ww, wh = math.min(w, tw / scale), math.min(h, th / scale)
+	if w - ww >= 1 then r.px = (place(fx * iw, ww, iw) - x) / (w - ww) end
+	if h - wh >= 1 then r.py = (place(fy * ih, wh, ih) - y) / (h - wh) end
+	r.px, r.py = math.min(1, math.max(0, r.px)), math.min(1, math.max(0, r.py))
+	return r
+end
+
+-- Placement of a logo (tile keys), independent of the background framing:
+-- LogoPos=X,Y is where the centre of the logo goes, in % of the tile's width
+-- and height; LogoScale (0.25-3) multiplies the category's logo size. Both are
+-- relative, so they hold at any resolution and grid. Sets t.logoX, t.logoY
+-- (0-1), t.logoScale and, for a moved logo, t.logoRatio (width / height of
+-- the image, to keep what is visible of it inside the tile).
+local function logoPlacement(t, pos, scale)
+	local x, y = trim(pos or ''):match('^([%d%.]+)%s*,%s*([%d%.]+)$')
+	t.logoX = math.min(100, math.max(0, tonumber(x) or 50)) / 100
+	t.logoY = math.min(100, math.max(0, tonumber(y) or 50)) / 100
+	t.logoScale = math.min(3, math.max(0.25, tonumber(trim(scale or '')) or 1))
+	if t.logo and (t.logoX ~= 0.5 or t.logoY ~= 0.5) then
+		local d = imageSize(t.logo)
+		if d then t.logoRatio = d[1] / d[2] end
+	end
+end
+
+-- Centre of tile t's logo in the tile, in pixels, for a logo box of the
+-- given size. The box is square and the image fits inside it, so the
+-- visible part is what has to stay in the tile: the slots are clipped by the
+-- grid, not by the tile, and the logo would spill onto the next one. A
+-- centred logo stays centred, also when larger than the tile.
+local function logoCentre(t, size)
+	local vw, vh = size, size
+	if t.logoRatio then
+		if t.logoRatio >= 1 then vh = size / t.logoRatio else vw = size * t.logoRatio end
+	end
+	local function place(p, n, total)
+		if n >= total then return total / 2 end
+		return math.min(total - n / 2, math.max(n / 2, p * total))
+	end
+	return place(t.logoX, vw, V.TileW), place(t.logoY, vh, V.TileH)
 end
 
 -- Automatic tile colour (AutoTileColor=1): a tile without a background image
@@ -318,8 +390,6 @@ local function categoryGeometry(c, nx, ny, iconSize)
 	c.rows = c.ny + (V.Horizontal and 0 or 1)
 	c.cols = c.nx + (V.Horizontal and 1 or 0)
 	c.iconSize = math.floor(iconSize or V.DefIconSize)
-	-- logo thumbnails are made at the largest size (zoom included)
-	c.logoMax = math.floor(c.iconSize * V.HoverLogoScale + 0.5)
 end
 
 -- Makes category c's grid the "current" one: the rest of the script uses
@@ -377,16 +447,21 @@ local function loadCategory(file)
 			end
 			-- originals, used full screen by the launch animation
 			t.backgroundFull, t.logoFull = t.background, t.logo
+			t.frame = frameRect(t.background, k.bgfocus, k.bgzoom, c.tw, c.th)
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
-				c.tw, c.th, V.BgThumbMode)
+				c.tw, c.th, V.BgThumbMode, t.frame)
+			logoPlacement(t, k.logopos, k.logoscale)
+			-- logo thumbnails are made at the largest size (zoom included)
+			local logoMax = math.floor(c.iconSize * t.logoScale * V.HoverLogoScale + 0.5)
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
-				c.logoMax, c.logoMax, 'contain')
+				logoMax, logoMax, 'contain')
 			if label ~= '' then
 				t.label = label
 			elseif not t.background and not t.logo then
 				t.label = s.name -- tile without images: show at least its name
 			end
 			t.name, t.catLabel = s.name, c.label -- for search
+			t.file = file -- for "Edit this tile"
 			c.tiles[#c.tiles + 1] = t
 		end
 	end
@@ -444,7 +519,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 4
+local GRID_VERSION = 6
 
 local function signature()
 	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
@@ -575,23 +650,35 @@ end
 
 -- "Window" backgrounds (BgStyle other than Crop): the image stays larger than
 -- the tile (BgOverscan) and the tile shows part of it with ImageCrop, moving
--- it (Pan, Parallax) or shrinking it (Zoom).
+-- it (Pan, Parallax) or shrinking it (Zoom). A framed tile still showing its
+-- original (thumbnail not made yet, or Thumbnails=0) works on the framed part
+-- only, as its thumbnail would; with Crop that part is shown as it is.
 -- x, y = tile position in the grid. Returns "x,y,w,h" or nil.
 local function bgWindow(t, x, y)
 	if t.bgSize == nil then t.bgSize = imageSize(t.background) or false end
 	local d = t.bgSize
 	if not d then return nil end
-	local iw, ih = d[1], d[2]
-	local scale = math.max(V.TileW / iw, V.TileH / ih) * V.BgOverscan
+	local ox, oy, iw, ih = 0, 0, d[1], d[2]
+	if t.frame and t.background == t.backgroundFull then
+		ox, oy, iw, ih = t.frame[1], t.frame[2], t.frame[3], t.frame[4]
+	end
+	local scale = math.max(V.TileW / iw, V.TileH / ih) * (V.BgStyle == 'crop' and 1 or V.BgOverscan)
 	if V.BgStyle == 'zoom' then
 		scale = scale * (1 + (V.BgHoverZoom - 1) * (t.zoom or 0))
 	end
 	local cw, ch = V.TileW / scale, V.TileH / scale
+	-- at rest: centred, or where the framing put it
 	local px, py = 0.5, 0.5
+	if t.frame then px, py = t.frame.px, t.frame.py end
 	if V.BgStyle == 'pan' then
-		-- from the centre towards one end, along the axis with more room
-		local e = 0.5 * easeInOut(t.pan or 0)
-		if (iw - cw) / iw >= (ih - ch) / ih then px = 0.5 + e else py = 0.5 + e end
+		-- from the rest position towards the end with more room, along the
+		-- axis with more room
+		local e = easeInOut(t.pan or 0)
+		if (iw - cw) / iw >= (ih - ch) / ih then
+			px = px + ((px <= 0.5 and 1 or 0) - px) * e
+		else
+			py = py + ((py <= 0.5 and 1 or 0) - py) * e
+		end
 	elseif V.BgStyle == 'parallax' then
 		-- the visible part depends on where the tile is in the grid
 		if V.Horizontal then
@@ -600,7 +687,7 @@ local function bgWindow(t, x, y)
 			py = math.min(1, math.max(0, (y + V.TileH / 2) / V.GridH))
 		end
 	end
-	return string.format('%d,%d,%d,%d', math.floor((iw - cw) * px + 0.5), math.floor((ih - ch) * py + 0.5),
+	return string.format('%d,%d,%d,%d', ox + math.floor((iw - cw) * px + 0.5), oy + math.floor((ih - ch) * py + 0.5),
 		math.floor(cw + 0.5), math.floor(ch + 0.5))
 end
 
@@ -859,13 +946,15 @@ local function placeSlots()
 			set(tile, 'H', tostring(V.TileH))
 			set(tile, 'ImageAlpha', alpha)
 			set(tile, 'SolidColor', fade(t.color, f))
-			local crop = V.BgStyle ~= 'crop' and t.background and bgWindow(t, x, y)
+			local framedOriginal = t.frame and t.background == t.backgroundFull
+			local crop = (V.BgStyle ~= 'crop' or framedOriginal) and t.background and bgWindow(t, x, y)
 			set(tile, 'PreserveAspectRatio', crop and '0' or '2')
 			set(tile, 'ImageCrop', crop or '')
 			if t.logo then
-				local size = math.floor(V.IconSize * (1 + (V.HoverLogoScale - 1) * (t.zoom or 0)) + 0.5)
-				set(icon, 'X', tostring(x + math.floor((V.TileW - size) / 2)))
-				set(icon, 'Y', tostring(y + math.floor((V.TileH - size) / 2)))
+				local size = math.floor(V.IconSize * t.logoScale * (1 + (V.HoverLogoScale - 1) * (t.zoom or 0)) + 0.5)
+				local lx, ly = logoCentre(t, size)
+				set(icon, 'X', tostring(x + math.floor(lx - size / 2)))
+				set(icon, 'Y', tostring(y + math.floor(ly - size / 2)))
 				set(icon, 'W', tostring(size))
 				set(icon, 'H', tostring(size))
 				set(icon, 'ImageAlpha', alpha)
@@ -1084,6 +1173,22 @@ local function writeSizes()
 	return true
 end
 
+-- Grid area in pixels for the framing editor of the Options window, which
+-- cannot work out the layout by itself: "width,height,gap" in
+-- Generated\Area.txt, rewritten only when it changes.
+local function writeArea()
+	local text = string.format('%d,%d,%d\n', math.floor(V.AreaW), math.floor(V.AreaH), math.floor(V.Gap))
+	local path = resources .. 'Generated\\Area.txt'
+	local f = io.open(path, 'rb')
+	local old = f and f:read('*a') or ''
+	if f then f:close() end
+	if old == text then return end
+	f = io.open(path, 'wb')
+	if not f then return end
+	f:write(text)
+	f:close()
+end
+
 -- Rewrites Grid.inc and refreshes the skin if menu, grid or files changed.
 local function regenerate(files)
 	local sig = signature()
@@ -1198,6 +1303,7 @@ function Initialize()
 	-- area available for the grid (each category's tiles fill it)
 	V.AreaW = V.ScreenW - 2 * V.PadX
 	V.AreaH = V.ScreenH - 2 * V.PadY - V.MenuH - V.Gap
+	writeArea()
 	for _, name in ipairs({ 'TileColor', 'ActiveCategoryColor', 'HoverCategoryColor', 'TextColor',
 			'TextDimColor', 'ScrollTrackColor', 'ScrollThumbColor', 'HoverColor', 'AccentColor' }) do
 		V[name] = parseColor(SKIN:GetVariable(name, '')) or '255,255,255,255'
@@ -1408,6 +1514,61 @@ function OpenNotice()
 	SKIN:Bang(SKIN:GetVariable(notice.update and 'OptionsInfoAction' or 'OptionsImportAction'))
 end
 
+-- Context menu > Edit this tile: the Options window opens on the tile the
+-- menu was opened on. Any right-click action on a meter (press or release)
+-- would replace Rainmeter's menu, so the tile is the one under the mouse:
+-- set by HoverTile, cleared by LeaveTile. Opening the menu also takes the
+-- mouse off the tile, but then it leaves the whole skin too (MouseInSkin(0)),
+-- before or right after LeaveTile: in that case the tile is kept. The tile
+-- reaches Options through Generated\EditTile.txt ("file|name"), not the
+-- command line: a tile name can hold any character.
+-- Rainmeter reads the menu entries each time it opens the menu (before the
+-- mouse leaves), and cannot grey one out: the entry is the last one and,
+-- without a tile, gets an empty action, which hides it (the list of entries
+-- ends there). With a tile it shows its name.
+local pointed = nil  -- tile under the mouse
+local left = nil     -- tile just left: { t, at = os.time() }
+local inSkin = true
+
+local function setPointed(t)
+	if pointed == t then return end
+	pointed = t
+	-- & would underline the next letter in a menu
+	local title = t and ('Edit ' .. t.name:gsub('&', '&&') .. '...') or 'Edit this tile...'
+	SKIN:Bang('!SetVariable', 'EditTileTitle', title)
+	SKIN:Bang('!SetVariable', 'EditTileAction', t and '[!CommandMeasure MeasureScript "EditTile()"]' or '')
+end
+
+local function leavePointed(t)
+	if not t or pointed ~= t then return end
+	if inSkin then
+		left = { t = t, at = os.time() }
+		setPointed(nil)
+	end
+end
+
+function MouseInSkin(on)
+	inSkin = on == 1
+	-- left the skin in the same moment as a tile: the menu opening on it
+	if not inSkin and not pointed and left and os.time() - left.at <= 1 then setPointed(left.t) end
+	left = nil
+end
+
+function EditTile()
+	local t = pointed
+	setPointed(nil)
+	if t then
+		local f = io.open(resources .. 'Generated\\EditTile.txt', 'wb')
+		if f then
+			f:write(t.file .. '|' .. t.name)
+			f:close()
+			SKIN:Bang(SKIN:GetVariable('OptionsTileAction'))
+			return
+		end
+	end
+	SKIN:Bang(SKIN:GetVariable('OptionsAction'))
+end
+
 -- Update check on every load (CheckUpdates=1); Update.ps1 asks GitHub at
 -- most once a day.
 function AutoUpdateCheck()
@@ -1519,11 +1680,13 @@ end
 function HoverTile(slot)
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
+	setPointed(t)
 	local tx, ty = slotToGrid(slot)
 	focus(t, indexAt(slot), tx, ty)
 end
 
 function LeaveTile(slot)
+	if ready then leavePointed(tileAt(slot)) end
 	if not ready or not tileAt(slot) or indexAt(slot) ~= hover.idx or not hover.on then return end
 	hover.on = false
 	local animate = next(zooming) ~= nil
@@ -1622,9 +1785,14 @@ local function drawSplash(p)
 	set('SplashBg', 'H', tostring(h))
 	local cx, cy = x + math.floor(w / 2), y + math.floor(h / 2)
 	if a.tile.logoFull then
-		local size = lerp(V.IconSize, V.LaunchLogoSize)
-		set('SplashLogo', 'X', tostring(cx - math.floor(size / 2)))
-		set('SplashLogo', 'Y', tostring(cy - math.floor(size / 2)))
+		local t = a.tile
+		local size = lerp(V.IconSize * t.logoScale, V.LaunchLogoSize)
+		-- the logo starts where it sits in the tile and ends at the centre
+		local lx, ly = logoCentre(t, V.IconSize * t.logoScale)
+		local fx = lx / V.TileW + (0.5 - lx / V.TileW) * e
+		local fy = ly / V.TileH + (0.5 - ly / V.TileH) * e
+		set('SplashLogo', 'X', tostring(x + math.floor(w * fx - size / 2)))
+		set('SplashLogo', 'Y', tostring(y + math.floor(h * fy - size / 2)))
 		set('SplashLogo', 'W', tostring(size))
 		set('SplashLogo', 'H', tostring(size))
 	elseif a.tile.label then

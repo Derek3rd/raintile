@@ -54,7 +54,7 @@ Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter start
 - **Click** a tile to launch it; **wheel** to scroll.
 - **Click** a category in the menu to switch to it; clicking the category already open scrolls back to the start.
 - The **search bar** at the top left opens the search; the **gear** opens the Options window; the **X** closes the launcher.
-- Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Add games and apps...*, *Categories folder*, plus Rainmeter's own menu.
+- Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Add games and apps...*, *Categories folder*, and on a tile *Edit \<tile\>...* (opens it in Options), plus Rainmeter's own menu.
 
 ### Keyboard
 
@@ -142,6 +142,10 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `Image` | another name for both images: `Image=diablo4` looks for `background\diablo4.*` and `logo\diablo4.*` |
 | `Background` | specific background file (relative to `background\` or absolute; extension optional) |
 | `Logo` | specific logo file (relative to `logo\` or absolute) |
+| `BgFocus` | framing of the background: the point of the image kept at the centre of the tile, `X,Y` in % of its width and height (default `50,50`); see [Framing a background](#framing-a-background) |
+| `BgZoom` | framing of the background: enlargement beyond filling the tile, `1` to `4` (default `1`) |
+| `LogoPos` | where the centre of the logo goes, `X,Y` in % of the tile's width and height (default `50,50`); see [Placing the logo](#placing-the-logo) |
+| `LogoScale` | size of the logo, times the category's `IconSize`, `0.25` to `3` (default `1`) |
 | `Source` | where an added game or app comes from (`Steam:570`); informational |
 
 ### Commands
@@ -164,10 +168,22 @@ For the `Games.ini` category:
 Images\Games\
   icon.png                 menu icon
   background\Diablo.jpg    background of the [Diablo] tile
-  logo\Diablo.png          centred logo of the [Diablo] tile
+  logo\Diablo.png          logo of the [Diablo] tile, centred
 ```
 
 Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
+
+### Framing a background
+
+A background fills its tile and, by default, is cropped at the centre. When the subject is off-centre, or the image is much wider or taller than the tile, choose the part to show in Options > *the category* > *the tile* > **Framing** (or right click on the tile > **Edit \<tile\>...**): drag the background in the preview to move the image, zoom with the mouse wheel (it zooms on the point under the mouse) or the slider, and **Reset** to go back to the centre. The preview has the proportions of this category's tiles on this screen.
+
+The framing is saved in the tile as `BgFocus` (the point kept at the centre, in % of the image) and `BgZoom`. Both are relative, so it holds when the resolution, the margins or the grid change: only the edges of the image limit it. With the sliding styles (`BgStyle` `Pan`, `Parallax`, `Zoom`) the tile starts from the framed part and moves within `BgOverscan` of it, instead of across the whole image. Choosing or removing the background resets the framing. The launch animation still shows the whole image.
+
+### Placing the logo
+
+The logo is centred in its tile and as large as the category's `IconSize`. To move it, drag the logo itself in the same preview (Options > *the category* > *the tile*); to resize it, use the mouse wheel over it or the **Logo** slider, and **Reset** to centre it again at its normal size. It is independent of the framing: the background and the logo move separately.
+
+The placement is saved in the tile as `LogoPos` (where the centre of the logo goes, in % of the tile) and `LogoScale` (times the category's logo size). Both are relative, so the logo keeps its place when the resolution or the grid change. What is visible of the logo always stays inside the tile, also while it grows under the mouse: pushed into a corner, it stays in the corner at any size. The launch animation starts from where the logo is and brings it to the centre of the screen.
 
 ## Adding games and apps
 
@@ -198,7 +214,7 @@ Settings: `ImportStores` (e.g. `Steam|Epic|Apps`), `ScanOnStart`, `ImportCategor
 
 ## Options window
 
-The **gear** next to the X, or right click > **Options...**, opens the Options window (`Scripts\Options.ps1`, WPF; its look is in `Scripts\Options.xaml`).
+The **gear** next to the X, or right click > **Options...**, opens the Options window (`Scripts\Options.ps1`, WPF; its look is in `Scripts\Options.xaml`). Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
 
 The sections are in the menu on the left; **Keybindings** and **Categories** open into sub-entries (click them again to close them):
 
@@ -216,7 +232,7 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 | Import | the games and apps found on this PC, to add; where to look and where they go |
 | Advanced | performance, debug log, entries without a page of their own |
 | Categories | the list of categories (create, open, reorder, delete) and the settings of the selected one: name, icon, grid, logo size |
-| Categories > *each category* | its tiles, with a preview: edit, move to another category, turn imported games into normal tiles |
+| Categories > *each category* | its tiles, with a preview: edit, frame the background, move to another category, turn imported games into normal tiles |
 | Info (at the bottom) | version and updates, your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide |
 
 - Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
@@ -436,7 +452,7 @@ Raintile is designed to be light even on a large full-screen window:
 - **Fixed number of meters**: only the visible slots exist (as many as the largest category grid needs), however many tiles you have. Scrolling or switching category only changes the options of existing slots.
 - **Only differences**: the script remembers the last value set on each meter and only sends Rainmeter what changed, then updates only those meters.
 - **Self-pacing animation clock**: a single ActionTimer clock drives every animation; each step schedules the next only after drawing, so steps never queue up and input stays responsive. It stops as soon as nothing moves.
-- **Thumbnails** (`Thumbnails=1`): Rainmeter decodes images at full resolution and rescales them on every draw. Raintile creates copies of backgrounds and logos at the exact displayed size in `Generated\Thumbs\` (`Scripts\Thumbs.ps1`, below-normal priority) and loads those. Right after adding images you see the originals for a few seconds, then the thumbnails take over. They are rebuilt when an image, the resolution, the grid or the background style changes; unused ones are deleted.
+- **Thumbnails** (`Thumbnails=1`): Rainmeter decodes images at full resolution and rescales them on every draw. Raintile creates copies of backgrounds and logos at the exact displayed size in `Generated\Thumbs\` (`Scripts\Thumbs.ps1`, below-normal priority) and loads those. Right after adding images you see the originals for a few seconds, then the thumbnails take over. They are rebuilt when an image, its framing, the resolution, the grid or the background style changes; unused ones are deleted.
 - **Generated grid**: the menu and slot meters live in `Generated\Grid.inc`, written by `Raintile.lua`; it is rewritten (with a refresh) when categories or grids change.
 - **Category files read once**, on load. The list of files is cached, so the skin draws immediately; the folder is re-checked in the background (RunCommand plugin) and the skin refreshes by itself if it changed.
 
@@ -463,6 +479,8 @@ Navigation/Navigation.ini    navigation keys mini-skin (activated by the launche
   Generated/Sizes.inc        percentage sizes and #hex colours converted for Rainmeter
   Generated/Thumbs/          thumbnails (safe to delete: they are rebuilt)
   Generated/Colors.txt       tile colours taken from logos (AutoTileColor)
+  Generated/Area.txt         grid area in pixels, for the framing preview of Options
+  Generated/EditTile.txt     tile to open Options on (Edit this tile), removed once read
   Generated/Found.json       games and apps found by the last search
   Generated/Found/           their icons
 ```

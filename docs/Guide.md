@@ -188,7 +188,7 @@ The search (`Scripts\Scan.ps1`, in the background) looks in:
 
 - **The list** shows the cover (Steam) or the icon of each item, with its source, and marks the new ones. Filter by type (All, Games, Apps) or by name; *Show added* also lists what is already in the launcher (dimmed, with its category); *Covers* off gives a compact text list.
 - **Where they go**: by type (games to `ImportCategory`, apps to `AppsCategory`; the category is created if missing) or all to one category.
-- **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. For games without local images, background and logo are downloaded from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences).
+- **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. For games without local images, background and logo are downloaded from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Set the key in Options > Import: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
 - Something already in the launcher, in any category (same name or same command), is not listed again.
 - **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear. A click on it opens the list.
 - The added tiles are written at once; **Save and refresh** shows them in the launcher.
@@ -254,7 +254,7 @@ When an update adds settings, they are added to your `Settings.inc` with their d
 
 With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps); a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
 
-- **Download and install** downloads the release's `.rmskin` and opens it with the Rainmeter installer; the Options window closes. Keep the installer's default options. Your data is not touched.
+- **Download and install** downloads the release's `.rmskin` and opens it with the Rainmeter installer; the Options window closes. Keep the installer's default options. Your data is not touched. Only files of this repository's releases on GitHub (https) are downloaded, into a new temporary folder, and the file is checked to be a Rainmeter package before it is opened.
 - **Check now** asks GitHub again; **Release page** opens the release on GitHub.
 
 ### Publishing a release

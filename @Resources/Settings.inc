@@ -198,7 +198,10 @@ ScanOnStart=1
 ImportCategory=Games
 AppsCategory=Apps
 ; Free SteamGridDB API key (steamgriddb.com > Preferences > API): when adding a
-; game without local images, its background and logo are downloaded
+; game without local images, its background and logo are downloaded. Set it in
+; the Options window: it is saved encrypted (dpapi:...), readable only by your
+; Windows user on this PC. Written here by hand it stays in clear until the
+; Options window saves.
 SteamGridDBKey=
 
 ; --- Updates --------------------------------------------------------------------

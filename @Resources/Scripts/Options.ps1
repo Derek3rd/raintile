@@ -22,7 +22,8 @@ param(
     # folder with your data (Settings.inc, Categories\, Images\): see Data.ps1
     [string]$Data = '',
     [string]$Config = 'Raintile',
-    # page to open on (e.g. -Page import: the list of games and apps found).
+    # page to open on (e.g. -Page import: the list of games and apps found;
+    # -Page tile: the tile in Generated\EditTile.txt, from the skin's menu).
     # Not $Page: variable names ignore case, and the menu code uses $page.
     [Alias('Page')][string]$OpenPage = '',
     [switch]$NoGui
@@ -3437,11 +3438,41 @@ $win.Add_ContentRendered({
         [void][RaintileOptions.Win32]::SetForegroundWindow((New-Object System.Windows.Interop.WindowInteropHelper($win)).Handle)
     })
 
+# Tile to open on (-Page tile): "file|name" left by the skin, used once. The
+# file must be one of the categories; a tile no longer there leaves the
+# first one selected.
+function Read-EditTile {
+    $path = Join-Path $Resources 'Generated\EditTile.txt'
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    try {
+        $parts = [IO.File]::ReadAllText($path).Split('|', 2)
+        Remove-Item -LiteralPath $path -Force
+    } catch { return $null }
+    if ($parts.Count -ne 2) { return $null }
+    $file = $parts[0].Trim()
+    $match = Get-CategoryFiles | Where-Object { $_.Name -ieq $file } | Select-Object -First 1
+    if (-not $match) { return $null }
+    return @{ File = $match.Name; Name = $parts[1].Trim() }
+}
+
 $script:updating = $false
+$editTile = if ($OpenPage -eq 'tile') { Read-EditTile } else { $null }
 if ($OpenPage -eq 'info') {
     # Info is in the list at the bottom: selecting it shows it
     Build-Nav ''
     $navBottom.SelectedIndex = 0
+} elseif ($editTile) {
+    $navOpen['categories'] = $true
+    Build-Nav "cat:$($editTile.File)"
+    if ($nav.SelectedItem) { Show-NavTarget $nav.SelectedItem.Tag }
+    for ($i = 0; $cat.Tiles -and $i -lt $cat.Tiles.Items.Count; $i++) {
+        $sec = $cat.Tiles.Items[$i].Tag.Section
+        if ($sec -and $sec.Name -ieq $editTile.Name) {
+            $cat.Tiles.SelectedIndex = $i
+            $cat.Tiles.ScrollIntoView($cat.Tiles.Items[$i])
+            break
+        }
+    }
 } else {
     Build-Nav $(if ($OpenPage -eq 'import') { 'page:import' } else { 'page:general' })
     Show-NavTarget $nav.SelectedItem.Tag

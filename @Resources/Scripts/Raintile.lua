@@ -426,6 +426,7 @@ local function loadCategory(file)
 				t.label = s.name -- tile without images: show at least its name
 			end
 			t.name, t.catLabel = s.name, c.label -- for search
+			t.file = file -- for "Edit this tile"
 			c.tiles[#c.tiles + 1] = t
 		end
 	end
@@ -483,7 +484,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 4
+local GRID_VERSION = 5
 
 local function signature()
 	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
@@ -551,6 +552,9 @@ local function writeGrid(path, sig, files)
 		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(' .. slot .. ')"]')
 		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ')"]')
 		w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(' .. slot .. ')"]')
+		-- on the press, not the release: a RightMouseUpAction would replace
+		-- the context menu
+		w('RightMouseDownAction=[!CommandMeasure MeasureScript "PointTile(' .. slot .. ')"]')
 		w('')
 		w('[TileIcon' .. slot .. ']')
 		w('Meter=Image')
@@ -1475,6 +1479,32 @@ end
 
 function OpenNotice()
 	SKIN:Bang(SKIN:GetVariable(notice.update and 'OptionsInfoAction' or 'OptionsImportAction'))
+end
+
+-- Context menu > Edit this tile: the Options window opens on the tile the
+-- menu was opened on. A right press on a tile points it (PointTile(slot)),
+-- anywhere else clears it (PointTile(0), from the skin). The tile reaches
+-- Options through Generated\EditTile.txt ("file|name"), not the command
+-- line: a tile name can hold any character.
+local pointed = nil
+
+function PointTile(slot)
+	pointed = ready and slot > 0 and tileAt(slot) or nil
+end
+
+function EditTile()
+	local t = pointed
+	pointed = nil
+	if t then
+		local f = io.open(resources .. 'Generated\\EditTile.txt', 'wb')
+		if f then
+			f:write(t.file .. '|' .. t.name)
+			f:close()
+			SKIN:Bang(SKIN:GetVariable('OptionsTileAction'))
+			return
+		end
+	end
+	SKIN:Bang(SKIN:GetVariable('OptionsAction'))
 end
 
 -- Update check on every load (CheckUpdates=1); Update.ps1 asks GitHub at

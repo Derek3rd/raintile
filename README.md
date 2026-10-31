@@ -44,7 +44,7 @@ The launcher places itself at the top-left corner and covers the screen. Do not 
 
 ## Quick start
 
-- **Add tiles**: right click on the launcher > **Options...**, or edit the files of right click > **Categories folder** (one file per category). Right click on a tile > **Edit this tile...** opens it in Options.
+- **Add tiles**: right click on the launcher > **Options...**, or edit the files of right click > **Categories folder** (one file per category). Right click on a tile > **Edit \<tile\>...** opens it in Options.
 - **Add your games and apps**: right click > **Add games and apps...**, tick them and press **Add selected**.
 - **Images**: put them in right click > **Images folder** > `<category>\background\<TileName>.jpg` and `...\logo\<TileName>.png`; they are picked up automatically.
 - **Settings**: right click > **Options...**, or **Edit Settings.inc**.

@@ -484,7 +484,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 5
+local GRID_VERSION = 6
 
 local function signature()
 	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
@@ -552,9 +552,6 @@ local function writeGrid(path, sig, files)
 		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(' .. slot .. ')"]')
 		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ')"]')
 		w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(' .. slot .. ')"]')
-		-- on the press, not the release: a RightMouseUpAction would replace
-		-- the context menu
-		w('RightMouseDownAction=[!CommandMeasure MeasureScript "PointTile(' .. slot .. ')"]')
 		w('')
 		w('[TileIcon' .. slot .. ']')
 		w('Meter=Image')
@@ -1482,19 +1479,48 @@ function OpenNotice()
 end
 
 -- Context menu > Edit this tile: the Options window opens on the tile the
--- menu was opened on. A right press on a tile points it (PointTile(slot)),
--- anywhere else clears it (PointTile(0), from the skin). The tile reaches
--- Options through Generated\EditTile.txt ("file|name"), not the command
--- line: a tile name can hold any character.
-local pointed = nil
+-- menu was opened on. Any right-click action on a meter (press or release)
+-- would replace Rainmeter's menu, so the tile is the one under the mouse:
+-- set by HoverTile, cleared by LeaveTile. Opening the menu also takes the
+-- mouse off the tile, but then it leaves the whole skin too (MouseInSkin(0)),
+-- before or right after LeaveTile: in that case the tile is kept. The tile
+-- reaches Options through Generated\EditTile.txt ("file|name"), not the
+-- command line: a tile name can hold any character.
+-- Rainmeter reads the menu entries each time it opens the menu (before the
+-- mouse leaves), and cannot grey one out: the entry is the last one and,
+-- without a tile, gets an empty action, which hides it (the list of entries
+-- ends there). With a tile it shows its name.
+local pointed = nil  -- tile under the mouse
+local left = nil     -- tile just left: { t, at = os.time() }
+local inSkin = true
 
-function PointTile(slot)
-	pointed = ready and slot > 0 and tileAt(slot) or nil
+local function setPointed(t)
+	if pointed == t then return end
+	pointed = t
+	-- & would underline the next letter in a menu
+	local title = t and ('Edit ' .. t.name:gsub('&', '&&') .. '...') or 'Edit this tile...'
+	SKIN:Bang('!SetVariable', 'EditTileTitle', title)
+	SKIN:Bang('!SetVariable', 'EditTileAction', t and '[!CommandMeasure MeasureScript "EditTile()"]' or '')
+end
+
+local function leavePointed(t)
+	if not t or pointed ~= t then return end
+	if inSkin then
+		left = { t = t, at = os.time() }
+		setPointed(nil)
+	end
+end
+
+function MouseInSkin(on)
+	inSkin = on == 1
+	-- left the skin in the same moment as a tile: the menu opening on it
+	if not inSkin and not pointed and left and os.time() - left.at <= 1 then setPointed(left.t) end
+	left = nil
 end
 
 function EditTile()
 	local t = pointed
-	pointed = nil
+	setPointed(nil)
 	if t then
 		local f = io.open(resources .. 'Generated\\EditTile.txt', 'wb')
 		if f then
@@ -1618,11 +1644,13 @@ end
 function HoverTile(slot)
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
+	setPointed(t)
 	local tx, ty = slotToGrid(slot)
 	focus(t, indexAt(slot), tx, ty)
 end
 
 function LeaveTile(slot)
+	if ready then leavePointed(tileAt(slot)) end
 	if not ready or not tileAt(slot) or indexAt(slot) ~= hover.idx or not hover.on then return end
 	hover.on = false
 	local animate = next(zooming) ~= nil

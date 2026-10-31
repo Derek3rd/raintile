@@ -54,7 +54,7 @@ Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter start
 - **Click** a tile to launch it; **wheel** to scroll.
 - **Click** a category in the menu to switch to it; clicking the category already open scrolls back to the start.
 - The **search bar** at the top left opens the search; the **gear** opens the Options window; the **X** closes the launcher.
-- Right click: *Options...*, *Edit this tile...* (on a tile: opens it in Options), *Edit Settings.inc*, *Images folder*, *Add games and apps...*, *Categories folder*, plus Rainmeter's own menu.
+- Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Add games and apps...*, *Categories folder*, and on a tile *Edit \<tile\>...* (opens it in Options), plus Rainmeter's own menu.
 
 ### Keyboard
 
@@ -173,7 +173,7 @@ Each tile looks for images named after itself, with the extensions `.png`, `.jpg
 
 ### Framing a background
 
-A background fills its tile and, by default, is cropped at the centre. When the subject is off-centre, or the image is much wider or taller than the tile, choose the part to show in Options > *the category* > *the tile* > **Framing** (or right click on the tile > **Edit this tile...**): drag the preview to move the image, zoom with the mouse wheel (it zooms on the point under the mouse) or the slider, and **Reset** to go back to the centre. The preview has the proportions of this category's tiles on this screen.
+A background fills its tile and, by default, is cropped at the centre. When the subject is off-centre, or the image is much wider or taller than the tile, choose the part to show in Options > *the category* > *the tile* > **Framing** (or right click on the tile > **Edit \<tile\>...**): drag the preview to move the image, zoom with the mouse wheel (it zooms on the point under the mouse) or the slider, and **Reset** to go back to the centre. The preview has the proportions of this category's tiles on this screen.
 
 The framing is saved in the tile as `BgFocus` (the point kept at the centre, in % of the image) and `BgZoom`. Both are relative, so it holds when the resolution, the margins or the grid change: only the edges of the image limit it. With the sliding styles (`BgStyle` `Pan`, `Parallax`, `Zoom`) the tile starts from the framed part and moves within `BgOverscan` of it, instead of across the whole image. Choosing or removing the background resets the framing. The launch animation still shows the whole image.
 
@@ -206,7 +206,7 @@ Settings: `ImportStores` (e.g. `Steam|Epic|Apps`), `ScanOnStart`, `ImportCategor
 
 ## Options window
 
-The **gear** next to the X, or right click > **Options...**, opens the Options window (`Scripts\Options.ps1`, WPF; its look is in `Scripts\Options.xaml`). Right click on a tile > **Edit this tile...** opens it on that tile, ready to edit or frame.
+The **gear** next to the X, or right click > **Options...**, opens the Options window (`Scripts\Options.ps1`, WPF; its look is in `Scripts\Options.xaml`). Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
 
 The sections are in the menu on the left; **Keybindings** and **Categories** open into sub-entries (click them again to close them):
 

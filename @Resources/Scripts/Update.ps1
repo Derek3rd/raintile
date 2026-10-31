@@ -52,6 +52,34 @@ function Format-Version([version]$v) {
     return $s
 }
 
+# Only addresses of this repository on GitHub, over https, are opened or
+# downloaded: Update.json is a plain file and could have been changed.
+function Test-ReleaseUrl([string]$url) {
+    $u = $null
+    if (-not [Uri]::TryCreate("$url", [UriKind]::Absolute, [ref]$u)) { return $false }
+    return $u.Scheme -eq 'https' -and $u.Host -eq 'github.com' -and
+        $u.AbsolutePath.StartsWith("/$Repository/", [StringComparison]::OrdinalIgnoreCase)
+}
+
+# A version made of numbers only (to use in a file name), or ''
+function Get-SafeVersion([string]$text) {
+    if ("$text" -match '^\d+(\.\d+){1,3}$') { return $text }
+    return ''
+}
+
+# True if the file is a Rainmeter package: its last 16 bytes are the size of
+# the zip before them, a flags byte and "RMSKIN" (the installer checks the same)
+function Test-RmskinPackage([string]$path) {
+    try {
+        $bytes = [IO.File]::ReadAllBytes($path)
+        if ($bytes.Length -lt 32) { return $false }
+        $size = [BitConverter]::ToInt64($bytes, $bytes.Length - 16)
+        $key = [Text.Encoding]::ASCII.GetString($bytes, $bytes.Length - 7, 7)
+        # the zip itself starts with "PK"
+        return $key -eq "RMSKIN`0" -and $size -eq ($bytes.Length - 16) -and $bytes[0] -eq 0x50 -and $bytes[1] -eq 0x4B
+    } catch { return $false }
+}
+
 function Read-UpdateInfo {
     if (-not (Test-Path -LiteralPath $updateFile)) { return $null }
     try { return ([IO.File]::ReadAllText($updateFile) | ConvertFrom-Json) } catch { return $null }
@@ -82,8 +110,8 @@ function Invoke-UpdateCheck {
         }
         $info.Title = "$($release.name)"
         $info.Notes = "$($release.body)"
-        if ($release.html_url) { $info.Page = "$($release.html_url)" }
-        $asset = @($release.assets | Where-Object { $_.name -like '*.rmskin' }) | Select-Object -First 1
+        if (Test-ReleaseUrl $release.html_url) { $info.Page = "$($release.html_url)" }
+        $asset = @($release.assets | Where-Object { $_.name -like '*.rmskin' -and (Test-ReleaseUrl $_.browser_download_url) }) | Select-Object -First 1
         if ($asset) { $info.Asset = "$($asset.browser_download_url)" }
     } catch {
         $info.Error = $_.Exception.Message

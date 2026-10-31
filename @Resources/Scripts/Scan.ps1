@@ -41,11 +41,13 @@ function Get-RegValue($path, $name) {
     try { return (Get-ItemProperty -LiteralPath $path -Name $name -ErrorAction Stop).$name } catch { return $null }
 }
 
-# Name usable as an INI section and as a file name
+# Name usable as an INI section and as a file name: no brackets, no
+# characters Windows refuses in file names, no control characters, no
+# leading or trailing dots (so a name can never point to another folder)
 function Get-TileName([string]$name) {
-    $n = $name -replace '[\[\]]', '' -replace '[\u2122\u00AE\u00A9]', '' -replace '[\\/:*?"<>|]', ' '
-    $n = ($n -replace '\s+', ' ').Trim().TrimStart(';')
-    return $n.Trim()
+    $n = $name -replace '[\x00-\x1F\x7F]', ' ' -replace '[\[\]]', '' -replace '[\u2122\u00AE\u00A9]', '' -replace '[\\/:*?"<>|]', ' '
+    $n = ($n -replace '\s+', ' ').Trim().Trim('.', ' ').TrimStart(';').Trim('.', ' ')
+    return $n
 }
 
 # Key to compare names: lower case, without spaces and light punctuation
@@ -466,7 +468,7 @@ function Get-SGDBImage([string]$key, [string]$kind, [string]$name, [string]$stea
     else { $id = (Invoke-SGDB $key ("search/autocomplete/" + [uri]::EscapeDataString($name)) | Select-Object -First 1).id }
     if (-not $id) { return $null }
     $img = Invoke-SGDB $key "$kind/game/$id" | Select-Object -First 1
-    if (-not $img) { return $null }
+    if (-not $img -or "$($img.url)" -notlike 'https://*') { return $null }
     $ext = [IO.Path]::GetExtension(([uri]$img.url).AbsolutePath).ToLowerInvariant()
     if ($imageExts -notcontains $ext) { $ext = '.png' }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destBase) | Out-Null

@@ -32,8 +32,10 @@ local ticking = false -- animation clock (ActionTimer) running
 local visible = true  -- launcher shown (Show/Hide)
 local searchCat = nil -- search results, shown instead of the active category
 local query = ''      -- searched text
-local typing = false  -- search text field open (until shortly after it closes)
+local typing = false  -- the search bar is being typed in (Typing mini-skin on)
+local typed = ''      -- text typed so far
 local leaveSearch     -- defined in the Search section
+local stopTyping      -- defined in the Search section
 
 -- Category shown in the grid: the search results or the active one.
 local function cur()
@@ -474,6 +476,110 @@ local function loadCategory(file)
 	return c
 end
 
+-- Favorites and Recent ---------------------------------------------------------
+-- Two categories made of the tiles of the others, first in the menu. Their
+-- data, in the data folder, one tile per line ("<file>|<tile name>"):
+-- Favorites.txt (in the order they were added) and Usage.txt (with the number
+-- of launches and the time of the last one: "<file>|<name>|<count>|<time>").
+
+local favorites = { list = {}, set = {} }
+local usage = {}        -- id -> { count, last }
+local virtualDirty = false
+
+local function tileId(t)
+	return (t.file or '') .. '|' .. t.name
+end
+
+local function readLines(path)
+	local lines = {}
+	local f = io.open(path, 'r')
+	if not f then return lines end
+	for line in f:lines() do
+		line = line:gsub('\r$', '')
+		if line ~= '' then lines[#lines + 1] = line end
+	end
+	f:close()
+	return lines
+end
+
+local function writeLines(path, lines)
+	local f = io.open(path, 'wb')
+	if not f then return end
+	f:write(table.concat(lines, '\r\n'), #lines > 0 and '\r\n' or '')
+	f:close()
+end
+
+local function readFavorites()
+	favorites = { list = {}, set = {} }
+	for _, id in ipairs(readLines(data .. 'Favorites.txt')) do
+		if not favorites.set[id] then
+			favorites.set[id] = true
+			favorites.list[#favorites.list + 1] = id
+		end
+	end
+end
+
+local function readUsage()
+	usage = {}
+	for _, line in ipairs(readLines(data .. 'Usage.txt')) do
+		local id, count, last = line:match('^(.*)|(%d+)|(%d+)$')
+		if id then usage[id] = { count = tonumber(count), last = tonumber(last) } end
+	end
+end
+
+local function writeUsage()
+	local lines = {}
+	for id, u in pairs(usage) do lines[#lines + 1] = id .. '|' .. u.count .. '|' .. u.last end
+	table.sort(lines)
+	writeLines(data .. 'Usage.txt', lines)
+end
+
+local function makeVirtual(kind)
+	local c = {
+		virtual = kind, file = '', name = '_' .. kind, order = -1, tiles = {},
+		label = kind == 'favorites' and 'Favorites' or 'Recent',
+	}
+	local icon = resources .. 'Icons\\' .. kind .. '.png'
+	if fileExists(icon) then c.icon = icon end
+	categoryGeometry(c)
+	return c
+end
+
+-- Tiles of Favorites and Recent, from the tiles of the other categories
+local function fillVirtual()
+	local byId, all = {}, {}
+	for _, c in ipairs(cats) do
+		if not c.virtual then
+			for _, t in ipairs(c.tiles) do
+				byId[tileId(t)] = t
+				all[#all + 1] = t
+			end
+		end
+	end
+	for _, c in ipairs(cats) do
+		if c.virtual == 'favorites' then
+			c.tiles = {}
+			for _, id in ipairs(favorites.list) do
+				if byId[id] then c.tiles[#c.tiles + 1] = byId[id] end
+			end
+		elseif c.virtual == 'recent' then
+			local list = {}
+			for _, t in ipairs(all) do
+				local u = usage[tileId(t)]
+				if u then list[#list + 1] = { t = t, u = u } end
+			end
+			table.sort(list, function(a, b)
+				if V.RecentMostUsed and a.u.count ~= b.u.count then return a.u.count > b.u.count end
+				if a.u.last ~= b.u.last then return a.u.last > b.u.last end
+				return a.t.name:lower() < b.t.name:lower()
+			end)
+			c.tiles = {}
+			for i = 1, math.min(#list, V.RecentCount) do c.tiles[i] = list[i].t end
+		end
+	end
+	virtualDirty = false
+end
+
 local function loadCategories(files)
 	cats = {}
 	thumbJobs, pending = {}, {}
@@ -489,6 +595,14 @@ local function loadCategories(files)
 	if #cats == 0 then
 		cats[1] = { file = '', name = 'Empty', label = 'No categories', order = 0, tiles = {} }
 		categoryGeometry(cats[1])
+	else
+		local virtual = {}
+		if V.ShowFavorites then virtual[#virtual + 1] = makeVirtual('favorites') end
+		if V.ShowRecent then virtual[#virtual + 1] = makeVirtual('recent') end
+		for i = #virtual, 1, -1 do table.insert(cats, 1, virtual[i]) end
+		readFavorites()
+		readUsage()
+		fillVirtual()
 	end
 	-- Slots to generate: as many as the largest grid needs
 	slots = 0
@@ -616,6 +730,7 @@ local function set(meter, option, value)
 	end
 end
 
+
 local function show(meter, visible)
 	local key = meter .. '|Hidden'
 	if cache[key] ~= visible then
@@ -623,6 +738,21 @@ local function show(meter, visible)
 		SKIN:Bang(visible and '!ShowMeter' or '!HideMeter', meter)
 	end
 end
+
+-- Text in the middle of an empty grid: no search results, no favorites yet,
+-- nothing launched yet
+local function updateEmptyHint()
+	local c, text = cur(), nil
+	if searchCat then
+		if #c.tiles == 0 then text = 'No results' end
+	elseif c and #c.tiles == 0 then
+		if c.virtual == 'favorites' then text = 'No favorites yet: right click a tile > Add to Favorites'
+		elseif c.virtual == 'recent' then text = 'Nothing launched yet' end
+	end
+	if text then set('SearchEmpty', 'Text', text) end
+	show('SearchEmpty', text ~= nil)
+end
+
 
 local function rect(meter, x, y, w, h, color)
 	set(meter, 'X', tostring(x))
@@ -1261,10 +1391,15 @@ function Initialize()
 	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
 	V.DebugLog = num('DebugLog', 0) ~= 0
 	V.ScanOnStart = num('ScanOnStart', 1) ~= 0
+	V.ShowFavorites = num('ShowFavorites', 1) ~= 0
+	V.ShowRecent = num('ShowRecent', 1) ~= 0
+	V.RecentMostUsed = SKIN:GetVariable('RecentOrder', 'Recent'):lower() == 'mostused'
+	V.RecentCount = math.max(1, math.floor(num('RecentCount', 12)))
 	V.CheckUpdates = num('CheckUpdates', 1) ~= 0
 	V.SearchW = math.floor(num('SearchW', 320))
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
+	V.TypingConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Typing'
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.LabelPad = num('LabelPad', 14)
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
@@ -1366,6 +1501,7 @@ function Update()
 		if showNow then os.remove(flag) end
 		local startHidden = V.StartHidden and not showNow
 		if V.AnimOpen and not startHidden then appear = 0 end
+		updateEmptyHint()
 		render(true)
 		if showNow then
 			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
@@ -1413,6 +1549,16 @@ function Show()
 	hover.on, hover.a = false, 0
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
+	if virtualDirty then
+		fillVirtual()
+		if cats[active].virtual then
+			applyGeometry(cats[active])
+			offset = normalizeOffset(offset)
+			pos, base = offset, -1
+			hover.idx = 0
+		end
+	end
+	updateEmptyHint()
 	if V.AnimOpen then appear = 0 end
 	frame() -- first frame drawn before showing the window
 	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
@@ -1425,6 +1571,7 @@ function Hide()
 	dbg('Hide: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
 	if not ready or not visible then return end
 	visible = false
+	stopTyping()
 	stopTicker()
 	leaveSearch() -- next time it opens on the category
 	pos = offset -- a half-done scroll restarts already finished
@@ -1530,13 +1677,49 @@ local pointed = nil  -- tile under the mouse
 local left = nil     -- tile just left: { t, at = os.time() }
 local inSkin = true
 
+-- Program (and its arguments) a command starts: "C:\x\app.exe" -a, app.exe,
+-- C:\x\Game.lnk. nil for URLs, bangs and empty commands.
+local function commandTarget(cmd)
+	cmd = trim(cmd or '')
+	if cmd == '' or cmd:sub(1, 1) == '[' or cmd:find('://', 1, true) then return nil end
+	local path, args = cmd:match('^"([^"]+)"%s*(.*)$')
+	if not path then path, args = cmd:match('^(%S+)%s*(.*)$') end
+	return path, args or ''
+end
+
+-- Programs that can be run as administrator: exe, shortcuts, scripts (not
+-- Store apps, which go through explorer.exe "shell:AppsFolder\...")
+local function isProgram(path, args)
+	local ext = (path or ''):lower():match('%.(%w+)$')
+	if ext ~= 'exe' and ext ~= 'lnk' and ext ~= 'bat' and ext ~= 'cmd' and ext ~= 'com' then return false end
+	return not (args or ''):lower():find('shell:', 1, true)
+end
+
+-- Context menu entries for tile t, in the order shown (Rainmeter stops at the
+-- first empty one, so only those that apply are listed)
+local TILE_MENU_SLOTS = 5
 local function setPointed(t)
 	if pointed == t then return end
 	pointed = t
-	-- & would underline the next letter in a menu
-	local title = t and ('Edit ' .. t.name:gsub('&', '&&') .. '...') or 'Edit this tile...'
-	SKIN:Bang('!SetVariable', 'EditTileTitle', title)
-	SKIN:Bang('!SetVariable', 'EditTileAction', t and '[!CommandMeasure MeasureScript "EditTile()"]' or '')
+	local items = {}
+	if t then
+		-- & would underline the next letter in a menu
+		items[#items + 1] = { 'Edit ' .. t.name:gsub('&', '&&') .. '...', 'edit' }
+		if V.ShowFavorites and t.file and t.file ~= '' then
+			items[#items + 1] = { favorites.set[tileId(t)] and 'Remove from Favorites' or 'Add to Favorites', 'favorite' }
+		end
+		local path, args = commandTarget(t.command)
+		if path and path:match('^%a:[\\/]') and fileExists(path) then items[#items + 1] = { 'Open file location', 'folder' } end
+		if path and isProgram(path, args) then items[#items + 1] = { 'Run as administrator', 'admin' } end
+		if t.file and t.file ~= '' then
+			items[#items + 1] = { 'Remove from ' .. (t.catLabel or ''):gsub('&', '&&') .. '...', 'remove' }
+		end
+	end
+	for i = 1, TILE_MENU_SLOTS do
+		local it = items[i]
+		SKIN:Bang('!SetVariable', 'TileMenuTitle' .. i, it and it[1] or '')
+		SKIN:Bang('!SetVariable', 'TileMenuAction' .. i, it and ('[!CommandMeasure MeasureScript "TileMenu(\'' .. it[2] .. '\')"]') or '')
+	end
 end
 
 local function leavePointed(t)
@@ -1554,19 +1737,63 @@ function MouseInSkin(on)
 	left = nil
 end
 
-function EditTile()
+-- Favorites: add or remove; the category shows the change at once
+local function toggleFavorite(t)
+	local id = tileId(t)
+	if favorites.set[id] then
+		favorites.set[id] = nil
+		for i, v in ipairs(favorites.list) do
+			if v == id then table.remove(favorites.list, i) break end
+		end
+	else
+		favorites.set[id] = true
+		favorites.list[#favorites.list + 1] = id
+	end
+	writeLines(data .. 'Favorites.txt', favorites.list)
+	fillVirtual()
+	if not searchCat and cats[active].virtual then
+		applyGeometry(cats[active])
+		offset = normalizeOffset(offset)
+		pos, base = offset, -1
+		hover.idx, hover.on, hover.a = 0, false, 0
+		updateEmptyHint()
+		render(true)
+	end
+end
+
+-- The tile the menu was opened on, for the PowerShell scripts: written to a
+-- file, not the command line, because a tile name can hold any character
+local function writeTileFile(name, t)
+	local f = io.open(resources .. 'Generated\\' .. name, 'wb')
+	if not f then return false end
+	f:write(t.file .. '|' .. t.name)
+	f:close()
+	return true
+end
+
+function TileMenu(kind)
 	local t = pointed
 	setPointed(nil)
-	if t then
-		local f = io.open(resources .. 'Generated\\EditTile.txt', 'wb')
-		if f then
-			f:write(t.file .. '|' .. t.name)
-			f:close()
-			SKIN:Bang(SKIN:GetVariable('OptionsTileAction'))
-			return
+	if not t then return end
+	if kind == 'edit' then
+		if writeTileFile('EditTile.txt', t) then SKIN:Bang(SKIN:GetVariable('OptionsTileAction')) end
+	elseif kind == 'favorite' then
+		toggleFavorite(t)
+	elseif kind == 'folder' then
+		local path = commandTarget(t.command)
+		if path then SKIN:Bang('explorer.exe /select,"' .. path .. '"') end
+	elseif kind == 'admin' or kind == 'remove' then
+		-- TileAction.ps1: run as administrator (UAC asks), or remove the tile
+		-- from its category file (after a confirmation)
+		if writeTileFile('TileAction.txt', t) then
+			SKIN:Bang(SKIN:GetVariable(kind == 'admin' and 'TileRunAsAction' or 'TileRemoveAction'))
 		end
 	end
-	SKIN:Bang(SKIN:GetVariable('OptionsAction'))
+end
+
+-- Older name of the "Edit" entry
+function EditTile()
+	TileMenu('edit')
 end
 
 -- Update check on every load (CheckUpdates=1); Update.ps1 asks GitHub at
@@ -1708,6 +1935,7 @@ end
 
 function SetCategory(i)
 	if not ready or launching or i < 1 or i > #cats then return end
+	stopTyping()
 	if leaveSearch() and i == active then
 		-- click on the category the search started from: go back there
 		if V.AnimCategory then appear = 0 startTicker() end
@@ -1730,6 +1958,7 @@ function SetCategory(i)
 	end
 	saveScroll()
 	active = i
+	if virtualDirty then fillVirtual() end
 	applyGeometry(cats[i])
 	SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), data .. 'State.inc')
 	offset = normalizeOffset(cats[i].offset)
@@ -1737,6 +1966,7 @@ function SetCategory(i)
 	hover.idx, hover.on, hover.a = 0, false, 0
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
+	updateEmptyHint()
 	if V.AnimCategory then
 		appear = 0
 		startTicker()
@@ -1813,6 +2043,14 @@ local function launchTile(t, x, y)
 	dbg('launch: ' .. t.command)
 
 	SKIN:Bang(t.command)
+	-- counted for Recent; its tiles change the next time it is shown
+	if t.file and t.file ~= '' then
+		local id = tileId(t)
+		local u = usage[id] or { count = 0, last = 0 }
+		usage[id] = { count = u.count + 1, last = os.time() }
+		writeUsage()
+		virtualDirty = true
+	end
 	if not V.LaunchAnimation then
 		if V.CloseOnLaunch then close() end
 		return
@@ -1909,20 +2147,24 @@ function NextCategory(delta)
 end
 
 -- Search -----------------------------------------------------------------------
--- The bar at the top left (or the NavSearch key) opens a text field (InputText
--- plugin). On Enter the grid shows the tiles of every category that contain
--- all the searched words (tile name, label or category); Esc, a click on a
--- category or an empty search go back to the category. While typing, the
--- navigation and Esc keys are off, and they come back shortly after
--- (MeasureKeysDelay) so the Enter release is not picked up.
+-- A click on the bar at the top left (or the NavSearch key) starts typing: the
+-- Raintile\Typing mini-skin takes the letters, digits, space, Backspace,
+-- Enter and Esc (TypeKey), and the grid shows, at every key, the tiles of
+-- every category that contain all the typed words (tile name, label or
+-- category). Enter stops typing and keeps the results (the first one is
+-- highlighted: Space/Enter launches it); Esc, a click on a category or an
+-- empty search go back to the category. While typing, the navigation and Esc
+-- keys are off; they come back shortly after (MeasureKeysDelay), so the
+-- release of Enter is not picked up.
 
 local function updateSearchBar()
-	set('SearchText', 'Text', query ~= '' and query or V.SearchPlaceholder)
-	set('SearchText', 'FontColor', query ~= '' and V.TextColor or V.TextDimColor)
+	local text = typing and (typed .. '|') or query
+	set('SearchText', 'Text', text ~= '' and text or V.SearchPlaceholder)
+	set('SearchText', 'FontColor', text ~= '' and V.TextColor or V.TextDimColor)
 	set('SearchPill', 'Shape', string.format(
 		'Rectangle 0,0,%d,%d,%d | Fill Color %s | StrokeWidth 0', V.SearchW, V.MenuH,
 		math.min(V.MenuRadius, math.floor(V.MenuH / 2)),
-		searchCat and V.ActiveCategoryColor or V.HoverCategoryColor))
+		(searchCat or typing) and V.ActiveCategoryColor or V.HoverCategoryColor))
 end
 
 -- Goes back from the search to the active category (without redrawing).
@@ -1936,7 +2178,7 @@ leaveSearch = function()
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	updateSearchBar()
-	show('SearchEmpty', false)
+	updateEmptyHint()
 	return true
 end
 
@@ -1945,15 +2187,16 @@ local function runSearch(text)
 	for w in trim(text or ''):lower():gmatch('%S+') do words[#words + 1] = w end
 	if #words == 0 then
 		if leaveSearch() then
-			if V.AnimCategory then appear = 0 startTicker() end
+			if V.AnimCategory and not typing then appear = 0 startTicker() end
 			render(true)
 		end
+		updateSearchBar()
 		return
 	end
 
 	local results = {}
 	for _, c in ipairs(cats) do
-		for _, t in ipairs(c.tiles) do
+		for _, t in ipairs(c.virtual and {} or c.tiles) do
 			local hay = (t.name .. ' ' .. (t.label or '') .. ' ' .. t.catLabel):lower()
 			local ok = true
 			for _, w in ipairs(words) do
@@ -1981,8 +2224,8 @@ local function runSearch(text)
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	updateSearchBar()
-	show('SearchEmpty', #results == 0)
-	if V.AnimCategory then
+	updateEmptyHint()
+	if V.AnimCategory and not typing then
 		appear = 0
 		startTicker()
 	end
@@ -1992,45 +2235,73 @@ local function runSearch(text)
 end
 
 function SearchOpen()
-	if not ready or launching or not visible then return end
+	if not ready or launching or not visible or typing then return end
 	typing = true
-	hotKey(false) -- the keys are needed by the text field
-	SKIN:Bang('!SetOption', 'MeasureSearchInput', 'DefaultValue', query)
-	SKIN:Bang('!UpdateMeasure', 'MeasureSearchInput')
-	SKIN:Bang('!CommandMeasure', 'MeasureSearchInput', 'ExecuteBatch 1')
+	typed = query
+	hotKey(false) -- the letters (WASD, Q, E, F...) are typed now
+	SKIN:Bang('!ActivateConfig', V.TypingConfig, 'Typing.ini')
+	updateSearchBar()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
 end
 
-function SearchSubmit(text)
-	dbg('search: ' .. tostring(text))
-	if ready and visible then runSearch(text) end
-	SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1')
+-- Stops typing; the other keys come back shortly after (KeysReady)
+stopTyping = function()
+	if not typing then return end
+	typing = false
+	SKIN:Bang('!DeactivateConfig', V.TypingConfig)
+	updateSearchBar()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
+	if visible then SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1') end
 end
 
-function SearchDismiss()
-	SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1')
+-- A key from the Typing mini-skin: a character, or BACK, ENTER, ESC
+function TypeKey(key)
+	if not ready or not visible or not typing then return end
+	if key == 'ENTER' then
+		stopTyping()
+		return
+	elseif key == 'ESC' then
+		typed = ''
+		stopTyping()
+		if leaveSearch() then
+			if V.AnimCategory then appear = 0 startTicker() end
+			render(true)
+		end
+		return
+	elseif key == 'BACK' then
+		typed = typed:sub(1, -2)
+	elseif #typed < 60 then
+		typed = typed .. key
+	end
+	dbg('search: ' .. typed)
+	runSearch(typed)
+	updateSearchBar()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
 end
 
 -- Turns the keys back on after the search (called by MeasureKeysDelay).
 function KeysReady()
-	typing = false
-	if ready and visible then hotKey(true) end
+	if ready and visible and not typing then hotKey(true) end
 end
 
 -- The launcher lost focus (from Helper.ps1, AutoHide=1). Ignored during the
 -- launch animation: the game window, or its launcher's, popping up must not
--- interrupt it. Also ignored around the search: when the text field closes,
--- Windows hands the foreground back to the program that had it before.
+-- interrupt it.
 function FocusLost()
-	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil)
-		.. ' typing=' .. tostring(typing))
-	if not ready or not visible or launching or typing then return end
+	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
+	if not ready or not visible or launching then return end
 	Hide()
 end
 
 -- Esc: closes the search if open, otherwise hides the launcher.
 function Escape()
 	if not ready then return end
-	if searchCat and not launching then
+	if typing then
+		TypeKey('ESC')
+	elseif searchCat and not launching then
 		leaveSearch()
 		if V.AnimCategory then appear = 0 startTicker() end
 		render(true)

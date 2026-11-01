@@ -10,6 +10,8 @@ Complete reference for Raintile. For a presentation and installation steps see t
   - [Keyboard](#keyboard)
   - [Gamepad](#gamepad)
 - [Search](#search)
+- [Tile menu](#tile-menu)
+- [Favorites and Recent](#favorites-and-recent)
 - [Launching a tile](#launching-a-tile)
 - [Categories and tiles](#categories-and-tiles)
   - [Category files](#category-files)
@@ -54,7 +56,7 @@ Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter start
 - **Click** a tile to launch it; **wheel** to scroll.
 - **Click** a category in the menu to switch to it; clicking the category already open scrolls back to the start.
 - The **search bar** at the top left opens the search; the **gear** opens the Options window; the **X** closes the launcher.
-- Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Add games and apps...*, *Categories folder*, and on a tile *Edit \<tile\>...* (opens it in Options), plus Rainmeter's own menu.
+- Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Add games and apps...*, *Categories folder*, plus Rainmeter's own menu. On a tile, also the [tile menu](#tile-menu).
 
 ### Keyboard
 
@@ -90,13 +92,36 @@ Settings: `Gamepad=0` turns it off; `GamepadToggle` (buttons held together: `A B
 
 ## Search
 
-Click the **Search** bar at the top left, or press `F` (`NavSearch`), and type; press **Enter** to search.
+Click the **Search** bar at the top left, or press `F` (`NavSearch`), and type: the results follow every key.
 
-- The grid shows the tiles of **every category** that contain all the typed words, in the tile name, its label or the category name (`games steam` finds Steam tiles in the Games category). Names starting with the first word come first, then the rest alphabetically.
-- The first result is already highlighted: `Space`/`Enter` (or gamepad `A`) launches it, WASD/arrows move through the results.
+- The grid shows the tiles of **every category** that contain all the typed words, in the tile name, its label or the category name (`games steam` finds Steam tiles in the Games category). Names starting with the first word come first, then the rest alphabetically. Favorites and Recent are left out (their tiles are in the other categories).
+- While typing, letters, digits (keypad too), space, `-` and `.` go into the search and `Backspace` deletes; the other keys of the launcher are off. **Enter** stops typing and keeps the results; the first one is highlighted: `Space`/`Enter` (or gamepad `A`) launches it, WASD/arrows move through the results.
 - `Esc`, clicking a category or an empty search go back to the categories, at the position you left them.
 - Results use the default grid (`NX`/`NY` in `Settings.inc`).
-- The text field is Rainmeter's InputText plugin, which only returns the text on Enter: results do not update while typing.
+- The keys are taken by the `Raintile\Typing` mini-skin (HotKey plugin), active only while you type.
+
+## Tile menu
+
+Right click on a tile adds, after Raintile's own entries, the ones that apply to it:
+
+| Entry | What it does |
+| --- | --- |
+| **Edit \<tile\>...** | opens the tile in the Options window |
+| **Add to / Remove from Favorites** | see [Favorites and Recent](#favorites-and-recent) |
+| **Open file location** | opens the folder of the program, with the file selected (only for commands that are a file on this PC) |
+| **Run as administrator** | starts the program as administrator; Windows asks for confirmation (only for `.exe`, `.lnk`, `.bat`, `.cmd`) |
+| **Remove from \<category\>...** | removes the tile from its category file, after asking; its images stay in `Images\` |
+
+*Run as administrator* and *Remove* go through `Scripts\TileAction.ps1`, which reads the tile's command from its category file.
+
+## Favorites and Recent
+
+Two categories at the start of the menu, made of the tiles of the others:
+
+- **Favorites**: the tiles you add with right click > **Add to Favorites**, in the order you added them.
+- **Recent**: the tiles you launched lately (`RecentOrder=Recent`) or most often (`MostUsed`), up to `RecentCount`.
+
+They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Menu).
 
 ## Launching a tile
 
@@ -256,11 +281,15 @@ Settings.inc      your settings (every key, with its comments)
 State.inc         last category and scroll positions
 Categories\*.ini  your categories and tiles
 Images\           their icons, backgrounds and logos
+Favorites.txt     your favorite tiles
+Usage.txt         how many times and when each tile was launched (Recent)
 Seen.txt          games and apps already shown in the Import list
 Update.json       result of the last update check
 ```
 
 Installing an update replaces the skin folder, so nothing of yours may live there. The files in the skin's `@Resources\` (`Settings.inc`, `Categories\`, `Images\`) are the defaults: the first time, `Scripts\Data.ps1` copies them to the data folder — or, when updating from a version that kept them in the skin folder, copies your own from the backup the installer has just made (`Skins\@Backup\Raintile\`). Right click > *Categories folder*, *Images folder* and *Edit Settings.inc*, and Options > Info, open the data folder.
+
+**Back up and restore**: Options > Info > *Backup* saves the whole data folder as a zip (*Back up...*) and puts a backup back (*Restore...*). Restoring never deletes your current data: it is moved to a folder next to it (`Raintile.before-restore-<date>`), and put back if something goes wrong. A backup also moves your launcher to another PC; the SteamGridDB key in it only works for the same Windows user.
 
 When an update adds settings, they are added to your `Settings.inc` with their default value (and settings it removes go), keeping your values; this happens by itself on the first load after the update. To start over from the defaults, delete the data folder and refresh the skin.
 
@@ -275,13 +304,13 @@ With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest r
 
 ### Publishing a release
 
-For the check to work, each release on GitHub needs:
+1. Set the new version in `Version=` in the `[Metadata]` of `Raintile.ini` and merge it.
+2. On GitHub, **Releases > Draft a new release**: tag with the same number, like **`v1.0.3`**, on `main`; write the notes and publish.
+3. The **Release package** workflow (`.github/workflows/release.yml`) builds the `.rmskin` with `tools/build_rmskin.py` and attaches it to the release by itself, within a minute or two. If the tag and `Version=` differ, it stops and attaches nothing.
 
-- a tag with the version number, like **`v1.0.2`** (if the tag has no number, the number in the release title is used, e.g. "1.0.1 - ...");
-- the same version in `Version=` in the `[Metadata]` of `Raintile.ini`;
-- the `.rmskin` package attached to the release (otherwise *Download and install* opens the release page).
+For the update check the tag must hold the version (if it has no number, the number in the release title is used, e.g. "1.0.1 - ..."), and the `.rmskin` must be attached (otherwise *Download and install* opens the release page). The package can also be built by hand: `python tools/build_rmskin.py` writes it to `dist\`; *Actions > Release package > Run workflow* builds it as a downloadable artifact.
 
-The package holds the skin only: `README.md` and `docs\` stay on GitHub (Options > Info opens the Guide there).
+The package holds the skin only (with the HotKey plugin from `tools/plugins/`): `README.md`, `docs\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
 
 In the package no *VariableFiles* are needed (settings are in the data folder) and the installer's default backup should be kept: the first update to this version recovers the user's categories and images from that backup.
 
@@ -326,6 +355,9 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `MenuGap` | `6` | space between entries *(size)* |
 | `MenuRadius` | `22` | pill corner radius *(size)* |
 | `MenuIconDimAlpha` | `150` | opacity of inactive category icons (0-255) |
+| `ShowFavorites`, `ShowRecent` | `1`, `1` | the [Favorites and Recent](#favorites-and-recent) categories |
+| `RecentOrder` | `Recent` | `Recent` (last launched first) or `MostUsed` |
+| `RecentCount` | `12` | tiles in Recent |
 
 ### Open and close
 
@@ -462,12 +494,15 @@ Raintile is designed to be light even on a large full-screen window:
 Raintile.ini                 main skin (styles, measures, fixed meters)
 Hotkey/Hotkey.ini            Esc mini-skin (activated by the launcher)
 Navigation/Navigation.ini    navigation keys mini-skin (activated by the launcher)
+Typing/Typing.ini            keys typed in the search bar (activated while typing)
 @Resources/
   Settings.inc               default settings (yours are in the data folder)
   State.inc                  default positions
   Categories/*.ini           default categories, copied to the data folder the first time
   Images/<category>/         their icons, backgrounds and logos
+  Icons/                     icons of Favorites and Recent
   Scripts/Data.ps1           prepares the data folder
+  Scripts/TileAction.ps1     tile menu: run as administrator, remove
   Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic
   Scripts/Thumbs.ps1         thumbnail creation
@@ -503,7 +538,7 @@ The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your da
 
 ## Known limitations
 
-- **Text input** goes through Rainmeter's InputText plugin: search results only appear after Enter.
+- **Search** takes letters, digits, space, `-` and `.`: accented letters and other characters can not be typed in it.
 - **Focus loss** (`AutoHide`) is detected only while the launcher is above other windows (`ShowZPos=1`, the default), not when it sits on the desktop (`-2`).
 - **Icons from `.exe` files** cannot be extracted by Rainmeter: provide an image.
 - **Non-ASCII characters** (accents, etc.) in category names and labels may display incorrectly: category files are read as UTF-8.

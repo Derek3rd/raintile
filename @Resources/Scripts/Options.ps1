@@ -1137,6 +1137,7 @@ Add-StartStep 'settings read'
 $models = @{}       # category file -> model (loaded when needed)
 $changedFiles = @{} # modified category files
 $logoColors = Read-LogoColors
+Add-StartStep '  logo colors'
 
 function Update-Dirty {
     $changed = @($values.Keys | Where-Object { $values[$_] -ne $fileValues[$_] })
@@ -3547,6 +3548,9 @@ function Test-UpdateAvailable {
 # often (opening a group, a category)
 $script:navDots = $null
 function Update-NavDots([switch]$Reload) {
+    # while the window opens the files are not read: Show-FirstPage does it
+    # once the window is on screen
+    if (-not $Reload -and -not $script:navDots -and -not $script:firstShown) { return }
     if ($Reload -or -not $script:navDots) { $script:navDots = @{ Found = (Test-NewFound); Update = (Test-UpdateAvailable) } }
     $newFound = $script:navDots.Found
     $update = $script:navDots.Update
@@ -3574,13 +3578,17 @@ function Build-Nav([string]$selectId) {
                     }
                 }
             } elseif ($node.Categories) {
+                if (-not $script:firstShown) { Add-StartStep '  menu: pages' }
                 $page = $schemaById[$node.Page]
                 $open = [bool]$navOpen['categories']
                 [void]$nav.Items.Add((New-NavItem 'categories' $page.Title $page.Icon 0 @{ Type = 'page'; Group = 'categories'; Page = $page } '' $open))
                 if ($open) {
-                    foreach ($e in Get-CategoryMenuEntries) {
+                    $menuEntries = Get-CategoryMenuEntries
+                    if (-not $script:firstShown) { Add-StartStep "  menu: categories read ($($menuEntries.Count))" }
+                    foreach ($e in $menuEntries) {
                         [void]$nav.Items.Add((New-NavItem "cat:$($e.File)" $e.Name 0 1 @{ Type = 'category'; File = $e.File } $e.Icon))
                     }
+                    if (-not $script:firstShown) { Add-StartStep '  menu: categories added' }
                 }
             } else {
                 $page = $schemaById[$node.Page]
@@ -3952,6 +3960,7 @@ function Read-EditTile {
 }
 
 $script:firstShown = $false
+Add-StartStep '  rest of the setup'
 $script:updating = $false
 $editTile = if ($OpenPage -eq 'tile') { Read-EditTile } else { $null }
 # The menu is built before the window appears, the page right after: the
@@ -3979,6 +3988,8 @@ function Show-FirstPage {
     }
     Update-Dirty
     Add-StartStep 'first page'
+    Update-NavDots -Reload
+    Add-StartStep 'menu dots (new games, update)'
 }
 Update-Dirty
 [void]$win.ShowDialog()

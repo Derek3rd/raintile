@@ -758,7 +758,32 @@ if ($NoGui) { return }
 #  User interface (WPF)
 # ==============================================================================
 
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing, Microsoft.VisualBasic
+# Time spent opening the window, written to Generated\Options-startup.log
+# (to find what makes it slow on a given PC)
+$startClock = [Diagnostics.Stopwatch]::StartNew()
+$startSteps = New-Object System.Collections.ArrayList
+function Add-StartStep([string]$name) { [void]$startSteps.Add(('{0,6} ms  {1}' -f $startClock.ElapsedMilliseconds, $name)) }
+# before this script: start of powershell.exe (and conhost) and its parsing
+try { $startLead = [int]([DateTime]::Now - [Diagnostics.Process]::GetCurrentProcess().StartTime).TotalMilliseconds } catch { $startLead = -1 }
+[void]$startSteps.Add(('{0,6} ms  powershell started, script read and its functions defined (before the first step)' -f $startLead))
+Add-StartStep 'script loaded'
+
+# WinForms, System.Drawing and VisualBasic only serve the color picker and the
+# Recycle Bin: loaded the first time they are needed
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+$script:lazyAssemblies = @{}
+function Use-Assembly([string[]]$names) {
+    foreach ($n in $names) {
+        if ($script:lazyAssemblies[$n]) { continue }
+        Add-Type -AssemblyName $n
+        $script:lazyAssemblies[$n] = $true
+    }
+}
+function Remove-ToRecycleBin([string]$path) {
+    Use-Assembly 'Microsoft.VisualBasic'
+    [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($path, 'OnlyErrorDialogs', 'SendToRecycleBin')
+}
+Add-StartStep 'WPF loaded'
 
 function Write-ErrorLog([string]$msg) {
     try { [IO.File]::WriteAllText((Join-Path $Resources 'Generated\Options.log'), $msg, $utf8) } catch { }
@@ -773,13 +798,41 @@ trap {
     exit 1
 }
 
-Add-Type -Namespace RaintileOptions -Name Win32 -MemberDefinition @'
+$win32Source = @'
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
 [DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hWnd);
 [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hdc);
 [DllImport("gdi32.dll")] public static extern int GetDeviceCaps(IntPtr hdc, int index);
 '@
+
+# Add-Type compiles C# with csc.exe at every start, which can take seconds
+# (an antivirus checks the compiler and its output). It is compiled once into
+# Generated\RaintileOptions-<hash>.dll and then just loaded; the hash of the
+# source makes a changed source compile again. On any error: compiled in
+# memory, as before.
+function Import-Win32Helper {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $hash = -join ($sha.ComputeHash($utf8.GetBytes($win32Source))[0..5] | ForEach-Object { $_.ToString('x2') })
+    $dll = Join-Path $Resources "Generated\RaintileOptions-$hash.dll"
+    try {
+        if (-not (Test-Path -LiteralPath $dll)) {
+            # older versions of the helper
+            Get-ChildItem -LiteralPath (Join-Path $Resources 'Generated') -Filter 'RaintileOptions-*.dll' -ErrorAction SilentlyContinue |
+                Remove-Item -Force -ErrorAction SilentlyContinue
+            Add-Type -Namespace RaintileOptions -Name Win32 -MemberDefinition $win32Source -OutputAssembly $dll -OutputType Library
+        }
+        if (-not ('RaintileOptions.Win32' -as [type])) { Add-Type -Path $dll }
+    } catch {
+        # a damaged file would be tried at every start: compiled again next time
+        Remove-Item -LiteralPath $dll -Force -ErrorAction SilentlyContinue
+    }
+    if (-not ('RaintileOptions.Win32' -as [type])) {
+        Add-Type -Namespace RaintileOptions -Name Win32 -MemberDefinition $win32Source
+    }
+}
+Import-Win32Helper
+Add-StartStep 'Win32 helper'
 
 # Dark title bar (Windows 10 2004+ / 11)
 function Set-DarkTitle($window) {
@@ -800,6 +853,7 @@ function Get-ScreenPixels {
 $app = New-Object System.Windows.Application
 $app.ShutdownMode = 'OnExplicitShutdown'
 $app.Resources = [System.Windows.Markup.XamlReader]::Parse([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Options.xaml')))
+Add-StartStep 'styles (Options.xaml)'
 # An error in an event handler: shown and logged, the window stays open
 $app.Add_DispatcherUnhandledException({
         param($s, $e)
@@ -906,6 +960,7 @@ $imageFilter = 'Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.ico|All files|*.*'
 
 # Windows colour picker; returns the colour in the format of 'old', or $null
 function Select-Color([string]$old) {
+    Use-Assembly 'System.Windows.Forms', 'System.Drawing'
     $dlg = New-Object System.Windows.Forms.ColorDialog
     $dlg.FullOpen = $true
     $v = ConvertFrom-ColorText $old
@@ -1046,6 +1101,7 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
 </Window>
 '@)
 $win.FindName('Version').Text = $version
+Add-StartStep 'window'
 $nav = $win.FindName('Nav')
 $pageHost = $win.FindName('PageHost')
 $pageTitle = $win.FindName('PageTitle')
@@ -1076,6 +1132,7 @@ $script:updating = $true
 $script:capturing = $null
 $script:dirtySettings = $false
 $screenPx = Get-ScreenPixels
+Add-StartStep 'settings read'
 
 $models = @{}       # category file -> model (loaded when needed)
 $changedFiles = @{} # modified category files
@@ -2400,7 +2457,7 @@ function New-CategoryListPage {
             if ($icon -and $icon.StartsWith($imagesRoot, [StringComparison]::OrdinalIgnoreCase)) {
                 $r = Show-Dialog 'Raintile' "Move $([IO.Path]::GetFileName($icon)) to the Recycle Bin?" @('Remove', 'Cancel')
                 if ($r.Button -ne 'Remove') { return }
-                [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($icon, 'OnlyErrorDialogs', 'SendToRecycleBin')
+                Remove-ToRecycleBin $icon
             }
             Set-Key $c 'Icon' ''
             Set-Changed $file
@@ -2429,7 +2486,7 @@ function New-CategoryListPage {
             $file = $cat.Cats.SelectedItem.Tag.File
             $r = Show-Dialog 'Delete category' "Move the category $file to the Recycle Bin? Its images stay in Images." @('Delete', 'Cancel')
             if ($r.Button -ne 'Delete') { return }
-            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile((Join-Path $categoriesDir $file), 'OnlyErrorDialogs', 'SendToRecycleBin')
+            Remove-ToRecycleBin (Join-Path $categoriesDir $file)
             $models.Remove($file); $changedFiles.Remove($file)
             if ($script:currentFile -eq $file) { $script:currentFile = $null }
             Update-Dirty
@@ -2723,7 +2780,7 @@ function New-CategoryPage {
                 if ($path -and $path.StartsWith($imagesRoot, [StringComparison]::OrdinalIgnoreCase)) {
                     $r = Show-Dialog 'Raintile' "Move $([IO.Path]::GetFileName($path)) to the Recycle Bin?" @('Remove', 'Cancel')
                     if ($r.Button -ne 'Remove') { return }
-                    [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($path, 'OnlyErrorDialogs', 'SendToRecycleBin')
+                    Remove-ToRecycleBin $path
                 }
                 Set-Key $t $s.Tag ''
                 if ($s.Tag -eq 'Background') { Reset-Framing $t }
@@ -3825,6 +3882,11 @@ $win.Add_ContentRendered({
         [void]$win.Activate()
         $win.Topmost = $false
         [void][RaintileOptions.Win32]::SetForegroundWindow((New-Object System.Windows.Interop.WindowInteropHelper($win)).Handle)
+        if ($startClock.IsRunning) {
+            Add-StartStep 'window shown'
+            $startClock.Stop()
+            try { [IO.File]::WriteAllLines((Join-Path $Resources 'Generated\Options-startup.log'), [string[]]@($startSteps), $utf8) } catch { }
+        }
     })
 
 # Tile to open on (-Page tile): "file|name" left by the skin, used once. The
@@ -3867,5 +3929,6 @@ if ($OpenPage -eq 'info') {
     Show-NavTarget $nav.SelectedItem.Tag
 }
 Update-Dirty
+Add-StartStep 'menu and first page'
 [void]$win.ShowDialog()
 $app.Shutdown()

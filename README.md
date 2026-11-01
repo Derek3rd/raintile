@@ -9,7 +9,9 @@ Your games, apps, links and system tools become large tiles with background art 
 - **Categories** in a centred menu at the top (icon, text or both), each with its own grid size.
 - **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs. Backgrounds fit the tile by themselves; you can also frame each one by dragging and zooming it in Options, and move and resize its logo on its own.
 - **Add games and apps** found on this PC — Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Battle.net, EA app, Xbox, and the programs of the Start menu — picking them from a list, with background and logo (local Steam cache, [SteamGridDB](https://www.steamgriddb.com/), program icons). New ones are signalled with a dot on the gear.
-- **Search** across all categories.
+- **Search** across all categories, with results that follow every key.
+- **Favorites and Recent**: your favorite tiles and the ones launched lately (or most often), first in the menu.
+- **Tile menu**: right click a tile to edit it, add it to Favorites, open its file location, run it as administrator or remove it.
 - **Mouse, keyboard and gamepad**: WASD/arrows, Space/Enter, Xbox-compatible controllers (open the launcher with Back + Start).
 - **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.
 - **Lightweight**: no update cycle (0% CPU at rest), a fixed number of meters however many tiles you have, thumbnails at the exact displayed size, loaded once and then just shown/hidden.
@@ -40,7 +42,7 @@ Your games, apps, links and system tools become large tiles with background art 
 
 **Updates** (experimental): Raintile checks GitHub once a day and shows a dot on the gear when a new version is out; Options > Info installs it with one click. This is still being tested and could cause problems: keep a copy of your data before updating. Your settings, categories and images live in `%APPDATA%\Rainmeter\Raintile\`, so updating never touches them.
 
-The launcher places itself at the top-left corner and covers the screen. Do not load the `Raintile\Hotkey` and `Raintile\Navigation` skins by hand: the launcher turns them on and off by itself.
+The launcher places itself at the top-left corner and covers the screen. Do not load the `Raintile\Hotkey`, `Raintile\Navigation` and `Raintile\Typing` skins by hand: the launcher turns them on and off by itself.
 
 ## Quick start
 
@@ -48,6 +50,7 @@ The launcher places itself at the top-left corner and covers the screen. Do not 
 - **Add your games and apps**: right click > **Add games and apps...**, tick them and press **Add selected**.
 - **Images**: put them in right click > **Images folder** > `<category>\background\<TileName>.jpg` and `...\logo\<TileName>.png`; they are picked up automatically.
 - **Settings**: right click > **Options...**, or **Edit Settings.inc**.
+- **Back up your launcher**: Options > Info > **Back up...** (and **Restore...** on another PC).
 
 ## Documentation
 

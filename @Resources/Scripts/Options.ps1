@@ -822,7 +822,7 @@ function Import-Win32Helper {
                 Remove-Item -Force -ErrorAction SilentlyContinue
             Add-Type -Namespace RaintileOptions -Name Win32 -MemberDefinition $win32Source -OutputAssembly $dll -OutputType Library
         }
-        if (-not ('RaintileOptions.Win32' -as [type])) { Add-Type -Path $dll }
+        if (-not ('RaintileOptions.Win32' -as [type])) { [void][Reflection.Assembly]::LoadFrom($dll) }
     } catch {
         # a damaged file would be tried at every start: compiled again next time
         Remove-Item -LiteralPath $dll -Force -ErrorAction SilentlyContinue
@@ -1927,6 +1927,39 @@ function Get-TileBrush([string]$base, $section, [string]$bg, [string]$logo) {
 }
 
 # Categories in menu order: File, Base, Name, Icon, Tiles, Imported
+# Name, order and icon of the categories, for the menu. A category not loaded
+# yet is not parsed: only its [Category] section is read (parsing every tile
+# of every category made the window slow to open). A loaded one may have
+# unsaved changes and is read from its model.
+function Get-CategoryMenuEntries {
+    $entries = foreach ($f in Get-CategoryFiles) {
+        $name = ''; $orderText = ''; $iconText = ''
+        if ($models.ContainsKey($f.Name)) {
+            $c = Get-CategorySection $models[$f.Name]
+            $name = Get-Key $c 'Name'; $orderText = Get-Key $c 'Order'; $iconText = Get-Key $c 'Icon'
+        } else {
+            try { $text = [IO.File]::ReadAllText($f.FullName) } catch { $text = '' }
+            $m = [regex]::Match($text, '(?ims)^[ \t]*\[Category\][ \t]*\r?$(.*?)(?=^[ \t]*\[|\z)')
+            if ($m.Success) {
+                foreach ($kv in [regex]::Matches($m.Groups[1].Value, '(?im)^[ \t]*(Name|Order|Icon)[ \t]*=(.*?)\r?$')) {
+                    $v = $kv.Groups[2].Value.Trim()
+                    switch ($kv.Groups[1].Value.ToLowerInvariant()) {
+                        'name' { if (-not $name) { $name = $v } }
+                        'order' { if (-not $orderText) { $orderText = $v } }
+                        'icon' { if (-not $iconText) { $iconText = $v } }
+                    }
+                }
+            }
+        }
+        $order = 0; [void][int]::TryParse($orderText, [ref]$order)
+        if (-not $order) { $order = 9999 }
+        if (-not $name) { $name = $f.BaseName }
+        if (-not $iconText) { $iconText = 'icon' }
+        [pscustomobject]@{ File = $f.Name; Order = $order; Name = $name; Icon = (Find-Image (Join-Path $imagesRoot $f.BaseName) $iconText) }
+    }
+    return @($entries | Sort-Object Order, File)
+}
+
 function Get-CategoryEntries {
     $entries = foreach ($f in Get-CategoryFiles) {
         $m = Get-Model $f.Name
@@ -3545,7 +3578,7 @@ function Build-Nav([string]$selectId) {
                 $open = [bool]$navOpen['categories']
                 [void]$nav.Items.Add((New-NavItem 'categories' $page.Title $page.Icon 0 @{ Type = 'page'; Group = 'categories'; Page = $page } '' $open))
                 if ($open) {
-                    foreach ($e in Get-CategoryEntries) {
+                    foreach ($e in Get-CategoryMenuEntries) {
                         [void]$nav.Items.Add((New-NavItem "cat:$($e.File)" $e.Name 0 1 @{ Type = 'category'; File = $e.File } $e.Icon))
                     }
                 }

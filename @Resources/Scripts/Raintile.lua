@@ -40,10 +40,10 @@ local stopTyping      -- defined in the Search section
 -- longer installed (see showNotice)
 local notice = { found = 0, update = nil, missing = 0 }
 local showNotice      -- defined with OpenNotice
--- Filter bar under the menu: chips = { { kind = 'all' | 'store' | 'tag',
--- key, label }, ... }; the tiles shown must have one of the selected stores
--- (if any) and all the selected tags. ver changes at every change (the
--- filtered views of the categories are rebuilt).
+-- Filter bar under the menu, shown only with the search results: chips =
+-- { { kind = 'all' | 'store' | 'tag', key, label }, ... }; the results shown
+-- must have one of the selected stores (if any) and all the selected tags.
+-- ver changes at every change (the filtered view is rebuilt).
 local filter = { chips = {}, stores = {}, tags = {}, n = 0, ver = 0, hovered = 0 }
 
 local function matchesFilter(t)
@@ -55,12 +55,12 @@ local function matchesFilter(t)
 	return true
 end
 
--- Category shown in the grid: the search results or the active one, with
--- only the tiles that pass the filter. The filtered view reads everything
--- else from the category itself.
+-- Category shown in the grid: the search results (only those that pass the
+-- filter) or the active one. The filtered view reads everything else from
+-- the results themselves.
 local function cur()
 	local c = searchCat or cats[active]
-	if filter.n == 0 or not c then return c end
+	if filter.n == 0 or not searchCat then return c end
 	if c._fview and c._fver == filter.ver and c._ftiles == c.tiles then return c._fview end
 	local list = {}
 	for _, t in ipairs(c.tiles) do
@@ -794,14 +794,14 @@ end
 -- Bump when the format of the meters written by writeGrid() changes.
 local GRID_VERSION = 7
 
--- Space taken by the filter bar (FilterSpace in Grid.inc): the grid area is
--- smaller by as much
+-- Space taken by the filter bar while the search results are shown: the grid
+-- moves down by as much
 local function filterSpace()
 	return #filter.chips > 0 and math.floor(V.FilterH + V.Gap) or 0
 end
 
 local function signature()
-	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode, 'fs' .. filterSpace() }
+	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
 	for _, chip in ipairs(filter.chips) do s[#s + 1] = 'chip:' .. chip.label end
 	for _, c in ipairs(cats) do
 		s[#s + 1] = c.name .. ':' .. c.label .. ':' .. (c.icon or '')
@@ -819,7 +819,6 @@ local function writeGrid(path, sig, files)
 	-- Category files seen last time: lets the skin draw right away on load,
 	-- while the folder is checked again in the background.
 	w('CategoryFiles=' .. table.concat(files, '|'))
-	w('FilterSpace=' .. filterSpace())
 	w('')
 
 	-- Menu entries: a chain of meters with relative X. After measuring them the
@@ -935,10 +934,12 @@ end
 local function updateEmptyHint()
 	local c, text = cur(), nil
 	if searchCat then
-		if #c.tiles == 0 then text = 'No results' end
+		if #c.tiles == 0 then
+			text = (filter.n > 0 and #searchCat.tiles > 0) and 'No results with this filter: click All to see them all'
+				or 'No results'
+		end
 	elseif c and #c.tiles == 0 then
-		if filter.n > 0 then text = 'No tiles match the filter: click All to see them all'
-		elseif c.virtual == 'favorites' then text = 'No favorites yet: right click a tile > Add to Favorites'
+		if c.virtual == 'favorites' then text = 'No favorites yet: right click a tile > Add to Favorites'
 		elseif c.virtual == 'recent' then text = 'Nothing launched yet' end
 	end
 	if text then set('SearchEmpty', 'Text', text) end
@@ -1190,6 +1191,21 @@ local function renderCategories()
 end
 
 -- Filter bar ---------------------------------------------------------------------
+-- Only with the search results: the grid (GridClip) moves down to make room
+-- for it, and goes back when the search ends.
+local function setGridArea(withFilter)
+	local fs = withFilter and filterSpace() or 0
+	V.GridY = V.GridTop + fs
+	set('GridClip', 'Y', tostring(math.floor(V.GridY)))
+	set('GridClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
+		math.floor(V.AreaW), math.floor(V.AreaH - fs)))
+	for i = 1, #filter.chips do show('FilterText' .. i, withFilter) end
+	if fs == 0 then
+		for i = 1, #filter.chips do show('FilterPill' .. i, false) end
+	end
+	filter.shown = withFilter and #filter.chips > 0
+end
+
 -- Measures the chips (a chain of texts like the menu), centres them under the
 -- menu and hides those that do not fit.
 local function layoutFilters()
@@ -1216,6 +1232,12 @@ local function chipOn(chip)
 end
 
 local function renderFilters()
+	if not filter.shown then return end
+	if not filter.laidOut then
+		SKIN:Bang('!UpdateMeterGroup', 'Menu')
+		layoutFilters()
+		filter.laidOut = true
+	end
 	local y = math.floor(V.PadY + V.MenuH + V.Gap)
 	for i, chip in ipairs(filter.chips) do
 		local on, hot = chipOn(chip), i == filter.hovered
@@ -1416,7 +1438,6 @@ local function render(menu)
 			-- Menu meters must be updated before they can be measured
 			SKIN:Bang('!UpdateMeterGroup', 'Menu')
 			layoutMenu()
-			layoutFilters()
 		end
 		renderCategories()
 		renderFilters()
@@ -1429,7 +1450,7 @@ end
 -- grid starts again from the top, with the appear animation.
 function ToggleFilter(i)
 	local chip = filter.chips[i]
-	if not ready or launching or not chip then return end
+	if not ready or launching or not chip or not searchCat then return end
 	if chip.kind == 'all' then
 		filter.stores, filter.tags = {}, {}
 	elseif chip.kind == 'store' then
@@ -1703,10 +1724,10 @@ function Initialize()
 	V.FilterBar = num('FilterBar', 1) ~= 0
 	V.FilterStores = num('FilterStores', 1) ~= 0
 	V.FilterH = num('FilterH', 30)
-	V.FilterSpace = math.max(0, num('FilterSpace', 0)) -- from Grid.inc
 	local info = SKIN:GetVariable('TileInfo', 'Hover'):lower()
 	V.TileInfo = (info == 'always' or info == 'never') and info or 'hover'
-	V.GridY = V.PadY + V.MenuH + V.Gap + V.FilterSpace
+	V.GridY = V.PadY + V.MenuH + V.Gap
+	V.GridTop = V.GridY -- without the filter bar (see setGridArea)
 	V.LabelPad = num('LabelPad', 14)
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
 	V.AnimCategory = num('AnimCategory', 1) ~= 0
@@ -1743,7 +1764,7 @@ function Initialize()
 	V.HoverLogoScale = V.AnimLogoZoom and math.max(1, num('HoverLogoScale', 1.25)) or 1
 	-- area available for the grid (each category's tiles fill it)
 	V.AreaW = V.ScreenW - 2 * V.PadX
-	V.AreaH = V.ScreenH - 2 * V.PadY - V.MenuH - V.Gap - V.FilterSpace
+	V.AreaH = V.ScreenH - 2 * V.PadY - V.MenuH - V.Gap
 	writeArea()
 	for _, name in ipairs({ 'TileColor', 'ActiveCategoryColor', 'HoverCategoryColor', 'TextColor',
 			'TextDimColor', 'ScrollTrackColor', 'ScrollThumbColor', 'HoverColor', 'AccentColor' }) do
@@ -2276,7 +2297,7 @@ function Layout()
 	if not ready then return end
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	layoutMenu()
-	layoutFilters()
+	filter.laidOut = false
 	renderCategories()
 	renderFilters()
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
@@ -2527,6 +2548,8 @@ end
 leaveSearch = function()
 	if not searchCat then return false end
 	searchCat, query = nil, ''
+	filter.stores, filter.tags, filter.n = {}, {}, 0
+	setGridArea(false)
 	applyGeometry(cats[active])
 	offset = normalizeOffset(cats[active].offset)
 	pos, base = offset, -1
@@ -2573,8 +2596,16 @@ local function runSearch(text)
 
 	saveScroll() -- remember the position of the category being left
 	query = trim(text)
+	local starting = searchCat == nil
 	searchCat = { name = '', label = '', tiles = results }
+	-- the filter bar takes room above the results
+	local fullH = V.AreaH
+	V.AreaH = fullH - filterSpace()
 	categoryGeometry(searchCat)
+	V.AreaH = fullH
+	if starting then filter.stores, filter.tags, filter.n = {}, {}, 0 end
+	filter.ver = filter.ver + 1
+	setGridArea(true)
 	applyGeometry(searchCat)
 	offset, pos, base = 0, 0, -1
 	hover.idx, hover.on, hover.a = 0, false, 0

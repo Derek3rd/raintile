@@ -12,7 +12,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Search](#search)
 - [Tile menu](#tile-menu)
 - [Favorites and Recent](#favorites-and-recent)
-- [Filter bar and tags](#filter-bar-and-tags)
+- [Tags and filter bar](#tags-and-filter-bar)
 - [Play time](#play-time)
 - [Launching a tile](#launching-a-tile)
 - [Categories and tiles](#categories-and-tiles)
@@ -97,7 +97,7 @@ Settings: `Gamepad=0` turns it off; `GamepadToggle` (buttons held together: `A B
 
 Click the **Search** bar at the top left, or press `F` (`NavSearch`), and type: the results follow every key.
 
-- The grid shows the tiles of **every category** that contain all the typed words, in the tile name, its label, the category name, its store or its [tags](#filter-bar-and-tags) (`games steam` finds Steam tiles in the Games category, `co-op` the tiles tagged co-op). Names starting with the first word come first, then the rest alphabetically. Favorites and Recent are left out (their tiles are in the other categories).
+- The grid shows the tiles of **every category** that contain all the typed words, in the tile name, its label, the category name, its store or its [tags](#tags-and-filter-bar) (`games steam` finds Steam tiles in the Games category, `coop` the tiles tagged coop). Above the results, the [filter bar](#tags-and-filter-bar) narrows them down with a click. Names starting with the first word come first, then the rest alphabetically. Favorites and Recent are left out (their tiles are in the other categories).
 - While typing, letters, digits (keypad too), space, `-` and `.` go into the search and `Backspace` deletes; the other keys of the launcher are off. **Enter** stops typing and keeps the results; the first one is highlighted: `Space`/`Enter` (or gamepad `A`) launches it, WASD/arrows move through the results.
 - `Esc`, clicking a category or an empty search go back to the categories, at the position you left them.
 - Results use the default grid (`NX`/`NY` in `Settings.inc`).
@@ -126,14 +126,13 @@ Two categories at the start of the menu, made of the tiles of the others:
 
 They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Menu).
 
-## Filter bar and tags
+## Tags and filter bar
 
-Under the menu, a row of chips filters the tiles of the category shown (and the search results):
-
-- **Tags**: give a tile tags with `Tags=` in its category file, separated by commas (`Tags=multiplayer, co-op`), or in Options > *the category* > *the tile* > **Tags**, where the tags already used elsewhere are one click away. Every tag used by at least one tile gets a chip (`#co-op`).
-- **Stores**: with `FilterStores=1`, when your tiles come from at least two stores, one chip per store (Steam, Epic Games, GOG, Ubisoft, Battle.net, EA, Xbox). The store is taken from `Store=` if the tile has it, otherwise from `Source=` (written when a game is added from Import) or from the command (`steam://`, the Epic launcher link, GOG Galaxy, `uplay://`, Battle.net, EA).
-- A click turns a chip on or off; you can turn on more than one. The grid shows the tiles of **one of** the selected stores (if any) that have **all** the selected tags. **All** turns everything off. The filter stays when you change category; with nothing to show, the grid says so.
-- Without tags and with a single store there is no bar, and the grid keeps all the space. `FilterBar=0` turns it off.
+- **Tags**: give a tile tags with `Tags=` in its category file, separated by commas (`Tags=multiplayer, coop`), or in Options > *the category* > *the tile* > **Tags**, where the tags already used elsewhere are one click away. [Search](#search) finds them: typing `coop` lists the tiles tagged coop.
+- **Filter bar**: while the search results are shown, a row of chips appears above them (the grid moves down to make room) — one per tag (`#coop`) and, with `FilterStores=1`, one per store when your tiles come from at least two (Steam, Epic Games, GOG, Ubisoft, Battle.net, EA, Xbox). Outside the search there is no bar, and the grid keeps all the space.
+- A click turns a chip on or off; you can turn on more than one. The results shown are those of **one of** the selected stores (if any) that have **all** the selected tags; **All** turns everything off. To see every tile of a store, or with a tag, search for it (`steam`, `coop`) or type a letter and use the chips. Leaving the search clears the filter.
+- The store of a tile is taken from `Store=` if it has it, otherwise from `Source=` (written when a game is added from Import) or from the command (`steam://`, the Epic launcher link, GOG Galaxy, `uplay://`, Battle.net, EA).
+- `FilterBar=0` turns the bar off.
 
 Settings (Options > Menu > Filter bar): `FilterBar`, `FilterStores`, `FilterH`, `FilterGap`, `FilterPad`, `FilterFontSize`.
 
@@ -194,8 +193,8 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `BgZoom` | framing of the background: enlargement beyond filling the tile, `1` to `4` (default `1`) |
 | `LogoPos` | where the centre of the logo goes, `X,Y` in % of the tile's width and height (default `50,50`); see [Placing the logo](#placing-the-logo) |
 | `LogoScale` | size of the logo, times the category's `IconSize`, `0.25` to `3` (default `1`) |
-| `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#filter-bar-and-tags) and the Steam id to the [play time](#play-time) |
-| `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): chips of the [filter bar](#filter-bar-and-tags), also found by search |
+| `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
+| `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
 | `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
 
 ### Commands
@@ -395,7 +394,7 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `ShowFavorites`, `ShowRecent` | `1`, `1` | the [Favorites and Recent](#favorites-and-recent) categories |
 | `RecentOrder` | `Recent` | `Recent` (last launched first) or `MostUsed` |
 | `RecentCount` | `12` | tiles in Recent |
-| `FilterBar` | `1` | the [filter bar](#filter-bar-and-tags) under the menu |
+| `FilterBar` | `1` | the [filter bar](#tags-and-filter-bar) above the search results |
 | `FilterStores` | `1` | a chip per store (only with tiles from at least two stores) |
 | `FilterH`, `FilterGap`, `FilterPad` | `30`, `6`, `12` | chip height, space between chips, inner padding *(size)* |
 | `FilterFontSize` | `10` | chip font size (points) |

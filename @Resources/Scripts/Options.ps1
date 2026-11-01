@@ -266,7 +266,7 @@ $schema = @(
                     (S 'choice' 'RecentOrder' 'Recent shows' '' @{ Choices = @(@('Recent', 'Last launched'), @('MostUsed', 'Most used')) }),
                     (Num 'RecentCount' 'Tiles in Recent' 1 48 1)
                 ) }
-            @{ Title = 'Filter bar'; Help = 'Chips under the menu, one per tag (Tags of the tiles) and per store: a click shows only the tiles that have it. Without tags or stores there is no bar.'; Items = @(
+            @{ Title = 'Filter bar'; Help = 'Chips above the search results, one per tag (Tags of the tiles) and per store: a click shows only the results that have it.'; Items = @(
                     (S 'bool' 'FilterBar' 'Filter bar'),
                     (S 'bool' 'FilterStores' 'A chip per store' 'Only when the tiles come from at least two stores.'),
                     (Size 'FilterH' 'Chip height' 'H'),
@@ -2819,7 +2819,7 @@ function New-CategoryPage {
     [void](Add-To $colorRow $cat.ColorSwatch); [void](Add-To $colorRow $cat['tile.Color'])
     [void](Add-To $f (New-FormRow 'Colour' $colorRow 'Used when there is no background image. Empty = from the logo, or the default tile colour.'))
     $tagHint = New-Panel
-    [void](Add-To $tagHint (New-Text 'Separated by commas, e.g. multiplayer, co-op. Each tag is a chip of the filter bar under the menu; search finds them too.' 11.5 (Res 'DimBrush') -Wrap))
+    [void](Add-To $tagHint (New-Text 'Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.' 11.5 (Res 'DimBrush') -Wrap))
     $cat.TagSuggestions = New-Object System.Windows.Controls.WrapPanel
     $cat.TagSuggestions.Margin = T 0 4 0 0
     [void](Add-To $tagHint $cat.TagSuggestions)

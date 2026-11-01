@@ -55,11 +55,11 @@ ShowFavorites=1
 ShowRecent=1
 RecentOrder=Recent
 RecentCount=12
-; Filter bar under the menu: one chip per tag of the tiles (Tags= in the
-; category files) and, with FilterStores=1, per store when the tiles come from
-; at least two (Steam, Epic Games, GOG, ...). A click on a chip shows only the
-; tiles that have it: tiles of one of the selected stores, with all the
-; selected tags; All shows them all again. Without tags or stores no bar.
+; Filter bar above the search results: one chip per tag of the tiles (Tags=
+; in the category files) and, with FilterStores=1, per store when the tiles
+; come from at least two (Steam, Epic Games, GOG, ...). A click on a chip
+; shows only the results that have it: of one of the selected stores, with
+; all the selected tags; All shows them all again. Search finds tags too.
 FilterBar=1
 FilterStores=1
 ; Height of the chips, space between them and their inner padding

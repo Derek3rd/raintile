@@ -538,6 +538,60 @@ function Unprotect-Secret([string]$stored) {
     } catch { return '' }
 }
 
+# --- Backup of the data folder --------------------------------------------------------
+# A zip of the data folder (settings, categories, images, favorites, usage).
+# Restoring replaces the folder; the previous one is kept beside it
+# (<data>.before-restore-<date>). The SteamGridDB key in a backup can only be
+# read by the same Windows user (DPAPI).
+
+try { Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem } catch { }
+
+function New-DataBackup([string]$dataDir, [string]$zipPath) {
+    if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
+    [IO.Compression.ZipFile]::CreateFromDirectory($dataDir, $zipPath, [IO.Compression.CompressionLevel]::Optimal, $false)
+}
+
+# $null if the zip is a Raintile backup that can be restored, otherwise why not
+function Test-DataBackup([string]$zipPath) {
+    try { $zip = [IO.Compression.ZipFile]::OpenRead($zipPath) } catch { return "it is not a zip file ($($_.Exception.Message))" }
+    try {
+        $names = @($zip.Entries | ForEach-Object { $_.FullName -replace '\\', '/' })
+        if ($names -notcontains 'Settings.inc') { return 'it is not a Raintile backup (no Settings.inc)' }
+        foreach ($n in $names) {
+            # every entry stays inside the folder
+            if ($n.StartsWith('/') -or $n -match '(^|/)\.\.(/|$)' -or $n -match ':') { return "it contains an unsafe path: $n" }
+        }
+        return $null
+    } finally { $zip.Dispose() }
+}
+
+# Replaces the data folder with the backup; returns the folder where the
+# previous data was kept. On errors the previous data is put back.
+function Restore-DataBackup([string]$zipPath, [string]$dataDir) {
+    $dataDir = [IO.Path]::GetFullPath($dataDir).TrimEnd('\', '/')
+    $kept = "$dataDir.before-restore-" + (Get-Date).ToString('yyyyMMdd-HHmmss')
+    if (Test-Path -LiteralPath $dataDir) { Move-Item -LiteralPath $dataDir -Destination $kept }
+    try {
+        New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+        $root = $dataDir + [IO.Path]::DirectorySeparatorChar
+        $zip = [IO.Compression.ZipFile]::OpenRead($zipPath)
+        try {
+            foreach ($entry in $zip.Entries) {
+                $dest = [IO.Path]::GetFullPath((Join-Path $dataDir ($entry.FullName -replace '[\\/]', [IO.Path]::DirectorySeparatorChar)))
+                if (-not $dest.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { throw "unsafe path in the backup: $($entry.FullName)" }
+                if ($entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')) { New-Item -ItemType Directory -Force -Path $dest | Out-Null; continue }
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+                [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $dest, $true)
+            }
+        } finally { $zip.Dispose() }
+    } catch {
+        Remove-Item -LiteralPath $dataDir -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $kept) { Move-Item -LiteralPath $kept -Destination $dataDir }
+        throw
+    }
+    return $kept
+}
+
 # --- Category files ---------------------------------------------------------------
 
 # Model: Header (text before the first section), Sections (Name, Comments,
@@ -3269,8 +3323,46 @@ function Start-SaveAndRefresh {
     $refreshTimer.Start()
 }
 
+# Info > Back up: the data folder to a zip (unsaved changes are saved first)
+function Invoke-Backup {
+    if ($Data -eq $Resources) { [void](Show-Dialog 'Raintile' 'Your data folder is not ready yet: refresh the skin once, then try again.'); return }
+    if ($script:dirtySettings) { Save-All -NoRefresh }
+    $dlg = New-Object Microsoft.Win32.SaveFileDialog
+    $dlg.Filter = 'Raintile backup|*.zip'
+    $dlg.FileName = 'Raintile-backup-' + (Get-Date).ToString('yyyy-MM-dd') + '.zip'
+    $dlg.InitialDirectory = [Environment]::GetFolderPath('MyDocuments')
+    if (-not $dlg.ShowDialog($win)) { return }
+    try {
+        New-DataBackup $Data $dlg.FileName
+        [void](Show-Dialog 'Raintile' "Backup saved:`r`n$($dlg.FileName)")
+    } catch { [void](Show-Dialog 'Raintile' "The backup could not be saved: $($_.Exception.Message)") }
+}
+
+# Info > Restore: replaces the data folder with a backup, then the window
+# closes and the skin reloads
+function Invoke-Restore {
+    if ($Data -eq $Resources) { [void](Show-Dialog 'Raintile' 'Your data folder is not ready yet: refresh the skin once, then try again.'); return }
+    $zip = Select-File 'Raintile backup|*.zip|All files|*.*'
+    if (-not $zip) { return }
+    $problem = Test-DataBackup $zip
+    if ($problem) { [void](Show-Dialog 'Raintile' "This file can not be restored: $problem."); return }
+    $r = Show-Dialog 'Restore backup' ("Replace your settings, categories, images, favorites and usage with this backup?`r`n`r`n" +
+        'Your current data is not deleted: it is kept in a folder next to it. Unsaved changes in this window are lost.') @('Restore', 'Cancel')
+    if ($r.Button -ne 'Restore') { return }
+    try { $kept = Restore-DataBackup $zip $Data }
+    catch { [void](Show-Dialog 'Raintile' "The backup could not be restored, nothing was changed: $($_.Exception.Message)"); return }
+    [void](Show-Dialog 'Raintile' "Backup restored. Your previous data is in:`r`n$kept")
+    # the launcher shows itself once reloaded; nothing left to save here
+    try { [IO.File]::WriteAllText((Join-Path $Resources 'Generated\ShowOnLoad'), '', $utf8) } catch { }
+    $script:skipSavePrompt = $true
+    $win.Close()
+    Invoke-Rainmeter "!Refresh `"$Config`""
+}
+
 function Invoke-Action([string]$action) {
     switch ($action) {
+        'Backup' { Invoke-Backup }
+        'Restore' { Invoke-Restore }
         'OpenSettings' { Start-Process notepad.exe -ArgumentList "`"$settingsFile`"" }
         'OpenFolder' { Start-Process explorer.exe -ArgumentList "`"$Data`"" }
         'OpenSkinFolder' { Start-Process explorer.exe -ArgumentList "`"$(Split-Path -Parent $Resources)`"" }
@@ -3584,6 +3676,12 @@ function New-InfoPage {
     $card = New-Card 'Files' ''
     [void]$card.Child.Children.Add((New-Row 'Settings' 'Settings.inc, in Notepad.' (New-ActionControl 'OpenSettings' 'Open Settings.inc') $null))
     [void]$card.Child.Children.Add((New-Row 'Your data' 'Settings, categories and images: updates never touch this folder.' (New-ActionControl 'OpenFolder' 'Open the folder') $null))
+    $backupButtons = New-Panel 'Horizontal'
+    $b = New-ActionControl 'Backup' 'Back up...'
+    $b.Margin = T 0 0 8 0
+    [void](Add-To $backupButtons $b)
+    [void](Add-To $backupButtons (New-ActionControl 'Restore' 'Restore...'))
+    [void]$card.Child.Children.Add((New-Row 'Backup' 'Your data in a zip file, to keep it safe or move it to another PC (the SteamGridDB key only works for the same Windows user).' $backupButtons $null))
     [void]$card.Child.Children.Add((New-Row 'Skin folder' 'Scripts and the default files of this version.' (New-ActionControl 'OpenSkinFolder' 'Open the folder') $null))
     [void]$card.Child.Children.Add((New-Row 'Rainmeter' 'The Manage window: skins, Rainmeter settings and log.' (New-ActionControl 'OpenRainmeter' 'Open Rainmeter') $null))
     [void]$card.Child.Children.Add((New-Row 'Guide' 'Every setting, the controls and troubleshooting, on GitHub.' (New-ActionControl 'OpenGuide' 'Open the Guide') $null))
@@ -3672,7 +3770,7 @@ $win.Add_PreviewKeyDown({
     })
 $win.Add_Closing({
         param($s, $e)
-        if (-not $script:dirtySettings) { return }
+        if (-not $script:dirtySettings -or $script:skipSavePrompt) { return }
         $r = Show-Dialog 'Raintile' 'Save the changes before closing?' @('Save', "Don't save", 'Cancel')
         if ($r.Button -eq 'Save') { Save-All }
         elseif ($r.Button -ne "Don't save") { $e.Cancel = $true }

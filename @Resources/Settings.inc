@@ -55,6 +55,18 @@ ShowFavorites=1
 ShowRecent=1
 RecentOrder=Recent
 RecentCount=12
+; Filter bar under the menu: one chip per tag of the tiles (Tags= in the
+; category files) and, with FilterStores=1, per store when the tiles come from
+; at least two (Steam, Epic Games, GOG, ...). A click on a chip shows only the
+; tiles that have it: tiles of one of the selected stores, with all the
+; selected tags; All shows them all again. Without tags or stores no bar.
+FilterBar=1
+FilterStores=1
+; Height of the chips, space between them and their inner padding
+FilterH=30
+FilterGap=6
+FilterPad=12
+FilterFontSize=10
 
 ; --- Open and close -------------------------------------------------------------
 ; The launcher loads once (when Rainmeter starts) and is then only shown and
@@ -199,7 +211,9 @@ SearchPlaceholder=Search
 ; (games) and Apps (the Start menu)
 ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps
 ; 1 = look for new games and apps in the background on every skin load: new
-; ones light a dot on the gear (nothing is added)
+; ones light a dot on the gear (nothing is added). The same search finds the
+; tiles of games no longer installed: they are greyed out, light the dot and
+; can be removed or kept in Options > Import.
 ScanOnStart=1
 ; Categories where games and apps go when added
 ImportCategory=Games
@@ -224,6 +238,11 @@ DebugLog=0
 ; --- Appearance -----------------------------------------------------------------
 ; 1 = show the tile label (Label= in the category file), 0 = hide it
 ShowLabels=1
+; Line at the top left of the tiles with the play time (Steam games) and the
+; last launch: Hover (only on the highlighted tile), Always or Never. Tiles
+; of games no longer installed always say so.
+TileInfo=Hover
+InfoFontSize=10
 FontFace=Segoe UI
 MenuFontSize=12
 LabelFontSize=14

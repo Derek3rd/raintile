@@ -11,6 +11,9 @@ Your games, apps, links and system tools become large tiles with background art 
 - **Add games and apps** found on this PC — Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Battle.net, EA app, Xbox, and the programs of the Start menu — picking them from a list, with background and logo (local Steam cache, [SteamGridDB](https://www.steamgriddb.com/), program icons). New ones are signalled with a dot on the gear.
 - **Search** across all categories, with results that follow every key.
 - **Favorites and Recent**: your favorite tiles and the ones launched lately (or most often), first in the menu.
+- **Filter bar**: tag your tiles (multiplayer, co-op, ...) and filter them by tag or by store with a click.
+- **Play time**: hours played (Steam) and last launch, on the highlighted tile or always.
+- **Games no longer installed** are found by the same search: greyed out in the launcher, removed or kept with a click.
 - **Tile menu**: right click a tile to edit it, add it to Favorites, open its file location, run it as administrator or remove it.
 - **Mouse, keyboard and gamepad**: WASD/arrows, Space/Enter, Xbox-compatible controllers (open the launcher with Back + Start).
 - **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.

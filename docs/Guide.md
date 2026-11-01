@@ -12,6 +12,8 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Search](#search)
 - [Tile menu](#tile-menu)
 - [Favorites and Recent](#favorites-and-recent)
+- [Filter bar and tags](#filter-bar-and-tags)
+- [Play time](#play-time)
 - [Launching a tile](#launching-a-tile)
 - [Categories and tiles](#categories-and-tiles)
   - [Category files](#category-files)
@@ -19,6 +21,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
   - [Commands](#commands)
   - [Images](#images)
 - [Adding games and apps](#adding-games-and-apps)
+  - [Games no longer installed](#games-no-longer-installed)
 - [Options window](#options-window)
 - [Your data and updates](#your-data-and-updates)
 - [Settings reference](#settings-reference)
@@ -94,7 +97,7 @@ Settings: `Gamepad=0` turns it off; `GamepadToggle` (buttons held together: `A B
 
 Click the **Search** bar at the top left, or press `F` (`NavSearch`), and type: the results follow every key.
 
-- The grid shows the tiles of **every category** that contain all the typed words, in the tile name, its label or the category name (`games steam` finds Steam tiles in the Games category). Names starting with the first word come first, then the rest alphabetically. Favorites and Recent are left out (their tiles are in the other categories).
+- The grid shows the tiles of **every category** that contain all the typed words, in the tile name, its label, the category name, its store or its [tags](#filter-bar-and-tags) (`games steam` finds Steam tiles in the Games category, `co-op` the tiles tagged co-op). Names starting with the first word come first, then the rest alphabetically. Favorites and Recent are left out (their tiles are in the other categories).
 - While typing, letters, digits (keypad too), space, `-` and `.` go into the search and `Backspace` deletes; the other keys of the launcher are off. **Enter** stops typing and keeps the results; the first one is highlighted: `Space`/`Enter` (or gamepad `A`) launches it, WASD/arrows move through the results.
 - `Esc`, clicking a category or an empty search go back to the categories, at the position you left them.
 - Results use the default grid (`NX`/`NY` in `Settings.inc`).
@@ -122,6 +125,26 @@ Two categories at the start of the menu, made of the tiles of the others:
 - **Recent**: the tiles you launched lately (`RecentOrder=Recent`) or most often (`MostUsed`), up to `RecentCount`.
 
 They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Menu).
+
+## Filter bar and tags
+
+Under the menu, a row of chips filters the tiles of the category shown (and the search results):
+
+- **Tags**: give a tile tags with `Tags=` in its category file, separated by commas (`Tags=multiplayer, co-op`), or in Options > *the category* > *the tile* > **Tags**, where the tags already used elsewhere are one click away. Every tag used by at least one tile gets a chip (`#co-op`).
+- **Stores**: with `FilterStores=1`, when your tiles come from at least two stores, one chip per store (Steam, Epic Games, GOG, Ubisoft, Battle.net, EA, Xbox). The store is taken from `Store=` if the tile has it, otherwise from `Source=` (written when a game is added from Import) or from the command (`steam://`, the Epic launcher link, GOG Galaxy, `uplay://`, Battle.net, EA).
+- A click turns a chip on or off; you can turn on more than one. The grid shows the tiles of **one of** the selected stores (if any) that have **all** the selected tags. **All** turns everything off. The filter stays when you change category; with nothing to show, the grid says so.
+- Without tags and with a single store there is no bar, and the grid keeps all the space. `FilterBar=0` turns it off.
+
+Settings (Options > Menu > Filter bar): `FilterBar`, `FilterStores`, `FilterH`, `FilterGap`, `FilterPad`, `FilterFontSize`.
+
+## Play time
+
+A small line at the top left of the tile tells how long you played and when you last did: `123 h played - 3 days ago`.
+
+- **Steam games**: the hours played and the last launch come from Steam itself (`userdata\<account>\config\localconfig.vdf`, every account that logged in on this PC), read in the background (`Scripts\Playtime.ps1`) when the skin loads and, at most once a minute, when the launcher opens. The game is recognised by its `steam://rungameid/<id>` command or by `Source=Steam:<id>`.
+- **Other tiles**: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
+- `TileInfo=Hover` (default) shows it only on the highlighted tile (mouse, keyboard or gamepad), `Always` on every tile, `Never` hides it. Size: `InfoFontSize`. Options > Appearance > Text.
+- Tiles of [games no longer installed](#games-no-longer-installed) always show **Not installed**.
 
 ## Launching a tile
 
@@ -171,7 +194,9 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `BgZoom` | framing of the background: enlargement beyond filling the tile, `1` to `4` (default `1`) |
 | `LogoPos` | where the centre of the logo goes, `X,Y` in % of the tile's width and height (default `50,50`); see [Placing the logo](#placing-the-logo) |
 | `LogoScale` | size of the logo, times the category's `IconSize`, `0.25` to `3` (default `1`) |
-| `Source` | where an added game or app comes from (`Steam:570`); informational |
+| `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#filter-bar-and-tags) and the Steam id to the [play time](#play-time) |
+| `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): chips of the [filter bar](#filter-bar-and-tags), also found by search |
+| `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
 
 ### Commands
 
@@ -232,10 +257,22 @@ The search (`Scripts\Scan.ps1`, in the background) looks in:
 - **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. For games without local images, background and logo are downloaded from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Set the key in Options > Import: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
 - Something already in the launcher, in any category (same name or same command), is not listed again.
 - **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear, and on **Import** in the menu of the Options window. A click on it opens the list.
+- **Games no longer installed** are reported by the same search (see below).
 - The added tiles are written at once; **Save and refresh** shows them in the launcher.
 - **Older versions** imported games automatically, in a block below the line `; ===== IMPORTED AUTOMATICALLY =====`. Opening **Import** turns those games into normal tiles, once.
 
 Settings: `ImportStores` (e.g. `Steam|Epic|Apps`), `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
+
+### Games no longer installed
+
+The same search also checks your tiles. A tile is reported when:
+
+- its command points to a game of a store that was searched and is installed, and the game is not there any more: Steam (`steam://rungameid/<id>`), Epic Games (launcher link), GOG Galaxy (`/gameId=`), Ubisoft Connect (`uplay://launch/<id>`), Store apps and Xbox games (`shell:AppsFolder\...`);
+- or its command is a program file (`.exe`, `.lnk`, `.bat`, `.cmd`, `.url`) that no longer exists.
+
+Nothing is reported when it cannot be told: a store that is not installed or not searched, a Steam library or a drive that is not connected (USB, network), URLs, folders, bangs, Battle.net games.
+
+Reported tiles are **greyed out** in the launcher, say **Not installed** and do not start: a click opens Options > **Import**. They light the dot on the gear and on **Import** in the menu of the Options window. At the top of Import, **No longer installed** lists them: **Remove** takes the tile out of its category (its images stay in `Images\`), **Keep** leaves it as it is and stops reporting it (`KeepMissing.txt` in the data folder). The list is in `Generated\Missing.txt`.
 
 ## Options window
 
@@ -358,6 +395,10 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `ShowFavorites`, `ShowRecent` | `1`, `1` | the [Favorites and Recent](#favorites-and-recent) categories |
 | `RecentOrder` | `Recent` | `Recent` (last launched first) or `MostUsed` |
 | `RecentCount` | `12` | tiles in Recent |
+| `FilterBar` | `1` | the [filter bar](#filter-bar-and-tags) under the menu |
+| `FilterStores` | `1` | a chip per store (only with tiles from at least two stores) |
+| `FilterH`, `FilterGap`, `FilterPad` | `30`, `6`, `12` | chip height, space between chips, inner padding *(size)* |
+| `FilterFontSize` | `10` | chip font size (points) |
 
 ### Open and close
 
@@ -456,6 +497,8 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ScanOnStar
 | Setting | Default | Description |
 | --- | --- | --- |
 | `ShowLabels` | `1` | show tile labels |
+| `TileInfo` | `Hover` | [play time](#play-time) line on the tiles: `Hover` (highlighted tile), `Always` or `Never` |
+| `InfoFontSize` | `10` | its font size (points) |
 | `FontFace` | `Segoe UI` | font |
 | `MenuFontSize`, `LabelFontSize` | `12`, `14` | font sizes (points) |
 | `BgColor` | `8,8,12,200` | launcher background |
@@ -506,7 +549,8 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic
   Scripts/Thumbs.ps1         thumbnail creation
-  Scripts/Scan.ps1           search of the installed games and apps
+  Scripts/Scan.ps1           search of the installed games and apps, and of the tiles no longer installed
+  Scripts/Playtime.ps1       play time of the Steam games
   Scripts/Helper.ps1         gamepad and focus-loss helper
   Scripts/Options.ps1        Options window
   Scripts/Options.xaml       look of the Options window
@@ -518,6 +562,8 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Generated/EditTile.txt     tile to open Options on (Edit this tile), removed once read
   Generated/Found.json       games and apps found by the last search
   Generated/Found/           their icons
+  Generated/Missing.txt      tiles of games no longer installed (last search)
+  Generated/Playtime.txt     play time of the Steam games
 ```
 
 The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your data is](#where-your-data-is).
@@ -533,6 +579,8 @@ The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your da
 - **Your categories are gone after an update**: they are copied from `Skins\@Backup\Raintile\@Resources\` the first time the new version loads; if the backup option was turned off in the installer, copy `Categories\` and `Images\` from your old copy into the data folder by hand.
 - **The update check fails**: Options > Info shows the error (no connection, GitHub not reachable). It is retried on the next load after a day, or with *Check now*.
 - **Added games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey` before adding them. With `DebugLog=1` the search writes what it found per store to the log (`Raintile: scan:` lines).
+- **A tile is greyed out but the game is installed**: it was reported as [no longer installed](#games-no-longer-installed). Check that its store is ticked in Import > *Where to look* and press *Search again*, or press **Keep** in Import.
+- **No play time on a Steam tile**: its command must be `steam://rungameid/<id>` (or the tile must have `Source=Steam:<id>`), and Steam must have recorded time for the account you play with; with `TileInfo=Hover` it only shows on the highlighted tile.
 - **A game or app is not in the list**: check that its source is ticked in Import > *Where to look*, then *Search again*. Anything else can always be added by hand with its `.lnk` shortcut.
 - **Thumbnails are not created**: they are made by PowerShell in the background; errors are listed in the log. Deleting `Generated\Thumbs\` forces a rebuild.
 - **Slow or choppy animations on very large screens**: every animation step redraws the whole full-screen window. Turn off the heaviest ones (`AnimScroll`, `BgStyle=Crop`), lower `AnimAppearFrames`/`LaunchAnimFrames` or raise the `Anim*Smooth` values.

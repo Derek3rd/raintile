@@ -266,6 +266,14 @@ $schema = @(
                     (S 'choice' 'RecentOrder' 'Recent shows' '' @{ Choices = @(@('Recent', 'Last launched'), @('MostUsed', 'Most used')) }),
                     (Num 'RecentCount' 'Tiles in Recent' 1 48 1)
                 ) }
+            @{ Title = 'Filter bar'; Help = 'Chips under the menu, one per tag (Tags of the tiles) and per store: a click shows only the tiles that have it. Without tags or stores there is no bar.'; Items = @(
+                    (S 'bool' 'FilterBar' 'Filter bar'),
+                    (S 'bool' 'FilterStores' 'A chip per store' 'Only when the tiles come from at least two stores.'),
+                    (Size 'FilterH' 'Chip height' 'H'),
+                    (Size 'FilterGap' 'Space between chips' 'W'),
+                    (Size 'FilterPad' 'Chip padding' 'W'),
+                    (Num 'FilterFontSize' 'Font size' 6 30 1 'pt')
+                ) }
             @{ Title = 'Buttons'; Items = @(
                     (Num 'CloseSize' 'Size of the X and gear buttons' 8 40 1)
                 ) }
@@ -278,7 +286,10 @@ $schema = @(
                     (S 'font' 'FontFace' 'Font'),
                     (Num 'MenuFontSize' 'Menu font size' 6 40 1 'pt'),
                     (Num 'LabelFontSize' 'Label font size' 6 40 1 'pt'),
-                    (S 'bool' 'ShowLabels' 'Show tile labels')
+                    (S 'bool' 'ShowLabels' 'Show tile labels'),
+                    (S 'choice' 'TileInfo' 'Play time and last launch' 'A line at the top left of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.' @{ Choices = @(
+                                @('Hover', 'On the highlighted tile'), @('Always', 'Always'), @('Never', 'Never')) }),
+                    (Num 'InfoFontSize' 'Play time font size' 6 30 1 'pt')
                 ) }
             @{ Title = 'Tiles'; Items = @(
                     (S 'color' 'TileColor' 'Default tile colour'),
@@ -395,7 +406,7 @@ $schema = @(
             @{ Found = $true; Items = @() }
             @{ Title = 'Search'; Items = @(
                     (S 'stores' 'ImportStores' 'Where to look'),
-                    (S 'bool' 'ScanOnStart' 'Look for new ones on start' 'In the background, each time the skin loads: new games or apps light a dot on the gear.'),
+                    (S 'bool' 'ScanOnStart' 'Look for new ones on start' 'In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear.'),
                     (S 'category' 'ImportCategory' 'Category for games'),
                     (S 'category' 'AppsCategory' 'Category for apps'),
                     (S 'secret' 'SteamGridDBKey' 'SteamGridDB API key' 'Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded. Saved encrypted: only your Windows user on this PC can read it.')
@@ -446,6 +457,8 @@ $defaults = @{
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'
+    FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
+    TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'
     CloseHotKey = 'ESCAPE'; KeyboardNav = '1'
     NavUp = 'W'; NavUp2 = 'UP'; NavDown = 'S'; NavDown2 = 'DOWN'; NavLeft = 'A'; NavLeft2 = 'LEFT'
@@ -1742,7 +1755,9 @@ function New-SettingsPage($page) {
         $card = New-Card $group.Title $group.Help
         $rows = 0
         if ($group.Found) {
-            # list of the games and apps found (its own card)
+            # tiles of games no longer installed, then the list of the games
+            # and apps found (cards of their own)
+            [void](Add-To $sp (New-MissingCard))
             [void](Add-To $sp (New-FoundCard))
             continue
         }
@@ -2332,6 +2347,42 @@ function Update-TilePreview {
     if ($sel -and $sel.Tag.Section) { Update-TileEntry $sel }
 }
 
+# Tags of every tile (as in the window), for the suggestions under the field
+function Get-AllTags {
+    $tags = @{}
+    foreach ($f in Get-CategoryFiles) {
+        foreach ($t in Get-Tiles (Get-Model $f.Name)) {
+            foreach ($tag in ((Get-Key $t 'Tags') -split '[,;]')) {
+                $tag = $tag.Trim()
+                if ($tag -and -not $tags.ContainsKey($tag.ToLowerInvariant())) { $tags[$tag.ToLowerInvariant()] = $tag }
+            }
+        }
+    }
+    return @($tags.Keys | Sort-Object | ForEach-Object { $tags[$_] })
+}
+
+# The tags used elsewhere and not on this tile: a click adds one
+function Update-TagSuggestions {
+    if (-not $cat.TagSuggestions) { return }
+    $cat.TagSuggestions.Children.Clear()
+    $t = Get-CurrentTile
+    if (-not $t) { return }
+    $mine = @((Get-Key $t 'Tags') -split '[,;]' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
+    foreach ($tag in Get-AllTags) {
+        if ($mine -contains $tag.ToLowerInvariant()) { continue }
+        $b = New-Button "+ $tag" 'LinkButton' 'Add this tag'
+        $b.Margin = T 0 0 12 0
+        $b.Tag = $tag
+        $b.Add_Click({
+                param($s, $e)
+                $box = $cat['tile.Tags']
+                $box.Text = if ($box.Text.Trim()) { $box.Text.Trim().TrimEnd(',', ';') + ', ' + $s.Tag } else { $s.Tag }
+                Update-TagSuggestions
+            })
+        [void]$cat.TagSuggestions.Children.Add($b)
+    }
+}
+
 function Show-Tile {
     $script:loading = $true
     $s = Get-ShownTile
@@ -2339,7 +2390,8 @@ function Show-Tile {
     $imported = $sel -and $sel.Tag.Imported
     $cat.TileCard.IsEnabled = [bool]$s -and -not $imported
     $cat.ImportedCard.Visibility = if ($imported) { 'Visible' } else { 'Collapsed' }
-    foreach ($k in 'Command', 'Label', 'Color') { $cat["tile.$k"].Text = if ($s) { Get-Key $s $k } else { '' } }
+    foreach ($k in 'Command', 'Label', 'Color', 'Tags') { $cat["tile.$k"].Text = if ($s) { Get-Key $s $k } else { '' } }
+    Update-TagSuggestions
     $cat['tile.Name'].Text = if ($s) { $s.Name } else { '' }
     $cat.Note.Text = if (-not $sel) { 'No tiles yet: add one with the + button.' } else { '' }
     $cat.Note.Visibility = if ($cat.Note.Text) { 'Visible' } else { 'Collapsed' }
@@ -2746,7 +2798,7 @@ function New-CategoryPage {
             Save-Framing
         })
 
-    foreach ($k in 'Name', 'Command', 'Label', 'Color') {
+    foreach ($k in 'Name', 'Command', 'Label', 'Color', 'Tags') {
         $tb = New-Object System.Windows.Controls.TextBox
         $tb.Tag = $k
         $cat["tile.$k"] = $tb
@@ -2766,6 +2818,12 @@ function New-CategoryPage {
     $cat['tile.Color'].Margin = T 10 0 0 0
     [void](Add-To $colorRow $cat.ColorSwatch); [void](Add-To $colorRow $cat['tile.Color'])
     [void](Add-To $f (New-FormRow 'Colour' $colorRow 'Used when there is no background image. Empty = from the logo, or the default tile colour.'))
+    $tagHint = New-Panel
+    [void](Add-To $tagHint (New-Text 'Separated by commas, e.g. multiplayer, co-op. Each tag is a chip of the filter bar under the menu; search finds them too.' 11.5 (Res 'DimBrush') -Wrap))
+    $cat.TagSuggestions = New-Object System.Windows.Controls.WrapPanel
+    $cat.TagSuggestions.Margin = T 0 4 0 0
+    [void](Add-To $tagHint $cat.TagSuggestions)
+    [void](Add-To $f (New-FormRow 'Tags' $cat['tile.Tags'] '' $tagHint))
     $moveRow = New-Panel 'Horizontal'
     $cat.MoveTo = New-Object System.Windows.Controls.ComboBox
     $cat.MoveTo.Width = 200
@@ -2826,7 +2884,7 @@ function New-CategoryPage {
     # --- events
     $cat.Tiles.Add_SelectionChanged({ Show-Tile })
 
-    foreach ($k in 'Command', 'Label', 'Color') {
+    foreach ($k in 'Command', 'Label', 'Color', 'Tags') {
         $cat["tile.$k"].Add_TextChanged({
                 param($s, $e)
                 if ($script:loading) { return }
@@ -3117,6 +3175,9 @@ $scanTimer.Add_Tick({
         Refresh-FoundList
         Update-FoundStatus
         Set-FoundSeen
+        Refresh-MissingList
+        Invoke-Rainmeter "!CommandMeasure MeasureScript `"OnMissing()`" `"$Config`""
+        Update-NavDots -Reload
     })
 
 function Start-FoundScan {
@@ -3125,7 +3186,7 @@ function Start-FoundScan {
     $found.Status.Text = 'Searching the stores and the Start menu' + [char]0x2026
     $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $argList = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f (Join-Path $PSScriptRoot 'Scan.ps1')),
-        '-Resources', ('"{0}"' -f $Resources), '-Stores', ('"{0}"' -f $values['ImportStores']))
+        '-Resources', ('"{0}"' -f $Resources), '-Data', ('"{0}"' -f $Data), '-Stores', ('"{0}"' -f $values['ImportStores']))
     $script:scanProcess = Start-Process -FilePath $exe -ArgumentList $argList -WindowStyle Hidden -PassThru
     Refresh-FoundList
     $scanTimer.Start()
@@ -3306,6 +3367,137 @@ function New-FoundCard {
     Update-FoundStatus
     Refresh-FoundList
     if ($found.Items.Count) { Set-FoundSeen } else { Start-FoundScan }
+    return $card
+}
+
+# --- Tiles of games no longer installed (Import page) -------------------------------
+# Scan.ps1 lists them in Generated\Missing.txt ("<file>|<tile name>"); the
+# launcher shows them greyed out. Remove takes the tile out of its category
+# (its images stay), Keep adds it to KeepMissing.txt (data folder): it is not
+# reported again.
+
+$missingUi = @{}   # controls of the card
+
+# Tiles still in their category (as in the window) and not kept
+function Get-MissingList {
+    $list = @()
+    if (-not (Test-Path -LiteralPath $missingFile)) { return $list }
+    $keep = Read-KeepMissing
+    $files = @{}
+    foreach ($f in Get-CategoryFiles) { $files[$f.Name.ToLowerInvariant()] = $f.Name }
+    foreach ($line in [IO.File]::ReadAllLines($missingFile, $utf8)) {
+        $parts = $line.Split('|', 2)
+        if ($parts.Count -ne 2 -or $keep.ContainsKey($line.ToLowerInvariant())) { continue }
+        $file = $files[$parts[0].ToLowerInvariant()]
+        if (-not $file) { continue }
+        $section = @(Get-Tiles (Get-Model $file) | Where-Object { $_.Name -eq $parts[1] }) | Select-Object -First 1
+        if ($section) { $list += [pscustomobject]@{ Id = $line; File = $file; Name = $parts[1]; Section = $section } }
+    }
+    return $list
+}
+
+# A tile to review (for the menu dot; only the categories named in
+# Missing.txt are read)
+function Test-MissingAny {
+    if (-not (Test-Path -LiteralPath $missingFile) -or (Get-Item -LiteralPath $missingFile).Length -eq 0) { return $false }
+    return @(Get-MissingList).Count -gt 0
+}
+
+# Missing.txt without the given tiles; the launcher reads it again
+function Remove-MissingLines([string[]]$ids) {
+    if (-not (Test-Path -LiteralPath $missingFile)) { return }
+    $drop = @{}
+    foreach ($id in $ids) { $drop[$id.ToLowerInvariant()] = $true }
+    $left = @([IO.File]::ReadAllLines($missingFile, $utf8) | Where-Object { $_ -and -not $drop.ContainsKey($_.ToLowerInvariant()) })
+    [IO.File]::WriteAllLines($missingFile, [string[]]$left, $utf8)
+    Invoke-Rainmeter "!CommandMeasure MeasureScript `"OnMissing()`" `"$Config`""
+    Update-NavDots -Reload
+}
+
+function Remove-MissingTiles($tiles) {
+    $touched = @{}
+    foreach ($t in @($tiles)) {
+        [void](Get-Model $t.File).Sections.Remove($t.Section)
+        $touched[$t.File] = $true
+    }
+    foreach ($f in @($touched.Keys)) {
+        Write-Category (Join-Path $categoriesDir $f) (Get-Model $f)
+        $changedFiles.Remove($f)
+    }
+    if ($touched.Count) { $script:needsRefresh = $true }
+    Remove-MissingLines @($tiles | ForEach-Object { $_.Id })
+    Update-Dirty
+    Refresh-MissingList
+    if ($pages.ContainsKey('category') -and $script:currentFile -and $touched.ContainsKey($script:currentFile)) { Show-Category }
+}
+
+function Keep-MissingTiles($tiles) {
+    $keep = Read-KeepMissing
+    $lines = New-Object System.Collections.ArrayList
+    if (Test-Path -LiteralPath $keepMissingFile) { foreach ($l in [IO.File]::ReadAllLines($keepMissingFile, $utf8)) { if ($l) { [void]$lines.Add($l) } } }
+    foreach ($t in @($tiles)) { if (-not $keep.ContainsKey($t.Id.ToLowerInvariant())) { [void]$lines.Add($t.Id) } }
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $keepMissingFile) | Out-Null
+    [IO.File]::WriteAllLines($keepMissingFile, [string[]]@($lines), $utf8)
+    Remove-MissingLines @($tiles | ForEach-Object { $_.Id })
+    Refresh-MissingList
+}
+
+function Refresh-MissingList {
+    if (-not $missingUi.Card) { return }
+    $tiles = @(Get-MissingList)
+    $missingUi.Card.Visibility = if ($tiles.Count) { 'Visible' } else { 'Collapsed' }
+    $missingUi.List.Children.Clear()
+    $names = @{}
+    foreach ($e in Get-CategoryEntries) { $names[$e.File] = $e.Name }
+    foreach ($t in $tiles) {
+        $row = New-Grid @('*', 'Auto', 'Auto')
+        $row.Margin = T 0 3
+        $texts = New-Panel
+        $texts.VerticalAlignment = 'Center'
+        $name = New-Text $t.Name 13.5
+        $name.TextTrimming = 'CharacterEllipsis'
+        [void](Add-To $texts $name)
+        $cmd = Get-Key $t.Section 'Command'
+        [void](Add-To $texts (New-Text "in $($names[$t.File])   $([char]0xB7)   $cmd" 11.5 (Res 'DimBrush')))
+        ($texts.Children[1]).TextTrimming = 'CharacterEllipsis'
+        [void]$row.Children.Add($texts)
+        $remove = New-Button 'Remove' '' 'Takes the tile out of its category. Its images stay in the Images folder.'
+        $remove.Margin = T 10 0 0 0
+        $remove.Tag = $t
+        $remove.Add_Click({ param($s, $e) Remove-MissingTiles @($s.Tag) })
+        Set-Col $remove 1
+        [void]$row.Children.Add($remove)
+        $keepBtn = New-Button 'Keep' '' 'Keeps the tile as it is and stops reporting it.'
+        $keepBtn.Margin = T 6 0 0 0
+        $keepBtn.Tag = $t
+        $keepBtn.Add_Click({ param($s, $e) Keep-MissingTiles @($s.Tag) })
+        Set-Col $keepBtn 2
+        [void]$row.Children.Add($keepBtn)
+        [void]$missingUi.List.Children.Add($row)
+    }
+    $missingUi.Count.Text = "$($tiles.Count) tile$(if ($tiles.Count -ne 1) { 's' }) of games that are no longer installed, or whose program file is gone. In the launcher they are greyed out and do not start."
+}
+
+function New-MissingCard {
+    $card = New-Card 'No longer installed' ''
+    $missingUi.Card = $card
+    $f = $card.Child
+    $missingUi.Count = New-Text '' 12 (Res 'DimBrush') -Wrap
+    $missingUi.Count.Margin = T 0 0 0 8
+    [void](Add-To $f $missingUi.Count)
+    $missingUi.List = New-Panel
+    [void](Add-To $f $missingUi.List)
+    $bottom = New-Panel 'Horizontal'
+    $bottom.Margin = T 0 10 0 6
+    $all = New-Button 'Remove all'
+    $all.Add_Click({ Remove-MissingTiles @(Get-MissingList) })
+    [void](Add-To $bottom $all)
+    $keepAll = New-Button 'Keep all'
+    $keepAll.Margin = T 8 0 0 0
+    $keepAll.Add_Click({ Keep-MissingTiles @(Get-MissingList) })
+    [void](Add-To $bottom $keepAll)
+    [void](Add-To $f $bottom)
+    Refresh-MissingList
     return $card
 }
 
@@ -3551,7 +3743,7 @@ function Update-NavDots([switch]$Reload) {
     # while the window opens the files are not read: Show-FirstPage does it
     # once the window is on screen
     if (-not $Reload -and -not $script:navDots -and -not $script:firstShown) { return }
-    if ($Reload -or -not $script:navDots) { $script:navDots = @{ Found = (Test-NewFound); Update = (Test-UpdateAvailable) } }
+    if ($Reload -or -not $script:navDots) { $script:navDots = @{ Found = ((Test-NewFound) -or (Test-MissingAny)); Update = (Test-UpdateAvailable) } }
     $newFound = $script:navDots.Found
     $update = $script:navDots.Update
     $items = @($nav.Items)
@@ -3560,7 +3752,7 @@ function Update-NavDots([switch]$Reload) {
         if (-not $it.Tag.Dot) { continue }
         $on = ($it.Tag.Id -eq 'page:import' -and $newFound) -or ($it.Tag.Id -eq 'page:info' -and $update)
         $it.Tag.Dot.Visibility = if ($on) { 'Visible' } else { 'Collapsed' }
-        $it.ToolTip = if (-not $on) { $null } elseif ($update -and $it.Tag.Id -eq 'page:info') { 'A new version of Raintile is available' } else { 'New games or apps found' }
+        $it.ToolTip = if (-not $on) { $null } elseif ($update -and $it.Tag.Id -eq 'page:info') { 'A new version of Raintile is available' } else { 'New games or apps found, or tiles of games no longer installed' }
     }
 }
 

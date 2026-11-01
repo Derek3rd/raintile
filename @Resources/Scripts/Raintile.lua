@@ -36,10 +36,39 @@ local typing = false  -- the search bar is being typed in (Typing mini-skin on)
 local typed = ''      -- text typed so far
 local leaveSearch     -- defined in the Search section
 local stopTyping      -- defined in the Search section
+-- Dot on the gear: an update, new games or apps found, tiles of games no
+-- longer installed (see showNotice)
+local notice = { found = 0, update = nil, missing = 0 }
+local showNotice      -- defined with OpenNotice
+-- Filter bar under the menu: chips = { { kind = 'all' | 'store' | 'tag',
+-- key, label }, ... }; the tiles shown must have one of the selected stores
+-- (if any) and all the selected tags. ver changes at every change (the
+-- filtered views of the categories are rebuilt).
+local filter = { chips = {}, stores = {}, tags = {}, n = 0, ver = 0, hovered = 0 }
 
--- Category shown in the grid: the search results or the active one.
+local function matchesFilter(t)
+	if filter.n == 0 then return true end
+	if next(filter.stores) and not (t.store and filter.stores[t.store]) then return false end
+	for tag in pairs(filter.tags) do
+		if not (t.tagSet and t.tagSet[tag]) then return false end
+	end
+	return true
+end
+
+-- Category shown in the grid: the search results or the active one, with
+-- only the tiles that pass the filter. The filtered view reads everything
+-- else from the category itself.
 local function cur()
-	return searchCat or cats[active]
+	local c = searchCat or cats[active]
+	if filter.n == 0 or not c then return c end
+	if c._fview and c._fver == filter.ver and c._ftiles == c.tiles then return c._fview end
+	local list = {}
+	for _, t in ipairs(c.tiles) do
+		if matchesFilter(t) then list[#list + 1] = t end
+	end
+	c._fview = setmetatable({ tiles = list }, { __index = c })
+	c._fver, c._ftiles = filter.ver, c.tiles
+	return c._fview
 end
 local resources
 -- Folder with your data (Settings.inc, Categories\, Images\, State.inc):
@@ -94,6 +123,7 @@ local SIZE_AXIS = {
 	PadX = 'W', SearchW = 'W', MenuItemPad = 'W', MenuGap = 'W', MenuIconGap = 'W',
 	PadY = 'H', Gap = 'H', MenuH = 'H', MenuIconSize = 'H', MenuRadius = 'H', IconSize = 'H',
 	LabelPad = 'H', ScrollBarSize = 'H', LaunchLogoSize = 'H',
+	FilterH = 'H', FilterGap = 'W', FilterPad = 'W',
 }
 
 -- Pixels of a size: a number, a formula or a percentage of the screen.
@@ -406,6 +436,33 @@ local function applyGeometry(c)
 	V.IconSize = c.iconSize
 end
 
+-- Store of a tile, for the filter bar, and its Steam app id (for the play
+-- time): from Store= or Source= (written when added from Import, e.g.
+-- Steam:570) or from the command. nil for programs and apps.
+local STORE_NAMES = {
+	steam = 'Steam', epic = 'Epic Games', gog = 'GOG', ubisoft = 'Ubisoft', ['battle.net'] = 'Battle.net',
+	battlenet = 'Battle.net', ea = 'EA', xbox = 'Xbox',
+}
+local function tileStore(command, store, source)
+	local low = command:lower()
+	local steamId = low:match('^steam://rungameid/(%d+)') or low:match('^steam://run/(%d+)')
+		or low:match('^steam://launch/(%d+)')
+	if steamId and #steamId > 10 then steamId = nil end -- non-Steam shortcuts
+	local src, srcId = source:match('^([^:]+):(.*)$')
+	if src and src:lower() == 'steam' and srcId:match('^%d+$') then steamId = steamId or srcId end
+	local name = STORE_NAMES[store:lower()] or (store ~= '' and store) or (src and STORE_NAMES[src:lower()])
+	if not name then
+		if low:find('^steam://') then name = 'Steam'
+		elseif low:find('^com%.epicgames%.launcher://') then name = 'Epic Games'
+		elseif low:find('galaxyclient%.exe') or low:find('^goggalaxy://') then name = 'GOG'
+		elseif low:find('^uplay://') or low:find('^ubisoft://') then name = 'Ubisoft'
+		elseif low:find('battle%.net') or low:find('^battlenet://') then name = 'Battle.net'
+		elseif low:find('^origin2?://') or low:find('^link2ea://') or low:find('^ea://') then name = 'EA'
+		end
+	end
+	return name, steamId
+end
+
 -- Reads a category file (Categories\<file>.ini).
 local function loadCategory(file)
 	local ini = parseIni(data .. 'Categories\\' .. file)
@@ -464,6 +521,15 @@ local function loadCategory(file)
 			end
 			t.name, t.catLabel = s.name, c.label -- for search
 			t.file = file -- for "Edit this tile"
+			t.store, t.steamId = tileStore(command, trim(k.store or ''), trim(k.source or ''))
+			t.tags, t.tagSet = {}, {}
+			for tag in (k.tags or ''):gmatch('[^,;]+') do
+				tag = trim(tag)
+				if tag ~= '' and not t.tagSet[tag:lower()] then
+					t.tags[#t.tags + 1] = tag
+					t.tagSet[tag:lower()] = true
+				end
+			end
 			c.tiles[#c.tiles + 1] = t
 		end
 	end
@@ -532,6 +598,68 @@ local function writeUsage()
 	for id, u in pairs(usage) do lines[#lines + 1] = id .. '|' .. u.count .. '|' .. u.last end
 	table.sort(lines)
 	writeLines(data .. 'Usage.txt', lines)
+end
+
+-- Tiles of games no longer installed -------------------------------------------
+-- Scan.ps1 lists them in Generated\Missing.txt ("<file>|<tile name>", the
+-- kept ones left out): they are greyed out, do not start (a click opens
+-- Options > Import, where they can be removed or kept) and light the dot.
+local function readMissing()
+	local set, n = {}, 0
+	for _, id in ipairs(readLines(resources .. 'Generated\\Missing.txt')) do set[id:lower()] = true end
+	for _, c in ipairs(cats) do
+		if not c.virtual then
+			for _, t in ipairs(c.tiles) do
+				t.missing = set[tileId(t):lower()] or nil
+				if t.missing then n = n + 1 end
+			end
+		end
+	end
+	notice.missing = n
+end
+
+-- Play time ------------------------------------------------------------------------
+-- Steam keeps the play time and the last launch of each game: Playtime.ps1
+-- copies them, in the background, to Generated\Playtime.txt
+-- ("<appid>|<minutes>|<last played, unix time>"). For the other tiles the
+-- last launch is the one counted by Raintile (Usage.txt).
+local playtime = {}   -- steam app id -> { minutes, last }
+
+local function readPlaytime()
+	playtime = {}
+	for _, line in ipairs(readLines(resources .. 'Generated\\Playtime.txt')) do
+		local id, minutes, last = line:match('^(%d+)|(%d+)|(%d+)$')
+		if id then playtime[id] = { minutes = tonumber(minutes), last = tonumber(last) } end
+	end
+end
+
+local function ago(time)
+	local today = os.date('*t')
+	today.hour, today.min, today.sec = 0, 0, 0
+	local midnight = os.time(today)
+	if time >= midnight then return 'today' end
+	local days = math.floor((midnight - time) / 86400) + 1
+	if days == 1 then return 'yesterday' end
+	if days < 30 then return days .. ' days ago' end
+	return os.date('%d %b %Y', time)
+end
+
+-- Line shown on the tile (TileInfo): play time and last launch
+local function tileInfo(t)
+	if t.missing then return 'Not installed' end
+	local p = t.steamId and playtime[t.steamId]
+	local u = usage[tileId(t)]
+	local last = math.max(p and p.last or 0, u and u.last or 0)
+	local played
+	if p and p.minutes > 0 then
+		if p.minutes < 60 then played = p.minutes .. ' min'
+		elseif p.minutes < 600 then played = string.format('%.1f h', p.minutes / 60):gsub('%.0 h$', ' h')
+		else played = math.floor(p.minutes / 60 + 0.5) .. ' h' end
+	end
+	if played and last > 0 then return played .. ' played - ' .. ago(last) end
+	if played then return played .. ' played' end
+	if last > 0 then return 'Last played ' .. ago(last) end
+	return nil
 end
 
 local function makeVirtual(kind)
@@ -603,7 +731,38 @@ local function loadCategories(files)
 		readFavorites()
 		readUsage()
 		fillVirtual()
+		readMissing()
+		readPlaytime()
 	end
+	-- Filter bar: stores (when there are at least two) and tags of the tiles
+	filter.chips = {}
+	if V.FilterBar then
+		local stores, tags, storeList, tagList = {}, {}, {}, {}
+		for _, c in ipairs(cats) do
+			for _, t in ipairs(c.virtual and {} or c.tiles) do
+				if t.store and not stores[t.store] then
+					stores[t.store] = true
+					storeList[#storeList + 1] = t.store
+				end
+				for _, tag in ipairs(t.tags or {}) do
+					if not tags[tag:lower()] then
+						tags[tag:lower()] = tag
+						tagList[#tagList + 1] = tag:lower()
+					end
+				end
+			end
+		end
+		table.sort(storeList)
+		table.sort(tagList)
+		if V.FilterStores and #storeList >= 2 then
+			for _, st in ipairs(storeList) do filter.chips[#filter.chips + 1] = { kind = 'store', key = st, label = st } end
+		end
+		for _, tag in ipairs(tagList) do filter.chips[#filter.chips + 1] = { kind = 'tag', key = tag, label = '#' .. tags[tag] } end
+		if #filter.chips > 0 then table.insert(filter.chips, 1, { kind = 'all', label = 'All' }) end
+	end
+	-- the stored selection is dropped: the chips may have changed
+	filter.stores, filter.tags, filter.n = {}, {}, 0
+	filter.ver = filter.ver + 1
 	-- Slots to generate: as many as the largest grid needs
 	slots = 0
 	for _, c in ipairs(cats) do slots = math.max(slots, c.rows * c.cols) end
@@ -633,10 +792,17 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 6
+local GRID_VERSION = 7
+
+-- Space taken by the filter bar (FilterSpace in Grid.inc): the grid area is
+-- smaller by as much
+local function filterSpace()
+	return #filter.chips > 0 and math.floor(V.FilterH + V.Gap) or 0
+end
 
 local function signature()
-	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
+	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode, 'fs' .. filterSpace() }
+	for _, chip in ipairs(filter.chips) do s[#s + 1] = 'chip:' .. chip.label end
 	for _, c in ipairs(cats) do
 		s[#s + 1] = c.name .. ':' .. c.label .. ':' .. (c.icon or '')
 	end
@@ -653,6 +819,7 @@ local function writeGrid(path, sig, files)
 	-- Category files seen last time: lets the skin draw right away on load,
 	-- while the folder is checked again in the background.
 	w('CategoryFiles=' .. table.concat(files, '|'))
+	w('FilterSpace=' .. filterSpace())
 	w('')
 
 	-- Menu entries: a chain of meters with relative X. After measuring them the
@@ -678,6 +845,26 @@ local function writeGrid(path, sig, files)
 			w('Text=' .. c.label)
 			w('')
 		end
+	end
+
+	-- Filter bar: the pills first (drawn below), then the texts, a chain like
+	-- the menu, centred by the script
+	for i = 1, #filter.chips do
+		w('[FilterPill' .. i .. ']')
+		w('Meter=Shape')
+		w('MeterStyle=StyleFilterPill')
+		w('')
+	end
+	for i, chip in ipairs(filter.chips) do
+		w('[FilterText' .. i .. ']')
+		w('Meter=String')
+		w('MeterStyle=StyleFilter')
+		w('X=' .. (i == 1 and '#PadX#' or '#FilterGap#R'))
+		w('Text=' .. chip.label)
+		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "ToggleFilter(' .. i .. ')"]')
+		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverFilter(' .. i .. ')"]')
+		w('MouseLeaveAction=[!CommandMeasure MeasureScript "HoverFilter(0)"]')
+		w('')
 	end
 
 	-- Clickable areas of the entries (placed by the script)
@@ -709,6 +896,10 @@ local function writeGrid(path, sig, files)
 		w('[TileLabel' .. slot .. ']')
 		w('Meter=String')
 		w('MeterStyle=StyleTileLabel')
+		w('')
+		w('[TileInfo' .. slot .. ']')
+		w('Meter=String')
+		w('MeterStyle=StyleTileInfo')
 		w('')
 	end
 
@@ -746,7 +937,8 @@ local function updateEmptyHint()
 	if searchCat then
 		if #c.tiles == 0 then text = 'No results' end
 	elseif c and #c.tiles == 0 then
-		if c.virtual == 'favorites' then text = 'No favorites yet: right click a tile > Add to Favorites'
+		if filter.n > 0 then text = 'No tiles match the filter: click All to see them all'
+		elseif c.virtual == 'favorites' then text = 'No favorites yet: right click a tile > Add to Favorites'
 		elseif c.virtual == 'recent' then text = 'Nothing launched yet' end
 	end
 	if text then set('SearchEmpty', 'Text', text) end
@@ -997,6 +1189,49 @@ local function renderCategories()
 	end
 end
 
+-- Filter bar ---------------------------------------------------------------------
+-- Measures the chips (a chain of texts like the menu), centres them under the
+-- menu and hides those that do not fit.
+local function layoutFilters()
+	local n = #filter.chips
+	if n == 0 then return end
+	local first, last = SKIN:GetMeter('FilterText1'), SKIN:GetMeter('FilterText' .. n)
+	if not first or not last then return end
+	local origin = first:GetX()
+	local total = last:GetX() + last:GetW() - origin
+	local start = math.max(V.PadX, math.floor((V.ScreenW - total) / 2))
+	local shift = start - origin
+	set('FilterText1', 'X', tostring(start))
+	for i, chip in ipairs(filter.chips) do
+		local m = SKIN:GetMeter('FilterText' .. i)
+		chip.x, chip.w = m:GetX() + shift, m:GetW()
+		chip.fits = chip.x + chip.w <= V.ScreenW - V.PadX
+	end
+end
+
+local function chipOn(chip)
+	if chip.kind == 'all' then return filter.n == 0 end
+	if chip.kind == 'store' then return filter.stores[chip.key] == true end
+	return filter.tags[chip.key] == true
+end
+
+local function renderFilters()
+	local y = math.floor(V.PadY + V.MenuH + V.Gap)
+	for i, chip in ipairs(filter.chips) do
+		local on, hot = chipOn(chip), i == filter.hovered
+		local visible = chip.x ~= nil and chip.fits ~= false
+		set('FilterText' .. i, 'FontColor', (on or hot) and V.TextColor or V.TextDimColor)
+		show('FilterText' .. i, chip.fits ~= false)
+		if visible and (on or hot) then
+			rect('FilterPill' .. i, math.floor(chip.x), y, math.floor(chip.w), math.floor(V.FilterH),
+				on and V.ActiveCategoryColor or V.HoverCategoryColor)
+			show('FilterPill' .. i, true)
+		else
+			show('FilterPill' .. i, false)
+		end
+	end
+end
+
 local function renderScrollBar()
 	local maxOff = maxOffset()
 	if maxOff == 0 then
@@ -1046,6 +1281,10 @@ local function fillSlots()
 	end
 end
 
+-- Colour matrices (rows 1-3) of a normal image and of a greyed-out one
+local IDENTITY_ROWS = { '1;0;0;0;0', '0;1;0;0;0', '0;0;1;0;0' }
+local GREY_ROWS = { '0.3;0.3;0.3;0;0', '0.59;0.59;0.59;0;0', '0.11;0.11;0.11;0;0' }
+
 -- Position, opacity and visibility of the slots (also on every animation step).
 local function placeSlots()
 	local frac = pos - base
@@ -1056,6 +1295,7 @@ local function placeSlots()
 		local extra = r >= V.NY or c >= V.NX -- extra row/column
 		local visible = t and (not extra or frac > 0)
 		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
+		local infoMeter = 'TileInfo' .. slot
 
 		if visible then
 			local x, y = c * V.StepX, r * V.StepY
@@ -1074,8 +1314,14 @@ local function placeSlots()
 			set(tile, 'Y', tostring(y))
 			set(tile, 'W', tostring(V.TileW))
 			set(tile, 'H', tostring(V.TileH))
-			set(tile, 'ImageAlpha', alpha)
-			set(tile, 'SolidColor', fade(t.color, f))
+			-- a game no longer installed: greyed out and dimmed
+			local dim = t.missing and 0.45 or 1
+			set(tile, 'ImageAlpha', tostring(math.floor(255 * f * dim + 0.5)))
+			set(tile, 'SolidColor', fade(t.color, f * dim))
+			local tileRows = t.missing and GREY_ROWS or IDENTITY_ROWS
+			set(tile, 'ColorMatrix1', tileRows[1])
+			set(tile, 'ColorMatrix2', tileRows[2])
+			set(tile, 'ColorMatrix3', tileRows[3])
 			local framedOriginal = t.frame and t.background == t.backgroundFull
 			local crop = (V.BgStyle ~= 'crop' or framedOriginal) and t.background and bgWindow(t, x, y)
 			set(tile, 'PreserveAspectRatio', crop and '0' or '2')
@@ -1087,13 +1333,11 @@ local function placeSlots()
 				set(icon, 'Y', tostring(y + math.floor(ly - size / 2)))
 				set(icon, 'W', tostring(size))
 				set(icon, 'H', tostring(size))
-				set(icon, 'ImageAlpha', alpha)
-				if V.LogoGreyscale then
-					local rows = saturationRows(t.zoom or 0)
-					set(icon, 'ColorMatrix1', rows[1])
-					set(icon, 'ColorMatrix2', rows[2])
-					set(icon, 'ColorMatrix3', rows[3])
-				end
+				set(icon, 'ImageAlpha', tostring(math.floor(255 * f * dim + 0.5)))
+				local rows = t.missing and GREY_ROWS or (V.LogoGreyscale and saturationRows(t.zoom or 0)) or IDENTITY_ROWS
+				set(icon, 'ColorMatrix1', rows[1])
+				set(icon, 'ColorMatrix2', rows[2])
+				set(icon, 'ColorMatrix3', rows[3])
 			end
 			local hasLabel = V.ShowLabels and t.label ~= nil
 			if hasLabel then
@@ -1103,13 +1347,34 @@ local function placeSlots()
 				set(label, 'FontColor', fade(V.TextColor, f))
 				set(label, 'FontEffectColor', fade('0,0,0,200', f))
 			end
+			-- play time / last launch: always, only on the highlighted tile
+			-- (fading with the highlight) or never; "Not installed" always
+			local infoText, infoAlpha = nil, f
+			if t.missing or V.TileInfo ~= 'never' then infoText = tileInfo(t) end
+			if infoText and not t.missing and V.TileInfo == 'hover' then
+				local idx = indexAt(slot)
+				if idx == hover.idx and (hover.on or hover.a > 0) then
+					infoAlpha = f * (V.TileHover and hover.a or (hover.on and 1 or 0))
+				else
+					infoText = nil
+				end
+			end
+			if infoText and infoAlpha > 0.01 then
+				set(infoMeter, 'Text', infoText)
+				set(infoMeter, 'X', tostring(x + V.LabelPad))
+				set(infoMeter, 'Y', tostring(y + V.LabelPad))
+				set(infoMeter, 'FontColor', fade(V.TextColor, infoAlpha))
+				set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
+			end
 			show(tile, true)
 			show(icon, t.logo ~= nil)
 			show(label, hasLabel)
+			show(infoMeter, infoText ~= nil and infoAlpha > 0.01)
 		else
 			show(tile, false)
 			show(icon, false)
 			show(label, false)
+			show(infoMeter, false)
 		end
 	end
 end
@@ -1151,11 +1416,46 @@ local function render(menu)
 			-- Menu meters must be updated before they can be measured
 			SKIN:Bang('!UpdateMeterGroup', 'Menu')
 			layoutMenu()
+			layoutFilters()
 		end
 		renderCategories()
+		renderFilters()
 		SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	end
 	frame()
+end
+
+-- Click on a chip: All clears the filter, the others turn on and off. The
+-- grid starts again from the top, with the appear animation.
+function ToggleFilter(i)
+	local chip = filter.chips[i]
+	if not ready or launching or not chip then return end
+	if chip.kind == 'all' then
+		filter.stores, filter.tags = {}, {}
+	elseif chip.kind == 'store' then
+		filter.stores[chip.key] = (not filter.stores[chip.key]) or nil
+	else
+		filter.tags[chip.key] = (not filter.tags[chip.key]) or nil
+	end
+	local n = 0
+	for _ in pairs(filter.stores) do n = n + 1 end
+	for _ in pairs(filter.tags) do n = n + 1 end
+	filter.n, filter.ver = n, filter.ver + 1
+	offset, pos, base = 0, 0, -1
+	hover.idx, hover.on, hover.a = 0, false, 0
+	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
+	zooming = {}
+	updateEmptyHint()
+	if V.AnimCategory then appear = 0 startTicker() end
+	render(true)
+end
+
+function HoverFilter(i)
+	if not ready or filter.hovered == i then return end
+	filter.hovered = i
+	renderFilters()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
 end
 
 -- Animations ---------------------------------------------------------------------
@@ -1400,7 +1700,13 @@ function Initialize()
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
 	V.TypingConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Typing'
-	V.GridY = V.PadY + V.MenuH + V.Gap
+	V.FilterBar = num('FilterBar', 1) ~= 0
+	V.FilterStores = num('FilterStores', 1) ~= 0
+	V.FilterH = num('FilterH', 30)
+	V.FilterSpace = math.max(0, num('FilterSpace', 0)) -- from Grid.inc
+	local info = SKIN:GetVariable('TileInfo', 'Hover'):lower()
+	V.TileInfo = (info == 'always' or info == 'never') and info or 'hover'
+	V.GridY = V.PadY + V.MenuH + V.Gap + V.FilterSpace
 	V.LabelPad = num('LabelPad', 14)
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
 	V.AnimCategory = num('AnimCategory', 1) ~= 0
@@ -1437,7 +1743,7 @@ function Initialize()
 	V.HoverLogoScale = V.AnimLogoZoom and math.max(1, num('HoverLogoScale', 1.25)) or 1
 	-- area available for the grid (each category's tiles fill it)
 	V.AreaW = V.ScreenW - 2 * V.PadX
-	V.AreaH = V.ScreenH - 2 * V.PadY - V.MenuH - V.Gap
+	V.AreaH = V.ScreenH - 2 * V.PadY - V.MenuH - V.Gap - V.FilterSpace
 	writeArea()
 	for _, name in ipairs({ 'TileColor', 'ActiveCategoryColor', 'HoverCategoryColor', 'TextColor',
 			'TextDimColor', 'ScrollTrackColor', 'ScrollThumbColor', 'HoverColor', 'AccentColor' }) do
@@ -1503,6 +1809,7 @@ function Update()
 		if V.AnimOpen and not startHidden then appear = 0 end
 		updateEmptyHint()
 		render(true)
+		if notice.missing > 0 then showNotice() end
 		if showNow then
 			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
 			SKIN:Bang('!Show')
@@ -1565,6 +1872,7 @@ function Show()
 	SKIN:Bang('!Show')
 	hotKey(true)
 	if appear then startTicker() end
+	ReadPlaytime(60)
 end
 
 function Hide()
@@ -1641,15 +1949,18 @@ function AutoScan()
 	SKIN:Bang('!CommandMeasure', 'MeasureScan', 'Run')
 end
 
--- Dot on the gear: an update, or new games or apps found. A click opens the
--- Options window where they are (Info or Import).
-local notice = { found = 0, update = nil }
-local function showNotice()
+-- Dot on the gear: an update, new games or apps found, or tiles of games no
+-- longer installed. A click opens the Options window where they are (Info or
+-- Import).
+showNotice = function()
 	local tip
 	if notice.update then
 		tip = 'Raintile ' .. notice.update .. ' is available: click for details'
 	elseif notice.found > 0 then
 		tip = 'New games or apps found: click to add them'
+	elseif notice.missing > 0 then
+		tip = notice.missing == 1 and '1 game is no longer installed: click to remove or keep its tile'
+			or (notice.missing .. ' games are no longer installed: click to remove or keep their tiles')
 	end
 	if tip then SKIN:Bang('!SetOption', 'MeterNotice', 'ToolTipText', tip) end
 	show('MeterNotice', tip ~= nil)
@@ -1827,7 +2138,44 @@ function OnScan()
 		end
 	end
 	notice.found = new
+	-- tiles of games no longer installed: Missing.txt was written again
+	readMissing()
 	showNotice()
+	base = -1
+	render(false)
+end
+
+-- The Options window removed or kept tiles of games no longer installed
+function OnMissing()
+	if not ready then return end
+	readMissing()
+	showNotice()
+	base = -1
+	render(false)
+end
+
+-- Play time (Playtime.ps1, in the background on load) ------------------------------
+-- On load, and when the launcher opens (minAge: seconds since the last
+-- reading, the play time changes when a game is closed)
+local playtimeRead = nil -- os.time() of the last reading
+function ReadPlaytime(minAge)
+	if not ready or V.TileInfo == 'never' then return end
+	if minAge and playtimeRead and os.time() - playtimeRead < minAge then return end
+	playtimeRead = os.time()
+	for _, c in ipairs(cats) do
+		for _, t in ipairs(c.tiles) do
+			if t.steamId then
+				SKIN:Bang('!CommandMeasure', 'MeasurePlaytime', 'Run')
+				return
+			end
+		end
+	end
+end
+
+function OnPlaytime()
+	readPlaytime()
+	base = -1
+	render(false)
 end
 
 -- The Options window showed the list: nothing is new any more
@@ -1928,7 +2276,9 @@ function Layout()
 	if not ready then return end
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	layoutMenu()
+	layoutFilters()
 	renderCategories()
+	renderFilters()
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	SKIN:Bang('!Redraw')
 end
@@ -2038,6 +2388,12 @@ end
 local function launchTile(t, x, y)
 	if not t or not t.command then
 		dbg('launch ignored: tile without Command')
+		return
+	end
+	if t.missing then
+		-- no longer installed: Options > Import, where it can be removed or kept
+		dbg('launch ignored: ' .. t.name .. ' is no longer installed')
+		SKIN:Bang(SKIN:GetVariable('OptionsImportAction'))
 		return
 	end
 	dbg('launch: ' .. t.command)
@@ -2197,7 +2553,8 @@ local function runSearch(text)
 	local results = {}
 	for _, c in ipairs(cats) do
 		for _, t in ipairs(c.virtual and {} or c.tiles) do
-			local hay = (t.name .. ' ' .. (t.label or '') .. ' ' .. t.catLabel):lower()
+			local hay = (t.name .. ' ' .. (t.label or '') .. ' ' .. t.catLabel .. ' ' .. (t.store or '')
+				.. ' #' .. table.concat(t.tags or {}, ' #')):lower()
 			local ok = true
 			for _, w in ipairs(words) do
 				if not hay:find(w, 1, true) then ok = false break end

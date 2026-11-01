@@ -2926,7 +2926,7 @@ function Set-FoundSeen {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $seenFile) | Out-Null
     [IO.File]::WriteAllLines($seenFile, [string[]]@($ids), $utf8)
     Invoke-Rainmeter "!CommandMeasure MeasureScript `"OnFoundSeen()`" `"$Config`""
-    Update-NavDots
+    Update-NavDots -Reload
 }
 
 # A new category file (Categories\<base>.ini) and its image folders
@@ -3497,7 +3497,10 @@ function New-NavItem([string]$id, [string]$title, [int]$glyph, [int]$level, [has
 # (a newer version), as on the launcher's gear
 function Test-NewFound {
     if (-not (Test-Path -LiteralPath $foundFile)) { return $false }
-    try { $j = [IO.File]::ReadAllText($foundFile) | ConvertFrom-Json } catch { return $false }
+    # ConvertFrom-Json is slow on a long list: only parsed when something is new
+    try { $text = [IO.File]::ReadAllText($foundFile) } catch { return $false }
+    if ($text -notmatch '"New"\s*:\s*true') { return $false }
+    try { $j = $text | ConvertFrom-Json } catch { return $false }
     $seen = Read-Seen
     return [bool](@($j.Items | Where-Object { $_ -and $_.New -and -not $seen.ContainsKey($_.Id) }).Count)
 }
@@ -3507,9 +3510,13 @@ function Test-UpdateAvailable {
     return [bool]($info -and $info.Newer -and -not $info.Error -and $info.Current -eq (Get-InstalledVersion))
 }
 
-function Update-NavDots {
-    $newFound = Test-NewFound
-    $update = Test-UpdateAvailable
+# The files are read again only after a change (-Reload): the menu is rebuilt
+# often (opening a group, a category)
+$script:navDots = $null
+function Update-NavDots([switch]$Reload) {
+    if ($Reload -or -not $script:navDots) { $script:navDots = @{ Found = (Test-NewFound); Update = (Test-UpdateAvailable) } }
+    $newFound = $script:navDots.Found
+    $update = $script:navDots.Update
     $items = @($nav.Items)
     if ($navBottom) { $items += @($navBottom.Items) }
     foreach ($it in $items) {
@@ -3614,7 +3621,7 @@ function Show-UpdateInfo {
     $upd.Install.Visibility = if ($newer) { 'Visible' } else { 'Collapsed' }
     $upd.Install.Content = if ($newer -and $info.Asset) { 'Download and install' } else { 'Open the release page' }
     $upd.Page.Visibility = if ($info -and $info.Page) { 'Visible' } else { 'Collapsed' }
-    Update-NavDots
+    Update-NavDots -Reload
 }
 
 function Invoke-CheckNow {
@@ -3832,7 +3839,6 @@ function Show-NavTarget($tag) {
 # lists has a selection
 $navBottom = $win.FindName('NavBottom')
 [void]$navBottom.Items.Add((New-NavItem 'page:info' 'Info' $schemaById['info'].Icon 0 @{ Type = 'page'; Page = $schemaById['info'] }))
-Update-NavDots
 $navBottom.Add_SelectionChanged({
         if ($script:navBuilding -or -not $navBottom.SelectedItem) { return }
         $script:navBuilding = $true
@@ -3882,10 +3888,16 @@ $win.Add_ContentRendered({
         [void]$win.Activate()
         $win.Topmost = $false
         [void][RaintileOptions.Win32]::SetForegroundWindow((New-Object System.Windows.Interop.WindowInteropHelper($win)).Handle)
-        if ($startClock.IsRunning) {
+        if (-not $script:firstShown) {
+            $script:firstShown = $true
             Add-StartStep 'window shown'
-            $startClock.Stop()
-            try { [IO.File]::WriteAllLines((Join-Path $Resources 'Generated\Options-startup.log'), [string[]]@($startSteps), $utf8) } catch { }
+            # the first page, once the window is on screen (see Show-FirstPage)
+            [void]$win.Dispatcher.BeginInvoke([action] {
+                    try { Show-FirstPage } finally {
+                        $startClock.Stop()
+                        try { [IO.File]::WriteAllLines((Join-Path $Resources 'Generated\Options-startup.log'), [string[]]@($startSteps), $utf8) } catch { }
+                    }
+                }, [System.Windows.Threading.DispatcherPriority]::Background)
         }
     })
 
@@ -3906,29 +3918,35 @@ function Read-EditTile {
     return @{ File = $match.Name; Name = $parts[1].Trim() }
 }
 
+$script:firstShown = $false
 $script:updating = $false
 $editTile = if ($OpenPage -eq 'tile') { Read-EditTile } else { $null }
-if ($OpenPage -eq 'info') {
-    # Info is in the list at the bottom: selecting it shows it
-    Build-Nav ''
-    $navBottom.SelectedIndex = 0
-} elseif ($editTile) {
-    $navOpen['categories'] = $true
-    Build-Nav "cat:$($editTile.File)"
-    if ($nav.SelectedItem) { Show-NavTarget $nav.SelectedItem.Tag }
-    for ($i = 0; $cat.Tiles -and $i -lt $cat.Tiles.Items.Count; $i++) {
-        $sec = $cat.Tiles.Items[$i].Tag.Section
-        if ($sec -and $sec.Name -ieq $editTile.Name) {
-            $cat.Tiles.SelectedIndex = $i
-            $cat.Tiles.ScrollIntoView($cat.Tiles.Items[$i])
-            break
+# The menu is built before the window appears, the page right after: the
+# window shows up sooner and its page fills in a moment later
+if ($OpenPage -eq 'info') { Build-Nav '' }
+elseif ($editTile) { $navOpen['categories'] = $true; Build-Nav "cat:$($editTile.File)" }
+else { Build-Nav $(if ($OpenPage -eq 'import') { 'page:import' } else { 'page:general' }) }
+Add-StartStep 'menu'
+function Show-FirstPage {
+    if ($OpenPage -eq 'info') {
+        # Info is in the list at the bottom: selecting it shows it
+        $navBottom.SelectedIndex = 0
+    } elseif ($editTile) {
+        if ($nav.SelectedItem) { Show-NavTarget $nav.SelectedItem.Tag }
+        for ($i = 0; $cat.Tiles -and $i -lt $cat.Tiles.Items.Count; $i++) {
+            $sec = $cat.Tiles.Items[$i].Tag.Section
+            if ($sec -and $sec.Name -ieq $editTile.Name) {
+                $cat.Tiles.SelectedIndex = $i
+                $cat.Tiles.ScrollIntoView($cat.Tiles.Items[$i])
+                break
+            }
         }
+    } elseif ($nav.SelectedItem) {
+        Show-NavTarget $nav.SelectedItem.Tag
     }
-} else {
-    Build-Nav $(if ($OpenPage -eq 'import') { 'page:import' } else { 'page:general' })
-    Show-NavTarget $nav.SelectedItem.Tag
+    Update-Dirty
+    Add-StartStep 'first page'
 }
 Update-Dirty
-Add-StartStep 'menu and first page'
 [void]$win.ShowDialog()
 $app.Shutdown()

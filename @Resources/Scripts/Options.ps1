@@ -2869,6 +2869,7 @@ function Set-FoundSeen {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $seenFile) | Out-Null
     [IO.File]::WriteAllLines($seenFile, [string[]]@($ids), $utf8)
     Invoke-Rainmeter "!CommandMeasure MeasureScript `"OnFoundSeen()`" `"$Config`""
+    Update-NavDots
 }
 
 # A new category file (Categories\<base>.ini) and its image folders
@@ -3415,12 +3416,51 @@ function New-NavItem([string]$id, [string]$title, [int]$glyph, [int]$level, [has
         Set-Col $ch 2
         [void]$g.Children.Add($ch)
         $item.Add_PreviewMouseLeftButtonDown({ param($s, $e) Switch-NavGroup $s $e })
+    } elseif ($level -eq 0) {
+        # the dot of the gear in the launcher, on the entry it leads to
+        # (Import: new games or apps; Info: an update), see Update-NavDots
+        $dot = New-Object System.Windows.Shapes.Ellipse
+        $dot.Width = 8; $dot.Height = 8
+        $dot.Fill = Res 'AccentBrush'
+        $dot.Margin = T 8 0 0 0
+        $dot.VerticalAlignment = 'Center'
+        $dot.Visibility = 'Collapsed'
+        Set-Col $dot 2
+        [void]$g.Children.Add($dot)
+        $tag.Dot = $dot
     }
     $item.Content = $g
     $tag.Id = $id
     $tag.Title = $t
     $item.Tag = $tag
     return $item
+}
+
+# Dots on Import (games or apps found and not seen in the list yet) and Info
+# (a newer version), as on the launcher's gear
+function Test-NewFound {
+    if (-not (Test-Path -LiteralPath $foundFile)) { return $false }
+    try { $j = [IO.File]::ReadAllText($foundFile) | ConvertFrom-Json } catch { return $false }
+    $seen = Read-Seen
+    return [bool](@($j.Items | Where-Object { $_ -and $_.New -and -not $seen.ContainsKey($_.Id) }).Count)
+}
+
+function Test-UpdateAvailable {
+    $info = Read-UpdateInfo
+    return [bool]($info -and $info.Newer -and -not $info.Error -and $info.Current -eq (Get-InstalledVersion))
+}
+
+function Update-NavDots {
+    $newFound = Test-NewFound
+    $update = Test-UpdateAvailable
+    $items = @($nav.Items)
+    if ($navBottom) { $items += @($navBottom.Items) }
+    foreach ($it in $items) {
+        if (-not $it.Tag.Dot) { continue }
+        $on = ($it.Tag.Id -eq 'page:import' -and $newFound) -or ($it.Tag.Id -eq 'page:info' -and $update)
+        $it.Tag.Dot.Visibility = if ($on) { 'Visible' } else { 'Collapsed' }
+        $it.ToolTip = if (-not $on) { $null } elseif ($update -and $it.Tag.Id -eq 'page:info') { 'A new version of Raintile is available' } else { 'New games or apps found' }
+    }
 }
 
 function Build-Nav([string]$selectId) {
@@ -3451,6 +3491,7 @@ function Build-Nav([string]$selectId) {
             }
         }
         foreach ($it in $nav.Items) { if ($it.Tag.Id -eq $selectId) { $nav.SelectedItem = $it } }
+        Update-NavDots
     } finally { $script:navBuilding = $false }
 }
 
@@ -3516,6 +3557,7 @@ function Show-UpdateInfo {
     $upd.Install.Visibility = if ($newer) { 'Visible' } else { 'Collapsed' }
     $upd.Install.Content = if ($newer -and $info.Asset) { 'Download and install' } else { 'Open the release page' }
     $upd.Page.Visibility = if ($info -and $info.Page) { 'Visible' } else { 'Collapsed' }
+    Update-NavDots
 }
 
 function Invoke-CheckNow {
@@ -3733,6 +3775,7 @@ function Show-NavTarget($tag) {
 # lists has a selection
 $navBottom = $win.FindName('NavBottom')
 [void]$navBottom.Items.Add((New-NavItem 'page:info' 'Info' $schemaById['info'].Icon 0 @{ Type = 'page'; Page = $schemaById['info'] }))
+Update-NavDots
 $navBottom.Add_SelectionChanged({
         if ($script:navBuilding -or -not $navBottom.SelectedItem) { return }
         $script:navBuilding = $true

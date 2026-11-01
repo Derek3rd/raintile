@@ -260,6 +260,12 @@ $schema = @(
                     (Size 'MenuRadius' 'Corner radius' 'H'),
                     (Num 'MenuIconDimAlpha' 'Opacity of inactive icons' 0 255 5)
                 ) }
+            @{ Title = 'Favorites and Recent'; Help = 'Categories made of the tiles of the others, first in the menu.'; Items = @(
+                    (S 'bool' 'ShowFavorites' 'Favorites' 'Right click a tile > Add to Favorites.'),
+                    (S 'bool' 'ShowRecent' 'Recent'),
+                    (S 'choice' 'RecentOrder' 'Recent shows' '' @{ Choices = @(@('Recent', 'Last launched'), @('MostUsed', 'Most used')) }),
+                    (Num 'RecentCount' 'Tiles in Recent' 1 48 1)
+                ) }
             @{ Title = 'Buttons'; Items = @(
                     (Num 'CloseSize' 'Size of the X and gear buttons' 8 40 1)
                 ) }
@@ -439,6 +445,7 @@ $defaults = @{
     Gap = '18'; PadX = '40'; PadY = '24'; IconSize = '96'; LabelPad = '14'; ScrollBarSize = '4'
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
+    ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'
     CloseHotKey = 'ESCAPE'; KeyboardNav = '1'
     NavUp = 'W'; NavUp2 = 'UP'; NavDown = 'S'; NavDown2 = 'DOWN'; NavLeft = 'A'; NavLeft2 = 'LEFT'

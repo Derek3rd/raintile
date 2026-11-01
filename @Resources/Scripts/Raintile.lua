@@ -32,8 +32,10 @@ local ticking = false -- animation clock (ActionTimer) running
 local visible = true  -- launcher shown (Show/Hide)
 local searchCat = nil -- search results, shown instead of the active category
 local query = ''      -- searched text
-local typing = false  -- search text field open (until shortly after it closes)
+local typing = false  -- the search bar is being typed in (Typing mini-skin on)
+local typed = ''      -- text typed so far
 local leaveSearch     -- defined in the Search section
+local stopTyping      -- defined in the Search section
 
 -- Category shown in the grid: the search results or the active one.
 local function cur()
@@ -1397,6 +1399,7 @@ function Initialize()
 	V.SearchW = math.floor(num('SearchW', 320))
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
+	V.TypingConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Typing'
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.LabelPad = num('LabelPad', 14)
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
@@ -1568,6 +1571,7 @@ function Hide()
 	dbg('Hide: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
 	if not ready or not visible then return end
 	visible = false
+	stopTyping()
 	stopTicker()
 	leaveSearch() -- next time it opens on the category
 	pos = offset -- a half-done scroll restarts already finished
@@ -1931,6 +1935,7 @@ end
 
 function SetCategory(i)
 	if not ready or launching or i < 1 or i > #cats then return end
+	stopTyping()
 	if leaveSearch() and i == active then
 		-- click on the category the search started from: go back there
 		if V.AnimCategory then appear = 0 startTicker() end
@@ -2142,20 +2147,24 @@ function NextCategory(delta)
 end
 
 -- Search -----------------------------------------------------------------------
--- The bar at the top left (or the NavSearch key) opens a text field (InputText
--- plugin). On Enter the grid shows the tiles of every category that contain
--- all the searched words (tile name, label or category); Esc, a click on a
--- category or an empty search go back to the category. While typing, the
--- navigation and Esc keys are off, and they come back shortly after
--- (MeasureKeysDelay) so the Enter release is not picked up.
+-- A click on the bar at the top left (or the NavSearch key) starts typing: the
+-- Raintile\Typing mini-skin takes the letters, digits, space, Backspace,
+-- Enter and Esc (TypeKey), and the grid shows, at every key, the tiles of
+-- every category that contain all the typed words (tile name, label or
+-- category). Enter stops typing and keeps the results (the first one is
+-- highlighted: Space/Enter launches it); Esc, a click on a category or an
+-- empty search go back to the category. While typing, the navigation and Esc
+-- keys are off; they come back shortly after (MeasureKeysDelay), so the
+-- release of Enter is not picked up.
 
 local function updateSearchBar()
-	set('SearchText', 'Text', query ~= '' and query or V.SearchPlaceholder)
-	set('SearchText', 'FontColor', query ~= '' and V.TextColor or V.TextDimColor)
+	local text = typing and (typed .. '|') or query
+	set('SearchText', 'Text', text ~= '' and text or V.SearchPlaceholder)
+	set('SearchText', 'FontColor', text ~= '' and V.TextColor or V.TextDimColor)
 	set('SearchPill', 'Shape', string.format(
 		'Rectangle 0,0,%d,%d,%d | Fill Color %s | StrokeWidth 0', V.SearchW, V.MenuH,
 		math.min(V.MenuRadius, math.floor(V.MenuH / 2)),
-		searchCat and V.ActiveCategoryColor or V.HoverCategoryColor))
+		(searchCat or typing) and V.ActiveCategoryColor or V.HoverCategoryColor))
 end
 
 -- Goes back from the search to the active category (without redrawing).
@@ -2178,9 +2187,10 @@ local function runSearch(text)
 	for w in trim(text or ''):lower():gmatch('%S+') do words[#words + 1] = w end
 	if #words == 0 then
 		if leaveSearch() then
-			if V.AnimCategory then appear = 0 startTicker() end
+			if V.AnimCategory and not typing then appear = 0 startTicker() end
 			render(true)
 		end
+		updateSearchBar()
 		return
 	end
 
@@ -2215,7 +2225,7 @@ local function runSearch(text)
 	zooming = {}
 	updateSearchBar()
 	updateEmptyHint()
-	if V.AnimCategory then
+	if V.AnimCategory and not typing then
 		appear = 0
 		startTicker()
 	end
@@ -2225,45 +2235,73 @@ local function runSearch(text)
 end
 
 function SearchOpen()
-	if not ready or launching or not visible then return end
+	if not ready or launching or not visible or typing then return end
 	typing = true
-	hotKey(false) -- the keys are needed by the text field
-	SKIN:Bang('!SetOption', 'MeasureSearchInput', 'DefaultValue', query)
-	SKIN:Bang('!UpdateMeasure', 'MeasureSearchInput')
-	SKIN:Bang('!CommandMeasure', 'MeasureSearchInput', 'ExecuteBatch 1')
+	typed = query
+	hotKey(false) -- the letters (WASD, Q, E, F...) are typed now
+	SKIN:Bang('!ActivateConfig', V.TypingConfig, 'Typing.ini')
+	updateSearchBar()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
 end
 
-function SearchSubmit(text)
-	dbg('search: ' .. tostring(text))
-	if ready and visible then runSearch(text) end
-	SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1')
+-- Stops typing; the other keys come back shortly after (KeysReady)
+stopTyping = function()
+	if not typing then return end
+	typing = false
+	SKIN:Bang('!DeactivateConfig', V.TypingConfig)
+	updateSearchBar()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
+	if visible then SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1') end
 end
 
-function SearchDismiss()
-	SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1')
+-- A key from the Typing mini-skin: a character, or BACK, ENTER, ESC
+function TypeKey(key)
+	if not ready or not visible or not typing then return end
+	if key == 'ENTER' then
+		stopTyping()
+		return
+	elseif key == 'ESC' then
+		typed = ''
+		stopTyping()
+		if leaveSearch() then
+			if V.AnimCategory then appear = 0 startTicker() end
+			render(true)
+		end
+		return
+	elseif key == 'BACK' then
+		typed = typed:sub(1, -2)
+	elseif #typed < 60 then
+		typed = typed .. key
+	end
+	dbg('search: ' .. typed)
+	runSearch(typed)
+	updateSearchBar()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
 end
 
 -- Turns the keys back on after the search (called by MeasureKeysDelay).
 function KeysReady()
-	typing = false
-	if ready and visible then hotKey(true) end
+	if ready and visible and not typing then hotKey(true) end
 end
 
 -- The launcher lost focus (from Helper.ps1, AutoHide=1). Ignored during the
 -- launch animation: the game window, or its launcher's, popping up must not
--- interrupt it. Also ignored around the search: when the text field closes,
--- Windows hands the foreground back to the program that had it before.
+-- interrupt it.
 function FocusLost()
-	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil)
-		.. ' typing=' .. tostring(typing))
-	if not ready or not visible or launching or typing then return end
+	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
+	if not ready or not visible or launching then return end
 	Hide()
 end
 
 -- Esc: closes the search if open, otherwise hides the launcher.
 function Escape()
 	if not ready then return end
-	if searchCat and not launching then
+	if typing then
+		TypeKey('ESC')
+	elseif searchCat and not launching then
 		leaveSearch()
 		if V.AnimCategory then appear = 0 startTicker() end
 		render(true)

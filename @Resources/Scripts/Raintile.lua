@@ -793,7 +793,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 7
+local GRID_VERSION = 8
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much

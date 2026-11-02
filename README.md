@@ -25,7 +25,7 @@ Your games, apps, links and system tools become large tiles with background art 
 - Windows 10 or 11
 - [Rainmeter](https://www.rainmeter.net/) **4.5** or later
 - The **HotKey** plugin, for the open shortcut, Esc and keyboard navigation ([HotKey.dll](https://github.com/brianferguson/HotKey.dll))
-- Windows PowerShell 5.1 (included in Windows), used for thumbnails, the search of games and apps, the gamepad helper and the Options window
+- Windows PowerShell 5.1 and .NET Framework 4.8 (both included in Windows 10/11), used for thumbnails, the search of games and apps, the gamepad helper and the Options window
 
 ## Installation
 

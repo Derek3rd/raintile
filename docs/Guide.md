@@ -275,7 +275,7 @@ Reported tiles are **greyed out** in the launcher, say **Not installed** and do 
 
 ## Options window
 
-The **gear** next to the X, or right click > **Options...**, opens the Options window (`Scripts\Options.ps1`, WPF; its look is in `Scripts\Options.xaml`). Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
+The **gear** next to the X, or right click > **Options...**, opens the Options window: the program `Bin\RaintileOptions.exe` (C#, WPF, .NET Framework 4.8, included in Windows 10/11), in the packages of the releases; a copy of the repository without it opens the same window from `Scripts\Options.ps1` with PowerShell, a little slower. Both look the same: their look is in `Scripts\Options.xaml`. Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
 
 The sections are in the menu on the left; **Keybindings** and **Categories** open into sub-entries (click them again to close them):
 
@@ -551,7 +551,8 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Scripts/Scan.ps1           search of the installed games and apps, and of the tiles no longer installed
   Scripts/Playtime.ps1       play time of the Steam games
   Scripts/Helper.ps1         gamepad and focus-loss helper
-  Scripts/Options.ps1        Options window
+  Bin/RaintileOptions.exe    Options window (built from src/Options by the release workflow)
+  Scripts/Options.ps1        Options window with PowerShell, when the program is missing
   Scripts/Options.xaml       look of the Options window
   Generated/Grid.inc         generated meters
   Generated/Sizes.inc        percentage sizes and #hex colours converted for Rainmeter
@@ -573,8 +574,8 @@ The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your da
 - **Esc, keyboard navigation or the gamepad don't work after an update**: in Rainmeter use **Refresh all** (not just *Refresh skin*) so it sees new or renamed mini-skins and scripts. Check that the HotKey plugin is installed.
 - **A category icon doesn't show**: the icon goes in `Images\<file name>\icon.png` — the folder is named after the category *file* (`Games`), not its menu label. The log shows exactly where it looked (`Raintile: no icon for category ...`).
 - **A tile image doesn't show**: check the file name matches the tile name (or its `Image`/`Background`/`Logo` key); explicit names that are not found are logged.
-- **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. It needs Windows PowerShell 5.1 (included in Windows 10/11).
-- **The Options window is slow to open**: the first time (and after an update) it prepares a small helper, `Generated\RaintileOptions-*.dll`, so later openings are faster. `Generated\Options-startup.log` lists how long each step of the last opening took.
+- **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. The program needs .NET Framework 4.8 (included in Windows 10/11); if it does not start, delete `@Resources\Bin\` in the skin folder and the window opens with PowerShell instead.
+- **The Options window is slow to open**: `Generated\Options-startup.log` lists how long each step of the last opening took. The PowerShell version (without `Bin\RaintileOptions.exe`) is slower, and the first time it prepares a small helper, `Generated\RaintileOptions-*.dll`.
 - **Your categories are gone after an update**: they are copied from `Skins\@Backup\Raintile\@Resources\` the first time the new version loads; if the backup option was turned off in the installer, copy `Categories\` and `Images\` from your old copy into the data folder by hand.
 - **The update check fails**: Options > Info shows the error (no connection, GitHub not reachable). It is retried on the next load after a day, or with *Check now*.
 - **Added games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey` before adding them. With `DebugLog=1` the search writes what it found per store to the log (`Raintile: scan:` lines).

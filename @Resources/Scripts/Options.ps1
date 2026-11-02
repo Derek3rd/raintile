@@ -1,5 +1,10 @@
 # Raintile: Options window (settings and categories).
 #
+# The skin opens the native program Bin\RaintileOptions.exe (src/Options, a
+# C# port of this script) when it is there; this script is the fallback and
+# the library of TileAction.ps1. Its $schema is also the program's: after a
+# change run tools/gen_options_schema.py.
+#
 # Opened from the gear button or the right-click menu. A WPF window (look in
 # Options.xaml) with a menu on the left ($navTree: sections, some with
 # sub-entries):

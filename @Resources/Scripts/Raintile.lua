@@ -2061,6 +2061,28 @@ function OpenNotice()
 	SKIN:Bang(SKIN:GetVariable(notice.update and 'OptionsInfoAction' or 'OptionsImportAction'))
 end
 
+-- Options window: the native program (@Resources\Bin\RaintileOptions.exe,
+-- in the packages of the releases) when it is there, otherwise
+-- Scripts\Options.ps1 with PowerShell (a copy of the repository has no
+-- program). page: '', 'import', 'tile' or 'info'. The launcher hides first.
+function OpenOptions(page)
+	Hide()
+	page = page or ''
+	-- "<dir>\." keeps the trailing backslash from escaping the closing quote
+	local args = string.format(' -Resources "%s." -Data "%sRaintile" -Config "%s"', resources,
+		SKIN:ReplaceVariables('#SETTINGSPATH#'), SKIN:ReplaceVariables('#ROOTCONFIG#'))
+	if page ~= '' then args = args .. ' -Page ' .. page end
+	local exe = resources .. 'Bin\\RaintileOptions.exe'
+	if fileExists(exe) then
+		dbg('options: ' .. exe)
+		SKIN:Bang('["' .. exe .. '"' .. args .. ']')
+	else
+		-- conhost --headless starts PowerShell without any console window
+		SKIN:Bang('["conhost.exe" --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File "'
+			.. resources .. 'Scripts\\Options.ps1"' .. args .. ']')
+	end
+end
+
 -- Context menu > Edit this tile: the Options window opens on the tile the
 -- menu was opened on. Any right-click action on a meter (press or release)
 -- would replace Rainmeter's menu, so the tile is the one under the mouse:

@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Raintile Options window as a native program (WPF, .NET Framework 4.8,
+    included in Windows 10/11). Built by .github/workflows/release.yml and
+    shipped in @Resources\Bin\RaintileOptions.exe; the skin falls back to
+    Scripts\Options.ps1 when the program is missing.
+
+    No compiled XAML: the styles are read at run time from
+    @Resources\Scripts\Options.xaml (the same file the PowerShell window
+    uses), so it builds on Linux too.
+
+      dotnet build src/Options -c Release -o build/options
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <AssemblyName>RaintileOptions</AssemblyName>
+    <RootNamespace>RaintileOptions</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Product>Raintile</Product>
+    <AssemblyTitle>Raintile Options</AssemblyTitle>
+    <Copyright>Derek3rd</Copyright>
+    <Nullable>disable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- 64-bit on 64-bit Windows, as Rainmeter: Program Files and its process are found -->
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="System.Security" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="Microsoft.VisualBasic" />
+  </ItemGroup>
+</Project>

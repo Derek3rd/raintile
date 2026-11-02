@@ -13,6 +13,14 @@
 # in the list (Seen.txt in the data folder, written by the Options window).
 # The last output line, read by the skin, is RESULT:NEW=<number of new items>.
 #
+# Tiles of games no longer installed: a tile whose command points to a game of
+# a store that was searched (Steam, Epic, GOG, Ubisoft, Store apps) and is not
+# there any more, or to a program file that no longer exists, is listed in
+# Generated\Missing.txt ("<category file>|<tile name>"); the launcher shows it
+# greyed out and the Options window (Import) offers to remove or keep it. Kept
+# tiles (KeepMissing.txt in the data folder) are not listed again. Output line
+# RESULT:MISSING=<number>.
+#
 # With -NoRun only the functions are loaded (Options window, tests).
 
 param(
@@ -35,6 +43,8 @@ $Data = if ($Data) { [IO.Path]::GetFullPath($Data).TrimEnd('\', '/') } else { $R
 $generated = Join-Path $Resources 'Generated'
 $foundFile = Join-Path $generated 'Found.json'
 $seenFile = Join-Path $Data 'Seen.txt'
+$missingFile = Join-Path $generated 'Missing.txt'
+$keepMissingFile = Join-Path $Data 'KeepMissing.txt'
 $iconDir = Join-Path $generated 'Found'
 
 function Get-RegValue($path, $name) {
@@ -81,6 +91,14 @@ function Get-UninstallEntries {
 # --- Items -----------------------------------------------------------------------
 
 $items = New-Object System.Collections.ArrayList
+# Everything installed, per store (also what the list leaves out, like
+# SteamVR or DLC): store -> id -> $true. Only stores searched and found are
+# in it: their tiles can be checked (see Get-MissingTiles).
+$installed = @{}
+function Add-Installed([string]$store, [string]$id) {
+    if (-not $installed.ContainsKey($store)) { $installed[$store] = @{} }
+    if ($id) { $installed[$store][$id.ToLowerInvariant()] = $true }
+}
 $gameDirs = New-Object System.Collections.ArrayList   # install folders: their shortcuts are not apps
 $gameNames = @{}
 
@@ -104,10 +122,17 @@ function Read-Steam {
     $libraries = @($root)
     $vdf = Join-Path $root 'steamapps\libraryfolders.vdf'
     if (Test-Path -LiteralPath $vdf) {
-        foreach ($m in [regex]::Matches((Get-Content -LiteralPath $vdf -Raw -Encoding UTF8), '"path"\s+"([^"]+)"')) {
+        $vdfText = Get-Content -LiteralPath $vdf -Raw -Encoding UTF8
+        foreach ($m in [regex]::Matches($vdfText, '"path"\s+"([^"]+)"')) {
             $libraries += $m.Groups[1].Value -replace '\\\\', '\'
         }
+        # games of a library on a drive that is not connected: still installed
+        foreach ($m in [regex]::Matches($vdfText, '(?s)"path"\s+"([^"]+)".*?"apps"\s*\{([^}]*)\}')) {
+            if (Test-Path -LiteralPath ($m.Groups[1].Value -replace '\\\\', '\')) { continue }
+            foreach ($a in [regex]::Matches($m.Groups[2].Value, '"(\d+)"')) { Add-Installed 'Steam' $a.Groups[1].Value }
+        }
     }
+    Add-Installed 'Steam' ''
     $cache = Join-Path $root 'appcache\librarycache'
     $skip = 'Steamworks Common Redistributables|Steam Linux Runtime|^Proton |Steam Controller Configs|SteamVR'
     $seen = @{}
@@ -120,6 +145,7 @@ function Read-Steam {
             $text = Get-Content -LiteralPath $acf.FullName -Raw -Encoding UTF8
             $appid = [regex]::Match($text, '"appid"\s+"(\d+)"').Groups[1].Value
             $name = [regex]::Match($text, '"name"\s+"([^"]+)"').Groups[1].Value
+            Add-Installed 'Steam' $appid
             if (-not $appid -or -not $name -or $seen[$appid] -or $name -match $skip) { continue }
             $seen[$appid] = $true
 
@@ -150,8 +176,10 @@ function Read-Epic {
     if (-not $dir) { $dir = Join-Path $env:ProgramData 'Epic\EpicGamesLauncher\Data\Manifests' }
     if (-not $dir -or -not (Test-Path -LiteralPath $dir)) { return 'not installed' }
     $count = 0
+    Add-Installed 'Epic' ''
     foreach ($item in Get-ChildItem -LiteralPath $dir -Filter '*.item' -File) {
         try { $m = Get-Content -LiteralPath $item.FullName -Raw -Encoding UTF8 | ConvertFrom-Json } catch { continue }
+        Add-Installed 'Epic' "$($m.AppName)"
         if (-not $m.DisplayName -or -not $m.AppName) { continue }
         # main games only (no DLC, no applications)
         if ($m.AppCategories -and ($m.AppCategories -notcontains 'games')) { continue }
@@ -174,8 +202,11 @@ function Read-GOG {
     if (-not (Test-Path $key)) { return 'not installed' }
     $client = Get-RegValue 'HKLM:\SOFTWARE\WOW6432Node\GOG.com\GalaxyClient\paths' 'client'
     $count = 0
+    Add-Installed 'GOG' ''
     foreach ($g in Get-ChildItem $key) {
         $p = Get-ItemProperty $g.PSPath
+        Add-Installed 'GOG' "$($p.gameID)"
+        Add-Installed 'GOG' $g.PSChildName
         if (-not $p.gameName -or ($p.dependsOn -and "$($p.dependsOn)".Trim())) { continue }
         if ($client) {
             $exe = Join-Path $client 'GalaxyClient.exe'
@@ -194,9 +225,11 @@ function Read-Ubisoft {
     $key = 'HKLM:\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs'
     if (-not (Test-Path $key)) { return 'not installed' }
     $count = 0
+    Add-Installed 'Ubisoft' ''
     foreach ($g in Get-ChildItem $key) {
         $dir = Get-RegValue $g.PSPath 'InstallDir'
         if (-not $dir) { continue }
+        Add-Installed 'Ubisoft' $g.PSChildName
         [void]$gameDirs.Add($dir)
         $name = Split-Path ($dir.TrimEnd('\', '/')) -Leaf
         Add-Item 'game' 'Ubisoft' $g.PSChildName $name "uplay://launch/$($g.PSChildName)/0"
@@ -267,6 +300,10 @@ function Get-StartEntries {
     if ($null -eq $script:startApps) {
         $script:startApps = @()
         try { $script:startApps = @(Get-StartApps) } catch { }
+        if ($script:startApps.Count) {
+            Add-Installed 'AppsFolder' ''
+            foreach ($a in $script:startApps) { Add-Installed 'AppsFolder' "$($a.AppID)" }
+        }
     }
     return $script:startApps
 }
@@ -452,6 +489,69 @@ function Read-Seen {
     return $seen
 }
 
+# --- Tiles of games no longer installed ----------------------------------------------
+
+# 'missing', 'present' or '' (cannot tell) for a tile's command
+function Test-CommandMissing([string]$command) {
+    $c = $command.Trim()
+    if (-not $c -or $c.Contains('#') -or $c.StartsWith('[')) { return '' }   # Rainmeter variables, bangs
+    $store = ''; $id = ''
+    if ($c -match '(?i)^steam://(?:rungameid|run|launch)/(\d+)') {
+        # non-Steam shortcuts added to Steam have 64-bit ids: not checked
+        if ($Matches[1].Length -le 10 -and [int64]$Matches[1] -le [uint32]::MaxValue) { $store = 'Steam'; $id = $Matches[1] }
+    } elseif ($c -match '(?i)^com\.epicgames\.launcher://apps/([^?]+)') {
+        $store = 'Epic'; $id = ([uri]::UnescapeDataString($Matches[1]).Split(':') | Select-Object -Last 1)
+    } elseif ($c -match '(?i)GalaxyClient\.exe.*?/gameId=(\d+)') {
+        $store = 'GOG'; $id = $Matches[1]
+    } elseif ($c -match '(?i)^uplay://launch/(\d+)') {
+        $store = 'Ubisoft'; $id = $Matches[1]
+    } elseif ($c -match '(?i)shell:AppsFolder\\([^"\s]+)') {
+        $store = 'AppsFolder'; $id = $Matches[1]
+    }
+    if ($store) {
+        if (-not $installed.ContainsKey($store)) { return '' }   # store not searched or not found
+        if ($installed[$store].ContainsKey($id.ToLowerInvariant())) { return 'present' }
+        return 'missing'
+    }
+    # a program file: "C:\x\game.exe" -args or C:\x\game.exe -args
+    if ($c -match '^"([^"]+)"') { $path = $Matches[1] } elseif ($c -match '^(\S+)') { $path = $Matches[1] } else { return '' }
+    $path = [Environment]::ExpandEnvironmentVariables($path)
+    if ($path -notmatch '^[A-Za-z]:\\.+\.(exe|lnk|bat|cmd|url)$') { return '' }
+    # a drive that is not connected (USB, network): cannot tell
+    if (-not (Test-Path -LiteralPath ($path.Substring(0, 3)))) { return '' }
+    if (Test-Path -LiteralPath $path) { return 'present' }
+    return 'missing'
+}
+
+function Read-KeepMissing {
+    $keep = @{}
+    if (Test-Path -LiteralPath $keepMissingFile) {
+        foreach ($l in [IO.File]::ReadAllLines($keepMissingFile, $utf8)) { if ($l) { $keep[$l.ToLowerInvariant()] = $true } }
+    }
+    return $keep
+}
+
+# Tiles of games no longer installed, not kept: "<file>|<tile name>"
+function Get-MissingTiles {
+    $keep = Read-KeepMissing
+    $list = New-Object System.Collections.ArrayList
+    foreach ($f in @(Get-ChildItem -LiteralPath (Join-Path $Data 'Categories') -Filter '*.ini' -File -ErrorAction SilentlyContinue | Sort-Object Name)) {
+        $section = $null
+        foreach ($line in [IO.File]::ReadAllLines($f.FullName)) {
+            $t = $line.Trim()
+            if ($t -match '^\[(.+)\]$') {
+                $section = $Matches[1].Trim()
+                if ($section -ieq 'Category') { $section = $null }
+            } elseif ($section -and $t -match '^(?i)command\s*=\s*(.+)$') {
+                $id = "$($f.Name)|$section"
+                if (-not $keep.ContainsKey($id.ToLowerInvariant()) -and (Test-CommandMissing $Matches[1]) -eq 'missing') { [void]$list.Add($id) }
+                $section = $null   # the first Command= counts
+            }
+        }
+    }
+    return $list
+}
+
 # --- SteamGridDB (used by the Options window when adding) ---------------------------
 
 function Invoke-SGDB([string]$key, [string]$path) {
@@ -508,7 +608,16 @@ $tmp = "$foundFile.tmp"
 [IO.File]::WriteAllText($tmp, $json, $utf8)
 Move-Item -LiteralPath $tmp -Destination $foundFile -Force
 
+# Tiles of games no longer installed
+$missing = @()
+try {
+    [void](Get-StartEntries)   # Store apps, also when Xbox and Apps were not searched
+    $missing = @(Get-MissingTiles)
+    [IO.File]::WriteAllLines($missingFile, [string[]]$missing, $utf8)
+} catch { $summary += "Missing tiles: error ($($_.Exception.Message))" }
+
 foreach ($s in $summary) { Write-Output $s }
-Write-Output "$($items.Count) found, $new new"
+Write-Output "$($items.Count) found, $new new, $($missing.Count) tiles no longer installed"
+Write-Output "RESULT:MISSING=$($missing.Count)"
 # last line, read by the skin
 Write-Output "RESULT:NEW=$new"

@@ -1,6 +1,8 @@
-# Builds the .rmskin package (tools/build_rmskin.py) and attaches it to the
-# release when a release is published. Run by hand (Actions > Release
-# package > Run workflow) it only builds it, as a downloadable artifact.
+# Builds the Options program (src/Options, RaintileOptions.exe) and the
+# .rmskin package with it (tools/build_rmskin.py), and attaches the package to
+# the release when a release is published. On a pull request, or run by hand
+# (Actions > Release package > Run workflow), it only builds them, as a
+# downloadable artifact to test.
 #
 # The release tag should be the version, e.g. v1.0.3, the same as Version= in
 # Raintile.ini: if they differ the build stops, before attaching anything.
@@ -10,6 +12,7 @@ name: Release package
 on:
   release:
     types: [published]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -20,6 +23,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # the pages of the window are written in Scripts/Options.ps1: the
+      # program's copy (SchemaData.cs) must match it
+      - name: Check the Options schema
+        run: python3 tools/gen_options_schema.py --check
+
+      - name: Build the Options program
+        run: |
+          dotnet build src/Options/RaintileOptions.csproj -c Release -o build/options
+          mkdir -p @Resources/Bin
+          cp build/options/RaintileOptions.exe @Resources/Bin/
 
       - name: Build the .rmskin
         env:

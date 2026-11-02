@@ -1,5 +1,10 @@
 # Raintile: Options window (settings and categories).
 #
+# The skin opens the native program Bin\RaintileOptions.exe (src/Options, a
+# C# port of this script) when it is there; this script is the fallback and
+# the library of TileAction.ps1. Its $schema is also the program's: after a
+# change run tools/gen_options_schema.py.
+#
 # Opened from the gear button or the right-click menu. A WPF window (look in
 # Options.xaml) with a menu on the left ($navTree: sections, some with
 # sub-entries):
@@ -260,11 +265,19 @@ $schema = @(
                     (Size 'MenuRadius' 'Corner radius' 'H'),
                     (Num 'MenuIconDimAlpha' 'Opacity of inactive icons' 0 255 5)
                 ) }
-            @{ Title = 'Favorites and Recent'; Help = 'Categories made of the tiles of the others, first in the menu.'; Items = @(
+            @{ Title = 'Favorites and Recent'; Help = 'Categories made of the tiles of the others: the two icon buttons right of the search bar.'; Items = @(
                     (S 'bool' 'ShowFavorites' 'Favorites' 'Right click a tile > Add to Favorites.'),
                     (S 'bool' 'ShowRecent' 'Recent'),
                     (S 'choice' 'RecentOrder' 'Recent shows' '' @{ Choices = @(@('Recent', 'Last launched'), @('MostUsed', 'Most used')) }),
                     (Num 'RecentCount' 'Tiles in Recent' 1 48 1)
+                ) }
+            @{ Title = 'Filter bar'; Help = 'Chips above the search results, one per tag (Tags of the tiles) and per store: a click shows only the results that have it.'; Items = @(
+                    (S 'bool' 'FilterBar' 'Filter bar'),
+                    (S 'bool' 'FilterStores' 'A chip per store' 'Only when the tiles come from at least two stores.'),
+                    (Size 'FilterH' 'Chip height' 'H'),
+                    (Size 'FilterGap' 'Space between chips' 'W'),
+                    (Size 'FilterPad' 'Chip padding' 'W'),
+                    (Num 'FilterFontSize' 'Font size' 6 30 1 'pt')
                 ) }
             @{ Title = 'Buttons'; Items = @(
                     (Num 'CloseSize' 'Size of the X and gear buttons' 8 40 1)
@@ -278,7 +291,10 @@ $schema = @(
                     (S 'font' 'FontFace' 'Font'),
                     (Num 'MenuFontSize' 'Menu font size' 6 40 1 'pt'),
                     (Num 'LabelFontSize' 'Label font size' 6 40 1 'pt'),
-                    (S 'bool' 'ShowLabels' 'Show tile labels')
+                    (S 'bool' 'ShowLabels' 'Show tile labels'),
+                    (S 'choice' 'TileInfo' 'Play time and last launch' 'A line at the top left of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.' @{ Choices = @(
+                                @('Hover', 'On the highlighted tile'), @('Always', 'Always'), @('Never', 'Never')) }),
+                    (Num 'InfoFontSize' 'Play time font size' 6 30 1 'pt')
                 ) }
             @{ Title = 'Tiles'; Items = @(
                     (S 'color' 'TileColor' 'Default tile colour'),
@@ -395,7 +411,7 @@ $schema = @(
             @{ Found = $true; Items = @() }
             @{ Title = 'Search'; Items = @(
                     (S 'stores' 'ImportStores' 'Where to look'),
-                    (S 'bool' 'ScanOnStart' 'Look for new ones on start' 'In the background, each time the skin loads: new games or apps light a dot on the gear.'),
+                    (S 'bool' 'ScanOnStart' 'Look for new ones on start' 'In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear.'),
                     (S 'category' 'ImportCategory' 'Category for games'),
                     (S 'category' 'AppsCategory' 'Category for apps'),
                     (S 'secret' 'SteamGridDBKey' 'SteamGridDB API key' 'Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded. Saved encrypted: only your Windows user on this PC can read it.')
@@ -446,6 +462,8 @@ $defaults = @{
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'
+    FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
+    TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'
     CloseHotKey = 'ESCAPE'; KeyboardNav = '1'
     NavUp = 'W'; NavUp2 = 'UP'; NavDown = 'S'; NavDown2 = 'DOWN'; NavLeft = 'A'; NavLeft2 = 'LEFT'
@@ -758,7 +776,32 @@ if ($NoGui) { return }
 #  User interface (WPF)
 # ==============================================================================
 
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing, Microsoft.VisualBasic
+# Time spent opening the window, written to Generated\Options-startup.log
+# (to find what makes it slow on a given PC)
+$startClock = [Diagnostics.Stopwatch]::StartNew()
+$startSteps = New-Object System.Collections.ArrayList
+function Add-StartStep([string]$name) { [void]$startSteps.Add(('{0,6} ms  {1}' -f $startClock.ElapsedMilliseconds, $name)) }
+# before this script: start of powershell.exe (and conhost) and its parsing
+try { $startLead = [int]([DateTime]::Now - [Diagnostics.Process]::GetCurrentProcess().StartTime).TotalMilliseconds } catch { $startLead = -1 }
+[void]$startSteps.Add(('{0,6} ms  powershell started, script read and its functions defined (before the first step)' -f $startLead))
+Add-StartStep 'script loaded'
+
+# WinForms, System.Drawing and VisualBasic only serve the color picker and the
+# Recycle Bin: loaded the first time they are needed
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+$script:lazyAssemblies = @{}
+function Use-Assembly([string[]]$names) {
+    foreach ($n in $names) {
+        if ($script:lazyAssemblies[$n]) { continue }
+        Add-Type -AssemblyName $n
+        $script:lazyAssemblies[$n] = $true
+    }
+}
+function Remove-ToRecycleBin([string]$path) {
+    Use-Assembly 'Microsoft.VisualBasic'
+    [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($path, 'OnlyErrorDialogs', 'SendToRecycleBin')
+}
+Add-StartStep 'WPF loaded'
 
 function Write-ErrorLog([string]$msg) {
     try { [IO.File]::WriteAllText((Join-Path $Resources 'Generated\Options.log'), $msg, $utf8) } catch { }
@@ -773,13 +816,41 @@ trap {
     exit 1
 }
 
-Add-Type -Namespace RaintileOptions -Name Win32 -MemberDefinition @'
+$win32Source = @'
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
 [DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hWnd);
 [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hdc);
 [DllImport("gdi32.dll")] public static extern int GetDeviceCaps(IntPtr hdc, int index);
 '@
+
+# Add-Type compiles C# with csc.exe at every start, which can take seconds
+# (an antivirus checks the compiler and its output). It is compiled once into
+# Generated\RaintileOptions-<hash>.dll and then just loaded; the hash of the
+# source makes a changed source compile again. On any error: compiled in
+# memory, as before.
+function Import-Win32Helper {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $hash = -join ($sha.ComputeHash($utf8.GetBytes($win32Source))[0..5] | ForEach-Object { $_.ToString('x2') })
+    $dll = Join-Path $Resources "Generated\RaintileOptions-$hash.dll"
+    try {
+        if (-not (Test-Path -LiteralPath $dll)) {
+            # older versions of the helper
+            Get-ChildItem -LiteralPath (Join-Path $Resources 'Generated') -Filter 'RaintileOptions-*.dll' -ErrorAction SilentlyContinue |
+                Remove-Item -Force -ErrorAction SilentlyContinue
+            Add-Type -Namespace RaintileOptions -Name Win32 -MemberDefinition $win32Source -OutputAssembly $dll -OutputType Library
+        }
+        if (-not ('RaintileOptions.Win32' -as [type])) { [void][Reflection.Assembly]::LoadFrom($dll) }
+    } catch {
+        # a damaged file would be tried at every start: compiled again next time
+        Remove-Item -LiteralPath $dll -Force -ErrorAction SilentlyContinue
+    }
+    if (-not ('RaintileOptions.Win32' -as [type])) {
+        Add-Type -Namespace RaintileOptions -Name Win32 -MemberDefinition $win32Source
+    }
+}
+Import-Win32Helper
+Add-StartStep 'Win32 helper'
 
 # Dark title bar (Windows 10 2004+ / 11)
 function Set-DarkTitle($window) {
@@ -800,6 +871,7 @@ function Get-ScreenPixels {
 $app = New-Object System.Windows.Application
 $app.ShutdownMode = 'OnExplicitShutdown'
 $app.Resources = [System.Windows.Markup.XamlReader]::Parse([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Options.xaml')))
+Add-StartStep 'styles (Options.xaml)'
 # An error in an event handler: shown and logged, the window stays open
 $app.Add_DispatcherUnhandledException({
         param($s, $e)
@@ -906,6 +978,7 @@ $imageFilter = 'Images|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.ico|All files|*.*'
 
 # Windows colour picker; returns the colour in the format of 'old', or $null
 function Select-Color([string]$old) {
+    Use-Assembly 'System.Windows.Forms', 'System.Drawing'
     $dlg = New-Object System.Windows.Forms.ColorDialog
     $dlg.FullOpen = $true
     $v = ConvertFrom-ColorText $old
@@ -1046,6 +1119,7 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
 </Window>
 '@)
 $win.FindName('Version').Text = $version
+Add-StartStep 'window'
 $nav = $win.FindName('Nav')
 $pageHost = $win.FindName('PageHost')
 $pageTitle = $win.FindName('PageTitle')
@@ -1076,10 +1150,12 @@ $script:updating = $true
 $script:capturing = $null
 $script:dirtySettings = $false
 $screenPx = Get-ScreenPixels
+Add-StartStep 'settings read'
 
 $models = @{}       # category file -> model (loaded when needed)
 $changedFiles = @{} # modified category files
 $logoColors = Read-LogoColors
+Add-StartStep '  logo colors'
 
 function Update-Dirty {
     $changed = @($values.Keys | Where-Object { $values[$_] -ne $fileValues[$_] })
@@ -1684,7 +1760,9 @@ function New-SettingsPage($page) {
         $card = New-Card $group.Title $group.Help
         $rows = 0
         if ($group.Found) {
-            # list of the games and apps found (its own card)
+            # tiles of games no longer installed, then the list of the games
+            # and apps found (cards of their own)
+            [void](Add-To $sp (New-MissingCard))
             [void](Add-To $sp (New-FoundCard))
             continue
         }
@@ -1870,6 +1948,39 @@ function Get-TileBrush([string]$base, $section, [string]$bg, [string]$logo) {
 }
 
 # Categories in menu order: File, Base, Name, Icon, Tiles, Imported
+# Name, order and icon of the categories, for the menu. A category not loaded
+# yet is not parsed: only its [Category] section is read (parsing every tile
+# of every category made the window slow to open). A loaded one may have
+# unsaved changes and is read from its model.
+function Get-CategoryMenuEntries {
+    $entries = foreach ($f in Get-CategoryFiles) {
+        $name = ''; $orderText = ''; $iconText = ''
+        if ($models.ContainsKey($f.Name)) {
+            $c = Get-CategorySection $models[$f.Name]
+            $name = Get-Key $c 'Name'; $orderText = Get-Key $c 'Order'; $iconText = Get-Key $c 'Icon'
+        } else {
+            try { $text = [IO.File]::ReadAllText($f.FullName) } catch { $text = '' }
+            $m = [regex]::Match($text, '(?ims)^[ \t]*\[Category\][ \t]*\r?$(.*?)(?=^[ \t]*\[|\z)')
+            if ($m.Success) {
+                foreach ($kv in [regex]::Matches($m.Groups[1].Value, '(?im)^[ \t]*(Name|Order|Icon)[ \t]*=(.*?)\r?$')) {
+                    $v = $kv.Groups[2].Value.Trim()
+                    switch ($kv.Groups[1].Value.ToLowerInvariant()) {
+                        'name' { if (-not $name) { $name = $v } }
+                        'order' { if (-not $orderText) { $orderText = $v } }
+                        'icon' { if (-not $iconText) { $iconText = $v } }
+                    }
+                }
+            }
+        }
+        $order = 0; [void][int]::TryParse($orderText, [ref]$order)
+        if (-not $order) { $order = 9999 }
+        if (-not $name) { $name = $f.BaseName }
+        if (-not $iconText) { $iconText = 'icon' }
+        [pscustomobject]@{ File = $f.Name; Order = $order; Name = $name; Icon = (Find-Image (Join-Path $imagesRoot $f.BaseName) $iconText) }
+    }
+    return @($entries | Sort-Object Order, File)
+}
+
 function Get-CategoryEntries {
     $entries = foreach ($f in Get-CategoryFiles) {
         $m = Get-Model $f.Name
@@ -2241,6 +2352,42 @@ function Update-TilePreview {
     if ($sel -and $sel.Tag.Section) { Update-TileEntry $sel }
 }
 
+# Tags of every tile (as in the window), for the suggestions under the field
+function Get-AllTags {
+    $tags = @{}
+    foreach ($f in Get-CategoryFiles) {
+        foreach ($t in Get-Tiles (Get-Model $f.Name)) {
+            foreach ($tag in ((Get-Key $t 'Tags') -split '[,;]')) {
+                $tag = $tag.Trim()
+                if ($tag -and -not $tags.ContainsKey($tag.ToLowerInvariant())) { $tags[$tag.ToLowerInvariant()] = $tag }
+            }
+        }
+    }
+    return @($tags.Keys | Sort-Object | ForEach-Object { $tags[$_] })
+}
+
+# The tags used elsewhere and not on this tile: a click adds one
+function Update-TagSuggestions {
+    if (-not $cat.TagSuggestions) { return }
+    $cat.TagSuggestions.Children.Clear()
+    $t = Get-CurrentTile
+    if (-not $t) { return }
+    $mine = @((Get-Key $t 'Tags') -split '[,;]' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ })
+    foreach ($tag in Get-AllTags) {
+        if ($mine -contains $tag.ToLowerInvariant()) { continue }
+        $b = New-Button "+ $tag" 'LinkButton' 'Add this tag'
+        $b.Margin = T 0 0 12 0
+        $b.Tag = $tag
+        $b.Add_Click({
+                param($s, $e)
+                $box = $cat['tile.Tags']
+                $box.Text = if ($box.Text.Trim()) { $box.Text.Trim().TrimEnd(',', ';') + ', ' + $s.Tag } else { $s.Tag }
+                Update-TagSuggestions
+            })
+        [void]$cat.TagSuggestions.Children.Add($b)
+    }
+}
+
 function Show-Tile {
     $script:loading = $true
     $s = Get-ShownTile
@@ -2248,7 +2395,8 @@ function Show-Tile {
     $imported = $sel -and $sel.Tag.Imported
     $cat.TileCard.IsEnabled = [bool]$s -and -not $imported
     $cat.ImportedCard.Visibility = if ($imported) { 'Visible' } else { 'Collapsed' }
-    foreach ($k in 'Command', 'Label', 'Color') { $cat["tile.$k"].Text = if ($s) { Get-Key $s $k } else { '' } }
+    foreach ($k in 'Command', 'Label', 'Color', 'Tags') { $cat["tile.$k"].Text = if ($s) { Get-Key $s $k } else { '' } }
+    Update-TagSuggestions
     $cat['tile.Name'].Text = if ($s) { $s.Name } else { '' }
     $cat.Note.Text = if (-not $sel) { 'No tiles yet: add one with the + button.' } else { '' }
     $cat.Note.Visibility = if ($cat.Note.Text) { 'Visible' } else { 'Collapsed' }
@@ -2400,7 +2548,7 @@ function New-CategoryListPage {
             if ($icon -and $icon.StartsWith($imagesRoot, [StringComparison]::OrdinalIgnoreCase)) {
                 $r = Show-Dialog 'Raintile' "Move $([IO.Path]::GetFileName($icon)) to the Recycle Bin?" @('Remove', 'Cancel')
                 if ($r.Button -ne 'Remove') { return }
-                [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($icon, 'OnlyErrorDialogs', 'SendToRecycleBin')
+                Remove-ToRecycleBin $icon
             }
             Set-Key $c 'Icon' ''
             Set-Changed $file
@@ -2429,7 +2577,7 @@ function New-CategoryListPage {
             $file = $cat.Cats.SelectedItem.Tag.File
             $r = Show-Dialog 'Delete category' "Move the category $file to the Recycle Bin? Its images stay in Images." @('Delete', 'Cancel')
             if ($r.Button -ne 'Delete') { return }
-            [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile((Join-Path $categoriesDir $file), 'OnlyErrorDialogs', 'SendToRecycleBin')
+            Remove-ToRecycleBin (Join-Path $categoriesDir $file)
             $models.Remove($file); $changedFiles.Remove($file)
             if ($script:currentFile -eq $file) { $script:currentFile = $null }
             Update-Dirty
@@ -2655,7 +2803,7 @@ function New-CategoryPage {
             Save-Framing
         })
 
-    foreach ($k in 'Name', 'Command', 'Label', 'Color') {
+    foreach ($k in 'Name', 'Command', 'Label', 'Color', 'Tags') {
         $tb = New-Object System.Windows.Controls.TextBox
         $tb.Tag = $k
         $cat["tile.$k"] = $tb
@@ -2675,6 +2823,12 @@ function New-CategoryPage {
     $cat['tile.Color'].Margin = T 10 0 0 0
     [void](Add-To $colorRow $cat.ColorSwatch); [void](Add-To $colorRow $cat['tile.Color'])
     [void](Add-To $f (New-FormRow 'Colour' $colorRow 'Used when there is no background image. Empty = from the logo, or the default tile colour.'))
+    $tagHint = New-Panel
+    [void](Add-To $tagHint (New-Text 'Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.' 11.5 (Res 'DimBrush') -Wrap))
+    $cat.TagSuggestions = New-Object System.Windows.Controls.WrapPanel
+    $cat.TagSuggestions.Margin = T 0 4 0 0
+    [void](Add-To $tagHint $cat.TagSuggestions)
+    [void](Add-To $f (New-FormRow 'Tags' $cat['tile.Tags'] '' $tagHint))
     $moveRow = New-Panel 'Horizontal'
     $cat.MoveTo = New-Object System.Windows.Controls.ComboBox
     $cat.MoveTo.Width = 200
@@ -2723,7 +2877,7 @@ function New-CategoryPage {
                 if ($path -and $path.StartsWith($imagesRoot, [StringComparison]::OrdinalIgnoreCase)) {
                     $r = Show-Dialog 'Raintile' "Move $([IO.Path]::GetFileName($path)) to the Recycle Bin?" @('Remove', 'Cancel')
                     if ($r.Button -ne 'Remove') { return }
-                    [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($path, 'OnlyErrorDialogs', 'SendToRecycleBin')
+                    Remove-ToRecycleBin $path
                 }
                 Set-Key $t $s.Tag ''
                 if ($s.Tag -eq 'Background') { Reset-Framing $t }
@@ -2735,7 +2889,7 @@ function New-CategoryPage {
     # --- events
     $cat.Tiles.Add_SelectionChanged({ Show-Tile })
 
-    foreach ($k in 'Command', 'Label', 'Color') {
+    foreach ($k in 'Command', 'Label', 'Color', 'Tags') {
         $cat["tile.$k"].Add_TextChanged({
                 param($s, $e)
                 if ($script:loading) { return }
@@ -2869,6 +3023,7 @@ function Set-FoundSeen {
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $seenFile) | Out-Null
     [IO.File]::WriteAllLines($seenFile, [string[]]@($ids), $utf8)
     Invoke-Rainmeter "!CommandMeasure MeasureScript `"OnFoundSeen()`" `"$Config`""
+    Update-NavDots -Reload
 }
 
 # A new category file (Categories\<base>.ini) and its image folders
@@ -3025,6 +3180,9 @@ $scanTimer.Add_Tick({
         Refresh-FoundList
         Update-FoundStatus
         Set-FoundSeen
+        Refresh-MissingList
+        Invoke-Rainmeter "!CommandMeasure MeasureScript `"OnMissing()`" `"$Config`""
+        Update-NavDots -Reload
     })
 
 function Start-FoundScan {
@@ -3033,7 +3191,7 @@ function Start-FoundScan {
     $found.Status.Text = 'Searching the stores and the Start menu' + [char]0x2026
     $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $argList = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f (Join-Path $PSScriptRoot 'Scan.ps1')),
-        '-Resources', ('"{0}"' -f $Resources), '-Stores', ('"{0}"' -f $values['ImportStores']))
+        '-Resources', ('"{0}"' -f $Resources), '-Data', ('"{0}"' -f $Data), '-Stores', ('"{0}"' -f $values['ImportStores']))
     $script:scanProcess = Start-Process -FilePath $exe -ArgumentList $argList -WindowStyle Hidden -PassThru
     Refresh-FoundList
     $scanTimer.Start()
@@ -3214,6 +3372,137 @@ function New-FoundCard {
     Update-FoundStatus
     Refresh-FoundList
     if ($found.Items.Count) { Set-FoundSeen } else { Start-FoundScan }
+    return $card
+}
+
+# --- Tiles of games no longer installed (Import page) -------------------------------
+# Scan.ps1 lists them in Generated\Missing.txt ("<file>|<tile name>"); the
+# launcher shows them greyed out. Remove takes the tile out of its category
+# (its images stay), Keep adds it to KeepMissing.txt (data folder): it is not
+# reported again.
+
+$missingUi = @{}   # controls of the card
+
+# Tiles still in their category (as in the window) and not kept
+function Get-MissingList {
+    $list = @()
+    if (-not (Test-Path -LiteralPath $missingFile)) { return $list }
+    $keep = Read-KeepMissing
+    $files = @{}
+    foreach ($f in Get-CategoryFiles) { $files[$f.Name.ToLowerInvariant()] = $f.Name }
+    foreach ($line in [IO.File]::ReadAllLines($missingFile, $utf8)) {
+        $parts = $line.Split('|', 2)
+        if ($parts.Count -ne 2 -or $keep.ContainsKey($line.ToLowerInvariant())) { continue }
+        $file = $files[$parts[0].ToLowerInvariant()]
+        if (-not $file) { continue }
+        $section = @(Get-Tiles (Get-Model $file) | Where-Object { $_.Name -eq $parts[1] }) | Select-Object -First 1
+        if ($section) { $list += [pscustomobject]@{ Id = $line; File = $file; Name = $parts[1]; Section = $section } }
+    }
+    return $list
+}
+
+# A tile to review (for the menu dot; only the categories named in
+# Missing.txt are read)
+function Test-MissingAny {
+    if (-not (Test-Path -LiteralPath $missingFile) -or (Get-Item -LiteralPath $missingFile).Length -eq 0) { return $false }
+    return @(Get-MissingList).Count -gt 0
+}
+
+# Missing.txt without the given tiles; the launcher reads it again
+function Remove-MissingLines([string[]]$ids) {
+    if (-not (Test-Path -LiteralPath $missingFile)) { return }
+    $drop = @{}
+    foreach ($id in $ids) { $drop[$id.ToLowerInvariant()] = $true }
+    $left = @([IO.File]::ReadAllLines($missingFile, $utf8) | Where-Object { $_ -and -not $drop.ContainsKey($_.ToLowerInvariant()) })
+    [IO.File]::WriteAllLines($missingFile, [string[]]$left, $utf8)
+    Invoke-Rainmeter "!CommandMeasure MeasureScript `"OnMissing()`" `"$Config`""
+    Update-NavDots -Reload
+}
+
+function Remove-MissingTiles($tiles) {
+    $touched = @{}
+    foreach ($t in @($tiles)) {
+        [void](Get-Model $t.File).Sections.Remove($t.Section)
+        $touched[$t.File] = $true
+    }
+    foreach ($f in @($touched.Keys)) {
+        Write-Category (Join-Path $categoriesDir $f) (Get-Model $f)
+        $changedFiles.Remove($f)
+    }
+    if ($touched.Count) { $script:needsRefresh = $true }
+    Remove-MissingLines @($tiles | ForEach-Object { $_.Id })
+    Update-Dirty
+    Refresh-MissingList
+    if ($pages.ContainsKey('category') -and $script:currentFile -and $touched.ContainsKey($script:currentFile)) { Show-Category }
+}
+
+function Keep-MissingTiles($tiles) {
+    $keep = Read-KeepMissing
+    $lines = New-Object System.Collections.ArrayList
+    if (Test-Path -LiteralPath $keepMissingFile) { foreach ($l in [IO.File]::ReadAllLines($keepMissingFile, $utf8)) { if ($l) { [void]$lines.Add($l) } } }
+    foreach ($t in @($tiles)) { if (-not $keep.ContainsKey($t.Id.ToLowerInvariant())) { [void]$lines.Add($t.Id) } }
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $keepMissingFile) | Out-Null
+    [IO.File]::WriteAllLines($keepMissingFile, [string[]]@($lines), $utf8)
+    Remove-MissingLines @($tiles | ForEach-Object { $_.Id })
+    Refresh-MissingList
+}
+
+function Refresh-MissingList {
+    if (-not $missingUi.Card) { return }
+    $tiles = @(Get-MissingList)
+    $missingUi.Card.Visibility = if ($tiles.Count) { 'Visible' } else { 'Collapsed' }
+    $missingUi.List.Children.Clear()
+    $names = @{}
+    foreach ($e in Get-CategoryEntries) { $names[$e.File] = $e.Name }
+    foreach ($t in $tiles) {
+        $row = New-Grid @('*', 'Auto', 'Auto')
+        $row.Margin = T 0 3
+        $texts = New-Panel
+        $texts.VerticalAlignment = 'Center'
+        $name = New-Text $t.Name 13.5
+        $name.TextTrimming = 'CharacterEllipsis'
+        [void](Add-To $texts $name)
+        $cmd = Get-Key $t.Section 'Command'
+        [void](Add-To $texts (New-Text "in $($names[$t.File])   $([char]0xB7)   $cmd" 11.5 (Res 'DimBrush')))
+        ($texts.Children[1]).TextTrimming = 'CharacterEllipsis'
+        [void]$row.Children.Add($texts)
+        $remove = New-Button 'Remove' '' 'Takes the tile out of its category. Its images stay in the Images folder.'
+        $remove.Margin = T 10 0 0 0
+        $remove.Tag = $t
+        $remove.Add_Click({ param($s, $e) Remove-MissingTiles @($s.Tag) })
+        Set-Col $remove 1
+        [void]$row.Children.Add($remove)
+        $keepBtn = New-Button 'Keep' '' 'Keeps the tile as it is and stops reporting it.'
+        $keepBtn.Margin = T 6 0 0 0
+        $keepBtn.Tag = $t
+        $keepBtn.Add_Click({ param($s, $e) Keep-MissingTiles @($s.Tag) })
+        Set-Col $keepBtn 2
+        [void]$row.Children.Add($keepBtn)
+        [void]$missingUi.List.Children.Add($row)
+    }
+    $missingUi.Count.Text = "$($tiles.Count) tile$(if ($tiles.Count -ne 1) { 's' }) of games that are no longer installed, or whose program file is gone. In the launcher they are greyed out and do not start."
+}
+
+function New-MissingCard {
+    $card = New-Card 'No longer installed' ''
+    $missingUi.Card = $card
+    $f = $card.Child
+    $missingUi.Count = New-Text '' 12 (Res 'DimBrush') -Wrap
+    $missingUi.Count.Margin = T 0 0 0 8
+    [void](Add-To $f $missingUi.Count)
+    $missingUi.List = New-Panel
+    [void](Add-To $f $missingUi.List)
+    $bottom = New-Panel 'Horizontal'
+    $bottom.Margin = T 0 10 0 6
+    $all = New-Button 'Remove all'
+    $all.Add_Click({ Remove-MissingTiles @(Get-MissingList) })
+    [void](Add-To $bottom $all)
+    $keepAll = New-Button 'Keep all'
+    $keepAll.Margin = T 8 0 0 0
+    $keepAll.Add_Click({ Keep-MissingTiles @(Get-MissingList) })
+    [void](Add-To $bottom $keepAll)
+    [void](Add-To $f $bottom)
+    Refresh-MissingList
     return $card
 }
 
@@ -3415,12 +3704,61 @@ function New-NavItem([string]$id, [string]$title, [int]$glyph, [int]$level, [has
         Set-Col $ch 2
         [void]$g.Children.Add($ch)
         $item.Add_PreviewMouseLeftButtonDown({ param($s, $e) Switch-NavGroup $s $e })
+    } elseif ($level -eq 0) {
+        # the dot of the gear in the launcher, on the entry it leads to
+        # (Import: new games or apps; Info: an update), see Update-NavDots
+        $dot = New-Object System.Windows.Shapes.Ellipse
+        $dot.Width = 8; $dot.Height = 8
+        $dot.Fill = Res 'AccentBrush'
+        $dot.Margin = T 8 0 0 0
+        $dot.VerticalAlignment = 'Center'
+        $dot.Visibility = 'Collapsed'
+        Set-Col $dot 2
+        [void]$g.Children.Add($dot)
+        $tag.Dot = $dot
     }
     $item.Content = $g
     $tag.Id = $id
     $tag.Title = $t
     $item.Tag = $tag
     return $item
+}
+
+# Dots on Import (games or apps found and not seen in the list yet) and Info
+# (a newer version), as on the launcher's gear
+function Test-NewFound {
+    if (-not (Test-Path -LiteralPath $foundFile)) { return $false }
+    # ConvertFrom-Json is slow on a long list: only parsed when something is new
+    try { $text = [IO.File]::ReadAllText($foundFile) } catch { return $false }
+    if ($text -notmatch '"New"\s*:\s*true') { return $false }
+    try { $j = $text | ConvertFrom-Json } catch { return $false }
+    $seen = Read-Seen
+    return [bool](@($j.Items | Where-Object { $_ -and $_.New -and -not $seen.ContainsKey($_.Id) }).Count)
+}
+
+function Test-UpdateAvailable {
+    $info = Read-UpdateInfo
+    return [bool]($info -and $info.Newer -and -not $info.Error -and $info.Current -eq (Get-InstalledVersion))
+}
+
+# The files are read again only after a change (-Reload): the menu is rebuilt
+# often (opening a group, a category)
+$script:navDots = $null
+function Update-NavDots([switch]$Reload) {
+    # while the window opens the files are not read: Show-FirstPage does it
+    # once the window is on screen
+    if (-not $Reload -and -not $script:navDots -and -not $script:firstShown) { return }
+    if ($Reload -or -not $script:navDots) { $script:navDots = @{ Found = ((Test-NewFound) -or (Test-MissingAny)); Update = (Test-UpdateAvailable) } }
+    $newFound = $script:navDots.Found
+    $update = $script:navDots.Update
+    $items = @($nav.Items)
+    if ($navBottom) { $items += @($navBottom.Items) }
+    foreach ($it in $items) {
+        if (-not $it.Tag.Dot) { continue }
+        $on = ($it.Tag.Id -eq 'page:import' -and $newFound) -or ($it.Tag.Id -eq 'page:info' -and $update)
+        $it.Tag.Dot.Visibility = if ($on) { 'Visible' } else { 'Collapsed' }
+        $it.ToolTip = if (-not $on) { $null } elseif ($update -and $it.Tag.Id -eq 'page:info') { 'A new version of Raintile is available' } else { 'New games or apps found, or tiles of games no longer installed' }
+    }
 }
 
 function Build-Nav([string]$selectId) {
@@ -3437,13 +3775,17 @@ function Build-Nav([string]$selectId) {
                     }
                 }
             } elseif ($node.Categories) {
+                if (-not $script:firstShown) { Add-StartStep '  menu: pages' }
                 $page = $schemaById[$node.Page]
                 $open = [bool]$navOpen['categories']
                 [void]$nav.Items.Add((New-NavItem 'categories' $page.Title $page.Icon 0 @{ Type = 'page'; Group = 'categories'; Page = $page } '' $open))
                 if ($open) {
-                    foreach ($e in Get-CategoryEntries) {
+                    $menuEntries = Get-CategoryMenuEntries
+                    if (-not $script:firstShown) { Add-StartStep "  menu: categories read ($($menuEntries.Count))" }
+                    foreach ($e in $menuEntries) {
                         [void]$nav.Items.Add((New-NavItem "cat:$($e.File)" $e.Name 0 1 @{ Type = 'category'; File = $e.File } $e.Icon))
                     }
+                    if (-not $script:firstShown) { Add-StartStep '  menu: categories added' }
                 }
             } else {
                 $page = $schemaById[$node.Page]
@@ -3451,6 +3793,7 @@ function Build-Nav([string]$selectId) {
             }
         }
         foreach ($it in $nav.Items) { if ($it.Tag.Id -eq $selectId) { $nav.SelectedItem = $it } }
+        Update-NavDots
     } finally { $script:navBuilding = $false }
 }
 
@@ -3516,6 +3859,7 @@ function Show-UpdateInfo {
     $upd.Install.Visibility = if ($newer) { 'Visible' } else { 'Collapsed' }
     $upd.Install.Content = if ($newer -and $info.Asset) { 'Download and install' } else { 'Open the release page' }
     $upd.Page.Visibility = if ($info -and $info.Page) { 'Visible' } else { 'Collapsed' }
+    Update-NavDots -Reload
 }
 
 function Invoke-CheckNow {
@@ -3782,6 +4126,17 @@ $win.Add_ContentRendered({
         [void]$win.Activate()
         $win.Topmost = $false
         [void][RaintileOptions.Win32]::SetForegroundWindow((New-Object System.Windows.Interop.WindowInteropHelper($win)).Handle)
+        if (-not $script:firstShown) {
+            $script:firstShown = $true
+            Add-StartStep 'window shown'
+            # the first page, once the window is on screen (see Show-FirstPage)
+            [void]$win.Dispatcher.BeginInvoke([action] {
+                    try { Show-FirstPage } finally {
+                        $startClock.Stop()
+                        try { [IO.File]::WriteAllLines((Join-Path $Resources 'Generated\Options-startup.log'), [string[]]@($startSteps), $utf8) } catch { }
+                    }
+                }, [System.Windows.Threading.DispatcherPriority]::Background)
+        }
     })
 
 # Tile to open on (-Page tile): "file|name" left by the skin, used once. The
@@ -3801,27 +4156,37 @@ function Read-EditTile {
     return @{ File = $match.Name; Name = $parts[1].Trim() }
 }
 
+$script:firstShown = $false
+Add-StartStep '  rest of the setup'
 $script:updating = $false
 $editTile = if ($OpenPage -eq 'tile') { Read-EditTile } else { $null }
-if ($OpenPage -eq 'info') {
-    # Info is in the list at the bottom: selecting it shows it
-    Build-Nav ''
-    $navBottom.SelectedIndex = 0
-} elseif ($editTile) {
-    $navOpen['categories'] = $true
-    Build-Nav "cat:$($editTile.File)"
-    if ($nav.SelectedItem) { Show-NavTarget $nav.SelectedItem.Tag }
-    for ($i = 0; $cat.Tiles -and $i -lt $cat.Tiles.Items.Count; $i++) {
-        $sec = $cat.Tiles.Items[$i].Tag.Section
-        if ($sec -and $sec.Name -ieq $editTile.Name) {
-            $cat.Tiles.SelectedIndex = $i
-            $cat.Tiles.ScrollIntoView($cat.Tiles.Items[$i])
-            break
+# The menu is built before the window appears, the page right after: the
+# window shows up sooner and its page fills in a moment later
+if ($OpenPage -eq 'info') { Build-Nav '' }
+elseif ($editTile) { $navOpen['categories'] = $true; Build-Nav "cat:$($editTile.File)" }
+else { Build-Nav $(if ($OpenPage -eq 'import') { 'page:import' } else { 'page:general' }) }
+Add-StartStep 'menu'
+function Show-FirstPage {
+    if ($OpenPage -eq 'info') {
+        # Info is in the list at the bottom: selecting it shows it
+        $navBottom.SelectedIndex = 0
+    } elseif ($editTile) {
+        if ($nav.SelectedItem) { Show-NavTarget $nav.SelectedItem.Tag }
+        for ($i = 0; $cat.Tiles -and $i -lt $cat.Tiles.Items.Count; $i++) {
+            $sec = $cat.Tiles.Items[$i].Tag.Section
+            if ($sec -and $sec.Name -ieq $editTile.Name) {
+                $cat.Tiles.SelectedIndex = $i
+                $cat.Tiles.ScrollIntoView($cat.Tiles.Items[$i])
+                break
+            }
         }
+    } elseif ($nav.SelectedItem) {
+        Show-NavTarget $nav.SelectedItem.Tag
     }
-} else {
-    Build-Nav $(if ($OpenPage -eq 'import') { 'page:import' } else { 'page:general' })
-    Show-NavTarget $nav.SelectedItem.Tag
+    Update-Dirty
+    Add-StartStep 'first page'
+    Update-NavDots -Reload
+    Add-StartStep 'menu dots (new games, update)'
 }
 Update-Dirty
 [void]$win.ShowDialog()

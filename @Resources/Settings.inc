@@ -48,8 +48,9 @@ MenuGap=6
 MenuRadius=22
 ; Opacity of the icons of inactive categories (0-255)
 MenuIconDimAlpha=150
-; Favorites and Recent: categories made of the tiles of the others, first in
-; the menu. Favorites: right click a tile > Add to Favorites. Recent: the
+; Favorites and Recent: categories made of the tiles of the others, opened
+; with the two icon buttons right of the search bar (the label shows on
+; hover). Favorites: right click a tile > Add to Favorites. Recent: the
 ; tiles launched lately (RecentOrder=Recent) or most often (MostUsed).
 ShowFavorites=1
 ShowRecent=1

@@ -770,10 +770,11 @@ local function loadCategories(files)
 	categoryGeometry(default)
 	slots = math.max(slots, default.rows * default.cols)
 
-	-- Meters making up each menu entry, according to MenuMode
+	-- Meters making up each menu entry, according to MenuMode. Favorites and
+	-- Recent are not in the menu: they are the buttons next to the search bar.
 	for i, c in ipairs(cats) do
-		c.showIcon = V.MenuMode ~= 'text' and c.icon ~= nil
-		c.showText = V.MenuMode ~= 'icon' or c.icon == nil
+		c.showIcon = not c.virtual and V.MenuMode ~= 'text' and c.icon ~= nil
+		c.showText = not c.virtual and (V.MenuMode ~= 'icon' or c.icon == nil)
 		c.parts = {}
 		if c.showIcon then c.parts[#c.parts + 1] = 'CatIcon' .. i end
 		if c.showText then c.parts[#c.parts + 1] = 'CatText' .. i end
@@ -823,8 +824,10 @@ local function writeGrid(path, sig, files)
 
 	-- Menu entries: a chain of meters with relative X. After measuring them the
 	-- script only moves the first one to centre the whole chain.
+	local firstEntry = true
 	for i, c in ipairs(cats) do
-		local x = i == 1 and '#PadX#' or '(#MenuGap#+2*#MenuItemPad#)R'
+		local x = firstEntry and '#PadX#' or '(#MenuGap#+2*#MenuItemPad#)R'
+		if not c.virtual then firstEntry = false end
 		if c.showIcon then
 			w('[CatIcon' .. i .. ']')
 			w('Meter=Image')
@@ -868,13 +871,15 @@ local function writeGrid(path, sig, files)
 
 	-- Clickable areas of the entries (placed by the script)
 	for i = 1, #cats do
-		w('[CatHit' .. i .. ']')
-		w('Meter=Shape')
-		w('MeterStyle=StyleCategoryHit')
-		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "SetCategory(' .. i .. ')"]')
-		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverCategory(' .. i .. ')"]')
-		w('MouseLeaveAction=[!CommandMeasure MeasureScript "HoverCategory(0)"]')
-		w('')
+		if not cats[i].virtual then
+			w('[CatHit' .. i .. ']')
+			w('Meter=Shape')
+			w('MeterStyle=StyleCategoryHit')
+			w('LeftMouseUpAction=[!CommandMeasure MeasureScript "SetCategory(' .. i .. ')"]')
+			w('MouseOverAction=[!CommandMeasure MeasureScript "HoverCategory(' .. i .. ')"]')
+			w('MouseLeaveAction=[!CommandMeasure MeasureScript "HoverCategory(0)"]')
+			w('')
+		end
 	end
 
 	-- Grid slots, inside the GridClip container: as many as the category with
@@ -1116,6 +1121,7 @@ end
 
 -- Measures the (already updated) menu entries and centres the chain horizontally.
 local function layoutMenu()
+	local first, last
 	for _, c in ipairs(cats) do
 		c.l, c.r = nil, nil
 		for _, name in ipairs(c.parts) do
@@ -1124,22 +1130,78 @@ local function layoutMenu()
 			c.l = c.l and math.min(c.l, x) or x
 			c.r = c.r and math.max(c.r, x + w) or x + w
 		end
+		if c.l then
+			first = first or c
+			last = c
+		end
 	end
+	if not first then return end
 
-	local origin = cats[1].l
-	local total = cats[#cats].r - origin
+	local origin = first.l
+	local total = last.r - origin
 	if total <= 0 then return end
 
 	local start = math.floor((V.ScreenW - total) / 2)
 	local shift = start - origin
-	set(cats[1].parts[1], 'X', tostring(start))
+	set(first.parts[1], 'X', tostring(start))
 	for i, c in ipairs(cats) do
-		c.l, c.r = c.l + shift, c.r + shift
-		rect('CatHit' .. i, c.l - V.MenuItemPad, V.PadY,
-			c.r - c.l + 2 * V.MenuItemPad, V.MenuH, '0,0,0,1')
-		show('CatHit' .. i, true)
+		if c.l then
+			c.l, c.r = c.l + shift, c.r + shift
+			rect('CatHit' .. i, c.l - V.MenuItemPad, V.PadY,
+				c.r - c.l + 2 * V.MenuItemPad, V.MenuH, '0,0,0,1')
+			show('CatHit' .. i, true)
+		end
 	end
 	laidOut = true
+end
+
+-- Favorites and Recent buttons, right of the search bar: icon only, the label
+-- shows below on hover. The active one is lit like a menu pill.
+local side = { hovered = '' }
+
+local function sideIndex(kind)
+	for i, c in ipairs(cats) do
+		if c.virtual == kind then return i end
+	end
+	return nil
+end
+
+local function renderSide()
+	local size = math.floor(V.MenuH)
+	local gap = math.max(8, math.floor(num('MenuGap', 6)))
+	local x = math.floor(V.PadX + V.SearchW + gap)
+	local iconSize = math.floor(num('MenuIconSize', 24))
+	for _, kind in ipairs({ 'favorites', 'recent' }) do
+		local name = kind == 'favorites' and 'Favorites' or 'Recent'
+		local i = sideIndex(kind)
+		if i then
+			local on = not searchCat and i == active
+			local hot = side.hovered == kind
+			if on or hot then
+				rect('SidePill' .. name, x, V.PadY, size, size, on and V.ActiveCategoryColor or V.HoverCategoryColor)
+				show('SidePill' .. name, true)
+			else
+				show('SidePill' .. name, false)
+			end
+			set('SideIcon' .. name, 'X', tostring(x + math.floor((size - iconSize) / 2)))
+			set('SideIcon' .. name, 'Y', tostring(math.floor(V.PadY + (size - iconSize) / 2)))
+			set('SideIcon' .. name, 'ImageAlpha', (on or hot) and '255' or tostring(V.MenuIconDimAlpha))
+			show('SideIcon' .. name, true)
+			rect('SideHit' .. name, x, V.PadY, size, size, '0,0,0,1')
+			show('SideHit' .. name, true)
+			if hot then
+				set('SideLabel', 'Text', cats[i].label)
+				set('SideLabel', 'X', tostring(x + math.floor(size / 2)))
+				set('SideLabel', 'Y', tostring(math.floor(V.PadY + size + 6)))
+			end
+			x = x + size + gap
+		else
+			show('SidePill' .. name, false)
+			show('SideIcon' .. name, false)
+			show('SideHit' .. name, false)
+		end
+	end
+	show('SideLabel', side.hovered ~= '' and sideIndex(side.hovered) ~= nil)
 end
 
 local function pillTarget(i)
@@ -1155,6 +1217,7 @@ end
 local startTicker -- defined further down
 
 local function renderCategories()
+	renderSide()
 	for i, c in ipairs(cats) do
 		local on = i == active or i == hovered
 		if c.showText then
@@ -1171,9 +1234,14 @@ local function renderCategories()
 	end
 
 	-- Active pill: slides to the new entry (Tick) or jumps straight there.
-	-- No category is active during a search.
-	local x, w = pillTarget(active)
-	if searchCat then
+	-- No category is active during a search; Favorites and Recent are lit on
+	-- their own button (the pill appears again without sliding).
+	local x, w
+	if cats[active].l then x, w = pillTarget(active) end
+	if not x then
+		show('CatPillActive', false)
+		pillPos = nil
+	elseif searchCat then
 		show('CatPillActive', false)
 	elseif pillPos and V.AnimCategory and (pillPos.x ~= x or pillPos.w ~= w) then
 		startTicker()
@@ -1182,7 +1250,7 @@ local function renderCategories()
 		drawPill('CatPillActive', x, w, V.ActiveCategoryColor)
 	end
 
-	if hovered ~= 0 and hovered ~= active then
+	if hovered ~= 0 and hovered ~= active and cats[hovered] and cats[hovered].l then
 		local hx, hw = pillTarget(hovered)
 		drawPill('CatPillHover', hx, hw, V.HoverCategoryColor)
 	else
@@ -1541,7 +1609,7 @@ local function advance()
 		if t.zoom == 0 and (t.pan or 0) == 0 and target == 0 then zooming[t] = nil end
 	end
 
-	if pillPos and laidOut and not searchCat then
+	if pillPos and laidOut and not searchCat and cats[active].l then
 		local x, w = pillTarget(active)
 		pillPos.x, moving = approach(pillPos.x, x, 0.5, V.AnimPillSmooth)
 		busy = busy or moving
@@ -2343,6 +2411,19 @@ function SetCategory(i)
 		startTicker()
 	end
 	render(true)
+end
+
+function SideCategory(kind)
+	local i = sideIndex(kind)
+	if i then SetCategory(i) end
+end
+
+function HoverSide(kind)
+	if not ready or side.hovered == kind then return end
+	side.hovered = kind
+	renderSide()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
 end
 
 function HoverCategory(i)

@@ -260,7 +260,7 @@ $schema = @(
                     (Size 'MenuRadius' 'Corner radius' 'H'),
                     (Num 'MenuIconDimAlpha' 'Opacity of inactive icons' 0 255 5)
                 ) }
-            @{ Title = 'Favorites and Recent'; Help = 'Categories made of the tiles of the others, first in the menu.'; Items = @(
+            @{ Title = 'Favorites and Recent'; Help = 'Categories made of the tiles of the others: the two icon buttons right of the search bar.'; Items = @(
                     (S 'bool' 'ShowFavorites' 'Favorites' 'Right click a tile > Add to Favorites.'),
                     (S 'bool' 'ShowRecent' 'Recent'),
                     (S 'choice' 'RecentOrder' 'Recent shows' '' @{ Choices = @(@('Recent', 'Last launched'), @('MostUsed', 'Most used')) }),

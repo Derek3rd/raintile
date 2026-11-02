@@ -10,7 +10,7 @@ Your games, apps, links and system tools become large tiles with background art 
 - **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs. Backgrounds fit the tile by themselves; you can also frame each one by dragging and zooming it in Options, and move and resize its logo on its own.
 - **Add games and apps** found on this PC — Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Battle.net, EA app, Xbox, and the programs of the Start menu — picking them from a list, with background and logo (local Steam cache, [SteamGridDB](https://www.steamgriddb.com/), program icons). New ones are signalled with a dot on the gear.
 - **Search** across all categories, with results that follow every key.
-- **Favorites and Recent**: your favorite tiles and the ones launched lately (or most often), first in the menu.
+- **Favorites and Recent**: your favorite tiles and the ones launched lately (or most often), one click away from the buttons next to the search bar.
 - **Tags**: tag your tiles (multiplayer, coop, ...); search finds them, and chips above the results filter by tag or by store with a click.
 - **Play time**: hours played (Steam) and last launch, on the highlighted tile or always.
 - **Games no longer installed** are found by the same search: greyed out in the launcher, removed or kept with a click.

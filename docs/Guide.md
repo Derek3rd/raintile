@@ -119,7 +119,7 @@ Right click on a tile adds, after Raintile's own entries, the ones that apply to
 
 ## Favorites and Recent
 
-Two categories at the start of the menu, made of the tiles of the others:
+Two categories made of the tiles of the others. They are not in the category menu: they are the two icon buttons right of the search bar (the star and the clock); hover one to see its name, click it to open it. The open one is lit like a menu entry. `Q`/`E` and the gamepad `LB`/`RB` reach them too, before the first category.
 
 - **Favorites**: the tiles you add with right click > **Add to Favorites**, in the order you added them.
 - **Recent**: the tiles you launched lately (`RecentOrder=Recent`) or most often (`MostUsed`), up to `RecentCount`.
@@ -391,7 +391,7 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `MenuGap` | `6` | space between entries *(size)* |
 | `MenuRadius` | `22` | pill corner radius *(size)* |
 | `MenuIconDimAlpha` | `150` | opacity of inactive category icons (0-255) |
-| `ShowFavorites`, `ShowRecent` | `1`, `1` | the [Favorites and Recent](#favorites-and-recent) categories |
+| `ShowFavorites`, `ShowRecent` | `1`, `1` | the [Favorites and Recent](#favorites-and-recent) buttons, right of the search bar |
 | `RecentOrder` | `Recent` | `Recent` (last launched first) or `MostUsed` |
 | `RecentCount` | `12` | tiles in Recent |
 | `FilterBar` | `1` | the [filter bar](#tags-and-filter-bar) above the search results |

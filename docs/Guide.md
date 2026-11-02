@@ -12,6 +12,8 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Search](#search)
 - [Tile menu](#tile-menu)
 - [Favorites and Recent](#favorites-and-recent)
+- [Tags and filter bar](#tags-and-filter-bar)
+- [Play time](#play-time)
 - [Launching a tile](#launching-a-tile)
 - [Categories and tiles](#categories-and-tiles)
   - [Category files](#category-files)
@@ -19,6 +21,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
   - [Commands](#commands)
   - [Images](#images)
 - [Adding games and apps](#adding-games-and-apps)
+  - [Games no longer installed](#games-no-longer-installed)
 - [Options window](#options-window)
 - [Your data and updates](#your-data-and-updates)
 - [Settings reference](#settings-reference)
@@ -94,7 +97,7 @@ Settings: `Gamepad=0` turns it off; `GamepadToggle` (buttons held together: `A B
 
 Click the **Search** bar at the top left, or press `F` (`NavSearch`), and type: the results follow every key.
 
-- The grid shows the tiles of **every category** that contain all the typed words, in the tile name, its label or the category name (`games steam` finds Steam tiles in the Games category). Names starting with the first word come first, then the rest alphabetically. Favorites and Recent are left out (their tiles are in the other categories).
+- The grid shows the tiles of **every category** that contain all the typed words, in the tile name, its label, the category name, its store or its [tags](#tags-and-filter-bar) (`games steam` finds Steam tiles in the Games category, `coop` the tiles tagged coop). Above the results, the [filter bar](#tags-and-filter-bar) narrows them down with a click. Names starting with the first word come first, then the rest alphabetically. Favorites and Recent are left out (their tiles are in the other categories).
 - While typing, letters, digits (keypad too), space, `-` and `.` go into the search and `Backspace` deletes; the other keys of the launcher are off. **Enter** stops typing and keeps the results; the first one is highlighted: `Space`/`Enter` (or gamepad `A`) launches it, WASD/arrows move through the results.
 - `Esc`, clicking a category or an empty search go back to the categories, at the position you left them.
 - Results use the default grid (`NX`/`NY` in `Settings.inc`).
@@ -116,12 +119,31 @@ Right click on a tile adds, after Raintile's own entries, the ones that apply to
 
 ## Favorites and Recent
 
-Two categories at the start of the menu, made of the tiles of the others:
+Two categories made of the tiles of the others. They are not in the category menu: they are the two icon buttons right of the search bar (the star and the clock); hover one to see its name, click it to open it. The open one is lit like a menu entry. `Q`/`E` and the gamepad `LB`/`RB` reach them too, before the first category.
 
 - **Favorites**: the tiles you add with right click > **Add to Favorites**, in the order you added them.
 - **Recent**: the tiles you launched lately (`RecentOrder=Recent`) or most often (`MostUsed`), up to `RecentCount`.
 
 They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Menu).
+
+## Tags and filter bar
+
+- **Tags**: give a tile tags with `Tags=` in its category file, separated by commas (`Tags=multiplayer, coop`), or in Options > *the category* > *the tile* > **Tags**, where the tags already used elsewhere are one click away. [Search](#search) finds them: typing `coop` lists the tiles tagged coop.
+- **Filter bar**: while the search results are shown, a row of chips appears above them (the grid moves down to make room) — one per tag (`#coop`) and, with `FilterStores=1`, one per store when your tiles come from at least two (Steam, Epic Games, GOG, Ubisoft, Battle.net, EA, Xbox). Outside the search there is no bar, and the grid keeps all the space.
+- A click turns a chip on or off; you can turn on more than one. The results shown are those of **one of** the selected stores (if any) that have **all** the selected tags; **All** turns everything off. To see every tile of a store, or with a tag, search for it (`steam`, `coop`) or type a letter and use the chips. Leaving the search clears the filter.
+- The store of a tile is taken from `Store=` if it has it, otherwise from `Source=` (written when a game is added from Import) or from the command (`steam://`, the Epic launcher link, GOG Galaxy, `uplay://`, Battle.net, EA).
+- `FilterBar=0` turns the bar off.
+
+Settings (Options > Menu > Filter bar): `FilterBar`, `FilterStores`, `FilterH`, `FilterGap`, `FilterPad`, `FilterFontSize`.
+
+## Play time
+
+A small line at the top left of the tile tells how long you played and when you last did: `123 h played - 3 days ago`.
+
+- **Steam games**: the hours played and the last launch come from Steam itself (`userdata\<account>\config\localconfig.vdf`, every account that logged in on this PC), read in the background (`Scripts\Playtime.ps1`) when the skin loads and, at most once a minute, when the launcher opens. The game is recognised by its `steam://rungameid/<id>` command or by `Source=Steam:<id>`.
+- **Other tiles**: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
+- `TileInfo=Hover` (default) shows it only on the highlighted tile (mouse, keyboard or gamepad), `Always` on every tile, `Never` hides it. Size: `InfoFontSize`. Options > Appearance > Text.
+- Tiles of [games no longer installed](#games-no-longer-installed) always show **Not installed**.
 
 ## Launching a tile
 
@@ -171,7 +193,9 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `BgZoom` | framing of the background: enlargement beyond filling the tile, `1` to `4` (default `1`) |
 | `LogoPos` | where the centre of the logo goes, `X,Y` in % of the tile's width and height (default `50,50`); see [Placing the logo](#placing-the-logo) |
 | `LogoScale` | size of the logo, times the category's `IconSize`, `0.25` to `3` (default `1`) |
-| `Source` | where an added game or app comes from (`Steam:570`); informational |
+| `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
+| `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
+| `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
 
 ### Commands
 
@@ -231,15 +255,27 @@ The search (`Scripts\Scan.ps1`, in the background) looks in:
 - **Where they go**: by type (games to `ImportCategory`, apps to `AppsCategory`; the category is created if missing) or all to one category.
 - **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. For games without local images, background and logo are downloaded from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Set the key in Options > Import: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
 - Something already in the launcher, in any category (same name or same command), is not listed again.
-- **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear. A click on it opens the list.
+- **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear, and on **Import** in the menu of the Options window. A click on it opens the list.
+- **Games no longer installed** are reported by the same search (see below).
 - The added tiles are written at once; **Save and refresh** shows them in the launcher.
 - **Older versions** imported games automatically, in a block below the line `; ===== IMPORTED AUTOMATICALLY =====`. Opening **Import** turns those games into normal tiles, once.
 
 Settings: `ImportStores` (e.g. `Steam|Epic|Apps`), `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
+### Games no longer installed
+
+The same search also checks your tiles. A tile is reported when:
+
+- its command points to a game of a store that was searched and is installed, and the game is not there any more: Steam (`steam://rungameid/<id>`), Epic Games (launcher link), GOG Galaxy (`/gameId=`), Ubisoft Connect (`uplay://launch/<id>`), Store apps and Xbox games (`shell:AppsFolder\...`);
+- or its command is a program file (`.exe`, `.lnk`, `.bat`, `.cmd`, `.url`) that no longer exists.
+
+Nothing is reported when it cannot be told: a store that is not installed or not searched, a Steam library or a drive that is not connected (USB, network), URLs, folders, bangs, Battle.net games.
+
+Reported tiles are **greyed out** in the launcher, say **Not installed** and do not start: a click opens Options > **Import**. They light the dot on the gear and on **Import** in the menu of the Options window. At the top of Import, **No longer installed** lists them: **Remove** takes the tile out of its category (its images stay in `Images\`), **Keep** leaves it as it is and stops reporting it (`KeepMissing.txt` in the data folder). The list is in `Generated\Missing.txt`.
+
 ## Options window
 
-The **gear** next to the X, or right click > **Options...**, opens the Options window (`Scripts\Options.ps1`, WPF; its look is in `Scripts\Options.xaml`). Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
+The **gear** next to the X, or right click > **Options...**, opens the Options window: the program `Bin\RaintileOptions.exe` (C#, WPF, .NET Framework 4.8, included in Windows 10/11), in the packages of the releases; a copy of the repository without it opens the same window from `Scripts\Options.ps1` with PowerShell, a little slower. Both look the same: their look is in `Scripts\Options.xaml`. Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
 
 The sections are in the menu on the left; **Keybindings** and **Categories** open into sub-entries (click them again to close them):
 
@@ -297,7 +333,7 @@ When an update adds settings, they are added to your `Settings.inc` with their d
 
 > **Experimental**: installing updates from the Options window is still being tested and could cause problems. Before installing, keep a copy of your data folder (Options > Info > *Your data*); if something goes wrong, install the package from the [releases page](https://github.com/Derek3rd/raintile/releases) by hand.
 
-With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps); a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
+With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps) and on **Info** in the menu of the Options window; a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
 
 - **Download and install** downloads the release's `.rmskin` and opens it with the Rainmeter installer; the Options window closes. Keep the installer's default options. Your data is not touched. Only files of this repository's releases on GitHub (https) are downloaded, into a new temporary folder, and the file is checked to be a Rainmeter package before it is opened.
 - **Check now** asks GitHub again; **Release page** opens the release on GitHub.
@@ -355,9 +391,13 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `MenuGap` | `6` | space between entries *(size)* |
 | `MenuRadius` | `22` | pill corner radius *(size)* |
 | `MenuIconDimAlpha` | `150` | opacity of inactive category icons (0-255) |
-| `ShowFavorites`, `ShowRecent` | `1`, `1` | the [Favorites and Recent](#favorites-and-recent) categories |
+| `ShowFavorites`, `ShowRecent` | `1`, `1` | the [Favorites and Recent](#favorites-and-recent) buttons, right of the search bar |
 | `RecentOrder` | `Recent` | `Recent` (last launched first) or `MostUsed` |
 | `RecentCount` | `12` | tiles in Recent |
+| `FilterBar` | `1` | the [filter bar](#tags-and-filter-bar) above the search results |
+| `FilterStores` | `1` | a chip per store (only with tiles from at least two stores) |
+| `FilterH`, `FilterGap`, `FilterPad` | `30`, `6`, `12` | chip height, space between chips, inner padding *(size)* |
+| `FilterFontSize` | `10` | chip font size (points) |
 
 ### Open and close
 
@@ -456,6 +496,8 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ScanOnStar
 | Setting | Default | Description |
 | --- | --- | --- |
 | `ShowLabels` | `1` | show tile labels |
+| `TileInfo` | `Hover` | [play time](#play-time) line on the tiles: `Hover` (highlighted tile), `Always` or `Never` |
+| `InfoFontSize` | `10` | its font size (points) |
 | `FontFace` | `Segoe UI` | font |
 | `MenuFontSize`, `LabelFontSize` | `12`, `14` | font sizes (points) |
 | `BgColor` | `8,8,12,200` | launcher background |
@@ -506,9 +548,11 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic
   Scripts/Thumbs.ps1         thumbnail creation
-  Scripts/Scan.ps1           search of the installed games and apps
+  Scripts/Scan.ps1           search of the installed games and apps, and of the tiles no longer installed
+  Scripts/Playtime.ps1       play time of the Steam games
   Scripts/Helper.ps1         gamepad and focus-loss helper
-  Scripts/Options.ps1        Options window
+  Bin/RaintileOptions.exe    Options window (built from src/Options by the release workflow)
+  Scripts/Options.ps1        Options window with PowerShell, when the program is missing
   Scripts/Options.xaml       look of the Options window
   Generated/Grid.inc         generated meters
   Generated/Sizes.inc        percentage sizes and #hex colours converted for Rainmeter
@@ -518,6 +562,8 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Generated/EditTile.txt     tile to open Options on (Edit this tile), removed once read
   Generated/Found.json       games and apps found by the last search
   Generated/Found/           their icons
+  Generated/Missing.txt      tiles of games no longer installed (last search)
+  Generated/Playtime.txt     play time of the Steam games
 ```
 
 The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your data is](#where-your-data-is).
@@ -528,10 +574,13 @@ The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your da
 - **Esc, keyboard navigation or the gamepad don't work after an update**: in Rainmeter use **Refresh all** (not just *Refresh skin*) so it sees new or renamed mini-skins and scripts. Check that the HotKey plugin is installed.
 - **A category icon doesn't show**: the icon goes in `Images\<file name>\icon.png` — the folder is named after the category *file* (`Games`), not its menu label. The log shows exactly where it looked (`Raintile: no icon for category ...`).
 - **A tile image doesn't show**: check the file name matches the tile name (or its `Image`/`Background`/`Logo` key); explicit names that are not found are logged.
-- **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. It needs Windows PowerShell 5.1 (included in Windows 10/11).
+- **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. The program needs .NET Framework 4.8 (included in Windows 10/11); if it does not start, delete `@Resources\Bin\` in the skin folder and the window opens with PowerShell instead.
+- **The Options window is slow to open**: `Generated\Options-startup.log` lists how long each step of the last opening took. The PowerShell version (without `Bin\RaintileOptions.exe`) is slower, and the first time it prepares a small helper, `Generated\RaintileOptions-*.dll`.
 - **Your categories are gone after an update**: they are copied from `Skins\@Backup\Raintile\@Resources\` the first time the new version loads; if the backup option was turned off in the installer, copy `Categories\` and `Images\` from your old copy into the data folder by hand.
 - **The update check fails**: Options > Info shows the error (no connection, GitHub not reachable). It is retried on the next load after a day, or with *Check now*.
 - **Added games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey` before adding them. With `DebugLog=1` the search writes what it found per store to the log (`Raintile: scan:` lines).
+- **A tile is greyed out but the game is installed**: it was reported as [no longer installed](#games-no-longer-installed). Check that its store is ticked in Import > *Where to look* and press *Search again*, or press **Keep** in Import.
+- **No play time on a Steam tile**: its command must be `steam://rungameid/<id>` (or the tile must have `Source=Steam:<id>`), and Steam must have recorded time for the account you play with; with `TileInfo=Hover` it only shows on the highlighted tile.
 - **A game or app is not in the list**: check that its source is ticked in Import > *Where to look*, then *Search again*. Anything else can always be added by hand with its `.lnk` shortcut.
 - **Thumbnails are not created**: they are made by PowerShell in the background; errors are listed in the log. Deleting `Generated\Thumbs\` forces a rebuild.
 - **Slow or choppy animations on very large screens**: every animation step redraws the whole full-screen window. Turn off the heaviest ones (`AnimScroll`, `BgStyle=Crop`), lower `AnimAppearFrames`/`LaunchAnimFrames` or raise the `Anim*Smooth` values.

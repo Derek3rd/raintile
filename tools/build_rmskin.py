@@ -3,8 +3,9 @@
 
     python tools/build_rmskin.py [--version 1.0.3] [--out dist]
 
-The package holds the skin only (Raintile.ini, its mini-skins and @Resources;
-not README.md, docs, tools or the git files) and the HotKey plugin from
+The package holds the skin only (Raintile.ini, its mini-skins and @Resources,
+with the Options program in @Resources/Bin when it has been built; not
+README.md, docs, src, tools or the git files) and the HotKey plugin from
 tools/plugins. Its version is Version= in Raintile.ini; with --version it must
 match (used by the release workflow, with the tag's number).
 
@@ -77,6 +78,8 @@ def build(version, out_dir):
             if not os.path.isfile(dll):
                 sys.exit('missing ' + dll)
             z.write(dll, 'Plugins/%s/HotKey.dll' % bits)
+    if not os.path.isfile(os.path.join(ROOT, '@Resources', 'Bin', 'RaintileOptions.exe')):
+        print('note: @Resources/Bin/RaintileOptions.exe not built: the package opens the PowerShell Options window')
     payload = data.getvalue()
     os.makedirs(out_dir, exist_ok=True)
     out = os.path.join(out_dir, '%s_%s.rmskin' % (SKIN, version))

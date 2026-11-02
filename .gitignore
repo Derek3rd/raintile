@@ -4,3 +4,9 @@
 
 # Packages built by tools/build_rmskin.py
 dist/
+
+# Options program, built by the release workflow (src/Options)
+@Resources/Bin/
+build/
+src/Options/bin/
+src/Options/obj/

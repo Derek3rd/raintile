@@ -95,7 +95,7 @@ Settings: `Gamepad=0` turns it off; `GamepadToggle` (buttons held together: `A B
 
 ## Search
 
-Click the **Search** bar at the top left, or press `F` (`NavSearch`), and type: the results follow every key.
+At the top left, after the [clock](#clock) and the Favorites / Recent buttons, the search bar is just a magnifier: it opens when the mouse is over it (`SearchHover=0` keeps it always open). Click it, or press `F` (`NavSearch`), and type: the results follow every key. It stays open while you type and while the results are shown.
 
 - The grid shows the tiles of **every category** that contain all the typed words, in the tile name, its label, the category name, its store or its [tags](#tags-and-filter-bar) (`games steam` finds Steam tiles in the Games category, `coop` the tiles tagged coop). Above the results, the [filter bar](#tags-and-filter-bar) narrows them down with a click. Names starting with the first word come first, then the rest alphabetically. Favorites and Recent are left out (their tiles are in the other categories).
 - While typing, letters, digits (keypad too), space, `-` and `.` go into the search and `Backspace` deletes; the other keys of the launcher are off. **Enter** stops typing and keeps the results; the first one is highlighted: `Space`/`Enter` (or gamepad `A`) launches it, WASD/arrows move through the results.
@@ -470,8 +470,20 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `SearchW` | `320` | search bar width *(size)* |
+| `SearchW` | `320` | search bar width when open *(size)* |
 | `SearchPlaceholder` | `Search` | text shown in the empty search bar |
+| `SearchHover` | `1` | `1` = only the magnifier until the mouse is over it, `0` = always open |
+
+### Clock
+
+<a id="clock"></a>Time and date at the top left (Options > Menu > Clock). They are updated once a minute, only while the launcher is visible: at rest it still uses no CPU.
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `ShowClock`, `ShowDate` | `1`, `1` | show the time, and the date next to it |
+| `ClockFormat` | `%H:%M` | time format: `%H:%M` = 14:05, `%#I:%M %p` = 2:05 PM |
+| `DateFormat` | `%A %#d %B` | date format, in the language of Windows: `%A %#d %B` = Monday 2 November, `%#d/%m/%Y` = 2/11/2026 |
+| `ClockFontSize` | `18` | time font size (points); the date uses `MenuFontSize` |
 
 ### Games and apps
 

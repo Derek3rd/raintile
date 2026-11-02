@@ -199,10 +199,24 @@ GamepadRepeatDelay=350
 GamepadRepeatRate=110
 
 ; --- Search ---------------------------------------------------------------------
-; Bar at the top left (or the NavSearch key): Enter searches every category,
-; Esc or a click on a category goes back
+; Bar at the top left, after the clock and the Favorites / Recent buttons (or
+; the NavSearch key): Enter searches every category, Esc or a click on a
+; category goes back
 SearchW=320
 SearchPlaceholder=Search
+; 1 = only the magnifier until the mouse is over it (it stays open while you
+; type and while a search is shown), 0 = always open
+SearchHover=1
+
+; --- Clock ----------------------------------------------------------------------
+; Time and date at the top left, updated every minute while the launcher is
+; visible. Formats: %H:%M = 14:05, %#I:%M %p = 2:05 PM; %A %#d %B = Monday
+; 2 November (in the language of Windows), %#d/%m/%Y = 2/11/2026
+ShowClock=1
+ShowDate=1
+ClockFormat=%H:%M
+DateFormat=%A %#d %B
+ClockFontSize=18
 
 ; --- Games and apps ---------------------------------------------------------------
 ; Right click on the skin > "Add games and apps..." (or Options > Import):

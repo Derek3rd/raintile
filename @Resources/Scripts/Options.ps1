@@ -252,7 +252,7 @@ $schema = @(
         )
     }
     @{ Id = 'menu'; Title = 'Menu'; Icon = 0xE700
-        Desc = 'The category menu at the top.'
+        Desc = 'The category menu at the top, the clock and the buttons.'
         Groups = @(
             @{ Title = 'Category menu'; Items = @(
                     (S 'choice' 'MenuMode' 'Show' 'A category without an icon always shows its name.' @{ Choices = @(
@@ -278,6 +278,13 @@ $schema = @(
                     (Size 'FilterGap' 'Space between chips' 'W'),
                     (Size 'FilterPad' 'Chip padding' 'W'),
                     (Num 'FilterFontSize' 'Font size' 6 30 1 'pt')
+                ) }
+            @{ Title = 'Clock'; Help = 'At the top left, updated every minute while the launcher is visible.'; Items = @(
+                    (S 'bool' 'ShowClock' 'Clock'),
+                    (S 'bool' 'ShowDate' 'Date' 'Next to the time, in the language of Windows.'),
+                    (S 'text' 'ClockFormat' 'Time format' '%H:%M = 14:05, %#I:%M %p = 2:05 PM.'),
+                    (S 'text' 'DateFormat' 'Date format' '%A %#d %B = Monday 2 November, %#d/%m/%Y = 2/11/2026.'),
+                    (Num 'ClockFontSize' 'Time font size' 8 60 1 'pt')
                 ) }
             @{ Title = 'Buttons'; Items = @(
                     (Num 'CloseSize' 'Size of the X and gear buttons' 8 40 1)
@@ -400,7 +407,8 @@ $schema = @(
         Desc = 'The search bar at the top left searches the tiles of every category.'
         Groups = @(
             @{ Title = 'Search bar'; Items = @(
-                    (Size 'SearchW' 'Width' 'W'),
+                    (S 'bool' 'SearchHover' 'Open on hover' 'Only the magnifier until the mouse is over it; it stays open while you type and while a search is shown.'),
+                    (Size 'SearchW' 'Width' 'W' 'When open.'),
                     (S 'text' 'SearchPlaceholder' 'Text in the empty bar')
                 ) }
         )
@@ -477,7 +485,8 @@ $defaults = @{
     BgStyle = 'Parallax'; BgOverscan = '1.15'; BgPanFrames = '180'; BgHoverZoom = '1.08'
     Thumbnails = '1'; TileHover = '1'; FadeDuration = '0'
     Gamepad = '1'; GamepadToggle = 'BACK START'; GamepadDeadZone = '12000'; GamepadRepeatDelay = '350'; GamepadRepeatRate = '110'
-    SearchW = '320'; SearchPlaceholder = 'Search'
+    SearchW = '320'; SearchPlaceholder = 'Search'; SearchHover = '1'
+    ShowClock = '1'; ShowDate = '1'; ClockFormat = '%H:%M'; DateFormat = '%A %#d %B'; ClockFontSize = '18'
     ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps'
     ScanOnStart = '1'; SteamGridDBKey = ''
     CheckUpdates = '1'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'

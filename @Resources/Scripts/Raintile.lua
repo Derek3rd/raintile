@@ -36,6 +36,7 @@ local typing = false  -- the search bar is being typed in (Typing mini-skin on)
 local typed = ''      -- text typed so far
 local leaveSearch     -- defined in the Search section
 local stopTyping      -- defined in the Search section
+local updateSearchBar -- defined in the Search section
 -- Dot on the gear: an update, new games or apps found, tiles of games no
 -- longer installed (see showNotice)
 local notice = { found = 0, update = nil, missing = 0 }
@@ -1157,7 +1158,8 @@ end
 
 -- Favorites and Recent buttons, right of the search bar: icon only, the label
 -- shows below on hover. The active one is lit like a menu pill.
-local side = { hovered = '' }
+local side = { hovered = '', x0 = nil, searchX = nil }
+local searchHover = false -- mouse over the search bar (SearchHover)
 
 local function sideIndex(kind)
 	for i, c in ipairs(cats) do
@@ -1169,7 +1171,7 @@ end
 local function renderSide()
 	local size = math.floor(V.MenuH)
 	local gap = math.max(8, math.floor(num('MenuGap', 6)))
-	local x = math.floor(V.PadX + V.SearchW + gap)
+	local x = side.x0 or math.floor(V.PadX)
 	local iconSize = math.floor(num('MenuIconSize', 24))
 	for _, kind in ipairs({ 'favorites', 'recent' }) do
 		local name = kind == 'favorites' and 'Favorites' or 'Recent'
@@ -1202,6 +1204,28 @@ local function renderSide()
 		end
 	end
 	show('SideLabel', side.hovered ~= '' and sideIndex(side.hovered) ~= nil)
+end
+
+-- Top left, in this order: clock and date, the Favorites / Recent buttons,
+-- the search bar (it opens to the right, so the buttons never move). The
+-- clock's width is measured: it changes with the date.
+local function layoutLeft()
+	local size = math.floor(V.MenuH)
+	local gap = math.max(8, math.floor(num('MenuGap', 6)))
+	local x = math.floor(V.PadX)
+	show('MeterClock', V.ShowClock)
+	show('MeterDate', V.ShowClock and V.ShowDate)
+	if V.ShowClock then
+		SKIN:Bang('!UpdateMeter', 'MeterClock')
+		SKIN:Bang('!UpdateMeter', 'MeterDate')
+		local m = SKIN:GetMeter(V.ShowDate and 'MeterDate' or 'MeterClock')
+		if m then x = math.floor(m:GetX() + m:GetW()) + math.max(24, 2 * gap) end
+	end
+	side.x0 = x
+	for _, kind in ipairs({ 'favorites', 'recent' }) do
+		if sideIndex(kind) then x = x + size + gap end
+	end
+	side.searchX = x
 end
 
 local function pillTarget(i)
@@ -1506,6 +1530,8 @@ local function render(menu)
 			-- Menu meters must be updated before they can be measured
 			SKIN:Bang('!UpdateMeterGroup', 'Menu')
 			layoutMenu()
+			layoutLeft()
+			updateSearchBar()
 		end
 		renderCategories()
 		renderFilters()
@@ -1786,6 +1812,9 @@ function Initialize()
 	V.RecentCount = math.max(1, math.floor(num('RecentCount', 12)))
 	V.CheckUpdates = num('CheckUpdates', 1) ~= 0
 	V.SearchW = math.floor(num('SearchW', 320))
+	V.SearchHover = num('SearchHover', 1) ~= 0
+	V.ShowClock = num('ShowClock', 1) ~= 0
+	V.ShowDate = num('ShowDate', 1) ~= 0
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
 	V.TypingConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Typing'
@@ -1910,6 +1939,7 @@ function Update()
 		else
 			hotKey(true)
 			if appear then startTicker() end
+			ClockTick(0)
 		end
 	end
 	return active
@@ -1925,6 +1955,47 @@ local function hideSplash()
 	show('SplashBg', false)
 	show('SplashLogo', false)
 	show('SplashLabel', false)
+end
+
+-- Clock -----------------------------------------------------------------------------
+-- The time and date measures are updated at every minute, only while the
+-- launcher is visible: MeasureClock waits until the next minute (ClockWait)
+-- and calls ClockTick again, with its other list.
+local clockWidth = nil
+
+function ClockTick(list)
+	if not ready or not V.ShowClock then return end
+	SKIN:Bang('!UpdateMeasure', 'MeasureClockTime')
+	SKIN:Bang('!UpdateMeasure', 'MeasureClockDate')
+	SKIN:Bang('!UpdateMeter', 'MeterClock')
+	SKIN:Bang('!UpdateMeter', 'MeterDate')
+	-- the date (or a wider time) moves what comes after it
+	local m = SKIN:GetMeter(V.ShowDate and 'MeterDate' or 'MeterClock')
+	local w = m and math.floor(m:GetX() + m:GetW()) or 0
+	if clockWidth ~= w then
+		clockWidth = w
+		layoutLeft()
+		renderSide()
+		updateSearchBar()
+		SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	end
+	SKIN:Bang('!Redraw')
+	if not visible then return end
+	local now = os.date('*t')
+	SKIN:Bang('!SetVariable', 'ClockWait', tostring((60 - now.sec) * 1000 + 200))
+	SKIN:Bang('!UpdateMeasure', 'MeasureClock')
+	if list == 1 or list == 2 then
+		SKIN:Bang('!CommandMeasure', 'MeasureClock', 'Execute ' .. (3 - list))
+	else
+		SKIN:Bang('!CommandMeasure', 'MeasureClock', 'Stop 1')
+		SKIN:Bang('!CommandMeasure', 'MeasureClock', 'Stop 2')
+		SKIN:Bang('!CommandMeasure', 'MeasureClock', 'Execute 1')
+	end
+end
+
+local function stopClock()
+	SKIN:Bang('!CommandMeasure', 'MeasureClock', 'Stop 1')
+	SKIN:Bang('!CommandMeasure', 'MeasureClock', 'Stop 2')
 end
 
 function Show()
@@ -1962,6 +2033,7 @@ function Show()
 	hotKey(true)
 	if appear then startTicker() end
 	ReadPlaytime(60)
+	ClockTick(0)
 end
 
 function Hide()
@@ -1979,6 +2051,7 @@ function Hide()
 	end
 	SKIN:Bang('!Hide')
 	hotKey(false)
+	stopClock()
 end
 
 function Toggle()
@@ -2387,6 +2460,8 @@ function Layout()
 	if not ready then return end
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	layoutMenu()
+	layoutLeft()
+	updateSearchBar()
 	filter.laidOut = false
 	renderCategories()
 	renderFilters()
@@ -2637,14 +2712,35 @@ end
 -- keys are off; they come back shortly after (MeasureKeysDelay), so the
 -- release of Enter is not picked up.
 
-local function updateSearchBar()
+-- The bar is open (SearchW wide, with its text) while the mouse is over it,
+-- while typing and while a search is shown; otherwise, with SearchHover=1,
+-- only the magnifier in a circle.
+updateSearchBar = function()
 	local text = typing and (typed .. '|') or query
+	local open = not V.SearchHover or searchHover or typing or searchCat ~= nil
+	local x = side.searchX or math.floor(V.PadX)
+	local h = math.floor(V.MenuH)
+	local w = open and math.max(h, math.floor(V.SearchW)) or h
+	set('SearchPill', 'X', tostring(x))
+	set('SearchPill', 'Shape', string.format(
+		'Rectangle 0,0,%d,%d,%d | Fill Color %s | StrokeWidth 0', w, h,
+		math.min(V.MenuRadius, math.floor(h / 2)),
+		(searchCat or typing) and V.ActiveCategoryColor or V.HoverCategoryColor))
+	set('SearchIcon', 'X', tostring(x + math.floor(h / 2)))
+	set('SearchIcon', 'FontColor', (open and (searchHover or typing or searchCat)) and V.TextColor or V.TextDimColor)
+	set('SearchText', 'X', tostring(x + h - 4))
+	set('SearchText', 'W', tostring(math.max(1, w - h - 12)))
 	set('SearchText', 'Text', text ~= '' and text or V.SearchPlaceholder)
 	set('SearchText', 'FontColor', text ~= '' and V.TextColor or V.TextDimColor)
-	set('SearchPill', 'Shape', string.format(
-		'Rectangle 0,0,%d,%d,%d | Fill Color %s | StrokeWidth 0', V.SearchW, V.MenuH,
-		math.min(V.MenuRadius, math.floor(V.MenuH / 2)),
-		(searchCat or typing) and V.ActiveCategoryColor or V.HoverCategoryColor))
+	show('SearchText', open)
+end
+
+function SearchHover(on)
+	if not ready then return end
+	searchHover = on == 1
+	updateSearchBar()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
 end
 
 -- Goes back from the search to the active category (without redrawing).

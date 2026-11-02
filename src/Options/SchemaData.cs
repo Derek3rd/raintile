@@ -43,7 +43,7 @@ namespace RaintileOptions
                     new Item { Kind = "size", Key = "ScrollBarSize", Label = "Scrollbar thickness", Help = "", Axis = "H" },
                 } },
             } },
-            new Page { Id = "menu", Title = "Menu", Icon = 0xE700, Desc = "The category menu at the top.", Groups = new List<Group>
+            new Page { Id = "menu", Title = "Menu", Icon = 0xE700, Desc = "The category menu at the top, the clock and the buttons.", Groups = new List<Group>
             {
                 new Group { Title = "Category menu", Help = null, Items = new List<Item>
                 {
@@ -71,6 +71,14 @@ namespace RaintileOptions
                     new Item { Kind = "size", Key = "FilterGap", Label = "Space between chips", Help = "", Axis = "W" },
                     new Item { Kind = "size", Key = "FilterPad", Label = "Chip padding", Help = "", Axis = "W" },
                     new Item { Kind = "int", Key = "FilterFontSize", Label = "Font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt" },
+                } },
+                new Group { Title = "Clock", Help = "At the top left, updated every minute while the launcher is visible.", Items = new List<Item>
+                {
+                    new Item { Kind = "bool", Key = "ShowClock", Label = "Clock", Help = "" },
+                    new Item { Kind = "bool", Key = "ShowDate", Label = "Date", Help = "Next to the time, in the language of Windows." },
+                    new Item { Kind = "text", Key = "ClockFormat", Label = "Time format", Help = "%H:%M = 14:05, %#I:%M %p = 2:05 PM." },
+                    new Item { Kind = "text", Key = "DateFormat", Label = "Date format", Help = "%A %#d %B = Monday 2 November, %#d/%m/%Y = 2/11/2026." },
+                    new Item { Kind = "int", Key = "ClockFontSize", Label = "Time font size", Help = "", Min = 8.0, Max = 60.0, Step = 1.0, Unit = "pt" },
                 } },
                 new Group { Title = "Buttons", Help = null, Items = new List<Item>
                 {
@@ -193,7 +201,8 @@ namespace RaintileOptions
             {
                 new Group { Title = "Search bar", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "size", Key = "SearchW", Label = "Width", Help = "", Axis = "W" },
+                    new Item { Kind = "bool", Key = "SearchHover", Label = "Open on hover", Help = "Only the magnifier until the mouse is over it; it stays open while you type and while a search is shown." },
+                    new Item { Kind = "size", Key = "SearchW", Label = "Width", Help = "When open.", Axis = "W" },
                     new Item { Kind = "text", Key = "SearchPlaceholder", Label = "Text in the empty bar", Help = "" },
                 } },
             } },
@@ -279,10 +288,13 @@ namespace RaintileOptions
             { "BgPanFrames", "180" },
             { "BgStyle", "Parallax" },
             { "CheckUpdates", "1" },
+            { "ClockFontSize", "18" },
+            { "ClockFormat", "%H:%M" },
             { "CloseAction", "[!CommandMeasure MeasureScript \"Hide()\"]" },
             { "CloseHotKey", "ESCAPE" },
             { "CloseOnLaunch", "1" },
             { "CloseSize", "14" },
+            { "DateFormat", "%A %#d %B" },
             { "DebugLog", "0" },
             { "FadeDuration", "0" },
             { "FilterBar", "1" },
@@ -354,8 +366,11 @@ namespace RaintileOptions
             { "ScrollStep", "1" },
             { "ScrollThumbColor", "0,210,180,200" },
             { "ScrollTrackColor", "255,255,255,25" },
+            { "SearchHover", "1" },
             { "SearchPlaceholder", "Search" },
             { "SearchW", "320" },
+            { "ShowClock", "1" },
+            { "ShowDate", "1" },
             { "ShowFavorites", "1" },
             { "ShowLabels", "1" },
             { "ShowRecent", "1" },

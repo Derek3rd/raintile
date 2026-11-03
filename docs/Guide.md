@@ -240,7 +240,7 @@ The framing is saved in the tile as `BgFocus` (the point kept at the centre, in 
 
 ### Placing the logo
 
-The logo is centred in its tile and as large as the category's `IconSize`. To move it, drag the logo itself in the same preview (Options > *the category* > *the tile*); to resize it, use the mouse wheel over it or the **Logo** slider, and **Reset** to centre it again at its normal size. **Reset framing and logo**, under the two rows, puts both back in the middle at their normal size in one click. It is independent of the framing: the background and the logo move separately.
+The logo is centred in its tile and as large as the category's `IconSize`. To move it, drag the logo itself in the same preview (Options > *the category* > *the tile*); to resize it, use the mouse wheel over it or the **Logo** slider, and **Reset** to centre it again at its normal size. It is independent of the framing: the background and the logo move separately.
 
 The placement is saved in the tile as `LogoPos` (where the centre of the logo goes, in % of the tile) and `LogoScale` (times the category's logo size). Both are relative, so the logo keeps its place when the resolution or the grid change. What is visible of the logo always stays inside the tile, also while it grows under the mouse: pushed into a corner, it stays in the corner at any size. The launch animation starts from where the logo is and brings it to the centre of the screen.
 

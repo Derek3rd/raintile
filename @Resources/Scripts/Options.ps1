@@ -2733,19 +2733,6 @@ function New-CategoryPage {
     [void](Add-To $logoRow $cat.LogoSlider); [void](Add-To $logoRow $cat.LogoScaleText); [void](Add-To $logoRow $btnLogoReset)
     $cat.LogoRow = $logoRow
     [void](Add-To $f (New-FormRow 'Logo' $logoRow 'Drag the logo in the preview to move it; resize it with the wheel over it or the slider (times the category''s logo size). Independent of the framing.'))
-    # both at once: background and logo back in the middle, normal size
-    $btnResetBoth = New-Button 'Reset framing and logo'
-    $btnResetBoth.HorizontalAlignment = 'Left'
-    [void](Add-To $f (New-FormRow '' $btnResetBoth 'Puts the background and the logo back in the middle, at their normal size.'))
-    $btnResetBoth.Add_Click({
-            if (-not (Get-CurrentTile)) { return }
-            $bgFrame.FX = 0.5; $bgFrame.FY = 0.5; $bgFrame.Zoom = 1.0
-            $logoPlace.X = 0.5; $logoPlace.Y = 0.5; $logoPlace.Scale = 1.0
-            Update-Framing
-            Update-LogoPlace
-            Save-Framing
-            Save-LogoPlace
-        })
 
     # a press on the logo moves the logo, anywhere else the background
     $p.Add_MouseLeftButtonDown({

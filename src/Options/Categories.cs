@@ -1191,21 +1191,6 @@ namespace RaintileOptions
             logoRow = lr;
             AddTo(f, NewFormRow("Logo", lr, "Drag the logo in the preview to move it; resize it with the wheel over it or the slider (times the category's logo size). Independent of the framing."));
 
-            // both at once: background and logo back in the middle, normal size
-            var btnResetBoth = NewButton("Reset framing and logo");
-            btnResetBoth.HorizontalAlignment = HorizontalAlignment.Left;
-            AddTo(f, NewFormRow("", btnResetBoth, "Puts the background and the logo back in the middle, at their normal size."));
-            btnResetBoth.Click += (s, e) =>
-            {
-                if (GetCurrentTile() == null) return;
-                bgFrame.FX = 0.5; bgFrame.FY = 0.5; bgFrame.Zoom = 1.0;
-                logoPlace.X = 0.5; logoPlace.Y = 0.5; logoPlace.Scale = 1.0;
-                UpdateFraming();
-                UpdateLogoPlace();
-                SaveFraming();
-                SaveLogoPlace();
-            };
-
             // a press on the logo moves the logo, anywhere else the background
             preview.MouseLeftButtonDown += (s, e) =>
             {

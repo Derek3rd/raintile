@@ -47,6 +47,30 @@ local showNotice      -- defined with OpenNotice
 -- ver changes at every change (the filtered view is rebuilt).
 local filter = { chips = {}, stores = {}, tags = {}, n = 0, ver = 0, hovered = 0 }
 
+-- On-screen keyboard for the gamepad (GamepadSearch): keys on a grid of 10
+-- columns; { row, col, span, value, label }. The meters OskKey<i> are written
+-- in Grid.inc.
+local OSK = {}
+do
+	local rows = { '1234567890', 'QWERTYUIOP', 'ASDFGHJKL-' }
+	for r, chars in ipairs(rows) do
+		for c = 1, #chars do
+			local ch = chars:sub(c, c)
+			OSK[#OSK + 1] = { row = r, col = c - 1, span = 1, value = ch, label = ch }
+		end
+	end
+	local last = 'ZXCVBNM.'
+	for c = 1, #last do
+		local ch = last:sub(c, c)
+		OSK[#OSK + 1] = { row = 4, col = c - 1, span = 1, value = ch, label = ch }
+	end
+	OSK[#OSK + 1] = { row = 4, col = 8, span = 2, value = 'BACK', label = 'Delete' }
+	OSK[#OSK + 1] = { row = 5, col = 0, span = 6, value = ' ', label = 'Space' }
+	OSK[#OSK + 1] = { row = 5, col = 6, span = 4, value = 'DONE', label = 'Done' }
+end
+local osk = { open = false, sel = 1 }
+local renderOsk, oskMove -- defined with the keyboard (Search section)
+
 local function matchesFilter(t)
 	if filter.n == 0 then return true end
 	if next(filter.stores) and not (t.store and filter.stores[t.store]) then return false end
@@ -523,6 +547,7 @@ local function loadCategory(file)
 			t.name, t.catLabel = s.name, c.label -- for search
 			t.file = file -- for "Edit this tile"
 			t.store, t.steamId = tileStore(command, trim(k.store or ''), trim(k.source or ''))
+			t.added = trim(k.added or '') -- YYYY-MM-DD, for Not played yet
 			t.tags, t.tagSet = {}, {}
 			for tag in (k.tags or ''):gmatch('[^,;]+') do
 				tag = trim(tag)
@@ -634,6 +659,18 @@ local function readPlaytime()
 	end
 end
 
+-- Play time of the other tiles (not Steam), measured by the helper while the
+-- game it started was running: TimePlayed.txt in the data folder,
+-- "<file>|<tile name>|<minutes>|<last played, unix time>"
+local timePlayed = {} -- tile id -> { minutes, last }
+local function readTimePlayed()
+	timePlayed = {}
+	for _, line in ipairs(readLines(data .. 'TimePlayed.txt')) do
+		local id, minutes, last = line:match('^(.*)|(%d+)|(%d+)$')
+		if id then timePlayed[id] = { minutes = tonumber(minutes), last = tonumber(last) } end
+	end
+end
+
 local function ago(time)
 	local today = os.date('*t')
 	today.hour, today.min, today.sec = 0, 0, 0
@@ -648,7 +685,8 @@ end
 -- Line shown on the tile (TileInfo): play time and last launch
 local function tileInfo(t)
 	if t.missing then return 'Not installed' end
-	local p = t.steamId and playtime[t.steamId]
+	-- Steam's own play time, otherwise the one measured by the helper
+	local p = t.steamId and playtime[t.steamId] or timePlayed[tileId(t)]
 	local u = usage[tileId(t)]
 	local last = math.max(p and p.last or 0, u and u.last or 0)
 	local played
@@ -663,10 +701,20 @@ local function tileInfo(t)
 	return nil
 end
 
+local VIRTUAL_LABELS = { favorites = 'Favorites', recent = 'Recent', unplayed = 'Not played yet' }
+
+-- A tile counts as played once launched from Raintile, or with play time on
+-- Steam or measured by the helper (Not played yet leaves it out)
+local function played(t)
+	if usage[tileId(t)] or timePlayed[tileId(t)] then return true end
+	local p = t.steamId and playtime[t.steamId]
+	return p ~= nil and (p.minutes > 0 or p.last > 0)
+end
+
 local function makeVirtual(kind)
 	local c = {
 		virtual = kind, file = '', name = '_' .. kind, order = -1, tiles = {},
-		label = kind == 'favorites' and 'Favorites' or 'Recent',
+		label = VIRTUAL_LABELS[kind],
 	}
 	local icon = resources .. 'Icons\\' .. kind .. '.png'
 	if fileExists(icon) then c.icon = icon end
@@ -691,6 +739,20 @@ local function fillVirtual()
 			for _, id in ipairs(favorites.list) do
 				if byId[id] then c.tiles[#c.tiles + 1] = byId[id] end
 			end
+		elseif c.virtual == 'unplayed' then
+			-- never launched, the ones added last first (Added=, written when a
+			-- tile is added), the others in category order
+			local list = {}
+			for i, t in ipairs(all) do
+				if not t.missing and not played(t) then list[#list + 1] = { t = t, i = i } end
+			end
+			table.sort(list, function(a, b)
+				local da, db = a.t.added or '', b.t.added or ''
+				if da ~= db then return da > db end
+				return a.i < b.i
+			end)
+			c.tiles = {}
+			for i = 1, math.min(#list, V.UnplayedCount) do c.tiles[i] = list[i].t end
 		elseif c.virtual == 'recent' then
 			local list = {}
 			for _, t in ipairs(all) do
@@ -728,12 +790,14 @@ local function loadCategories(files)
 		local virtual = {}
 		if V.ShowFavorites then virtual[#virtual + 1] = makeVirtual('favorites') end
 		if V.ShowRecent then virtual[#virtual + 1] = makeVirtual('recent') end
+		if V.ShowUnplayed then virtual[#virtual + 1] = makeVirtual('unplayed') end
 		for i = #virtual, 1, -1 do table.insert(cats, 1, virtual[i]) end
 		readFavorites()
 		readUsage()
-		fillVirtual()
 		readMissing()
 		readPlaytime()
+		readTimePlayed()
+		fillVirtual()
 	end
 	-- Filter bar: stores (when there are at least two) and tags of the tiles
 	filter.chips = {}
@@ -794,7 +858,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 8
+local GRID_VERSION = 9
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -867,6 +931,21 @@ local function writeGrid(path, sig, files)
 		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "ToggleFilter(' .. i .. ')"]')
 		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverFilter(' .. i .. ')"]')
 		w('MouseLeaveAction=[!CommandMeasure MeasureScript "HoverFilter(0)"]')
+		w('')
+	end
+
+	-- On-screen keyboard (placed and shown by the script)
+	w('[OskBg]')
+	w('Meter=Shape')
+	w('Shape=Rectangle 0,0,0,0 | StrokeWidth 0')
+	w('Hidden=1')
+	w('')
+	for i, k in ipairs(OSK) do
+		w('[OskKey' .. i .. ']')
+		w('Meter=String')
+		w('MeterStyle=StyleOskKey')
+		w('Text=' .. k.label)
+		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "OskPress(' .. i .. ')"]')
 		w('')
 	end
 
@@ -946,7 +1025,8 @@ local function updateEmptyHint()
 		end
 	elseif c and #c.tiles == 0 then
 		if c.virtual == 'favorites' then text = 'No favorites yet: right click a tile > Add to Favorites'
-		elseif c.virtual == 'recent' then text = 'Nothing launched yet' end
+		elseif c.virtual == 'recent' then text = 'Nothing launched yet'
+		elseif c.virtual == 'unplayed' then text = 'Every tile has been launched at least once' end
 	end
 	if text then set('SearchEmpty', 'Text', text) end
 	show('SearchEmpty', text ~= nil)
@@ -1159,6 +1239,8 @@ end
 -- Favorites and Recent buttons, right of the search bar: icon only, the label
 -- shows below on hover. The active one is lit like a menu pill.
 local side = { hovered = '', x0 = nil, searchX = nil }
+local SIDE_KINDS = { 'favorites', 'recent', 'unplayed' }
+local SIDE_METERS = { favorites = 'Favorites', recent = 'Recent', unplayed = 'Unplayed' }
 local searchHover = false -- mouse over the search bar (SearchHover)
 
 local function sideIndex(kind)
@@ -1173,8 +1255,8 @@ local function renderSide()
 	local gap = math.max(8, math.floor(num('MenuGap', 6)))
 	local x = side.x0 or math.floor(V.PadX)
 	local iconSize = math.floor(num('MenuIconSize', 24))
-	for _, kind in ipairs({ 'favorites', 'recent' }) do
-		local name = kind == 'favorites' and 'Favorites' or 'Recent'
+	for _, kind in ipairs(SIDE_KINDS) do
+		local name = SIDE_METERS[kind]
 		local i = sideIndex(kind)
 		if i then
 			local on = not searchCat and i == active
@@ -1222,7 +1304,7 @@ local function layoutLeft()
 		if m then x = math.floor(m:GetX() + m:GetW()) + math.max(24, 2 * gap) end
 	end
 	side.x0 = x
-	for _, kind in ipairs({ 'favorites', 'recent' }) do
+	for _, kind in ipairs(SIDE_KINDS) do
 		if sideIndex(kind) then x = x + size + gap end
 	end
 	side.searchX = x
@@ -1542,6 +1624,7 @@ end
 
 -- Click on a chip: All clears the filter, the others turn on and off. The
 -- grid starts again from the top, with the appear animation.
+local applyFilter
 function ToggleFilter(i)
 	local chip = filter.chips[i]
 	if not ready or launching or not chip or not searchCat then return end
@@ -1552,6 +1635,11 @@ function ToggleFilter(i)
 	else
 		filter.tags[chip.key] = (not filter.tags[chip.key]) or nil
 	end
+	applyFilter()
+end
+
+-- After a change of the selected chips: the results again, from the top
+applyFilter = function()
 	local n = 0
 	for _ in pairs(filter.stores) do n = n + 1 end
 	for _ in pairs(filter.tags) do n = n + 1 end
@@ -1563,6 +1651,23 @@ function ToggleFilter(i)
 	updateEmptyHint()
 	if V.AnimCategory then appear = 0 startTicker() end
 	render(true)
+end
+
+-- Gamepad LT / RT: the previous / next chip, alone (All clears the filter)
+function PadChip(delta)
+	if not ready or launching or not searchCat or #filter.chips == 0 then return end
+	local current = 1
+	if filter.n == 1 then
+		for i, chip in ipairs(filter.chips) do
+			if (chip.kind == 'store' and filter.stores[chip.key]) or (chip.kind == 'tag' and filter.tags[chip.key]) then current = i end
+		end
+	end
+	local i = (current - 1 + delta) % #filter.chips + 1
+	local chip = filter.chips[i]
+	filter.stores, filter.tags = {}, {}
+	if chip.kind == 'store' then filter.stores[chip.key] = true
+	elseif chip.kind == 'tag' then filter.tags[chip.key] = true end
+	applyFilter()
 end
 
 function HoverFilter(i)
@@ -1810,10 +1915,14 @@ function Initialize()
 	V.ShowRecent = num('ShowRecent', 1) ~= 0
 	V.RecentMostUsed = SKIN:GetVariable('RecentOrder', 'Recent'):lower() == 'mostused'
 	V.RecentCount = math.max(1, math.floor(num('RecentCount', 12)))
+	V.ShowUnplayed = num('ShowUnplayed', 1) ~= 0
+	V.UnplayedCount = math.max(1, math.floor(num('UnplayedCount', 24)))
 	V.CheckUpdates = num('CheckUpdates', 1) ~= 0
 	V.SearchW = math.floor(num('SearchW', 320))
 	V.SearchHover = num('SearchHover', 1) ~= 0
 	V.ShowClock = num('ShowClock', 1) ~= 0
+	V.ShowPower = num('ShowPower', 1) ~= 0
+	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
 	V.ShowDate = num('ShowDate', 1) ~= 0
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
@@ -1928,6 +2037,7 @@ function Update()
 		updateEmptyHint()
 		render(true)
 		if notice.missing > 0 then showNotice() end
+		show('MeterPower', V.ShowPower)
 		if showNow then
 			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
 			SKIN:Bang('!Show')
@@ -1955,6 +2065,73 @@ local function hideSplash()
 	show('SplashBg', false)
 	show('SplashLogo', false)
 	show('SplashLabel', false)
+end
+
+-- Power menu -------------------------------------------------------------------------
+-- The power button (ShowPower) opens Lock, Sleep, Restart and Shut down below
+-- it. Restart and Shut down ask for a second click on the same entry (it says
+-- so); the launcher hides before acting.
+local POWER = {
+	{ glyph = '[\\xE72E]', label = 'Lock' },
+	{ glyph = '[\\xE708]', label = 'Sleep' },
+	{ glyph = '[\\xE777]', label = 'Restart', confirm = 'Click again to restart' },
+	{ glyph = '[\\xE7E8]', label = 'Shut down', confirm = 'Click again to shut down' },
+}
+local power = { open = false, armed = 0, hovered = 0 }
+
+local function renderPower()
+	for i, p in ipairs(POWER) do
+		local m = 'MeterPowerItem' .. i
+		local armed = power.armed == i
+		set(m, 'Text', p.glyph .. '   ' .. (armed and p.confirm or p.label))
+		set(m, 'FontColor', armed and V.AccentColor or V.TextColor)
+		set(m, 'SolidColor', (power.hovered == i or armed) and '44,44,54,245' or '24,24,30,240')
+		show(m, power.open)
+		SKIN:Bang('!UpdateMeter', m)
+	end
+	SKIN:Bang('!Redraw')
+end
+
+local function closePower()
+	if not power.open then return false end
+	power.open, power.armed, power.hovered = false, 0, 0
+	renderPower()
+	return true
+end
+
+function PowerMenu()
+	if not ready then return end
+	power.open = not power.open
+	power.armed, power.hovered = 0, 0
+	renderPower()
+end
+
+function PowerHover(i)
+	if not power.open then return end
+	power.hovered = i
+	renderPower()
+end
+
+function PowerAction(i)
+	local p = POWER[i]
+	if not ready or not p or not power.open then return end
+	if p.confirm and power.armed ~= i then
+		power.armed = i
+		renderPower()
+		return
+	end
+	closePower()
+	Hide()
+	if i == 1 then
+		SKIN:Bang('["rundll32.exe" user32.dll,LockWorkStation]')
+	elseif i == 2 then
+		-- sleep, not hibernate (SetSuspendState with hibernate = false)
+		SKIN:Bang('["conhost.exe" --headless powershell.exe -NoProfile -Command "Add-Type -AssemblyName System.Windows.Forms; [void][System.Windows.Forms.Application]::SetSuspendState(0, $false, $false)"]')
+	elseif i == 3 then
+		SKIN:Bang('["shutdown.exe" /r /t 0]')
+	else
+		SKIN:Bang('["shutdown.exe" /s /t 0]')
+	end
 end
 
 -- Clock -----------------------------------------------------------------------------
@@ -2016,6 +2193,10 @@ function Show()
 	hover.on, hover.a = false, 0
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
+	-- play time measured by the helper while the launcher was hidden
+	readTimePlayed()
+	virtualDirty = true
+	base = -1
 	if virtualDirty then
 		fillVirtual()
 		if cats[active].virtual then
@@ -2052,6 +2233,7 @@ function Hide()
 	SKIN:Bang('!Hide')
 	hotKey(false)
 	stopClock()
+	closePower()
 end
 
 function Toggle()
@@ -2606,6 +2788,21 @@ local function launchTile(t, x, y)
 		writeUsage()
 		virtualDirty = true
 	end
+	-- play time of the tiles that are not Steam games: the helper looks for
+	-- the game's process and measures it (see Helper.ps1)
+	if V.TrackPlaytime and t.file and t.file ~= '' and not t.steamId then
+		local cmd = trim(t.command)
+		local low = cmd:lower()
+		if not (cmd:sub(1, 1) == '[' or low:find('^https?://') or low:find('^ms%-settings:')) then
+			local path = commandTarget(cmd)
+			local exe = (path and path:lower():match('%.exe$')) and path or ''
+			local f = io.open(resources .. 'Generated\\Launch.txt', 'wb')
+			if f then
+				f:write(tileId(t), '|', tostring(os.time()), '|', exe)
+				f:close()
+			end
+		end
+	end
 	if not V.LaunchAnimation then
 		if V.CloseOnLaunch then close() end
 		return
@@ -2646,6 +2843,7 @@ end
 -- enough to keep it visible.
 function Nav(dx, dy)
 	if not ready or launching or not visible then return end
+	if osk.open then oskMove(dx, dy) return end
 	local tiles = cur().tiles
 	if #tiles == 0 then return end
 	local L, per, vis = lineCount(), (V.Horizontal and V.NY or V.NX), visibleLines()
@@ -2687,6 +2885,7 @@ function Confirm()
 	dbg(string.format('Confirm: ready=%s launching=%s visible=%s hover=%d on=%s', tostring(ready),
 		tostring(launching ~= nil), tostring(visible), hover.idx, tostring(hover.on)))
 	if not ready or launching or not visible then return end
+	if osk.open then OskPress(osk.sel) return end
 	if hover.idx == 0 or not hover.on then
 		Nav(0, 0)
 		return
@@ -2836,6 +3035,7 @@ end
 stopTyping = function()
 	if not typing then return end
 	typing = false
+	if osk.open then osk.open = false renderOsk() end
 	SKIN:Bang('!DeactivateConfig', V.TypingConfig)
 	updateSearchBar()
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
@@ -2870,6 +3070,102 @@ function TypeKey(key)
 end
 
 -- Turns the keys back on after the search (called by MeasureKeysDelay).
+-- On-screen keyboard ---------------------------------------------------------------
+-- GamepadSearch (Y) opens the search with a keyboard at the bottom of the
+-- screen: D-pad / stick move on it, A types the key, X deletes, Start (or
+-- Done) keeps the results, B closes the search. The mouse can click its keys.
+
+renderOsk = function()
+	local k = math.floor(V.MenuH * 1.15)
+	local gap = 6
+	local pad = 14
+	local w = 10 * k + 9 * gap + 2 * pad
+	local h = 5 * k + 4 * gap + 2 * pad
+	local x0 = math.floor((V.ScreenW - w) / 2)
+	local y0 = math.floor(V.ScreenH - V.PadY - h - 12)
+	set('OskBg', 'X', tostring(x0))
+	set('OskBg', 'Y', tostring(y0))
+	set('OskBg', 'Shape', string.format('Rectangle 0,0,%d,%d,14 | Fill Color 18,18,24,235 | StrokeWidth 1 | Stroke Color %s',
+		w, h, V.HoverCategoryColor))
+	show('OskBg', osk.open)
+	for i, key in ipairs(OSK) do
+		local m = 'OskKey' .. i
+		local kw = key.span * k + (key.span - 1) * gap
+		local x = x0 + pad + key.col * (k + gap)
+		local y = y0 + pad + (key.row - 1) * (k + gap)
+		set(m, 'X', tostring(x + math.floor(kw / 2)))
+		set(m, 'Y', tostring(y + math.floor(k / 2)))
+		set(m, 'W', tostring(kw))
+		set(m, 'H', tostring(k))
+		local on = i == osk.sel
+		set(m, 'SolidColor', on and V.ActiveCategoryColor or '255,255,255,14')
+		set(m, 'FontColor', on and V.TextColor or V.TextDimColor)
+		show(m, osk.open)
+	end
+	for meter in pairs(dirty) do SKIN:Bang('!UpdateMeter', meter) end
+	dirty = {}
+	SKIN:Bang('!Redraw')
+end
+
+local function closeOsk()
+	if not osk.open then return end
+	osk.open = false
+	renderOsk()
+end
+
+function PadSearch()
+	if not ready or launching or not visible then return end
+	if osk.open then
+		PadStart()
+		return
+	end
+	if not typing then SearchOpen() end
+	osk.open = true
+	renderOsk()
+end
+
+function OskPress(i)
+	local key = OSK[i]
+	if not ready or not key then return end
+	if not typing then SearchOpen() end
+	osk.sel = i
+	if key.value == 'DONE' then
+		PadStart()
+		return
+	end
+	TypeKey(key.value)
+	if osk.open then renderOsk() end
+end
+
+-- Start or Done: the search stays, the keyboard closes
+function PadStart()
+	if not osk.open then return end
+	closeOsk()
+	if typing then TypeKey('ENTER') end
+end
+
+function PadX()
+	if osk.open and typing then TypeKey('BACK') end
+end
+
+-- Moves the selection: left / right in the row, up / down to the key of the
+-- next row under the middle of the selected one
+oskMove = function(dx, dy)
+	local cur = OSK[osk.sel]
+	if dx ~= 0 then
+		for i, key in ipairs(OSK) do
+			if key.row == cur.row and key.col == (dx > 0 and cur.col + cur.span or cur.col - 1) then osk.sel = i break end
+		end
+	elseif dy ~= 0 then
+		local row = cur.row + dy
+		local mid = cur.col + cur.span / 2
+		for i, key in ipairs(OSK) do
+			if key.row == row and mid >= key.col and mid < key.col + key.span then osk.sel = i break end
+		end
+	end
+	renderOsk()
+end
+
 function KeysReady()
 	if ready and visible and not typing then hotKey(true) end
 end
@@ -2886,6 +3182,7 @@ end
 -- Esc: closes the search if open, otherwise hides the launcher.
 function Escape()
 	if not ready then return end
+	if closePower() then return end
 	if typing then
 		TypeKey('ESC')
 	elseif searchCat and not launching then

@@ -59,6 +59,7 @@ Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter start
 - **Click** a tile to launch it; **wheel** to scroll.
 - **Click** a category in the menu to switch to it; clicking the category already open scrolls back to the start.
 - The **search bar** at the top left opens the search; the **gear** opens the Options window; the **X** closes the launcher.
+- The **power button**, left of the gear (`ShowPower`), opens **Lock**, **Sleep**, **Restart** and **Shut down**; Restart and Shut down want a second click on the same entry, which says so. The launcher hides first. `Esc` closes the menu.
 - Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Add games and apps...*, *Categories folder*, plus Rainmeter's own menu. On a tile, also the [tile menu](#tile-menu).
 
 ### Keyboard
@@ -88,10 +89,14 @@ Xbox and compatible controllers (XInput):
 | `A` | launch the highlighted tile |
 | `B` | close the search, or the launcher |
 | `LB` / `RB` | previous / next category |
+| `Y` (`GamepadSearch`) | search with the on-screen keyboard |
+| `LT` / `RT` | with search results: the previous / next filter chip, alone |
+
+**On-screen keyboard**: `GamepadSearch` opens the search with a keyboard at the bottom of the screen (letters, digits, `-` and `.`, Delete, Space, Done). The D-pad or stick moves on it, `A` types the key, `X` deletes, `Start` (or *Done*) closes it and keeps the results (the first one highlighted, `A` launches it), `B` closes the search. The keys can be clicked with the mouse too. `Start` is also part of `GamepadToggle`: alone it counts when released, so `Back` + `Start` still opens and closes the launcher.
 
 Rainmeter cannot read controllers, so a small background helper does it (`Scripts\Helper.ps1`: C# compiled by PowerShell on first start). It polls the controllers every 16 ms at below-normal priority and sends commands to Rainmeter through a Windows message (`WM_COPYDATA`), without starting processes. Only one copy runs: refreshing the skin replaces it, and it exits by itself when Rainmeter is closed. While the launcher is hidden, commands other than open/close are ignored, so it does not interfere with games.
 
-Settings: `Gamepad=0` turns it off; `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
+Settings: `Gamepad=0` turns it off; `GamepadSearch` (one or more buttons), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
 
 ## Search
 
@@ -119,9 +124,10 @@ Right click on a tile adds, after Raintile's own entries, the ones that apply to
 
 ## Favorites and Recent
 
-Two categories made of the tiles of the others. They are not in the category menu: they are the two icon buttons right of the search bar (the star and the clock); hover one to see its name, click it to open it. The open one is lit like a menu entry. `Q`/`E` and the gamepad `LB`/`RB` reach them too, before the first category.
+Three categories made of the tiles of the others. They are not in the category menu: they are the icon buttons right of the [clock](#clock) (the star, the clock and the play sign); hover one to see its name, click it to open it. The open one is lit like a menu entry. `Q`/`E` and the gamepad `LB`/`RB` reach them too, before the first category.
 
 - **Favorites**: the tiles you add with right click > **Add to Favorites**, in the order you added them.
+- **Not played yet**: the tiles never launched (from Raintile, or with play time on Steam or [measured](#play-time)), the ones added last first: tiles added in the Options window remember the day (`Added=`). Up to `UnplayedCount`; `ShowUnplayed=0` turns it off.
 - **Recent**: the tiles you launched lately (`RecentOrder=Recent`) or most often (`MostUsed`), up to `RecentCount`.
 
 They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Menu).
@@ -141,7 +147,8 @@ Settings (Options > Menu > Filter bar): `FilterBar`, `FilterStores`, `FilterH`, 
 A small line at the top left of the tile tells how long you played and when you last did: `123 h played - 3 days ago`.
 
 - **Steam games**: the hours played and the last launch come from Steam itself (`userdata\<account>\config\localconfig.vdf`, every account that logged in on this PC), read in the background (`Scripts\Playtime.ps1`) when the skin loads and, at most once a minute, when the launcher opens. The game is recognised by its `steam://rungameid/<id>` command or by `Source=Steam:<id>`.
-- **Other tiles**: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
+- **Other tiles** (`TrackPlaytime=1`): when a tile starts a game, the background helper (the one of the [gamepad](#gamepad)) looks for its process and measures how long it runs: the program of the command (`.exe`), the one it learned the last time, or the first program coming to the foreground that started after the launch (launchers like Epic, GOG, Ubisoft, EA and Battle.net, and parts of Windows, are left out). The minutes go to `TimePlayed.txt` in the data folder, the program found to `GameExe.txt`. Web links and bangs are not measured.
+- Before any time is measured: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
 - `TileInfo=Hover` (default) shows it only on the highlighted tile (mouse, keyboard or gamepad), `Always` on every tile, `Never` hides it. Size: `InfoFontSize`. Options > Appearance > Text.
 - Tiles of [games no longer installed](#games-no-longer-installed) always show **Not installed**.
 
@@ -299,7 +306,7 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 - Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default, and restores it.
-- **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
+- **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
   - **Move to**: moves a tile, and its images, to another category; both category files are saved at once.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.

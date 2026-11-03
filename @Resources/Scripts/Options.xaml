@@ -378,7 +378,9 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ListBoxItem">
-          <Border x:Name="b" CornerRadius="6" Padding="{TemplateBinding Padding}" Background="Transparent">
+          <!-- the border marks where a dragged entry goes (Options program) -->
+          <Border x:Name="b" CornerRadius="6" Padding="{TemplateBinding Padding}" Background="Transparent"
+                  BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
             <ContentPresenter/>
           </Border>
           <ControlTemplate.Triggers>

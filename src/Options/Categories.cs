@@ -829,6 +829,76 @@ namespace RaintileOptions
             return b;
         }
 
+        // Drag and drop in a list: 'move(from, to)' moves the item at index 'from'
+        // to index 'to' (both in the list as it is before the move). A thin line
+        // shows where it goes. 'canDrag' leaves some items out (imported tiles).
+        void EnableDragReorder(ListBox list, Func<ListBoxItem, bool> canDrag, Action<int, int> move)
+        {
+            list.AllowDrop = true;
+            Point start = new Point();
+            ListBoxItem pressed = null;
+            list.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                start = e.GetPosition(list);
+                pressed = ItemAt(list, e.OriginalSource as DependencyObject);
+            };
+            list.PreviewMouseMove += (s, e) =>
+            {
+                if (e.LeftButton != MouseButtonState.Pressed || pressed == null || !canDrag(pressed)) return;
+                var p = e.GetPosition(list);
+                if (Math.Abs(p.X - start.X) < SystemParameters.MinimumHorizontalDragDistance
+                    && Math.Abs(p.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+                var item = pressed;
+                pressed = null;
+                DragDrop.DoDragDrop(list, new DataObject("RaintileItem", item), DragDropEffects.Move);
+                ClearDropMark(list);
+            };
+            list.DragOver += (s, e) =>
+            {
+                e.Effects = e.Data.GetDataPresent("RaintileItem") ? DragDropEffects.Move : DragDropEffects.None;
+                e.Handled = true;
+                int to = DropIndex(list, e);
+                ClearDropMark(list);
+                if (to < list.Items.Count) ((ListBoxItem)list.Items[to]).BorderThickness = T(0, 2, 0, 0);
+                else if (list.Items.Count > 0) ((ListBoxItem)list.Items[list.Items.Count - 1]).BorderThickness = T(0, 0, 0, 2);
+            };
+            list.DragLeave += (s, e) => ClearDropMark(list);
+            list.Drop += (s, e) =>
+            {
+                ClearDropMark(list);
+                var item = e.Data.GetData("RaintileItem") as ListBoxItem;
+                if (item == null) return;
+                int from = list.Items.IndexOf(item), to = DropIndex(list, e);
+                if (from < 0) return;
+                if (to > from) to--;   // the item leaves its place first
+                if (to != from) move(from, to);
+            };
+        }
+
+        static ListBoxItem ItemAt(ListBox list, DependencyObject element)
+        {
+            return element != null ? ItemsControl.ContainerFromElement(list, element) as ListBoxItem : null;
+        }
+
+        // Index the dragged item would take: before the item under the mouse, or
+        // after it in its lower half
+        static int DropIndex(ListBox list, DragEventArgs e)
+        {
+            var over = ItemAt(list, e.OriginalSource as DependencyObject);
+            if (over == null) return list.Items.Count;
+            int i = list.Items.IndexOf(over);
+            return e.GetPosition(over).Y > over.ActualHeight / 2 ? i + 1 : i;
+        }
+
+        void ClearDropMark(ListBox list)
+        {
+            foreach (ListBoxItem it in list.Items)
+            {
+                it.BorderThickness = T(0);
+                it.BorderBrush = ResBrush("AccentBrush");
+            }
+        }
+
         // Categories page: the list of categories, to create, reorder and delete them
         UIElement NewCategoryListPage()
         {
@@ -888,6 +958,21 @@ namespace RaintileOptions
             AddTo(f, NewFormRow("Logo size", catFields["IconSize"], "", sizeHint));
 
             catsList.SelectionChanged += (s, e) => ShowCategoryDetails();
+            // drag a category to change the order of the menu
+            EnableDragReorder(catsList, it => true, (from, to) =>
+            {
+                var files = catsList.Items.OfType<ListBoxItem>().Select(it => ((ListTag)it.Tag).File).ToList();
+                string moved = files[from];
+                files.RemoveAt(from);
+                files.Insert(to, moved);
+                for (int n = 0; n < files.Count; n++)
+                {
+                    var c = Core.GetCategorySection(GetModel(files[n]));
+                    if (Core.GetKey(c, "Order") != (n + 1).ToString()) { Core.SetKey(c, "Order", (n + 1).ToString()); SetChanged(files[n]); }
+                }
+                RefreshCats(moved);
+                BuildNav(navCurrent);
+            });
             foreach (var kv in catFields)
             {
                 string key = kv.Key;
@@ -1270,6 +1355,23 @@ namespace RaintileOptions
 
             // --- events
             tilesList.SelectionChanged += (s, e) => ShowTile();
+            // drag a tile to change its place (hand-written tiles; the imported
+            // ones stay at the end)
+            EnableDragReorder(tilesList, it => !((ListTag)it.Tag).Imported, (from, to) =>
+            {
+                var m = GetModel(currentFile);
+                var tiles = Core.GetTiles(m);
+                if (from >= tiles.Count) return;
+                to = Math.Min(to, tiles.Count - 1);
+                var t = tiles[from];
+                var target = tiles[to];
+                m.Sections.Remove(t);
+                int ins = m.Sections.IndexOf(target);
+                // after the target when moving down, before it when moving up
+                m.Sections.Insert(to > from ? ins + 1 : ins, t);
+                SetChanged(currentFile);
+                RefreshTiles(to);
+            });
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" })
             {
                 string key = k;
@@ -1325,7 +1427,9 @@ namespace RaintileOptions
                 string name = Core.GetTileName(r.Text ?? "");
                 if (r.Button != "Create" || name == "") return;
                 if (TestTileName(m, name)) { ShowDialog("Raintile", "There is already a tile called '" + name + "'."); return; }
-                m.Sections.Add(new IniSection { Name = name });
+                var added = new IniSection { Name = name };
+                Core.SetKey(added, "Added", DateTime.Now.ToString("yyyy-MM-dd"));   // for Not played yet
+                m.Sections.Add(added);
                 SetChanged(currentFile);
                 RefreshTiles(Core.GetTiles(m).Count - 1);
                 tileFields["Command"].Focus();

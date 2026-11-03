@@ -154,6 +154,8 @@ A small line at the top left of the tile tells how long you played and when you 
 
 ## Launching a tile
 
+**Hot keys**: a tile with `HotKey=` (e.g. `CTRL ALT 1`) starts with that combination wherever you are, also while the launcher is hidden: right away, without the animation (an open launcher hides with `CloseOnLaunch=1`). One tile per combination: if two tiles have the same one, the first wins, and the open/close key (`OpenHotKey`) cannot be used. The Options window warns about a combination already used.
+
 On click the tile expands to full screen (with background and logo at full resolution), stays visible for `LaunchHold` ms, then the launcher hides. The command starts right away, at the beginning of the animation.
 
 | Setting | Default | Effect |
@@ -202,6 +204,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `LogoScale` | size of the logo, times the category's `IconSize`, `0.25` to `3` (default `1`) |
 | `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
 | `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
+| `HotKey` | key combination that starts the tile, also while the launcher is hidden: HotKey plugin names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
 | `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
 
 ### Commands

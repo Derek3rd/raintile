@@ -2411,7 +2411,7 @@ function Show-Tile {
     $imported = $sel -and $sel.Tag.Imported
     $cat.TileCard.IsEnabled = [bool]$s -and -not $imported
     $cat.ImportedCard.Visibility = if ($imported) { 'Visible' } else { 'Collapsed' }
-    foreach ($k in 'Command', 'Label', 'Color', 'Tags') { $cat["tile.$k"].Text = if ($s) { Get-Key $s $k } else { '' } }
+    foreach ($k in 'Command', 'Label', 'Color', 'Tags', 'HotKey') { $cat["tile.$k"].Text = if ($s) { Get-Key $s $k } else { '' } }
     Update-TagSuggestions
     $cat['tile.Name'].Text = if ($s) { $s.Name } else { '' }
     $cat.Note.Text = if (-not $sel) { 'No tiles yet: add one with the + button.' } else { '' }
@@ -2819,7 +2819,7 @@ function New-CategoryPage {
             Save-Framing
         })
 
-    foreach ($k in 'Name', 'Command', 'Label', 'Color', 'Tags') {
+    foreach ($k in 'Name', 'Command', 'Label', 'Color', 'Tags', 'HotKey') {
         $tb = New-Object System.Windows.Controls.TextBox
         $tb.Tag = $k
         $cat["tile.$k"] = $tb
@@ -2845,6 +2845,7 @@ function New-CategoryPage {
     $cat.TagSuggestions.Margin = T 0 4 0 0
     [void](Add-To $tagHint $cat.TagSuggestions)
     [void](Add-To $f (New-FormRow 'Tags' $cat['tile.Tags'] '' $tagHint))
+    [void](Add-To $f (New-FormRow 'Hot key' $cat['tile.HotKey'] 'Starts the tile also while the launcher is hidden: keys separated by spaces, e.g. CTRL ALT 1 (HotKey plugin names).'))
     $moveRow = New-Panel 'Horizontal'
     $cat.MoveTo = New-Object System.Windows.Controls.ComboBox
     $cat.MoveTo.Width = 200
@@ -2905,7 +2906,7 @@ function New-CategoryPage {
     # --- events
     $cat.Tiles.Add_SelectionChanged({ Show-Tile })
 
-    foreach ($k in 'Command', 'Label', 'Color', 'Tags') {
+    foreach ($k in 'Command', 'Label', 'Color', 'Tags', 'HotKey') {
         $cat["tile.$k"].Add_TextChanged({
                 param($s, $e)
                 if ($script:loading) { return }

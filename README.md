@@ -17,6 +17,7 @@ Your games, apps, links and system tools become large tiles with background art 
 - **Tile menu**: right click a tile to edit it, add it to Favorites, open its file location, run it as administrator or remove it.
 - **Mouse, keyboard and gamepad**: WASD/arrows, Space/Enter, Xbox-compatible controllers (open the launcher with Back + Start), with an on-screen keyboard to search from the couch.
 - **Power button**: lock, sleep, restart or shut down the PC from the launcher.
+- **Hot keys for tiles**: give a game a key combination and start it from anywhere, even with the launcher closed.
 - **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.
 - **Lightweight**: no update cycle (0% CPU at rest), a fixed number of meters however many tiles you have, thumbnails at the exact displayed size, loaded once and then just shown/hidden.
 - **Options window** to edit every setting, the categories and their tiles without touching files.

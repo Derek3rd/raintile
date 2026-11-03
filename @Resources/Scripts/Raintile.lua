@@ -69,6 +69,7 @@ do
 	OSK[#OSK + 1] = { row = 5, col = 6, span = 4, value = 'DONE', label = 'Done' }
 end
 local osk = { open = false, sel = 1 }
+local tileKeys = {}  -- tile hot keys: { { key, id } }, in the order of their measures
 local renderOsk, oskMove -- defined with the keyboard (Search section)
 
 local function matchesFilter(t)
@@ -548,6 +549,7 @@ local function loadCategory(file)
 			t.file = file -- for "Edit this tile"
 			t.store, t.steamId = tileStore(command, trim(k.store or ''), trim(k.source or ''))
 			t.added = trim(k.added or '') -- YYYY-MM-DD, for Not played yet
+			t.hotkey = trim(k.hotkey or '') -- e.g. CTRL ALT 1
 			t.tags, t.tagSet = {}, {}
 			for tag in (k.tags or ''):gmatch('[^,;]+') do
 				tag = trim(tag)
@@ -825,6 +827,18 @@ local function loadCategories(files)
 		for _, tag in ipairs(tagList) do filter.chips[#filter.chips + 1] = { kind = 'tag', key = tag, label = '#' .. tags[tag] } end
 		if #filter.chips > 0 then table.insert(filter.chips, 1, { kind = 'all', label = 'All' }) end
 	end
+	-- tile hot keys: one tile per key (the first one), not the open/close key
+	tileKeys = {}
+	local usedKeys = { [trim(SKIN:GetVariable('OpenHotKey', '')):upper()] = true }
+	for _, c in ipairs(cats) do
+		for _, t in ipairs(c.virtual and {} or c.tiles) do
+			local key = (t.hotkey or ''):upper()
+			if key ~= '' and not usedKeys[key] then
+				usedKeys[key] = true
+				tileKeys[#tileKeys + 1] = { key = key, id = tileId(t) }
+			end
+		end
+	end
 	-- the stored selection is dropped: the chips may have changed
 	filter.stores, filter.tags, filter.n = {}, {}, 0
 	filter.ver = filter.ver + 1
@@ -869,6 +883,7 @@ end
 local function signature()
 	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
 	for _, chip in ipairs(filter.chips) do s[#s + 1] = 'chip:' .. chip.label end
+	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
 	for _, c in ipairs(cats) do
 		s[#s + 1] = c.name .. ':' .. c.label .. ':' .. (c.icon or '')
 	end
@@ -931,6 +946,16 @@ local function writeGrid(path, sig, files)
 		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "ToggleFilter(' .. i .. ')"]')
 		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverFilter(' .. i .. ')"]')
 		w('MouseLeaveAction=[!CommandMeasure MeasureScript "HoverFilter(0)"]')
+		w('')
+	end
+
+	-- Tile hot keys (HotKey plugin): active also while the launcher is hidden
+	for i, k in ipairs(tileKeys) do
+		w('[MeasureTileKey' .. i .. ']')
+		w('Measure=Plugin')
+		w('Plugin=HotKey')
+		w('HotKey=' .. k.key)
+		w('KeyDownAction=[!CommandMeasure MeasureScript "TileHotKey(' .. i .. ')"]')
 		w('')
 	end
 
@@ -2766,19 +2791,9 @@ end
 
 -- Launches tile t; x, y = its position (in pixels) in the grid, where the
 -- expansion starts.
-local function launchTile(t, x, y)
-	if not t or not t.command then
-		dbg('launch ignored: tile without Command')
-		return
-	end
-	if t.missing then
-		-- no longer installed: Options > Import, where it can be removed or kept
-		dbg('launch ignored: ' .. t.name .. ' is no longer installed')
-		SKIN:Bang(SKIN:GetVariable('OptionsImportAction'))
-		return
-	end
-	dbg('launch: ' .. t.command)
-
+-- Runs the tile's command; counted for Recent and, for the tiles that are not
+-- Steam games, handed to the helper that measures the play time
+local function startTile(t)
 	SKIN:Bang(t.command)
 	-- counted for Recent; its tiles change the next time it is shown
 	if t.file and t.file ~= '' then
@@ -2803,6 +2818,22 @@ local function launchTile(t, x, y)
 			end
 		end
 	end
+end
+
+local function launchTile(t, x, y)
+	if not t or not t.command then
+		dbg('launch ignored: tile without Command')
+		return
+	end
+	if t.missing then
+		-- no longer installed: Options > Import, where it can be removed or kept
+		dbg('launch ignored: ' .. t.name .. ' is no longer installed')
+		SKIN:Bang(SKIN:GetVariable('OptionsImportAction'))
+		return
+	end
+	dbg('launch: ' .. t.command)
+
+	startTile(t)
 	if not V.LaunchAnimation then
 		if V.CloseOnLaunch then close() end
 		return
@@ -2824,6 +2855,28 @@ local function launchTile(t, x, y)
 
 	drawSplash(V.LaunchAnimFrames > 0 and 0 or 1)
 	SKIN:Bang('!CommandMeasure', 'MeasureLaunchAnim', 'Execute 1')
+end
+
+-- Tile hot keys (HotKey= on a tile, MeasureTileKey<i> in Grid.inc): they
+-- work also while the launcher is hidden. The tile starts right away, without
+-- the launch animation; an open launcher hides (CloseOnLaunch).
+
+function TileHotKey(i)
+	local entry = tileKeys[i]
+	if not ready or not entry or launching then return end
+	for _, c in ipairs(cats) do
+		if not c.virtual then
+			for _, t in ipairs(c.tiles) do
+				if tileId(t) == entry.id then
+					dbg('hot key ' .. entry.key .. ': ' .. t.name)
+					if t.missing or not t.command then return end
+					if visible and V.CloseOnLaunch then Hide() end
+					startTile(t)
+					return
+				end
+			end
+		end
+	end
 end
 
 function Launch(slot)

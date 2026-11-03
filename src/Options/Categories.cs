@@ -49,6 +49,7 @@ namespace RaintileOptions
         Panel frameRow, logoRow;
         Slider zoomSlider, logoSlider;
         ComboBox moveTo;
+        Button tileKeyButton;
         Button colorSwatch;
         WrapPanel tagSuggestions;
         readonly Dictionary<string, TextBox> catFields = new Dictionary<string, TextBox>();
@@ -730,6 +731,17 @@ namespace RaintileOptions
             if (sel != null && ((ListTag)sel.Tag).Section != null) UpdateTileEntry(sel);
         }
 
+        // Who already uses a hot key: the open/close key or another tile (null if free)
+        string HotKeyUser(string value, IniSection self)
+        {
+            if (string.Equals(V("OpenHotKey").Trim(), value, StringComparison.OrdinalIgnoreCase)) return "Open / close the launcher";
+            foreach (var f in Core.GetCategoryFiles())
+                foreach (var t in Core.GetTiles(GetModel(f.Name)))
+                    if (t != self && string.Equals(Core.GetKey(t, "HotKey").Trim(), value, StringComparison.OrdinalIgnoreCase))
+                        return "the tile " + t.Name;
+            return null;
+        }
+
         // Tags of every tile (as in the window), for the suggestions under the field
         List<string> GetAllTags()
         {
@@ -778,6 +790,7 @@ namespace RaintileOptions
             importedCard.Visibility = imported ? Visibility.Visible : Visibility.Collapsed;
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" }) tileFields[k].Text = s != null ? Core.GetKey(s, k) : "";
             UpdateTagSuggestions();
+            tileKeyButton.Content = Schema.FormatHotKey(s != null ? Core.GetKey(s, "HotKey") : "");
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
             tileNote.Visibility = tileNote.Text != "" ? Visibility.Visible : Visibility.Collapsed;
@@ -1292,6 +1305,67 @@ namespace RaintileOptions
             tagSuggestions = new WrapPanel { Margin = T(0, 4, 0, 0) };
             AddTo(tagHint, tagSuggestions);
             AddTo(f, NewFormRow("Tags", tileFields["Tags"], "", tagHint));
+            // hot key: click, then press the combination (with modifiers)
+            var keyRow = NewPanel(Orientation.Horizontal);
+            tileKeyButton = NewButton("None", "KeyButton", "Click, then press the combination");
+            var keyClear = NewIconButton(0xE711, "No hot key");
+            AddTo(keyRow, tileKeyButton); AddTo(keyRow, keyClear);
+            AddTo(f, NewFormRow("Hot key", keyRow, "Starts the tile also while the launcher is hidden, e.g. Ctrl + Alt + 1. Hold the modifiers, then press the key."));
+            tileKeyButton.Click += (s, e) =>
+            {
+                if (GetCurrentTile() == null) return;
+                capturing = tileKeyButton;
+                tileKeyButton.Content = "Press the keys\u2026";
+                tileKeyButton.Focus();
+            };
+            tileKeyButton.LostKeyboardFocus += (s, e) =>
+            {
+                if (capturing != tileKeyButton) return;
+                capturing = null;
+                var t = GetCurrentTile();
+                tileKeyButton.Content = Schema.FormatHotKey(t != null ? Core.GetKey(t, "HotKey") : "");
+            };
+            tileKeyButton.PreviewKeyDown += (s, e) =>
+            {
+                if (capturing != tileKeyButton) return;
+                e.Handled = true;
+                var k = e.Key == Key.System ? e.SystemKey : e.Key;
+                var mods = Keyboard.Modifiers;
+                bool ctrl = (mods & ModifierKeys.Control) != 0, alt = (mods & ModifierKeys.Alt) != 0;
+                bool shift = (mods & ModifierKeys.Shift) != 0, winKey = (mods & ModifierKeys.Windows) != 0;
+                string value = Schema.ToHotKey(KeyInterop.VirtualKeyFromKey(k), ctrl, alt, shift, winKey, true);
+                if (value == null)
+                {
+                    var held = new List<string>();
+                    if (ctrl) held.Add("CTRL");
+                    if (alt) held.Add("ALT");
+                    if (shift) held.Add("SHIFT");
+                    if (winKey) held.Add("LWIN");
+                    if (held.Count > 0) tileKeyButton.Content = Schema.FormatHotKey(string.Join(" ", held)) + " + \u2026";
+                    return;
+                }
+                capturing = null;
+                var t = GetCurrentTile();
+                if (t == null) return;
+                string other = HotKeyUser(value, t);
+                if (other != null)
+                {
+                    tileKeyButton.Content = Schema.FormatHotKey(Core.GetKey(t, "HotKey"));
+                    ShowDialog("Raintile", Schema.FormatHotKey(value) + " is already used by " + other + ".");
+                    return;
+                }
+                Core.SetKey(t, "HotKey", value);
+                tileKeyButton.Content = Schema.FormatHotKey(value);
+                SetChanged(currentFile);
+            };
+            keyClear.Click += (s, e) =>
+            {
+                var t = GetCurrentTile();
+                if (t == null) return;
+                Core.SetKey(t, "HotKey", "");
+                tileKeyButton.Content = Schema.FormatHotKey("");
+                SetChanged(currentFile);
+            };
             var moveRow = NewPanel(Orientation.Horizontal);
             moveTo = new ComboBox { Width = 200 };
             var btnMove = NewButton("Move");

@@ -49,6 +49,7 @@ namespace RaintileOptions
         Panel frameRow, logoRow;
         Slider zoomSlider, logoSlider;
         ComboBox moveTo;
+        Button tileKeyButton;
         Button colorSwatch;
         WrapPanel tagSuggestions;
         readonly Dictionary<string, TextBox> catFields = new Dictionary<string, TextBox>();
@@ -730,6 +731,17 @@ namespace RaintileOptions
             if (sel != null && ((ListTag)sel.Tag).Section != null) UpdateTileEntry(sel);
         }
 
+        // Who already uses a hot key: the open/close key or another tile (null if free)
+        string HotKeyUser(string value, IniSection self)
+        {
+            if (string.Equals(V("OpenHotKey").Trim(), value, StringComparison.OrdinalIgnoreCase)) return "Open / close the launcher";
+            foreach (var f in Core.GetCategoryFiles())
+                foreach (var t in Core.GetTiles(GetModel(f.Name)))
+                    if (t != self && string.Equals(Core.GetKey(t, "HotKey").Trim(), value, StringComparison.OrdinalIgnoreCase))
+                        return "the tile " + t.Name;
+            return null;
+        }
+
         // Tags of every tile (as in the window), for the suggestions under the field
         List<string> GetAllTags()
         {
@@ -778,6 +790,7 @@ namespace RaintileOptions
             importedCard.Visibility = imported ? Visibility.Visible : Visibility.Collapsed;
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" }) tileFields[k].Text = s != null ? Core.GetKey(s, k) : "";
             UpdateTagSuggestions();
+            tileKeyButton.Content = Schema.FormatHotKey(s != null ? Core.GetKey(s, "HotKey") : "");
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
             tileNote.Visibility = tileNote.Text != "" ? Visibility.Visible : Visibility.Collapsed;
@@ -827,6 +840,76 @@ namespace RaintileOptions
             dp.Children.Add(head);
             dp.Children.Add(list);
             return b;
+        }
+
+        // Drag and drop in a list: 'move(from, to)' moves the item at index 'from'
+        // to index 'to' (both in the list as it is before the move). A thin line
+        // shows where it goes. 'canDrag' leaves some items out (imported tiles).
+        void EnableDragReorder(ListBox list, Func<ListBoxItem, bool> canDrag, Action<int, int> move)
+        {
+            list.AllowDrop = true;
+            Point start = new Point();
+            ListBoxItem pressed = null;
+            list.PreviewMouseLeftButtonDown += (s, e) =>
+            {
+                start = e.GetPosition(list);
+                pressed = ItemAt(list, e.OriginalSource as DependencyObject);
+            };
+            list.PreviewMouseMove += (s, e) =>
+            {
+                if (e.LeftButton != MouseButtonState.Pressed || pressed == null || !canDrag(pressed)) return;
+                var p = e.GetPosition(list);
+                if (Math.Abs(p.X - start.X) < SystemParameters.MinimumHorizontalDragDistance
+                    && Math.Abs(p.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+                var item = pressed;
+                pressed = null;
+                DragDrop.DoDragDrop(list, new DataObject("RaintileItem", item), DragDropEffects.Move);
+                ClearDropMark(list);
+            };
+            list.DragOver += (s, e) =>
+            {
+                e.Effects = e.Data.GetDataPresent("RaintileItem") ? DragDropEffects.Move : DragDropEffects.None;
+                e.Handled = true;
+                int to = DropIndex(list, e);
+                ClearDropMark(list);
+                if (to < list.Items.Count) ((ListBoxItem)list.Items[to]).BorderThickness = T(0, 2, 0, 0);
+                else if (list.Items.Count > 0) ((ListBoxItem)list.Items[list.Items.Count - 1]).BorderThickness = T(0, 0, 0, 2);
+            };
+            list.DragLeave += (s, e) => ClearDropMark(list);
+            list.Drop += (s, e) =>
+            {
+                ClearDropMark(list);
+                var item = e.Data.GetData("RaintileItem") as ListBoxItem;
+                if (item == null) return;
+                int from = list.Items.IndexOf(item), to = DropIndex(list, e);
+                if (from < 0) return;
+                if (to > from) to--;   // the item leaves its place first
+                if (to != from) move(from, to);
+            };
+        }
+
+        static ListBoxItem ItemAt(ListBox list, DependencyObject element)
+        {
+            return element != null ? ItemsControl.ContainerFromElement(list, element) as ListBoxItem : null;
+        }
+
+        // Index the dragged item would take: before the item under the mouse, or
+        // after it in its lower half
+        static int DropIndex(ListBox list, DragEventArgs e)
+        {
+            var over = ItemAt(list, e.OriginalSource as DependencyObject);
+            if (over == null) return list.Items.Count;
+            int i = list.Items.IndexOf(over);
+            return e.GetPosition(over).Y > over.ActualHeight / 2 ? i + 1 : i;
+        }
+
+        void ClearDropMark(ListBox list)
+        {
+            foreach (ListBoxItem it in list.Items)
+            {
+                it.BorderThickness = T(0);
+                it.BorderBrush = ResBrush("AccentBrush");
+            }
         }
 
         // Categories page: the list of categories, to create, reorder and delete them
@@ -888,6 +971,21 @@ namespace RaintileOptions
             AddTo(f, NewFormRow("Logo size", catFields["IconSize"], "", sizeHint));
 
             catsList.SelectionChanged += (s, e) => ShowCategoryDetails();
+            // drag a category to change the order of the menu
+            EnableDragReorder(catsList, it => true, (from, to) =>
+            {
+                var files = catsList.Items.OfType<ListBoxItem>().Select(it => ((ListTag)it.Tag).File).ToList();
+                string moved = files[from];
+                files.RemoveAt(from);
+                files.Insert(to, moved);
+                for (int n = 0; n < files.Count; n++)
+                {
+                    var c = Core.GetCategorySection(GetModel(files[n]));
+                    if (Core.GetKey(c, "Order") != (n + 1).ToString()) { Core.SetKey(c, "Order", (n + 1).ToString()); SetChanged(files[n]); }
+                }
+                RefreshCats(moved);
+                BuildNav(navCurrent);
+            });
             foreach (var kv in catFields)
             {
                 string key = kv.Key;
@@ -1207,6 +1305,67 @@ namespace RaintileOptions
             tagSuggestions = new WrapPanel { Margin = T(0, 4, 0, 0) };
             AddTo(tagHint, tagSuggestions);
             AddTo(f, NewFormRow("Tags", tileFields["Tags"], "", tagHint));
+            // hot key: click, then press the combination (with modifiers)
+            var keyRow = NewPanel(Orientation.Horizontal);
+            tileKeyButton = NewButton("None", "KeyButton", "Click, then press the combination");
+            var keyClear = NewIconButton(0xE711, "No hot key");
+            AddTo(keyRow, tileKeyButton); AddTo(keyRow, keyClear);
+            AddTo(f, NewFormRow("Hot key", keyRow, "Starts the tile also while the launcher is hidden, e.g. Ctrl + Alt + 1. Hold the modifiers, then press the key."));
+            tileKeyButton.Click += (s, e) =>
+            {
+                if (GetCurrentTile() == null) return;
+                capturing = tileKeyButton;
+                tileKeyButton.Content = "Press the keys\u2026";
+                tileKeyButton.Focus();
+            };
+            tileKeyButton.LostKeyboardFocus += (s, e) =>
+            {
+                if (capturing != tileKeyButton) return;
+                capturing = null;
+                var t = GetCurrentTile();
+                tileKeyButton.Content = Schema.FormatHotKey(t != null ? Core.GetKey(t, "HotKey") : "");
+            };
+            tileKeyButton.PreviewKeyDown += (s, e) =>
+            {
+                if (capturing != tileKeyButton) return;
+                e.Handled = true;
+                var k = e.Key == Key.System ? e.SystemKey : e.Key;
+                var mods = Keyboard.Modifiers;
+                bool ctrl = (mods & ModifierKeys.Control) != 0, alt = (mods & ModifierKeys.Alt) != 0;
+                bool shift = (mods & ModifierKeys.Shift) != 0, winKey = (mods & ModifierKeys.Windows) != 0;
+                string value = Schema.ToHotKey(KeyInterop.VirtualKeyFromKey(k), ctrl, alt, shift, winKey, true);
+                if (value == null)
+                {
+                    var held = new List<string>();
+                    if (ctrl) held.Add("CTRL");
+                    if (alt) held.Add("ALT");
+                    if (shift) held.Add("SHIFT");
+                    if (winKey) held.Add("LWIN");
+                    if (held.Count > 0) tileKeyButton.Content = Schema.FormatHotKey(string.Join(" ", held)) + " + \u2026";
+                    return;
+                }
+                capturing = null;
+                var t = GetCurrentTile();
+                if (t == null) return;
+                string other = HotKeyUser(value, t);
+                if (other != null)
+                {
+                    tileKeyButton.Content = Schema.FormatHotKey(Core.GetKey(t, "HotKey"));
+                    ShowDialog("Raintile", Schema.FormatHotKey(value) + " is already used by " + other + ".");
+                    return;
+                }
+                Core.SetKey(t, "HotKey", value);
+                tileKeyButton.Content = Schema.FormatHotKey(value);
+                SetChanged(currentFile);
+            };
+            keyClear.Click += (s, e) =>
+            {
+                var t = GetCurrentTile();
+                if (t == null) return;
+                Core.SetKey(t, "HotKey", "");
+                tileKeyButton.Content = Schema.FormatHotKey("");
+                SetChanged(currentFile);
+            };
             var moveRow = NewPanel(Orientation.Horizontal);
             moveTo = new ComboBox { Width = 200 };
             var btnMove = NewButton("Move");
@@ -1270,6 +1429,23 @@ namespace RaintileOptions
 
             // --- events
             tilesList.SelectionChanged += (s, e) => ShowTile();
+            // drag a tile to change its place (hand-written tiles; the imported
+            // ones stay at the end)
+            EnableDragReorder(tilesList, it => !((ListTag)it.Tag).Imported, (from, to) =>
+            {
+                var m = GetModel(currentFile);
+                var tiles = Core.GetTiles(m);
+                if (from >= tiles.Count) return;
+                to = Math.Min(to, tiles.Count - 1);
+                var t = tiles[from];
+                var target = tiles[to];
+                m.Sections.Remove(t);
+                int ins = m.Sections.IndexOf(target);
+                // after the target when moving down, before it when moving up
+                m.Sections.Insert(to > from ? ins + 1 : ins, t);
+                SetChanged(currentFile);
+                RefreshTiles(to);
+            });
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" })
             {
                 string key = k;
@@ -1325,7 +1501,9 @@ namespace RaintileOptions
                 string name = Core.GetTileName(r.Text ?? "");
                 if (r.Button != "Create" || name == "") return;
                 if (TestTileName(m, name)) { ShowDialog("Raintile", "There is already a tile called '" + name + "'."); return; }
-                m.Sections.Add(new IniSection { Name = name });
+                var added = new IniSection { Name = name };
+                Core.SetKey(added, "Added", DateTime.Now.ToString("yyyy-MM-dd"));   // for Not played yet
+                m.Sections.Add(added);
                 SetChanged(currentFile);
                 RefreshTiles(Core.GetTiles(m).Count - 1);
                 tileFields["Command"].Focus();

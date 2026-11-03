@@ -252,7 +252,7 @@ $schema = @(
         )
     }
     @{ Id = 'menu'; Title = 'Menu'; Icon = 0xE700
-        Desc = 'The category menu at the top.'
+        Desc = 'The category menu at the top, the clock and the buttons.'
         Groups = @(
             @{ Title = 'Category menu'; Items = @(
                     (S 'choice' 'MenuMode' 'Show' 'A category without an icon always shows its name.' @{ Choices = @(
@@ -265,11 +265,13 @@ $schema = @(
                     (Size 'MenuRadius' 'Corner radius' 'H'),
                     (Num 'MenuIconDimAlpha' 'Opacity of inactive icons' 0 255 5)
                 ) }
-            @{ Title = 'Favorites and Recent'; Help = 'Categories made of the tiles of the others: the two icon buttons right of the search bar.'; Items = @(
+            @{ Title = 'Favorites, Recent, Not played yet'; Help = 'Categories made of the tiles of the others: the icon buttons right of the clock.'; Items = @(
                     (S 'bool' 'ShowFavorites' 'Favorites' 'Right click a tile > Add to Favorites.'),
                     (S 'bool' 'ShowRecent' 'Recent'),
                     (S 'choice' 'RecentOrder' 'Recent shows' '' @{ Choices = @(@('Recent', 'Last launched'), @('MostUsed', 'Most used')) }),
-                    (Num 'RecentCount' 'Tiles in Recent' 1 48 1)
+                    (Num 'RecentCount' 'Tiles in Recent' 1 48 1),
+                    (S 'bool' 'ShowUnplayed' 'Not played yet' 'Tiles never launched, the ones added last first.'),
+                    (Num 'UnplayedCount' 'Tiles in Not played yet' 1 96 1)
                 ) }
             @{ Title = 'Filter bar'; Help = 'Chips above the search results, one per tag (Tags of the tiles) and per store: a click shows only the results that have it.'; Items = @(
                     (S 'bool' 'FilterBar' 'Filter bar'),
@@ -279,8 +281,16 @@ $schema = @(
                     (Size 'FilterPad' 'Chip padding' 'W'),
                     (Num 'FilterFontSize' 'Font size' 6 30 1 'pt')
                 ) }
+            @{ Title = 'Clock'; Help = 'At the top left, updated every minute while the launcher is visible.'; Items = @(
+                    (S 'bool' 'ShowClock' 'Clock'),
+                    (S 'bool' 'ShowDate' 'Date' 'Next to the time, in the language of Windows.'),
+                    (S 'text' 'ClockFormat' 'Time format' '%H:%M = 14:05, %#I:%M %p = 2:05 PM.'),
+                    (S 'text' 'DateFormat' 'Date format' '%A %#d %B = Monday 2 November, %#d/%m/%Y = 2/11/2026.'),
+                    (Num 'ClockFontSize' 'Time font size' 8 60 1 'pt')
+                ) }
             @{ Title = 'Buttons'; Items = @(
-                    (Num 'CloseSize' 'Size of the X and gear buttons' 8 40 1)
+                    (Num 'CloseSize' 'Size of the X and gear buttons' 8 40 1),
+                    (S 'bool' 'ShowPower' 'Power button' 'Left of the gear: Lock, Sleep, Restart, Shut down. Restart and Shut down want a second click.')
                 ) }
         )
     }
@@ -294,7 +304,8 @@ $schema = @(
                     (S 'bool' 'ShowLabels' 'Show tile labels'),
                     (S 'choice' 'TileInfo' 'Play time and last launch' 'A line at the top left of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.' @{ Choices = @(
                                 @('Hover', 'On the highlighted tile'), @('Always', 'Always'), @('Never', 'Never')) }),
-                    (Num 'InfoFontSize' 'Play time font size' 6 30 1 'pt')
+                    (Num 'InfoFontSize' 'Play time font size' 6 30 1 'pt'),
+                    (S 'bool' 'TrackPlaytime' 'Measure play time outside Steam' 'The background helper looks for the game a tile starts and counts how long it runs.')
                 ) }
             @{ Title = 'Tiles'; Items = @(
                     (S 'color' 'TileColor' 'Default tile colour'),
@@ -392,7 +403,9 @@ $schema = @(
                     (S 'info' '' 'D-pad / left stick' 'Move the highlight'),
                     (S 'info' '' 'A' 'Launch the highlighted tile'),
                     (S 'info' '' 'B' 'Close the search, or the launcher'),
-                    (S 'info' '' 'LB / RB' 'Previous / next category')
+                    (S 'info' '' 'LB / RB' 'Previous / next category'),
+                    (S 'pad' 'GamepadSearch' 'Search with the on-screen keyboard' 'D-pad/stick move on it, A types, X deletes, Start keeps the results, B closes.'),
+                    (S 'info' '' 'LT / RT' 'Filter chips of the search results')
                 ) }
         )
     }
@@ -400,7 +413,8 @@ $schema = @(
         Desc = 'The search bar at the top left searches the tiles of every category.'
         Groups = @(
             @{ Title = 'Search bar'; Items = @(
-                    (Size 'SearchW' 'Width' 'W'),
+                    (S 'bool' 'SearchHover' 'Open on hover' 'Only the magnifier until the mouse is over it; it stays open while you type and while a search is shown.'),
+                    (Size 'SearchW' 'Width' 'W' 'When open.'),
                     (S 'text' 'SearchPlaceholder' 'Text in the empty bar')
                 ) }
         )
@@ -461,7 +475,8 @@ $defaults = @{
     Gap = '18'; PadX = '40'; PadY = '24'; IconSize = '96'; LabelPad = '14'; ScrollBarSize = '4'
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
-    ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'
+    ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'; ShowUnplayed = '1'; UnplayedCount = '24'
+    ShowPower = '1'; TrackPlaytime = '1'; GamepadSearch = 'Y'
     FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
     TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'
@@ -477,7 +492,8 @@ $defaults = @{
     BgStyle = 'Parallax'; BgOverscan = '1.15'; BgPanFrames = '180'; BgHoverZoom = '1.08'
     Thumbnails = '1'; TileHover = '1'; FadeDuration = '0'
     Gamepad = '1'; GamepadToggle = 'BACK START'; GamepadDeadZone = '12000'; GamepadRepeatDelay = '350'; GamepadRepeatRate = '110'
-    SearchW = '320'; SearchPlaceholder = 'Search'
+    SearchW = '320'; SearchPlaceholder = 'Search'; SearchHover = '1'
+    ShowClock = '1'; ShowDate = '1'; ClockFormat = '%H:%M'; DateFormat = '%A %#d %B'; ClockFontSize = '18'
     ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps'
     ScanOnStart = '1'; SteamGridDBKey = ''
     CheckUpdates = '1'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
@@ -2395,7 +2411,7 @@ function Show-Tile {
     $imported = $sel -and $sel.Tag.Imported
     $cat.TileCard.IsEnabled = [bool]$s -and -not $imported
     $cat.ImportedCard.Visibility = if ($imported) { 'Visible' } else { 'Collapsed' }
-    foreach ($k in 'Command', 'Label', 'Color', 'Tags') { $cat["tile.$k"].Text = if ($s) { Get-Key $s $k } else { '' } }
+    foreach ($k in 'Command', 'Label', 'Color', 'Tags', 'HotKey') { $cat["tile.$k"].Text = if ($s) { Get-Key $s $k } else { '' } }
     Update-TagSuggestions
     $cat['tile.Name'].Text = if ($s) { $s.Name } else { '' }
     $cat.Note.Text = if (-not $sel) { 'No tiles yet: add one with the + button.' } else { '' }
@@ -2803,7 +2819,7 @@ function New-CategoryPage {
             Save-Framing
         })
 
-    foreach ($k in 'Name', 'Command', 'Label', 'Color', 'Tags') {
+    foreach ($k in 'Name', 'Command', 'Label', 'Color', 'Tags', 'HotKey') {
         $tb = New-Object System.Windows.Controls.TextBox
         $tb.Tag = $k
         $cat["tile.$k"] = $tb
@@ -2829,6 +2845,7 @@ function New-CategoryPage {
     $cat.TagSuggestions.Margin = T 0 4 0 0
     [void](Add-To $tagHint $cat.TagSuggestions)
     [void](Add-To $f (New-FormRow 'Tags' $cat['tile.Tags'] '' $tagHint))
+    [void](Add-To $f (New-FormRow 'Hot key' $cat['tile.HotKey'] 'Starts the tile also while the launcher is hidden: keys separated by spaces, e.g. CTRL ALT 1 (HotKey plugin names).'))
     $moveRow = New-Panel 'Horizontal'
     $cat.MoveTo = New-Object System.Windows.Controls.ComboBox
     $cat.MoveTo.Width = 200
@@ -2889,7 +2906,7 @@ function New-CategoryPage {
     # --- events
     $cat.Tiles.Add_SelectionChanged({ Show-Tile })
 
-    foreach ($k in 'Command', 'Label', 'Color', 'Tags') {
+    foreach ($k in 'Command', 'Label', 'Color', 'Tags', 'HotKey') {
         $cat["tile.$k"].Add_TextChanged({
                 param($s, $e)
                 if ($script:loading) { return }
@@ -2937,6 +2954,7 @@ function New-CategoryPage {
                 [void](Show-Dialog 'Raintile' "There is already a tile called '$name'."); return
             }
             $s = [pscustomobject]@{ Name = $name; Comments = @(); Keys = (New-Object System.Collections.ArrayList) }
+            Set-Key $s 'Added' (Get-Date).ToString('yyyy-MM-dd')
             [void]$m.Sections.Add($s)
             Set-Changed $file
             Refresh-Tiles ((Get-Tiles $m).Count - 1)
@@ -3233,6 +3251,7 @@ function Add-SelectedFound {
             $s = [pscustomobject]@{ Name = $name; Comments = @(); Keys = (New-Object System.Collections.ArrayList) }
             Set-Key $s 'Command' $it.Command
             Set-Key $s 'Source' $it.Id
+            Set-Key $s 'Added' (Get-Date).ToString('yyyy-MM-dd')   # for Not played yet
             # images in the default folders, named after the tile
             if ($it.Hero -and (Test-Path -LiteralPath $it.Hero)) { [void](Copy-TileImage $base 'background' $name $it.Hero) }
             elseif ($it.Kind -eq 'game' -and $key) {

@@ -43,7 +43,7 @@ namespace RaintileOptions
                     new Item { Kind = "size", Key = "ScrollBarSize", Label = "Scrollbar thickness", Help = "", Axis = "H" },
                 } },
             } },
-            new Page { Id = "menu", Title = "Menu", Icon = 0xE700, Desc = "The category menu at the top.", Groups = new List<Group>
+            new Page { Id = "menu", Title = "Menu", Icon = 0xE700, Desc = "The category menu at the top, the clock and the buttons.", Groups = new List<Group>
             {
                 new Group { Title = "Category menu", Help = null, Items = new List<Item>
                 {
@@ -56,12 +56,14 @@ namespace RaintileOptions
                     new Item { Kind = "size", Key = "MenuRadius", Label = "Corner radius", Help = "", Axis = "H" },
                     new Item { Kind = "int", Key = "MenuIconDimAlpha", Label = "Opacity of inactive icons", Help = "", Min = 0.0, Max = 255.0, Step = 5.0, Unit = "" },
                 } },
-                new Group { Title = "Favorites and Recent", Help = "Categories made of the tiles of the others: the two icon buttons right of the search bar.", Items = new List<Item>
+                new Group { Title = "Favorites, Recent, Not played yet", Help = "Categories made of the tiles of the others: the icon buttons right of the clock.", Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "ShowFavorites", Label = "Favorites", Help = "Right click a tile > Add to Favorites." },
                     new Item { Kind = "bool", Key = "ShowRecent", Label = "Recent", Help = "" },
                     new Item { Kind = "choice", Key = "RecentOrder", Label = "Recent shows", Help = "", Choices = new List<string[]> { new[] { "Recent", "Last launched" }, new[] { "MostUsed", "Most used" } } },
                     new Item { Kind = "int", Key = "RecentCount", Label = "Tiles in Recent", Help = "", Min = 1.0, Max = 48.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "bool", Key = "ShowUnplayed", Label = "Not played yet", Help = "Tiles never launched, the ones added last first." },
+                    new Item { Kind = "int", Key = "UnplayedCount", Label = "Tiles in Not played yet", Help = "", Min = 1.0, Max = 96.0, Step = 1.0, Unit = "" },
                 } },
                 new Group { Title = "Filter bar", Help = "Chips above the search results, one per tag (Tags of the tiles) and per store: a click shows only the results that have it.", Items = new List<Item>
                 {
@@ -72,9 +74,18 @@ namespace RaintileOptions
                     new Item { Kind = "size", Key = "FilterPad", Label = "Chip padding", Help = "", Axis = "W" },
                     new Item { Kind = "int", Key = "FilterFontSize", Label = "Font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt" },
                 } },
+                new Group { Title = "Clock", Help = "At the top left, updated every minute while the launcher is visible.", Items = new List<Item>
+                {
+                    new Item { Kind = "bool", Key = "ShowClock", Label = "Clock", Help = "" },
+                    new Item { Kind = "bool", Key = "ShowDate", Label = "Date", Help = "Next to the time, in the language of Windows." },
+                    new Item { Kind = "text", Key = "ClockFormat", Label = "Time format", Help = "%H:%M = 14:05, %#I:%M %p = 2:05 PM." },
+                    new Item { Kind = "text", Key = "DateFormat", Label = "Date format", Help = "%A %#d %B = Monday 2 November, %#d/%m/%Y = 2/11/2026." },
+                    new Item { Kind = "int", Key = "ClockFontSize", Label = "Time font size", Help = "", Min = 8.0, Max = 60.0, Step = 1.0, Unit = "pt" },
+                } },
                 new Group { Title = "Buttons", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "int", Key = "CloseSize", Label = "Size of the X and gear buttons", Help = "", Min = 8.0, Max = 40.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "bool", Key = "ShowPower", Label = "Power button", Help = "Left of the gear: Lock, Sleep, Restart, Shut down. Restart and Shut down want a second click." },
                 } },
             } },
             new Page { Id = "appearance", Title = "Appearance", Icon = 0xE790, Desc = "Fonts and colours. Colours can be written as R,G,B,A or #RRGGBBAA: click the swatch to pick one.", Groups = new List<Group>
@@ -87,6 +98,7 @@ namespace RaintileOptions
                     new Item { Kind = "bool", Key = "ShowLabels", Label = "Show tile labels", Help = "" },
                     new Item { Kind = "choice", Key = "TileInfo", Label = "Play time and last launch", Help = "A line at the top left of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.", Choices = new List<string[]> { new[] { "Hover", "On the highlighted tile" }, new[] { "Always", "Always" }, new[] { "Never", "Never" } } },
                     new Item { Kind = "int", Key = "InfoFontSize", Label = "Play time font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt" },
+                    new Item { Kind = "bool", Key = "TrackPlaytime", Label = "Measure play time outside Steam", Help = "The background helper looks for the game a tile starts and counts how long it runs." },
                 } },
                 new Group { Title = "Tiles", Help = null, Items = new List<Item>
                 {
@@ -187,13 +199,16 @@ namespace RaintileOptions
                     new Item { Kind = "info", Key = "", Label = "A", Help = "Launch the highlighted tile" },
                     new Item { Kind = "info", Key = "", Label = "B", Help = "Close the search, or the launcher" },
                     new Item { Kind = "info", Key = "", Label = "LB / RB", Help = "Previous / next category" },
+                    new Item { Kind = "pad", Key = "GamepadSearch", Label = "Search with the on-screen keyboard", Help = "D-pad/stick move on it, A types, X deletes, Start keeps the results, B closes." },
+                    new Item { Kind = "info", Key = "", Label = "LT / RT", Help = "Filter chips of the search results" },
                 } },
             } },
             new Page { Id = "search", Title = "Search", Icon = 0xE721, Desc = "The search bar at the top left searches the tiles of every category.", Groups = new List<Group>
             {
                 new Group { Title = "Search bar", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "size", Key = "SearchW", Label = "Width", Help = "", Axis = "W" },
+                    new Item { Kind = "bool", Key = "SearchHover", Label = "Open on hover", Help = "Only the magnifier until the mouse is over it; it stays open while you type and while a search is shown." },
+                    new Item { Kind = "size", Key = "SearchW", Label = "Width", Help = "When open.", Axis = "W" },
                     new Item { Kind = "text", Key = "SearchPlaceholder", Label = "Text in the empty bar", Help = "" },
                 } },
             } },
@@ -279,10 +294,13 @@ namespace RaintileOptions
             { "BgPanFrames", "180" },
             { "BgStyle", "Parallax" },
             { "CheckUpdates", "1" },
+            { "ClockFontSize", "18" },
+            { "ClockFormat", "%H:%M" },
             { "CloseAction", "[!CommandMeasure MeasureScript \"Hide()\"]" },
             { "CloseHotKey", "ESCAPE" },
             { "CloseOnLaunch", "1" },
             { "CloseSize", "14" },
+            { "DateFormat", "%A %#d %B" },
             { "DebugLog", "0" },
             { "FadeDuration", "0" },
             { "FilterBar", "1" },
@@ -296,6 +314,7 @@ namespace RaintileOptions
             { "GamepadDeadZone", "12000" },
             { "GamepadRepeatDelay", "350" },
             { "GamepadRepeatRate", "110" },
+            { "GamepadSearch", "Y" },
             { "GamepadToggle", "BACK START" },
             { "Gap", "18" },
             { "HoverCategoryColor", "255,255,255,20" },
@@ -354,11 +373,16 @@ namespace RaintileOptions
             { "ScrollStep", "1" },
             { "ScrollThumbColor", "0,210,180,200" },
             { "ScrollTrackColor", "255,255,255,25" },
+            { "SearchHover", "1" },
             { "SearchPlaceholder", "Search" },
             { "SearchW", "320" },
+            { "ShowClock", "1" },
+            { "ShowDate", "1" },
             { "ShowFavorites", "1" },
             { "ShowLabels", "1" },
+            { "ShowPower", "1" },
             { "ShowRecent", "1" },
+            { "ShowUnplayed", "1" },
             { "ShowZPos", "1" },
             { "StartHidden", "0" },
             { "SteamGridDBKey", "" },
@@ -368,6 +392,8 @@ namespace RaintileOptions
             { "TileColor", "36,36,44,255" },
             { "TileHover", "1" },
             { "TileInfo", "Hover" },
+            { "TrackPlaytime", "1" },
+            { "UnplayedCount", "24" },
         };
 
         public static readonly string[] GAMEPAD_BUTTONS = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };

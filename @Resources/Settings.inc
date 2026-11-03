@@ -48,14 +48,17 @@ MenuGap=6
 MenuRadius=22
 ; Opacity of the icons of inactive categories (0-255)
 MenuIconDimAlpha=150
-; Favorites and Recent: categories made of the tiles of the others, opened
-; with the two icon buttons right of the search bar (the label shows on
+; Favorites, Recent and Not played yet: categories made of the tiles of the
+; others, opened with the icon buttons right of the clock (the label shows on
 ; hover). Favorites: right click a tile > Add to Favorites. Recent: the
-; tiles launched lately (RecentOrder=Recent) or most often (MostUsed).
+; tiles launched lately (RecentOrder=Recent) or most often (MostUsed). Not
+; played yet: never launched, the ones added last first.
 ShowFavorites=1
 ShowRecent=1
 RecentOrder=Recent
 RecentCount=12
+ShowUnplayed=1
+UnplayedCount=24
 ; Filter bar above the search results: one chip per tag of the tiles (Tags=
 ; in the category files) and, with FilterStores=1, per store when the tiles
 ; come from at least two (Steam, Epic Games, GOG, ...). A click on a chip
@@ -80,6 +83,9 @@ OpenHotKey=CTRL ALT G
 ; With [!DeactivateConfig] it unloads it from memory instead.
 CloseAction=[!CommandMeasure MeasureScript "Hide()"]
 CloseSize=14
+; 1 = power button left of the gear: Lock, Sleep, Restart, Shut down (the
+; last two want a second click)
+ShowPower=1
 ; Key that closes the launcher (HotKey plugin), registered only while the
 ; launcher is visible. Empty = no key.
 CloseHotKey=ESCAPE
@@ -197,12 +203,30 @@ GamepadToggle=BACK START
 GamepadDeadZone=12000
 GamepadRepeatDelay=350
 GamepadRepeatRate=110
+; Button that opens the search with the on-screen keyboard: D-pad/stick move
+; on it, A types, X deletes, Start keeps the results, B closes. LT/RT pick
+; the filter chips of the results.
+GamepadSearch=Y
 
 ; --- Search ---------------------------------------------------------------------
-; Bar at the top left (or the NavSearch key): Enter searches every category,
-; Esc or a click on a category goes back
+; Bar at the top left, after the clock and the Favorites / Recent buttons (or
+; the NavSearch key): Enter searches every category, Esc or a click on a
+; category goes back
 SearchW=320
 SearchPlaceholder=Search
+; 1 = only the magnifier until the mouse is over it (it stays open while you
+; type and while a search is shown), 0 = always open
+SearchHover=1
+
+; --- Clock ----------------------------------------------------------------------
+; Time and date at the top left, updated every minute while the launcher is
+; visible. Formats: %H:%M = 14:05, %#I:%M %p = 2:05 PM; %A %#d %B = Monday
+; 2 November (in the language of Windows), %#d/%m/%Y = 2/11/2026
+ShowClock=1
+ShowDate=1
+ClockFormat=%H:%M
+DateFormat=%A %#d %B
+ClockFontSize=18
 
 ; --- Games and apps ---------------------------------------------------------------
 ; Right click on the skin > "Add games and apps..." (or Options > Import):
@@ -244,6 +268,10 @@ ShowLabels=1
 ; of games no longer installed always say so.
 TileInfo=Hover
 InfoFontSize=10
+; 1 = measure the play time of the tiles that are not Steam games: the
+; background helper looks for the game started by the tile and counts how
+; long it runs (TimePlayed.txt in the data folder)
+TrackPlaytime=1
 FontFace=Segoe UI
 MenuFontSize=12
 LabelFontSize=14

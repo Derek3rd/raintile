@@ -455,7 +455,7 @@ namespace RaintileOptions
 
         TextBlock updInstalled, updLatest, updStatus, updNotes;
         Border updNotesBox;
-        Button updInstall, updPage, updCheck;
+        Button updInstall, updInstaller, updPage, updCheck;
 
         void ShowUpdateInfo()
         {
@@ -479,7 +479,9 @@ namespace RaintileOptions
             updNotes.Text = newer ? Json.Str(info, "Notes") : "";
             updNotesBox.Visibility = updNotes.Text != "" ? Visibility.Visible : Visibility.Collapsed;
             updInstall.Visibility = newer ? Visibility.Visible : Visibility.Collapsed;
-            updInstall.Content = newer && Json.Str(info, "Asset") != "" ? "Download and install" : "Open the release page";
+            bool asset = newer && Json.Str(info, "Asset") != "";
+            updInstall.Content = asset ? "Direct update" : "Open the release page";
+            updInstaller.Visibility = asset ? Visibility.Visible : Visibility.Collapsed;
             updPage.Visibility = info != null && Json.Str(info, "Page") != "" ? Visibility.Visible : Visibility.Collapsed;
             UpdateNavDots(true);
         }
@@ -514,25 +516,35 @@ namespace RaintileOptions
             OpenUrl(page);
         }
 
-        void InstallUpdate()
+        // Downloads the release's .rmskin and installs it: directly (its files over
+        // the skin folder, after a backup in Skins\@Backup\, then Rainmeter
+        // reloads) or with the Rainmeter installer
+        void InstallUpdate(bool direct)
         {
             var info = Core.ReadUpdateInfo();
             if (info == null) return;
             string asset = Json.Str(info, "Asset");
             if (!Core.TestReleaseUrl(asset)) { OpenReleasePage(info); return; }
-            var r = ShowDialog("Update Raintile", "Download Raintile " + Json.Str(info, "Latest") + " and open the Rainmeter installer?\r\n\r\n" +
-                "Your settings, categories and images stay: they are in " + Core.Data + ", which the installer does not touch. " +
-                "In the installer keep the default options and press Install.\r\n\r\n" +
-                "This is still experimental: keep a copy of your data folder first.", new[] { "Download and install", "Cancel" });
-            if (r.Button != "Download and install") return;
+            string latest = Json.Str(info, "Latest");
+            string skinDir = System.IO.Path.GetDirectoryName(Core.Resources);
+            var r = direct
+                ? ShowDialog("Update Raintile", "Download Raintile " + latest + " and install it now?\r\n\r\n" +
+                    "Its files replace the ones of the skin folder (" + skinDir + "); a copy of the current ones is kept in Skins\\@Backup. " +
+                    "Your settings, categories and images stay: they are in " + Core.Data + ". Then Rainmeter reloads.\r\n\r\n" +
+                    "This is still experimental: keep a backup of your data first (Info > Back up).", new[] { "Direct update", "Cancel" })
+                : ShowDialog("Update Raintile", "Download Raintile " + latest + " and open the Rainmeter installer?\r\n\r\n" +
+                    "Your settings, categories and images stay: they are in " + Core.Data + ", which the installer does not touch. " +
+                    "In the installer keep the default options and press Install.", new[] { "Rainmeter Update", "Cancel" });
+            if (r.Button != "Direct update" && r.Button != "Rainmeter Update") return;
             // a new folder of its own, and a name made here: nothing else can be
             // put in its place before it is opened
-            string ver = Core.GetSafeVersion(Json.Str(info, "Latest"));
+            string ver = Core.GetSafeVersion(latest);
             string folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Raintile-update-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);
             string dest = System.IO.Path.Combine(folder, ver != "" ? "Raintile_" + ver + ".rmskin" : "Raintile_update.rmskin");
             updStatus.Text = "Downloading\u2026";
             updInstall.IsEnabled = false;
+            updInstaller.IsEnabled = false;
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
             var wc = new WebClient();
             wc.Headers.Add("User-Agent", "Raintile");
@@ -540,6 +552,7 @@ namespace RaintileOptions
             {
                 wc.Dispose();
                 updInstall.IsEnabled = true;
+                updInstaller.IsEnabled = true;
                 if (e.Error != null) { updStatus.Text = "Download failed: " + e.Error.Message; return; }
                 if (!Core.TestRmskinPackage(dest))
                 {
@@ -547,11 +560,44 @@ namespace RaintileOptions
                     updStatus.Text = "The downloaded file is not a Rainmeter package: nothing was installed.";
                     return;
                 }
-                // .rmskin files open with the Rainmeter skin installer; this window
-                // closes so that nothing of the skin folder is in use
-                try { Process.Start(new ProcessStartInfo(dest) { UseShellExecute = true }); }
-                catch (Exception ex) { updStatus.Text = "The installer could not be opened: " + ex.Message; return; }
+                if (!direct)
+                {
+                    // .rmskin files open with the Rainmeter skin installer; this
+                    // window closes so that nothing of the skin folder is in use
+                    try { Process.Start(new ProcessStartInfo(dest) { UseShellExecute = true }); }
+                    catch (Exception ex) { updStatus.Text = "The installer could not be opened: " + ex.Message; return; }
+                    win.Close();
+                    return;
+                }
+                updStatus.Text = "Installing\u2026";
+                win.Cursor = Cursors.Wait;
+                string backup = null;
+                try
+                {
+                    using (var zip = Core.OpenRmskin(dest))
+                    {
+                        string problem = Core.TestUpdatePackage(zip);
+                        if (problem != null) { updStatus.Text = "This package can not be installed: " + problem + ". Nothing was changed."; return; }
+                        backup = Core.BackupSkin(skinDir, Core.GetInstalledVersion());
+                        Core.InstallUpdatePackage(zip, skinDir, backup);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    updStatus.Text = "The update failed, the previous files were put back: " + ex.Message;
+                    return;
+                }
+                finally
+                {
+                    win.Cursor = null;
+                    try { Directory.Delete(folder, true); } catch { }
+                }
+                ShowDialog("Raintile", "Raintile " + latest + " is installed. Rainmeter reloads now.\r\n\r\nThe previous files are in:\r\n" + backup);
+                // every skin is reloaded (new mini-skins and scripts are seen);
+                // the launcher shows itself once loaded
+                WriteShowOnLoad();
                 win.Close();
+                InvokeRainmeter("!RefreshApp");
             };
             wc.DownloadFileAsync(new Uri(asset), dest);
         }
@@ -583,15 +629,18 @@ namespace RaintileOptions
             AddTo(f, updNotesBox);
             var bar = NewPanel(Orientation.Horizontal);
             bar.Margin = T(0, 4, 0, 10);
-            updInstall = NewButton("Download and install", "AccentButton");
+            updInstall = NewButton("Direct update", "AccentButton");
             updInstall.Margin = T(0, 0, 8, 0);
+            updInstaller = NewButton("Rainmeter Update", "", "Opens the downloaded package with the Rainmeter skin installer");
+            updInstaller.Margin = T(0, 0, 8, 0);
             updCheck = NewButton("Check now");
             updCheck.Margin = T(0, 0, 8, 0);
             updPage = NewButton("Release page", "LinkButton");
             updPage.VerticalAlignment = VerticalAlignment.Center;
-            AddTo(bar, updInstall); AddTo(bar, updCheck); AddTo(bar, updPage);
+            AddTo(bar, updInstall); AddTo(bar, updCheck); AddTo(bar, updInstaller); AddTo(bar, updPage);
             AddTo(f, bar);
-            updInstall.Click += (s, e) => InstallUpdate();
+            updInstall.Click += (s, e) => InstallUpdate(true);
+            updInstaller.Click += (s, e) => InstallUpdate(false);
             updCheck.Click += (s, e) => InvokeCheckNow();
             updPage.Click += (s, e) => OpenReleasePage(Core.ReadUpdateInfo());
             ShowUpdateInfo();

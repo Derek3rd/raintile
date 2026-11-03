@@ -59,6 +59,7 @@ Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter start
 - **Click** a tile to launch it; **wheel** to scroll.
 - **Click** a category in the menu to switch to it; clicking the category already open scrolls back to the start.
 - The **search bar** at the top left opens the search; the **gear** opens the Options window; the **X** closes the launcher.
+- The **power button**, left of the gear (`ShowPower`), opens **Lock**, **Sleep**, **Restart** and **Shut down**; Restart and Shut down want a second click on the same entry, which says so. The launcher hides first. `Esc` closes the menu.
 - Right click: *Options...*, *Edit Settings.inc*, *Images folder*, *Add games and apps...*, *Categories folder*, plus Rainmeter's own menu. On a tile, also the [tile menu](#tile-menu).
 
 ### Keyboard
@@ -88,14 +89,18 @@ Xbox and compatible controllers (XInput):
 | `A` | launch the highlighted tile |
 | `B` | close the search, or the launcher |
 | `LB` / `RB` | previous / next category |
+| `Y` (`GamepadSearch`) | search with the on-screen keyboard |
+| `LT` / `RT` | with search results: the previous / next filter chip, alone |
+
+**On-screen keyboard**: `GamepadSearch` opens the search with a keyboard at the bottom of the screen (letters, digits, `-` and `.`, Delete, Space, Done). The D-pad or stick moves on it, `A` types the key, `X` deletes, `Start` (or *Done*) closes it and keeps the results (the first one highlighted, `A` launches it), `B` closes the search. The keys can be clicked with the mouse too. `Start` is also part of `GamepadToggle`: alone it counts when released, so `Back` + `Start` still opens and closes the launcher.
 
 Rainmeter cannot read controllers, so a small background helper does it (`Scripts\Helper.ps1`: C# compiled by PowerShell on first start). It polls the controllers every 16 ms at below-normal priority and sends commands to Rainmeter through a Windows message (`WM_COPYDATA`), without starting processes. Only one copy runs: refreshing the skin replaces it, and it exits by itself when Rainmeter is closed. While the launcher is hidden, commands other than open/close are ignored, so it does not interfere with games.
 
-Settings: `Gamepad=0` turns it off; `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
+Settings: `Gamepad=0` turns it off; `GamepadSearch` (one or more buttons), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
 
 ## Search
 
-Click the **Search** bar at the top left, or press `F` (`NavSearch`), and type: the results follow every key.
+At the top left, after the [clock](#clock) and the Favorites / Recent buttons, the search bar is just a magnifier: it opens when the mouse is over it (`SearchHover=0` keeps it always open). Click it, or press `F` (`NavSearch`), and type: the results follow every key. It stays open while you type and while the results are shown.
 
 - The grid shows the tiles of **every category** that contain all the typed words, in the tile name, its label, the category name, its store or its [tags](#tags-and-filter-bar) (`games steam` finds Steam tiles in the Games category, `coop` the tiles tagged coop). Above the results, the [filter bar](#tags-and-filter-bar) narrows them down with a click. Names starting with the first word come first, then the rest alphabetically. Favorites and Recent are left out (their tiles are in the other categories).
 - While typing, letters, digits (keypad too), space, `-` and `.` go into the search and `Backspace` deletes; the other keys of the launcher are off. **Enter** stops typing and keeps the results; the first one is highlighted: `Space`/`Enter` (or gamepad `A`) launches it, WASD/arrows move through the results.
@@ -119,9 +124,10 @@ Right click on a tile adds, after Raintile's own entries, the ones that apply to
 
 ## Favorites and Recent
 
-Two categories made of the tiles of the others. They are not in the category menu: they are the two icon buttons right of the search bar (the star and the clock); hover one to see its name, click it to open it. The open one is lit like a menu entry. `Q`/`E` and the gamepad `LB`/`RB` reach them too, before the first category.
+Three categories made of the tiles of the others. They are not in the category menu: they are the icon buttons right of the [clock](#clock) (the star, the clock and the play sign); hover one to see its name, click it to open it. The open one is lit like a menu entry. `Q`/`E` and the gamepad `LB`/`RB` reach them too, before the first category.
 
 - **Favorites**: the tiles you add with right click > **Add to Favorites**, in the order you added them.
+- **Not played yet**: the tiles never launched (from Raintile, or with play time on Steam or [measured](#play-time)), the ones added last first: tiles added in the Options window remember the day (`Added=`). Up to `UnplayedCount`; `ShowUnplayed=0` turns it off.
 - **Recent**: the tiles you launched lately (`RecentOrder=Recent`) or most often (`MostUsed`), up to `RecentCount`.
 
 They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Menu).
@@ -141,11 +147,14 @@ Settings (Options > Menu > Filter bar): `FilterBar`, `FilterStores`, `FilterH`, 
 A small line at the top left of the tile tells how long you played and when you last did: `123 h played - 3 days ago`.
 
 - **Steam games**: the hours played and the last launch come from Steam itself (`userdata\<account>\config\localconfig.vdf`, every account that logged in on this PC), read in the background (`Scripts\Playtime.ps1`) when the skin loads and, at most once a minute, when the launcher opens. The game is recognised by its `steam://rungameid/<id>` command or by `Source=Steam:<id>`.
-- **Other tiles**: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
+- **Other tiles** (`TrackPlaytime=1`): when a tile starts a game, the background helper (the one of the [gamepad](#gamepad)) looks for its process and measures how long it runs: the program of the command (`.exe`), the one it learned the last time, or the first program coming to the foreground that started after the launch (launchers like Epic, GOG, Ubisoft, EA and Battle.net, and parts of Windows, are left out). The minutes go to `TimePlayed.txt` in the data folder, the program found to `GameExe.txt`. Web links and bangs are not measured.
+- Before any time is measured: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
 - `TileInfo=Hover` (default) shows it only on the highlighted tile (mouse, keyboard or gamepad), `Always` on every tile, `Never` hides it. Size: `InfoFontSize`. Options > Appearance > Text.
 - Tiles of [games no longer installed](#games-no-longer-installed) always show **Not installed**.
 
 ## Launching a tile
+
+**Hot keys**: a tile with `HotKey=` (e.g. `CTRL ALT 1`) starts with that combination wherever you are, also while the launcher is hidden: right away, without the animation (an open launcher hides with `CloseOnLaunch=1`). One tile per combination: if two tiles have the same one, the first wins, and the open/close key (`OpenHotKey`) cannot be used. The Options window warns about a combination already used.
 
 On click the tile expands to full screen (with background and logo at full resolution), stays visible for `LaunchHold` ms, then the launcher hides. The command starts right away, at the beginning of the animation.
 
@@ -195,6 +204,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `LogoScale` | size of the logo, times the category's `IconSize`, `0.25` to `3` (default `1`) |
 | `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
 | `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
+| `HotKey` | key combination that starts the tile, also while the launcher is hidden: HotKey plugin names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
 | `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
 
 ### Commands
@@ -299,7 +309,7 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 - Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default, and restores it.
-- **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
+- **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
   - **Move to**: moves a tile, and its images, to another category; both category files are saved at once.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
@@ -335,7 +345,9 @@ When an update adds settings, they are added to your `Settings.inc` with their d
 
 With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps) and on **Info** in the menu of the Options window; a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
 
-- **Download and install** downloads the release's `.rmskin` and opens it with the Rainmeter installer; the Options window closes. Keep the installer's default options. Your data is not touched. Only files of this repository's releases on GitHub (https) are downloaded, into a new temporary folder, and the file is checked to be a Rainmeter package before it is opened.
+- **Direct update** downloads the release's `.rmskin` and installs it by itself: a copy of the current skin folder goes to `Skins\@Backup\Raintile-<version>-<date>` (Rainmeter does not load folders starting with @), the package's files replace the ones of the skin folder, then Rainmeter reloads every skin and the launcher opens. `@Resources\Generated` (thumbnails, lists) stays, the plugins are not touched, and a file in use (the Options program itself) is renamed and replaced; the old copy goes at the next start. If something fails, the files of the backup are put back. The package is refused if it does not hold `Skins/Raintile/Raintile.ini` or a path leaves its folder.
+- **Rainmeter Update** downloads the same package and opens it with the Rainmeter installer instead; the Options window closes. Keep the installer's default options.
+- Either way your data is not touched, and only files of this repository's releases on GitHub (https) are downloaded, into a new temporary folder, and checked to be a Rainmeter package before they are used. Without the Options program (a copy of the repository) the PowerShell window only has the installer.
 - **Check now** asks GitHub again; **Release page** opens the release on GitHub.
 
 ### Publishing a release
@@ -344,7 +356,7 @@ With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest r
 2. On GitHub, **Releases > Draft a new release**: tag with the same number, like **`v1.0.3`**, on `main`; write the notes and publish.
 3. The **Release package** workflow (`.github/workflows/release.yml`) builds the `.rmskin` with `tools/build_rmskin.py` and attaches it to the release by itself, within a minute or two. If the tag and `Version=` differ, it stops and attaches nothing.
 
-For the update check the tag must hold the version (if it has no number, the number in the release title is used, e.g. "1.0.1 - ..."), and the `.rmskin` must be attached (otherwise *Download and install* opens the release page). The package can also be built by hand: `python tools/build_rmskin.py` writes it to `dist\`; *Actions > Release package > Run workflow* builds it as a downloadable artifact.
+For the update check the tag must hold the version (if it has no number, the number in the release title is used, e.g. "1.0.1 - ..."), and the `.rmskin` must be attached (otherwise the update buttons open the release page). The package can also be built by hand: `python tools/build_rmskin.py` writes it to `dist\`; *Actions > Release package > Run workflow* builds it as a downloadable artifact.
 
 The package holds the skin only (with the HotKey plugin from `tools/plugins/`): `README.md`, `docs\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
 
@@ -470,8 +482,20 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `SearchW` | `320` | search bar width *(size)* |
+| `SearchW` | `320` | search bar width when open *(size)* |
 | `SearchPlaceholder` | `Search` | text shown in the empty search bar |
+| `SearchHover` | `1` | `1` = only the magnifier until the mouse is over it, `0` = always open |
+
+### Clock
+
+<a id="clock"></a>Time and date at the top left (Options > Menu > Clock). They are updated once a minute, only while the launcher is visible: at rest it still uses no CPU.
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `ShowClock`, `ShowDate` | `1`, `1` | show the time, and the date next to it |
+| `ClockFormat` | `%H:%M` | time format: `%H:%M` = 14:05, `%#I:%M %p` = 2:05 PM |
+| `DateFormat` | `%A %#d %B` | date format, in the language of Windows: `%A %#d %B` = Monday 2 November, `%#d/%m/%Y` = 2/11/2026 |
+| `ClockFontSize` | `18` | time font size (points); the date uses `MenuFontSize` |
 
 ### Games and apps
 

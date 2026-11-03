@@ -379,6 +379,7 @@ namespace RaintileOptions
                     var s = new IniSection { Name = name };
                     Core.SetKey(s, "Command", it.Command);
                     Core.SetKey(s, "Source", it.Id);
+                    Core.SetKey(s, "Added", DateTime.Now.ToString("yyyy-MM-dd"));   // for Not played yet
                     // images in the default folders, named after the tile
                     try
                     {

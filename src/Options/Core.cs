@@ -559,6 +559,115 @@ namespace RaintileOptions
             catch { return false; }
         }
 
+        // --- Direct update: the package's files copied over the skin folder ----------------
+
+        // The zip inside an .rmskin (the package without its 16-byte footer)
+        public static ZipArchive OpenRmskin(string path)
+        {
+            var bytes = File.ReadAllBytes(path);
+            long size = BitConverter.ToInt64(bytes, bytes.Length - 16);
+            return new ZipArchive(new MemoryStream(bytes, 0, (int)size), ZipArchiveMode.Read);
+        }
+
+        // null if the package can be installed over the skin, otherwise why not:
+        // it holds Skins/Raintile/Raintile.ini, and no path leaves its folders
+        public static string TestUpdatePackage(ZipArchive zip)
+        {
+            bool ini = false;
+            foreach (var e in zip.Entries)
+            {
+                string n = e.FullName.Replace('\\', '/');
+                if (n.StartsWith("/") || n.Contains(":") || Regex.IsMatch(n, @"(^|/)\.\.(/|$)")) return "it contains an unsafe path: " + n;
+                if (n == "Skins/Raintile/Raintile.ini") ini = true;
+            }
+            return ini ? null : "it is not a Raintile package (no Skins/Raintile/Raintile.ini)";
+        }
+
+        // Every file under 'dir', except @Resources\Generated (made by the skin)
+        static IEnumerable<string> SkinFiles(string dir)
+        {
+            string generated = Path.Combine(dir, "@Resources", "Generated") + Path.DirectorySeparatorChar;
+            foreach (var f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
+                if (!f.StartsWith(generated, StringComparison.OrdinalIgnoreCase)) yield return f;
+        }
+
+        // A copy of the skin folder (without Generated) in Skins\@Backup\, which
+        // Rainmeter does not load; returns its folder
+        public static string BackupSkin(string skinDir, string version)
+        {
+            string skins = Path.GetDirectoryName(skinDir);
+            string dest = Path.Combine(skins, "@Backup", Path.GetFileName(skinDir) + "-" + (GetSafeVersion(version) != "" ? version : "old") + "-" + DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+            foreach (var f in SkinFiles(skinDir))
+            {
+                string to = Path.Combine(dest, f.Substring(skinDir.Length + 1));
+                Directory.CreateDirectory(Path.GetDirectoryName(to));
+                File.Copy(f, to, true);
+            }
+            return dest;
+        }
+
+        // Writes a file of the skin; one in use (the running Options program) is
+        // renamed first, and the old copy deleted at the next start
+        static void ReplaceFile(string dest, Stream data)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(dest));
+            try
+            {
+                using (var f = File.Create(dest)) data.CopyTo(f);
+            }
+            catch (IOException)
+            {
+                string old = dest + "." + Guid.NewGuid().ToString("N").Substring(0, 8) + ".old";
+                File.Move(dest, old);
+                using (var f = File.Create(dest)) data.CopyTo(f);
+            }
+        }
+
+        // Copies the package's Skins/Raintile/ files over the skin folder (the
+        // plugins are left alone: Rainmeter keeps them in use). On an error the
+        // files of the backup are put back.
+        public static void InstallUpdatePackage(ZipArchive zip, string skinDir, string backup)
+        {
+            const string prefix = "Skins/Raintile/";
+            string root = Path.GetFullPath(skinDir).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
+            try
+            {
+                foreach (var e in zip.Entries)
+                {
+                    string n = e.FullName.Replace('\\', '/');
+                    if (!n.StartsWith(prefix) || n.EndsWith("/")) continue;
+                    string dest = Path.GetFullPath(Path.Combine(skinDir, n.Substring(prefix.Length).Replace('/', Path.DirectorySeparatorChar)));
+                    if (!dest.StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new Exception("unsafe path in the package: " + n);
+                    using (var s = e.Open()) ReplaceFile(dest, s);
+                }
+            }
+            catch
+            {
+                foreach (var f in Directory.GetFiles(backup, "*", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        string to = Path.Combine(skinDir, f.Substring(backup.Length + 1));
+                        using (var s = File.OpenRead(f)) ReplaceFile(to, s);
+                    }
+                    catch { }
+                }
+                throw;
+            }
+        }
+
+        // Old copies of files that were in use during an update
+        public static void DeleteOldUpdateFiles()
+        {
+            try
+            {
+                string skinDir = Path.GetDirectoryName(Resources);
+                foreach (var f in Directory.GetFiles(skinDir, "*.old", SearchOption.AllDirectories))
+                    try { File.Delete(f); } catch { }
+            }
+            catch { }
+        }
+
         public static Dictionary<string, object> ReadUpdateInfo()
         {
             if (!File.Exists(UpdateFile)) return null;

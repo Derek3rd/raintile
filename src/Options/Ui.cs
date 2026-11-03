@@ -49,6 +49,7 @@ namespace RaintileOptions
             try
             {
                 Core.Init(resources, data, config);
+                Core.DeleteOldUpdateFiles();
                 var app = new OptionsApp(page, clock);
                 return app.Run();
             }

@@ -73,6 +73,8 @@ def generate(d):
                 flags += ', Found = true'
             if g.get('Other'):
                 flags += ', Other = true'
+            if g.get('Market'):
+                flags += ', Market = true'
             w('                new Group { Title = %s, Help = %s%s, Items = new List<Item>' % (q(g.get('Title')), q(g.get('Help')), flags))
             w('                {')
             for it in g.get('Items') or []:

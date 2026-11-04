@@ -409,6 +409,17 @@ $schema = @(
                 ) }
         )
     }
+    @{ Id = 'dashboard'; Title = 'Dashboard'; Icon = 0xE9D2
+        Desc = 'Categories of widgets: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.'
+        Groups = @(
+            @{ Title = 'Widgets'; Help = 'A category is a Dashboard with Type=Dashboard (Categories > the category). Its tiles are widgets: pick their kind in the tile editor.'; Items = @(
+                    (Num 'DashInterval' 'Update every' 250 5000 250 'ms' 'Only while a Dashboard is on screen.'),
+                    (S 'info' '' 'Temperatures and fans' 'From HWiNFO (free, hwinfo.com): keep it running with Settings > Shared Memory Support on.'),
+                    (S 'info' '' 'Custom widgets' 'Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>.')
+                ) }
+            @{ Market = $true; Items = @() }
+        )
+    }
     @{ Id = 'search'; Title = 'Search'; Icon = 0xE721
         Desc = 'The search bar at the top left searches the tiles of every category.'
         Groups = @(
@@ -464,7 +475,7 @@ $navTree = @(
     @{ Page = 'general' }, @{ Page = 'layout' }, @{ Page = 'menu' }, @{ Page = 'appearance' },
     @{ Page = 'animations' }, @{ Page = 'backgrounds' },
     @{ Id = 'keybindings'; Title = 'Keybindings'; Icon = 0xE765; Children = @('keys', 'gamepad') },
-    @{ Page = 'search' }, @{ Page = 'import' }, @{ Page = 'advanced' },
+    @{ Page = 'dashboard' }, @{ Page = 'search' }, @{ Page = 'import' }, @{ Page = 'advanced' },
     @{ Page = 'categories'; Categories = $true }
 )
 
@@ -476,7 +487,7 @@ $defaults = @{
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'; ShowUnplayed = '1'; UnplayedCount = '24'
-    ShowPower = '1'; TrackPlaytime = '1'; GamepadSearch = 'Y'
+    ShowPower = '1'; TrackPlaytime = '1'; GamepadSearch = 'Y'; DashInterval = '1000'
     FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
     TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'

@@ -676,6 +676,12 @@ namespace RaintileOptions
                     AddTo(sp, NewFoundCard());
                     continue;
                 }
+                if (group.Market)
+                {
+                    // widgets to download (its own card)
+                    AddTo(sp, NewMarketCard());
+                    continue;
+                }
                 if (group.Other)
                 {
                     // Settings.inc entries without a page of their own

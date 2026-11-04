@@ -218,6 +218,14 @@ SearchPlaceholder=Search
 ; type and while a search is shown), 0 = always open
 SearchHover=1
 
+; --- Dashboard ------------------------------------------------------------------
+; A category with Type=Dashboard holds widgets (CPU, GPU, memory, disks,
+; network, processes, system, temperatures, skins, custom ones): see
+; Categories\Dashboard.ini. They update every DashInterval ms, only while the
+; Dashboard is on screen. Temperatures and fans: HWiNFO running with "Shared
+; Memory Support" on.
+DashInterval=1000
+
 ; --- Clock ----------------------------------------------------------------------
 ; Time and date at the top left, updated every minute while the launcher is
 ; visible. Formats: %H:%M = 14:05, %#I:%M %p = 2:05 PM; %A %#d %B = Monday

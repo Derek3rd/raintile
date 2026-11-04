@@ -50,6 +50,42 @@ namespace RaintileOptions
         Slider zoomSlider, logoSlider;
         ComboBox moveTo;
         Button tileKeyButton;
+        CheckBox catDashboard;
+        ComboBox widgetKind;
+        TextBox widgetParam;
+        TextBlock widgetHint;
+        FrameworkElement widgetRow, widgetParamRow;
+
+        // Widgets of a Dashboard: kind, label in the list, what Param= means
+        static readonly string[][] WIDGET_KINDS =
+        {
+            new[] { "", "(none: a normal tile)", "" },
+            new[] { "cpu", "CPU", "" },
+            new[] { "gpu", "GPU", "" },
+            new[] { "ram", "Memory", "" },
+            new[] { "disk", "Disks", "A drive (C), or empty for all of them." },
+            new[] { "network", "Network", "" },
+            new[] { "processes", "Processes", "cpu or ram: what they are sorted by." },
+            new[] { "system", "System", "" },
+            new[] { "temps", "Temperatures (HWiNFO)", "HWiNFO sensor labels separated by ; (e.g. CPU Package; GPU Temperature). Empty: CPU, GPU and drives." },
+            new[] { "fans", "Fans (HWiNFO)", "" },
+            new[] { "skin", "An installed skin", "<config>\\<file>.ini of a skin in Rainmeter's Skins folder, e.g. illustro\\Clock\\Clock.ini. It is loaded over the tile while the Dashboard is shown." },
+            new[] { "custom", "Custom widget", "The name of a widget in the Widgets folder of your data (Widgets\\<name>.ini or Widgets\\<name>\\<name>.ini)." },
+        };
+
+        bool IsDashboard(string file)
+        {
+            return file != null && string.Equals(Core.GetKey(Core.GetCategorySection(GetModel(file)), "Type").Trim(), "Dashboard", StringComparison.OrdinalIgnoreCase);
+        }
+
+        void UpdateWidgetHint()
+        {
+            var item = widgetKind.SelectedItem as ComboBoxItem;
+            string kind = item != null ? (string)item.Tag : "";
+            string hint = WIDGET_KINDS.Where(k => k[0] == kind).Select(k => k[2]).FirstOrDefault() ?? "";
+            widgetHint.Text = hint;
+            widgetParamRow.Visibility = hint != "" ? Visibility.Visible : Visibility.Collapsed;
+        }
         Button colorSwatch;
         WrapPanel tagSuggestions;
         readonly Dictionary<string, TextBox> catFields = new Dictionary<string, TextBox>();
@@ -421,6 +457,7 @@ namespace RaintileOptions
             catIconHint.Text = file != null ? "Default: Images\\" + GetListBase() + "\\icon.png" : "";
             gridHint.Text = "Empty = default (" + V("NX") + " \u00D7 " + V("NY") + ", from Layout)";
             sizeHint.Text = "Pixels or %. Empty = default (" + V("IconSize") + ")";
+            catDashboard.IsChecked = file != null && IsDashboard(file);
             loading = false;
         }
 
@@ -791,6 +828,13 @@ namespace RaintileOptions
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" }) tileFields[k].Text = s != null ? Core.GetKey(s, k) : "";
             UpdateTagSuggestions();
             tileKeyButton.Content = Schema.FormatHotKey(s != null ? Core.GetKey(s, "HotKey") : "");
+            bool dashboard = IsDashboard(currentFile);
+            widgetRow.Visibility = dashboard ? Visibility.Visible : Visibility.Collapsed;
+            string kind = s != null ? Core.GetKey(s, "Widget").Trim().ToLowerInvariant() : "";
+            widgetKind.SelectedItem = widgetKind.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == kind) ?? widgetKind.Items[0];
+            widgetParam.Text = s != null ? Core.GetKey(s, "Param") : "";
+            UpdateWidgetHint();
+            if (!dashboard) widgetParamRow.Visibility = Visibility.Collapsed;
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
             tileNote.Visibility = tileNote.Text != "" ? Visibility.Visible : Visibility.Collapsed;
@@ -969,6 +1013,15 @@ namespace RaintileOptions
             AddTo(f, NewFormRow("Grid", gridRow, "", gridHint));
             sizeHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
             AddTo(f, NewFormRow("Logo size", catFields["IconSize"], "", sizeHint));
+            catDashboard = new CheckBox { Content = "Dashboard" };
+            AddTo(f, NewFormRow("Kind", catDashboard, "A Dashboard holds widgets (CPU, memory, disks, temperatures, skins...) instead of tiles that launch something."));
+            catDashboard.Click += (s, e) =>
+            {
+                string file = GetListFile();
+                if (file == null) return;
+                Core.SetKey(Core.GetCategorySection(GetModel(file)), "Type", catDashboard.IsChecked == true ? "Dashboard" : "");
+                SetChanged(file);
+            };
 
             catsList.SelectionChanged += (s, e) => ShowCategoryDetails();
             // drag a category to change the order of the menu
@@ -1293,6 +1346,33 @@ namespace RaintileOptions
             SetCol(btnCmd, 1);
             cmdRow.Children.Add(btnCmd);
             AddTo(f, NewFormRow("Command", cmdRow, "A program, a .lnk/.url shortcut, a URL (also steam://...), a folder or a Rainmeter bang."));
+            // widgets: only in a Dashboard
+            widgetKind = new ComboBox { Width = 260 };
+            foreach (var k in WIDGET_KINDS) widgetKind.Items.Add(new ComboBoxItem { Content = k[1], Tag = k[0] });
+            widgetRow = NewFormRow("Widget", widgetKind, "What the tile shows in the Dashboard. A click opens its Command, or the tool that fits.");
+            AddTo(f, widgetRow);
+            widgetParam = new TextBox();
+            widgetHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
+            widgetParamRow = NewFormRow("Widget option", widgetParam, "", widgetHint);
+            AddTo(f, widgetParamRow);
+            widgetKind.SelectionChanged += (s, e) =>
+            {
+                UpdateWidgetHint();
+                if (loading) return;
+                var t = GetCurrentTile();
+                var item = widgetKind.SelectedItem as ComboBoxItem;
+                if (t == null || item == null) return;
+                Core.SetKey(t, "Widget", (string)item.Tag);
+                SetChanged(currentFile);
+            };
+            widgetParam.TextChanged += (s, e) =>
+            {
+                if (loading) return;
+                var t = GetCurrentTile();
+                if (t == null) return;
+                Core.SetKey(t, "Param", widgetParam.Text.Trim());
+                SetChanged(currentFile);
+            };
             AddTo(f, NewFormRow("Label", tileFields["Label"], "Text at the bottom left. Empty = none (tiles without images show their name)."));
             var colorRow = NewPanel(Orientation.Horizontal);
             colorSwatch = NewButton("", "Swatch", "Pick a colour");

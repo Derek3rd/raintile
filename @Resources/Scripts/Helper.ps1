@@ -40,6 +40,7 @@ param(
     [int]$RepeatRate = 110,
     [string]$SearchButton = 'Y',
     [int]$Track = 1,
+    [int]$Dash = 1,
     [string]$Generated = '',
     [string]$Data = ''
 )
@@ -47,7 +48,7 @@ param(
 $ErrorActionPreference = 'Stop'
 try { (Get-Process -Id $PID).PriorityClass = 'BelowNormal' } catch { }
 
-if (-not $Gamepad -and -not $AutoHide -and -not $Track) {
+if (-not $Gamepad -and -not $AutoHide -and -not $Track -and -not $Dash) {
     $quit = $null
     if ([System.Threading.EventWaitHandle]::TryOpenExisting('Local\Raintile.Gamepad.Quit', [ref]$quit)) {
         [void]$quit.Set()
@@ -61,6 +62,343 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
+
+// Data of the Dashboard (Helper: while Generated\DashOn.txt exists, every
+// DashInterval ms): CPU, RAM, GPU, disks, network, processes, system, and the
+// sensors of HWiNFO (shared memory) when it runs. Written to
+// Generated\DashData.txt, one "key=value" per line (lists repeat the key).
+public class RaintileDash
+{
+    [StructLayout(LayoutKind.Sequential)]
+    struct MemoryStatus
+    {
+        public uint Length, MemoryLoad;
+        public ulong TotalPhys, AvailPhys, TotalPageFile, AvailPageFile, TotalVirtual, AvailVirtual, AvailExtendedVirtual;
+    }
+    [DllImport("kernel32.dll")] static extern bool GlobalMemoryStatusEx(ref MemoryStatus status);
+    [DllImport("kernel32.dll")] static extern ulong GetTickCount64();
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct PowerStatus { public byte ACLineStatus, BatteryFlag, BatteryLifePercent, Reserved; public int LifeTime, FullLifeTime; }
+    [DllImport("kernel32.dll")] static extern bool GetSystemPowerStatus(out PowerStatus status);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr OpenFileMapping(uint access, bool inherit, string name);
+    [DllImport("kernel32.dll")] static extern IntPtr MapViewOfFile(IntPtr map, uint access, uint high, uint low, UIntPtr bytes);
+    [DllImport("kernel32.dll")] static extern bool UnmapViewOfFile(IntPtr view);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+
+    PerformanceCounter cpuTotal, cpuPerf;
+    List<PerformanceCounter> cores;
+    double baseMhz;
+    string cpuName = "", gpuName = "", osName = "";
+    long vramTotal;
+    Dictionary<string, PerformanceCounter> gpuEngines, gpuMemory;
+    DateTime gpuRefresh = DateTime.MinValue;
+    long netRx = -1, netTx = -1;
+    DateTime netTime;
+    Dictionary<int, TimeSpan> procTimes = new Dictionary<int, TimeSpan>();
+    DateTime procTime;
+    bool started;
+
+    static string Clean(string s)
+    {
+        if (s == null) return "";
+        return s.Replace("|", "/").Replace("\r", " ").Replace("\n", " ").Trim();
+    }
+
+    static string N(double v) { return v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture); }
+
+    static PerformanceCounter Counter(string category, string counter, string instance)
+    {
+        try { var c = new PerformanceCounter(category, counter, instance, true); c.NextValue(); return c; }
+        catch { return null; }
+    }
+
+    void Start()
+    {
+        started = true;
+        cpuTotal = Counter("Processor Information", "% Processor Utility", "_Total")
+            ?? Counter("Processor", "% Processor Time", "_Total");
+        cpuPerf = Counter("Processor Information", "% Processor Performance", "_Total");
+        cores = new List<PerformanceCounter>();
+        try
+        {
+            var names = new List<string>(new PerformanceCounterCategory("Processor Information").GetInstanceNames());
+            names.RemoveAll(n => n.EndsWith("_Total"));
+            names.Sort((a, b) =>
+            {
+                string[] x = a.Split(','), y = b.Split(',');
+                int c = int.Parse(x[0]).CompareTo(int.Parse(y[0]));
+                return c != 0 ? c : int.Parse(x[1]).CompareTo(int.Parse(y[1]));
+            });
+            bool utility = cpuTotal != null && cpuTotal.CounterName == "% Processor Utility";
+            foreach (var n in names)
+            {
+                var c = Counter("Processor Information", utility ? "% Processor Utility" : "% Processor Time", n);
+                if (c != null) cores.Add(c);
+            }
+        }
+        catch { }
+        try
+        {
+            using (var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\CentralProcessor\0"))
+            {
+                if (k != null)
+                {
+                    cpuName = Clean(Convert.ToString(k.GetValue("ProcessorNameString")));
+                    baseMhz = Convert.ToDouble(k.GetValue("~MHz", 0));
+                }
+            }
+        }
+        catch { }
+        // the graphics card with the most memory (the dedicated one on laptops)
+        try
+        {
+            using (var cls = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"))
+            {
+                if (cls != null)
+                    foreach (var sub in cls.GetSubKeyNames())
+                    {
+                        try
+                        {
+                            using (var k = cls.OpenSubKey(sub))
+                            {
+                                if (k == null) continue;
+                                object mem = k.GetValue("HardwareInformation.qwMemorySize") ?? k.GetValue("HardwareInformation.MemorySize");
+                                long bytes = 0;
+                                if (mem is long) bytes = (long)mem;
+                                else if (mem is int) bytes = (uint)(int)mem;
+                                else if (mem is byte[] && ((byte[])mem).Length >= 4) bytes = ((byte[])mem).Length >= 8 ? BitConverter.ToInt64((byte[])mem, 0) : BitConverter.ToUInt32((byte[])mem, 0);
+                                string desc = Convert.ToString(k.GetValue("DriverDesc"));
+                                if (!string.IsNullOrEmpty(desc) && bytes >= vramTotal) { vramTotal = bytes; gpuName = Clean(desc); }
+                            }
+                        }
+                        catch { }
+                    }
+            }
+        }
+        catch { }
+        try
+        {
+            using (var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))
+            {
+                if (k != null)
+                {
+                    string product = Convert.ToString(k.GetValue("ProductName"));
+                    int build;
+                    int.TryParse(Convert.ToString(k.GetValue("CurrentBuildNumber")), out build);
+                    if (build >= 22000) product = product.Replace("Windows 10", "Windows 11");
+                    string ver = Convert.ToString(k.GetValue("DisplayVersion"));
+                    osName = Clean(product + (string.IsNullOrEmpty(ver) ? "" : " " + ver));
+                }
+            }
+        }
+        catch { }
+    }
+
+    // GPU load: the "3D" engines of every process, summed (as Task Manager);
+    // the instances change with the processes: looked up again every 5 s
+    void RefreshGpu()
+    {
+        gpuRefresh = DateTime.Now;
+        try
+        {
+            var engines = new Dictionary<string, PerformanceCounter>();
+            foreach (var n in new PerformanceCounterCategory("GPU Engine").GetInstanceNames())
+            {
+                if (!n.EndsWith("engtype_3D")) continue;
+                PerformanceCounter c;
+                if (gpuEngines != null && gpuEngines.TryGetValue(n, out c)) { engines[n] = c; gpuEngines.Remove(n); }
+                else { c = Counter("GPU Engine", "Utilization Percentage", n); if (c != null) engines[n] = c; }
+            }
+            if (gpuEngines != null) foreach (var c in gpuEngines.Values) c.Dispose();
+            gpuEngines = engines;
+            var memory = new Dictionary<string, PerformanceCounter>();
+            foreach (var n in new PerformanceCounterCategory("GPU Adapter Memory").GetInstanceNames())
+            {
+                PerformanceCounter c;
+                if (gpuMemory != null && gpuMemory.TryGetValue(n, out c)) { memory[n] = c; gpuMemory.Remove(n); }
+                else { c = Counter("GPU Adapter Memory", "Dedicated Usage", n); if (c != null) memory[n] = c; }
+            }
+            if (gpuMemory != null) foreach (var c in gpuMemory.Values) c.Dispose();
+            gpuMemory = memory;
+        }
+        catch { }
+    }
+
+    static float Next(PerformanceCounter c)
+    {
+        try { return c != null ? c.NextValue() : 0f; } catch { return 0f; }
+    }
+
+    public string Collect(bool processes, bool sensors)
+    {
+        if (!started) Start();
+        var sb = new System.Text.StringBuilder();
+        var now = DateTime.Now;
+
+        // CPU
+        sb.Append("cpu=").Append(N(Math.Min(100, Next(cpuTotal)))).Append('\n');
+        sb.Append("cpu.name=").Append(cpuName).Append('\n');
+        if (cpuPerf != null && baseMhz > 0) sb.Append("cpu.mhz=").Append(N(Math.Round(baseMhz * Next(cpuPerf) / 100))).Append('\n');
+        foreach (var c in cores) sb.Append("core=").Append(N(Math.Min(100, Next(c)))).Append('\n');
+
+        // RAM
+        var ms = new MemoryStatus { Length = (uint)Marshal.SizeOf(typeof(MemoryStatus)) };
+        if (GlobalMemoryStatusEx(ref ms))
+        {
+            sb.Append("ram.total=").Append(ms.TotalPhys).Append('\n');
+            sb.Append("ram.used=").Append(ms.TotalPhys - ms.AvailPhys).Append('\n');
+        }
+
+        // GPU
+        if ((now - gpuRefresh).TotalSeconds >= 5) RefreshGpu();
+        if (gpuEngines != null)
+        {
+            double g = 0;
+            foreach (var c in gpuEngines.Values) g += Next(c);
+            sb.Append("gpu=").Append(N(Math.Min(100, g))).Append('\n');
+        }
+        if (gpuMemory != null)
+        {
+            double used = 0;
+            foreach (var c in gpuMemory.Values) used += Next(c);
+            sb.Append("gpu.vram=").Append(N(used)).Append('\n');
+        }
+        if (vramTotal > 0) sb.Append("gpu.vramtotal=").Append(vramTotal).Append('\n');
+        sb.Append("gpu.name=").Append(gpuName).Append('\n');
+
+        // Disks: letter|label|total|free
+        try
+        {
+            foreach (var d in System.IO.DriveInfo.GetDrives())
+            {
+                if (d.DriveType != System.IO.DriveType.Fixed || !d.IsReady) continue;
+                sb.Append("disk=").Append(d.Name.TrimEnd('\\')).Append('|').Append(Clean(d.VolumeLabel)).Append('|')
+                  .Append(d.TotalSize).Append('|').Append(d.TotalFreeSpace).Append('\n');
+            }
+        }
+        catch { }
+
+        // Network: bytes per second, all the interfaces that are up
+        try
+        {
+            long rx = 0, tx = 0;
+            foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                var t = ni.NetworkInterfaceType;
+                if (t == System.Net.NetworkInformation.NetworkInterfaceType.Loopback || t == System.Net.NetworkInformation.NetworkInterfaceType.Tunnel) continue;
+                var st = ni.GetIPv4Statistics();
+                rx += st.BytesReceived; tx += st.BytesSent;
+            }
+            if (netRx >= 0)
+            {
+                double secs = Math.Max(0.1, (now - netTime).TotalSeconds);
+                sb.Append("net.down=").Append(N(Math.Max(0, rx - netRx) / secs)).Append('\n');
+                sb.Append("net.up=").Append(N(Math.Max(0, tx - netTx) / secs)).Append('\n');
+            }
+            netRx = rx; netTx = tx; netTime = now;
+        }
+        catch { }
+
+        // Processes, by name: CPU % since the last time, memory
+        if (processes)
+        {
+            var cpu = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            var ram = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            var times = new Dictionary<int, TimeSpan>();
+            double elapsed = Math.Max(0.1, (now - procTime).TotalSeconds);
+            int logical = Math.Max(1, Environment.ProcessorCount);
+            foreach (var p in Process.GetProcesses())
+            {
+                try
+                {
+                    if (p.Id == 0) continue;
+                    string name = p.ProcessName;
+                    long ws = p.WorkingSet64;
+                    long r; ram.TryGetValue(name, out r); ram[name] = r + ws;
+                    TimeSpan t = p.TotalProcessorTime, before;
+                    times[p.Id] = t;
+                    if (procTimes.TryGetValue(p.Id, out before))
+                    {
+                        double pct = (t - before).TotalSeconds / elapsed / logical * 100;
+                        double c; cpu.TryGetValue(name, out c); cpu[name] = c + pct;
+                    }
+                }
+                catch { }
+                finally { p.Dispose(); }
+            }
+            procTimes = times; procTime = now;
+            var byCpu = new List<KeyValuePair<string, double>>(cpu);
+            byCpu.Sort((a, b) => b.Value.CompareTo(a.Value));
+            for (int i = 0; i < Math.Min(8, byCpu.Count); i++)
+                if (byCpu[i].Key != "Idle") sb.Append("proc.cpu=").Append(Clean(byCpu[i].Key)).Append('|').Append(N(Math.Min(100, byCpu[i].Value))).Append('\n');
+            var byRam = new List<KeyValuePair<string, long>>(ram);
+            byRam.Sort((a, b) => b.Value.CompareTo(a.Value));
+            for (int i = 0; i < Math.Min(8, byRam.Count); i++)
+                sb.Append("proc.ram=").Append(Clean(byRam[i].Key)).Append('|').Append(byRam[i].Value).Append('\n');
+        }
+
+        // System
+        sb.Append("sys.uptime=").Append(GetTickCount64() / 1000).Append('\n');
+        sb.Append("sys.os=").Append(osName).Append('\n');
+        sb.Append("sys.name=").Append(Clean(Environment.MachineName)).Append('\n');
+        PowerStatus ps;
+        if (GetSystemPowerStatus(out ps) && ps.BatteryFlag != 128 && ps.BatteryLifePercent <= 100)
+            sb.Append("sys.battery=").Append(ps.BatteryLifePercent).Append('|').Append(ps.ACLineStatus == 1 ? 1 : 0).Append('\n');
+
+        // HWiNFO sensors (shared memory, when HWiNFO runs with it on)
+        if (sensors) ReadHwinfo(sb);
+        return sb.ToString();
+    }
+
+    // HWiNFO_SENSORS_SHARED_MEM2: a header, then the sensors and the readings
+    // (type|sensor|label|value|unit). Types: 1 temperature, 2 voltage, 3 fan,
+    // 4 current, 5 power, 6 clock, 7 usage, 8 other.
+    static void ReadHwinfo(System.Text.StringBuilder sb)
+    {
+        IntPtr map = OpenFileMapping(4 /* FILE_MAP_READ */, false, @"Global\HWiNFO_SENS_SM2");
+        if (map == IntPtr.Zero) { sb.Append("hw=off\n"); return; }
+        IntPtr view = MapViewOfFile(map, 4, 0, 0, UIntPtr.Zero);
+        try
+        {
+            if (view == IntPtr.Zero) { sb.Append("hw=off\n"); return; }
+            int signature = Marshal.ReadInt32(view, 0);
+            if (signature == 0x44414544 /* "DEAD" */) { sb.Append("hw=off\n"); return; }
+            int sensorOffset = Marshal.ReadInt32(view, 20), sensorSize = Marshal.ReadInt32(view, 24), sensorCount = Marshal.ReadInt32(view, 28);
+            int readingOffset = Marshal.ReadInt32(view, 32), readingSize = Marshal.ReadInt32(view, 36), readingCount = Marshal.ReadInt32(view, 40);
+            if (readingCount <= 0 || readingCount > 5000 || readingSize < 316) { sb.Append("hw=off\n"); return; }
+            var sensorNames = new string[Math.Max(0, Math.Min(sensorCount, 1000))];
+            for (int i = 0; i < sensorNames.Length; i++)
+            {
+                IntPtr s = new IntPtr(view.ToInt64() + sensorOffset + (long)i * sensorSize);
+                string user = Marshal.PtrToStringAnsi(new IntPtr(s.ToInt64() + 8 + 128));
+                sensorNames[i] = Clean(string.IsNullOrEmpty(user) ? Marshal.PtrToStringAnsi(new IntPtr(s.ToInt64() + 8)) : user);
+            }
+            sb.Append("hw=on\n");
+            for (int i = 0; i < readingCount; i++)
+            {
+                IntPtr r = new IntPtr(view.ToInt64() + readingOffset + (long)i * readingSize);
+                int type = Marshal.ReadInt32(r, 0);
+                int sensor = Marshal.ReadInt32(r, 4);
+                string label = Marshal.PtrToStringAnsi(new IntPtr(r.ToInt64() + 140));
+                if (string.IsNullOrEmpty(label)) label = Marshal.PtrToStringAnsi(new IntPtr(r.ToInt64() + 12));
+                string unit = Marshal.PtrToStringAnsi(new IntPtr(r.ToInt64() + 268));
+                double value = BitConverter.Int64BitsToDouble(Marshal.ReadInt64(r, 284));
+                string sname = sensor >= 0 && sensor < sensorNames.Length ? sensorNames[sensor] : "";
+                sb.Append("hw=").Append(type).Append('|').Append(sname).Append('|').Append(Clean(label)).Append('|')
+                  .Append(N(value)).Append('|').Append(Clean(unit)).Append('\n');
+            }
+        }
+        catch { sb.Append("hw=off\n"); }
+        finally
+        {
+            if (view != IntPtr.Zero) UnmapViewOfFile(view);
+            CloseHandle(map);
+        }
+    }
+}
 
 public class RaintilePad
 {
@@ -531,6 +869,52 @@ public class RaintilePad
         StartWatch(pid, pendingId, image);
     }
 
+    // --- Dashboard ---------------------------------------------------------------
+    // While the skin shows the Dashboard it keeps Generated\DashOn.txt
+    // ("<interval ms>|<processes 0/1>|<sensors 0/1>"): the data is collected,
+    // written to DashData.txt and DashTick() tells the skin.
+    public string DashFlag, DashFile;
+    RaintileDash dash;
+    long nextDash, nextDashCheck;
+    int dashInterval = 1000;
+    bool dashOn, dashProcs = true, dashSensors = true;
+
+    void DashStep(IntPtr window, long now)
+    {
+        if (now >= nextDashCheck)
+        {
+            nextDashCheck = now + 250;
+            bool on = System.IO.File.Exists(DashFlag);
+            if (on && !dashOn)
+            {
+                try
+                {
+                    string[] p = System.IO.File.ReadAllText(DashFlag).Trim().Split('|');
+                    int ms;
+                    if (p.Length > 0 && int.TryParse(p[0], out ms)) dashInterval = Math.Max(250, ms);
+                    dashProcs = p.Length < 2 || p[1] != "0";
+                    dashSensors = p.Length < 3 || p[2] != "0";
+                }
+                catch { }
+                nextDash = now; // right away
+            }
+            dashOn = on;
+        }
+        if (!dashOn || now < nextDash) return;
+        nextDash = now + dashInterval;
+        if (dash == null) dash = new RaintileDash();
+        string data = dash.Collect(dashProcs, dashSensors);
+        try
+        {
+            string tmp = DashFile + ".tmp";
+            System.IO.File.WriteAllText(tmp, data, new System.Text.UTF8Encoding(false));
+            if (System.IO.File.Exists(DashFile)) System.IO.File.Delete(DashFile);
+            System.IO.File.Move(tmp, DashFile);
+        }
+        catch { return; }
+        Send(window, Call("DashTick()"));
+    }
+
     static void Send(IntPtr window, string bang)
     {
         IntPtr text = Marshal.StringToHGlobalUni(bang);
@@ -558,6 +942,7 @@ public class RaintilePad
 
             if (AutoHide && window != IntPtr.Zero && FocusLost(window, now)) Send(window, Call("FocusLost()"));
             if (TrackEnabled) { try { TrackStep(now); } catch { } }
+            if (DashFlag != null && window != IntPtr.Zero) { try { DashStep(window, now); } catch { } }
             if (!PadEnabled) continue;
 
             // disconnected controllers are checked again every 2 s (the call
@@ -599,6 +984,10 @@ $pad.PadEnabled = [bool]$Gamepad
 $pad.AutoHide = [bool]$AutoHide
 $pad.SearchMask = [RaintilePad]::ParseButtons($SearchButton)
 $pad.TrackEnabled = [bool]$Track -and $Generated -and $Data
+if ($Generated) {
+    $pad.DashFlag = Join-Path $Generated 'DashOn.txt'
+    $pad.DashFile = Join-Path $Generated 'DashData.txt'
+}
 if ($pad.TrackEnabled) {
     $pad.LaunchFile = Join-Path $Generated 'Launch.txt'
     $pad.PlayedFile = Join-Path $Data 'TimePlayed.txt'

@@ -75,6 +75,21 @@ try {
         }
         Write-Output "Your data was copied from $source to $Data"
     }
+    # The Dashboard (1.0.6): added once to an existing folder; deleted, it does
+    # not come back (Dashboard.added)
+    $marker = Join-Path $Data 'Dashboard.added'
+    if (-not (Test-Path -LiteralPath $marker)) {
+        $hasDashboard = @(Get-ChildItem -LiteralPath (Join-Path $Data 'Categories') -Filter '*.ini' -File -ErrorAction SilentlyContinue |
+            Where-Object { [IO.File]::ReadAllText($_.FullName) -match '(?im)^\s*Type\s*=\s*Dashboard\s*$' }).Count -gt 0
+        $file = Join-Path $Data 'Categories\Dashboard.ini'
+        if (-not $hasDashboard -and -not (Test-Path -LiteralPath $file) -and (Test-Path -LiteralPath (Join-Path $Resources 'Categories\Dashboard.ini'))) {
+            Copy-Item -LiteralPath (Join-Path $Resources 'Categories\Dashboard.ini') -Destination $file
+            $icon = Join-Path $Resources 'Images\Dashboard'
+            if (Test-Path -LiteralPath $icon) { Copy-Item -LiteralPath $icon -Destination (Join-Path $Data 'Images') -Recurse -Force }
+            Write-Output "Dashboard added: $file"
+        }
+        [IO.File]::WriteAllText($marker, '', $utf8)
+    }
 
     # Settings: defaults of this version + your values
     $defaults = Join-Path $Resources 'Settings.inc'

@@ -15,6 +15,12 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Tags and filter bar](#tags-and-filter-bar)
 - [Play time](#play-time)
 - [Launching a tile](#launching-a-tile)
+- [Dashboard](#dashboard)
+  - [Widgets](#widgets)
+  - [Temperatures and fans (HWiNFO)](#temperatures-and-fans-hwinfo)
+  - [Skins in a tile](#skins-in-a-tile)
+  - [Custom widgets](#custom-widgets)
+  - [Widget gallery](#widget-gallery)
 - [Categories and tiles](#categories-and-tiles)
   - [Category files](#category-files)
   - [Tile keys](#tile-keys)
@@ -165,6 +171,61 @@ On click the tile expands to full screen (with background and logo at full resol
 | `LaunchHold` | `1500` | ms at full screen before hiding |
 | `LaunchLogoSize` | `33%` | final logo size |
 | `LaunchFontSize` | `48` | centre text for tiles without a logo |
+
+## Dashboard
+
+A **Dashboard** is a category whose tiles are widgets that watch the PC: processor, graphics card, memory, disks, network, processes, temperatures. The default one (`Categories\Dashboard.ini`, added once to existing data too) has one widget of each kind; make your own with `Type=Dashboard` in the `[Category]` section, or with the **Dashboard** box of the category in Options > Categories.
+
+- The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a Dashboard is on screen, every `DashInterval` ms (default 1000): with the Dashboard closed nothing is measured.
+- Widgets are left out of search, Favorites, Recent and the filters.
+- Clicking a widget runs its `Command=`, or by default opens what fits: Task Manager (CPU, GPU, RAM, processes), the disk in Explorer, network or system settings.
+
+### Widgets
+
+A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options pick **Widget** and **Widget option** in the tile editor. `Name=` is the title shown on the widget (by default the name of the kind).
+
+| `Widget=` | Shows | `Param=` |
+| --- | --- | --- |
+| `cpu` | use, speed, cores and a graph of the last minute | |
+| `gpu` | use (3D engine), video memory and a graph | |
+| `ram` | memory used and free, and a graph | |
+| `disk` | used and free space | a drive (`C:`); empty = every drive, one bar each |
+| `network` | download and upload speed, and a graph | |
+| `processes` | the programs using the most CPU | `ram` = sorted by memory |
+| `system` | Windows version, PC name, uptime, battery | |
+| `temps` | temperatures (from HWiNFO) | sensors to show, see below |
+| `fans` | fan speeds (from HWiNFO) | sensors to show |
+| `skin` | a Rainmeter skin placed over the tile | its config and file: `illustro\Clock\Clock.ini` |
+| `custom` | a custom widget drawn in the tile | its name in the `Widgets` folder |
+
+### Temperatures and fans (HWiNFO)
+
+Windows does not give temperatures to programs without a driver, so Raintile reads them from [HWiNFO](https://www.hwinfo.com/) (free): start it (sensors only is enough), open **Settings** and turn on **Shared Memory Support**. With the free version the shared memory turns off after 12 hours: start HWiNFO again, or keep it running at login.
+
+- Without `Param=`, `temps` shows the CPU and GPU temperatures it finds (package, die, hot spot, ...), `fans` the first fans.
+- `Param=` picks the readings, separated by `;`, each one a part of the label as HWiNFO writes it (any case): `Param=CPU Package;GPU Temperature;SSD`. Add `=Name` to rename one: `Param=CPU Package=CPU;GPU Hot Spot=GPU hot`.
+
+### Skins in a tile
+
+`Widget=skin` with `Param=<config>\<file>.ini` loads a skin you already have in Rainmeter, places it over the tile while the Dashboard is open and unloads it when the launcher hides. The skin keeps its own size: pick one that fits the tile, or change the grid of the Dashboard (`NX`, `NY`).
+
+### Custom widgets
+
+A custom widget is a Rainmeter `.ini` drawn inside the tile, as part of the launcher (no separate skin). Put it in the data folder, `Widgets\<name>\<name>.ini` (or `Widgets\<name>.ini`), and use `Widget=custom`, `Param=<name>`. Write it like a skin, with these differences:
+
+- `#WIDGETW#` and `#WIDGETH#` are the size of the tile in pixels, `#WIDGETPATH#` the folder of the widget (for images: `#WIDGETPATH#bar.png`). Coordinates start at the top left of the tile.
+- `[Rainmeter]` and `[Metadata]` are ignored; `[Variables]` are added to the launcher's, so give them names of your own (`MyWidgetColor`, not `Color`).
+- Measures update every `DashInterval` ms, while the widget is visible.
+- Section names get a prefix (`CW3_MeterTime`): references as `[MeterTime]`, `[MeasureCPU:%]` and `MeasureName=` are renamed by themselves, names written bare in a bang are not. In a meter's own actions use `#CURRENTSECTION#`: `LeftMouseUpAction=[!SetOption #CURRENTSECTION# FontColor 255,0,0]`.
+- Plugins work as in any skin, but heavy ones slow the launcher down.
+
+The widget is read again when its file changes (refresh the skin).
+
+### Widget gallery
+
+Options > Dashboard > **Widget gallery** lists widgets made for Raintile: **Install** downloads one to the `Widgets` folder (and offers to add it to the Dashboard), **Update** appears when a newer version is out, **Remove** sends it to the Recycle Bin. A widget can run programs like any Rainmeter skin: install only the ones you trust.
+
+The list is [`widgets/index.json`](../widgets/index.json) in this repository; the widgets themselves can be here (`widgets/<id>/`) or in their authors' repositories. To publish one, see [widgets/README.md](../widgets/README.md).
 
 ## Categories and tiles
 
@@ -327,6 +388,7 @@ Settings.inc      your settings (every key, with its comments)
 State.inc         last category and scroll positions
 Categories\*.ini  your categories and tiles
 Images\           their icons, backgrounds and logos
+Widgets\          custom widgets (Dashboard), installed from the gallery or by hand
 Favorites.txt     your favorite tiles
 Usage.txt         how many times and when each tile was launched (Recent)
 Seen.txt          games and apps already shown in the Import list
@@ -486,6 +548,12 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 | `SearchPlaceholder` | `Search` | text shown in the empty search bar |
 | `SearchHover` | `1` | `1` = only the magnifier until the mouse is over it, `0` = always open |
 
+### Dashboard
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `DashInterval` | `1000` | ms between two updates of the [Dashboard](#dashboard) widgets (250-5000), only while one is on screen |
+
 ### Clock
 
 <a id="clock"></a>Time and date at the top left (Options > Menu > Clock). They are updated once a minute, only while the launcher is visible: at rest it still uses no CPU.
@@ -564,7 +632,7 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
 @Resources/
   Settings.inc               default settings (yours are in the data folder)
   State.inc                  default positions
-  Categories/*.ini           default categories, copied to the data folder the first time
+  Categories/*.ini           default categories (Dashboard.ini: the default Dashboard), copied to the data folder the first time
   Images/<category>/         their icons, backgrounds and logos
   Icons/                     icons of Favorites and Recent
   Scripts/Data.ps1           prepares the data folder
@@ -588,6 +656,8 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Generated/Found/           their icons
   Generated/Missing.txt      tiles of games no longer installed (last search)
   Generated/Playtime.txt     play time of the Steam games
+  Generated/DashOn.txt       present while a Dashboard is on screen: the helper collects its data
+  Generated/DashData.txt     the data of the Dashboard widgets (written by the helper)
 ```
 
 The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your data is](#where-your-data-is).

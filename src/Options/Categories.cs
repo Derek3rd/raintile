@@ -790,8 +790,8 @@ namespace RaintileOptions
             previewLabel.Visibility = label != "" && V("ShowLabels") != "0" ? Visibility.Visible : Visibility.Collapsed;
             SetThumb(bgThumb, bg);
             SetThumb(logoThumb, logo);
-            bgPath.Text = bg ?? (s != null ? "None. Default: Images\\" + b + "\\background\\" + s.Name + ".jpg" : "");
-            logoPath.Text = logo ?? (s != null ? "None. Default: Images\\" + b + "\\logo\\" + s.Name + ".png" : "");
+            SetLabelHint(bgPath, bg ?? (s != null ? "None. Default: Images\\" + b + "\\background\\" + s.Name + ".jpg" : ""));
+            SetLabelHint(logoPath, logo ?? (s != null ? "None. Default: Images\\" + b + "\\logo\\" + s.Name + ".png" : ""));
             var sw = NewColorBrush(s != null ? Core.GetKey(s, "Color") : "", true);
             colorSwatch.Background = (Brush)sw ?? ResBrush("FieldBg");
             var sel = tilesList.SelectedItem as ListBoxItem;
@@ -908,6 +908,7 @@ namespace RaintileOptions
 
         void SetLabelHint(TextBlock label, string hint)
         {
+            if (string.IsNullOrEmpty(hint)) { label.TextDecorations = null; label.ClearValue(FrameworkElement.CursorProperty); label.ToolTip = null; return; }
             if (hintUnderline == null)
             {
                 var dim = ResBrush("DimBrush") as SolidColorBrush;
@@ -1585,9 +1586,11 @@ namespace RaintileOptions
                 var remove = NewButton("Remove");
                 remove.Margin = T(6, 0, 0, 0);
                 AddTo(row, thumb); AddTo(row, choose); AddTo(row, remove);
-                var pathText = NewText("", 11.5, ResBrush("DimBrush"), false, true);
-                AddTo(f, NewFormRow(kind, row, "", pathText));
-                if (kind == "Background") { bgThumb = thumb; bgPath = pathText; } else { logoThumb = thumb; logoPath = pathText; }
+                // the path of the image is the tooltip of the label (set with the tile)
+                var imageRow = NewFormRow(kind, row);
+                AddTo(f, imageRow);
+                var pathLabel = (TextBlock)imageRow.Children[0];
+                if (kind == "Background") { bgThumb = thumb; bgPath = pathLabel; } else { logoThumb = thumb; logoPath = pathLabel; }
                 string k = kind;
                 choose.Click += (s, e) =>
                 {

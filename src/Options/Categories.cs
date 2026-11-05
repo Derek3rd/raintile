@@ -471,7 +471,7 @@ namespace RaintileOptions
         // Opacity of the tile background (colour and image): "" = the default, then 100% to 0%
         static ComboBox NewOpacityBox(string defaultLabel)
         {
-            var box = new ComboBox { Width = 170 };
+            var box = new ComboBox();
             box.Items.Add(new ComboBoxItem { Content = defaultLabel, Tag = "" });
             for (int n = 100; n >= 0; n -= 10) box.Items.Add(new ComboBoxItem { Content = n + "%" + (n == 0 ? " (none)" : ""), Tag = n.ToString() });
             return box;
@@ -877,22 +877,79 @@ namespace RaintileOptions
             UpdateTilePreview();
         }
 
+        // Every field of a form fills the column, so all of them share both edges; a
+        // button after it (Browse..., the clear button) takes its room from the field.
+        const double PairGap = 32;
+
         Grid NewFormRow(string label, UIElement control, string hint = "", FrameworkElement hintBlock = null)
         {
             var g = NewGrid("118", "*");
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             g.Margin = T(0, 7);
+            // centred on the control, not on the hint below it
             var l = NewText(label, 13, ResBrush("DimBrush"));
-            l.VerticalAlignment = VerticalAlignment.Top;
-            l.Margin = T(0, 6, 0, 0);
+            l.VerticalAlignment = VerticalAlignment.Center;
             g.Children.Add(l);
             // A fixed hint is the tooltip of the label (dotted underline), to keep the form short;
             // hintBlock stays below the control: it shows current values or holds buttons.
             if (!string.IsNullOrEmpty(hint)) SetLabelHint(l, hint);
-            var sp = NewPanel();
-            AddTo(sp, control);
-            if (hintBlock != null) { hintBlock.Margin = T(0, 4, 0, 0); AddTo(sp, hintBlock); }
-            SetCol(sp, 1);
-            g.Children.Add(sp);
+            // a field with its own width starts at the left edge (stretched, it would be centred)
+            var fe = control as FrameworkElement;
+            if (fe != null && !double.IsNaN(fe.Width)) fe.HorizontalAlignment = HorizontalAlignment.Left;
+            SetCol(control, 1);
+            g.Children.Add(control);
+            if (hintBlock != null)
+            {
+                hintBlock.Margin = T(0, 4, 0, 0);
+                SetCol(hintBlock, 1);
+                Grid.SetRow(hintBlock, 1);
+                g.Children.Add(hintBlock);
+            }
+            return g;
+        }
+
+        // Two fields split the column around a dimmed x (grid, size)
+        Grid NewPairRow(FrameworkElement a, FrameworkElement b)
+        {
+            var g = NewGrid("*", PairGap.ToString(System.Globalization.CultureInfo.InvariantCulture), "*");
+            var by = NewText(((char)0xD7).ToString(), 13, ResBrush("DimBrush"));
+            by.VerticalAlignment = VerticalAlignment.Center;
+            by.HorizontalAlignment = HorizontalAlignment.Center;
+            SetCol(by, 1); SetCol(b, 2);
+            g.Children.Add(a); g.Children.Add(by); g.Children.Add(b);
+            return g;
+        }
+
+        // The one button that empties a field (hot key, image, icon); the trash is for
+        // deleting a tile or a category
+        Button NewClearButton(string tip)
+        {
+            var b = NewIconButton(0xE711, tip);
+            b.Margin = T(6, 0, 0, 0);
+            return b;
+        }
+
+        // A field that fills the column between an optional element before it
+        // (swatch, thumbnail) and one after it (clear button)
+        Grid NewFieldRow(FrameworkElement lead, FrameworkElement field, FrameworkElement tail)
+        {
+            var g = NewGrid("Auto", "*", "Auto");
+            if (lead != null)
+            {
+                lead.VerticalAlignment = VerticalAlignment.Center;
+                g.Children.Add(lead);
+                field.Margin = T(8, 0, 0, 0);
+            }
+            field.VerticalAlignment = VerticalAlignment.Center;
+            SetCol(field, 1);
+            g.Children.Add(field);
+            if (tail != null)
+            {
+                tail.VerticalAlignment = VerticalAlignment.Center;
+                SetCol(tail, 2);
+                g.Children.Add(tail);
+            }
             return g;
         }
 
@@ -1085,33 +1142,22 @@ namespace RaintileOptions
             AddTo(side, catCard);
             var f = CardPanel(catCard);
             foreach (var k in new[] { "Name", "NX", "NY", "IconSize" }) catFields[k] = new TextBox();
-            catFields["NX"].Width = 64; catFields["NY"].Width = 64; catFields["IconSize"].Width = 100;
             AddTo(f, NewFormRow("Name", catFields["Name"], "Text shown in the menu."));
-            var iconRow = NewPanel(Orientation.Horizontal);
-            catIcon = NewThumb(36);
+            catIcon = NewThumb(44);
             var btnIcon = NewButton("Choose...");
-            btnIcon.Margin = T(10, 0, 0, 0);
-            var btnIconDel = NewButton("Remove");
-            btnIconDel.Margin = T(6, 0, 0, 0);
-            AddTo(iconRow, catIcon); AddTo(iconRow, btnIcon); AddTo(iconRow, btnIconDel);
+            var btnIconDel = NewClearButton("Remove the icon");
+            var iconRow = NewFieldRow(catIcon, btnIcon, btnIconDel);
             catIconHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
             AddTo(f, NewFormRow("Icon", iconRow, "", catIconHint));
-            var gridRow = NewPanel(Orientation.Horizontal);
-            AddTo(gridRow, catFields["NX"]);
-            var x = NewText("\u00D7", 13, ResBrush("DimBrush"));
-            x.Margin = T(8, 0, 8, 0);
-            x.VerticalAlignment = VerticalAlignment.Center;
-            AddTo(gridRow, x);
-            AddTo(gridRow, catFields["NY"]);
+            var gridRow = NewPairRow(catFields["NX"], catFields["NY"]);
             gridHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
             AddTo(f, NewFormRow("Grid", gridRow, "", gridHint));
             sizeHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
             AddTo(f, NewFormRow("Logo size", catFields["IconSize"], "", sizeHint));
             // background of the tiles of the category
-            var catColorRow = NewPanel(Orientation.Horizontal);
             catColorSwatch = NewButton("", "Swatch", "Pick a colour");
-            catTileColor = new TextBox { Width = 170, Margin = T(10, 0, 0, 0) };
-            AddTo(catColorRow, catColorSwatch); AddTo(catColorRow, catTileColor);
+            catTileColor = new TextBox();
+            var catColorRow = NewFieldRow(catColorSwatch, catTileColor, null);
             AddTo(f, NewFormRow("Tile colour", catColorRow, "For the tiles without a colour of their own. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent."));
             catColorSwatch.Click += (s, e) =>
             {
@@ -1463,7 +1509,7 @@ namespace RaintileOptions
             cmdRow.Children.Add(btnCmd);
             AddTo(f, NewFormRow("Command", cmdRow, "A program, a .lnk/.url shortcut, a URL (also steam://...), a folder or a Rainmeter bang."));
             // widgets: only in a Dashboard
-            widgetKind = new ComboBox { Width = 260 };
+            widgetKind = new ComboBox();
             foreach (var k in WIDGET_KINDS) widgetKind.Items.Add(new ComboBoxItem { Content = k[1], Tag = k[0] });
             widgetRow = NewFormRow("Widget", widgetKind, "What the tile shows in the Dashboard. A click opens its Command, or the tool that fits.");
             AddTo(f, widgetRow);
@@ -1490,11 +1536,8 @@ namespace RaintileOptions
                 SetChanged(currentFile);
             };
             AddTo(f, NewFormRow("Label", tileFields["Label"], "Text at the bottom left. Empty = none (tiles without images show their name)."));
-            var colorRow = NewPanel(Orientation.Horizontal);
             colorSwatch = NewButton("", "Swatch", "Pick a colour");
-            tileFields["Color"].Width = 170;
-            tileFields["Color"].Margin = T(10, 0, 0, 0);
-            AddTo(colorRow, colorSwatch); AddTo(colorRow, tileFields["Color"]);
+            var colorRow = NewFieldRow(colorSwatch, tileFields["Color"], null);
             AddTo(f, NewFormRow("Colour", colorRow, "Used when there is no background image. Empty = from the logo, or the default tile colour."));
             tileOpacity = NewOpacityBox("From the category");
             AddTo(f, NewFormRow("Background", tileOpacity, "Opacity of the colour and the image of the tile: 0% leaves only the logo, the label or the widget (a skin over the tile, without a box behind it)."));
@@ -1508,14 +1551,10 @@ namespace RaintileOptions
                 SetChanged(currentFile);
             };
             // cells taken in the grid (Size=<columns>x<rows>)
-            var sizeRow = NewPanel(Orientation.Horizontal);
-            sizeCols = new ComboBox { Width = 70 };
-            sizeRows = new ComboBox { Width = 70 };
+            sizeCols = new ComboBox();
+            sizeRows = new ComboBox();
             for (int n = 1; n <= 8; n++) { sizeCols.Items.Add(n.ToString()); sizeRows.Items.Add(n.ToString()); }
-            var by = NewText("\u00D7", 13, ResBrush("DimBrush"));
-            by.VerticalAlignment = VerticalAlignment.Center;
-            by.Margin = T(10, 0, 10, 0);
-            AddTo(sizeRow, sizeCols); AddTo(sizeRow, by); AddTo(sizeRow, sizeRows);
+            var sizeRow = NewPairRow(sizeCols, sizeRows);
             AddTo(f, NewFormRow("Size", sizeRow, "Cells the tile takes in the grid: columns \u00D7 rows (at most the grid of the category). The other tiles fill the space around it. Search, Favorites and Recent show it in one cell."));
             SelectionChangedEventHandler sizeChanged = (s, e) =>
             {
@@ -1532,10 +1571,9 @@ namespace RaintileOptions
             tagSuggestions = new WrapPanel();
             AddTo(f, NewFormRow("Tags", tileFields["Tags"], "Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", tagSuggestions));
             // hot key: click, then press the combination (with modifiers)
-            var keyRow = NewPanel(Orientation.Horizontal);
             tileKeyButton = NewButton("None", "KeyButton", "Click, then press the combination");
-            var keyClear = NewIconButton(0xE711, "No hot key");
-            AddTo(keyRow, tileKeyButton); AddTo(keyRow, keyClear);
+            var keyClear = NewClearButton("No hot key");
+            var keyRow = NewFieldRow(null, tileKeyButton, keyClear);
             AddTo(f, NewFormRow("Hot key", keyRow, "Starts the tile also while the launcher is hidden, e.g. Ctrl + Alt + 1. Hold the modifiers, then press the key."));
             tileKeyButton.Click += (s, e) =>
             {
@@ -1594,13 +1632,10 @@ namespace RaintileOptions
             };
             foreach (var kind in new[] { "Background", "Logo" })
             {
-                var row = NewPanel(Orientation.Horizontal);
                 var thumb = NewThumb(44);
                 var choose = NewButton("Choose...");
-                choose.Margin = T(10, 0, 0, 0);
-                var remove = NewButton("Remove");
-                remove.Margin = T(6, 0, 0, 0);
-                AddTo(row, thumb); AddTo(row, choose); AddTo(row, remove);
+                var remove = NewClearButton("Remove the " + kind.ToLowerInvariant());
+                var row = NewFieldRow(thumb, choose, remove);
                 // the path of the image is the tooltip of the label (set with the tile)
                 var imageRow = NewFormRow(kind, row);
                 AddTo(f, imageRow);

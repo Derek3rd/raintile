@@ -1584,8 +1584,9 @@ local function setGridArea(withFilter)
 	local fs = withFilter and filterSpace() or 0
 	V.GridY = V.GridTop + fs
 	set('GridClip', 'Y', tostring(math.floor(V.GridY)))
-	set('GridClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
-		math.floor(V.AreaW), math.floor(V.AreaH - fs)))
+	-- visible part of the grid (also the edge of the fades)
+	V.ClipW, V.ClipH = math.floor(V.AreaW), math.floor(V.AreaH - fs)
+	set('GridClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', V.ClipW, V.ClipH))
 	for i = 1, #filter.chips do show('FilterText' .. i, withFilter) end
 	if fs == 0 then
 		for i = 1, #filter.chips do show('FilterPill' .. i, false) end
@@ -2365,11 +2366,13 @@ local function placeSlots()
 				end
 				if V.Horizontal then
 					local fw = math.floor(math.min(V.StepX * 0.4, 160))
-					if x < V.GridW then add(x + V.TileW - V.GridW, fw, { V.GridW - fw, y, fw, V.TileH, 'end' }) end
+					local edge = V.ClipW or V.GridW
+					if x < edge then add(x + V.TileW - edge, fw, { edge - fw, y, fw, V.TileH, 'end' }) end
 					if x + V.TileW > 0 then add(-x, fw, { 0, y, fw, V.TileH, 'start' }) end
 				else
 					local fh = math.floor(math.min(V.StepY * 0.4, 160))
-					if y < V.GridH then add(y + V.TileH - V.GridH, fh, { x, V.GridH - fh, V.TileW, fh, 'end' }) end
+					local edge = V.ClipH or V.GridH
+					if y < edge then add(y + V.TileH - edge, fh, { x, edge - fh, V.TileW, fh, 'end' }) end
 					if y + V.TileH > 0 then add(-y, fh, { x, 0, V.TileW, fh, 'start' }) end
 				end
 			end

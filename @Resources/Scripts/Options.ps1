@@ -305,7 +305,8 @@ $schema = @(
                     (S 'choice' 'TileInfo' 'Play time and last launch' 'A line on the tile, at the top left unless moved in the preview of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.' @{ Choices = @(
                                 @('Hover', 'On the highlighted tile'), @('Always', 'Always'), @('Never', 'Never')) }),
                     (Num 'InfoFontSize' 'Play time font size' 6 30 1 'pt'),
-                    (S 'bool' 'TrackPlaytime' 'Measure play time outside Steam' 'The background helper looks for the game a tile starts and counts how long it runs.')
+                    (S 'bool' 'TrackPlaytime' 'Measure play time outside Steam' 'The background helper looks for the game a tile starts and counts how long it runs.'),
+                    (S 'bool' 'GameUpdates' 'Steam updates waiting' 'Steam games with an update to download say so on the play time line, with its size and when Steam scheduled it.')
                 ) }
             @{ Title = 'Tiles'; Items = @(
                     (S 'color' 'TileColor' 'Default tile colour'),
@@ -489,7 +490,7 @@ $defaults = @{
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'; ShowUnplayed = '1'; UnplayedCount = '24'
-    ShowPower = '1'; TrackPlaytime = '1'; GamepadSearch = 'Y'; DashInterval = '1000'
+    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; GamepadSearch = 'Y'; DashInterval = '1000'
     FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
     TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'

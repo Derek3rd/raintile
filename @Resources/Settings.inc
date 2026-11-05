@@ -281,6 +281,10 @@ InfoFontSize=10
 ; background helper looks for the game started by the tile and counts how
 ; long it runs (TimePlayed.txt in the data folder)
 TrackPlaytime=1
+; 1 = Steam games with an update waiting say so on the TileInfo line, in place
+; of the play time: "Update 5.4 GB - Sat 06:27" (size and time Steam
+; scheduled it), read from Steam's appmanifest files
+GameUpdates=1
 FontFace=Segoe UI
 MenuFontSize=12
 LabelFontSize=14

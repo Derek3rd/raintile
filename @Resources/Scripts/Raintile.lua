@@ -749,6 +749,51 @@ local function readPlaytime()
 	end
 end
 
+-- Steam games with an update waiting: GameUpdates.ps1 lists them in
+-- Generated\GameUpdates.txt ("<appid>|<bytes to download>|<bytes downloaded>|
+-- <scheduled, unix time or 0>")
+local gameUpdates = {} -- steam app id -> { size, done, when }
+
+local function readGameUpdates()
+	gameUpdates = {}
+	for _, line in ipairs(readLines(resources .. 'Generated\\GameUpdates.txt')) do
+		local id, size, done, when = line:match('^(%d+)|(%d+)|(%d+)|(%d+)$')
+		if id then gameUpdates[id] = { size = tonumber(size), done = tonumber(done), when = tonumber(when) } end
+	end
+end
+
+-- Line of a Steam tile with an update waiting (GameUpdates), as Steam's
+-- downloads page: "Update 5.4 GB - Sat 06:27" (GB of 1024 MB, like Steam),
+-- "Updating 40%" while it downloads
+local function updateInfo(t)
+	local u = V.GameUpdates and t.steamId and gameUpdates[t.steamId]
+	if not u then return nil end
+	if u.done > 0 and u.done < u.size then
+		return 'Updating ' .. math.floor(u.done * 100 / u.size) .. '%'
+	end
+	local text = 'Update'
+	if u.size >= 1024 ^ 3 then
+		text = text .. string.format(' %.1f GB', u.size / 1024 ^ 3):gsub('%.0 GB$', ' GB')
+	elseif u.size > 0 then
+		text = text .. ' ' .. math.max(1, math.floor(u.size / 1024 ^ 2 + 0.5)) .. ' MB'
+	end
+	local now = os.time()
+	if u.when > now then
+		-- days between the two midnights (rounded: a day can last 23 or 25 h)
+		local today, that = os.date('*t', now), os.date('*t', u.when)
+		today.hour, today.min, today.sec = 0, 0, 0
+		that.hour, that.min, that.sec = 0, 0, 0
+		local days = math.floor((os.time(that) - os.time(today)) / 86400 + 0.5)
+		local day
+		if days == 0 then day = 'today'
+		elseif days == 1 then day = 'tomorrow'
+		elseif days < 7 then day = os.date('%a', u.when)
+		else day = os.date('%d %b', u.when) end
+		text = text .. ' - ' .. day .. ' ' .. os.date('%H:%M', u.when)
+	end
+	return text
+end
+
 -- Play time of the other tiles (not Steam), measured by the helper while the
 -- game it started was running: TimePlayed.txt in the data folder,
 -- "<file>|<tile name>|<minutes>|<last played, unix time>"
@@ -772,9 +817,13 @@ local function ago(time)
 	return os.date('%d %b %Y', time)
 end
 
--- Line shown on the tile (TileInfo): play time and last launch
+-- Line shown on the tile (TileInfo): play time and last launch, or a Steam
+-- update waiting. The second value is true for the line shown whatever
+-- TileInfo says: "Not installed".
 local function tileInfo(t)
-	if t.missing then return 'Not installed' end
+	if t.missing then return 'Not installed', true end
+	local update = updateInfo(t)
+	if update then return update end
 	-- Steam's own play time, otherwise the one measured by the helper
 	local p = t.steamId and playtime[t.steamId] or timePlayed[tileId(t)]
 	local u = usage[tileId(t)]
@@ -886,6 +935,7 @@ local function loadCategories(files)
 		readUsage()
 		readMissing()
 		readPlaytime()
+		readGameUpdates()
 		readTimePlayed()
 		fillVirtual()
 	end
@@ -2322,9 +2372,10 @@ local function placeSlots()
 			end
 			-- play time / last launch: always, only on the highlighted tile
 			-- (fading with the highlight) or never; "Not installed" always
-			local infoText, infoAlpha = nil, f
-			if t.missing or V.TileInfo ~= 'never' then infoText = tileInfo(t) end
-			if infoText and not t.missing and V.TileInfo == 'hover' then
+			local infoAlpha = f
+			local infoText, sticky = tileInfo(t)
+			if not sticky and V.TileInfo == 'never' then infoText = nil end
+			if infoText and not sticky and V.TileInfo == 'hover' then
 				local idx = indexAt(slot)
 				if idx == hover.idx and (hover.on or hover.a > 0) then
 					infoAlpha = f * (V.TileHover and hover.a or (hover.on and 1 or 0))
@@ -2761,6 +2812,7 @@ function Initialize()
 	V.ShowClock = num('ShowClock', 1) ~= 0
 	V.ShowPower = num('ShowPower', 1) ~= 0
 	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
+	V.GameUpdates = num('GameUpdates', 1) ~= 0
 	V.DashInterval = math.max(250, math.floor(num('DashInterval', 1000)))
 	V.ShowDate = num('ShowDate', 1) ~= 0
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
@@ -3365,7 +3417,8 @@ end
 
 -- Play time (Playtime.ps1, in the background on load) ------------------------------
 -- On load, and when the launcher opens (minAge: seconds since the last
--- reading, the play time changes when a game is closed)
+-- reading, the play time changes when a game is closed). The Steam updates
+-- waiting (GameUpdates.ps1) are read at the same moments.
 local playtimeRead = nil -- os.time() of the last reading
 function ReadPlaytime(minAge)
 	if not ready or V.TileInfo == 'never' then return end
@@ -3375,6 +3428,7 @@ function ReadPlaytime(minAge)
 		for _, t in ipairs(c.tiles) do
 			if t.steamId then
 				SKIN:Bang('!CommandMeasure', 'MeasurePlaytime', 'Run')
+				if V.GameUpdates then SKIN:Bang('!CommandMeasure', 'MeasureGameUpdates', 'Run') end
 				return
 			end
 		end
@@ -3383,6 +3437,12 @@ end
 
 function OnPlaytime()
 	readPlaytime()
+	base = -1
+	render(false)
+end
+
+function OnGameUpdates()
+	readGameUpdates()
 	base = -1
 	render(false)
 end

@@ -158,6 +158,7 @@ A small line on the tile (at the top left unless you move it) tells how long you
 - Before any time is measured: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
 - `TileInfo=Hover` (default) shows it only on the highlighted tile (mouse, keyboard or gamepad), `Always` on every tile, `Never` hides it. Size: `InfoFontSize`. Options > Appearance > Text.
 - Tiles of [games no longer installed](#games-no-longer-installed) always show **Not installed**.
+- **Steam updates** (`GameUpdates=1`): a Steam game with an update to download shows it on the same line, in place of the play time (shown as `TileInfo` says, like the play time): `Update 5.4 GB - Sat 06:27` (its size and when Steam scheduled it; `today` / `tomorrow` when close), `Updating 40%` while it downloads. It is read from Steam's `steamapps\appmanifest_<id>.acf` of every library (`Scripts\GameUpdates.ps1`) at the same moments as the play time, so it is what Steam knew last: Steam finds new updates only while it runs. `GameUpdates=0` turns it off (Options > Appearance > Text).
 - **Where**: the top left by default. To move it, drag the sample line in the tile's preview (Options > *the category* > *the tile*), or under **All tiles** for the whole category; the **x** on the **Play time** row gives it back the place of All tiles. It is saved as `InfoPos=X,Y`: where the line goes in the room it leaves inside the margins (`LabelPad`), in %: `0,0` top left, `100,0` top right, `50,50` centre, `100,100` bottom right. The line changes width with what it says, so it stays inside the tile whatever the text.
 
 ## Launching a tile
@@ -625,6 +626,7 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ScanOnStar
 | `ShowLabels` | `1` | show tile labels |
 | `TileInfo` | `Hover` | [play time](#play-time) line on the tiles: `Hover` (highlighted tile), `Always` or `Never` |
 | `InfoFontSize` | `10` | its font size (points) |
+| `GameUpdates` | `1` | Steam games with an [update waiting](#play-time) say so on that line; `0` turns it off |
 | `FontFace` | `Segoe UI` | font |
 | `MenuFontSize`, `LabelFontSize` | `12`, `14` | font sizes (points) |
 | `BgColor` | `8,8,12,200` | launcher background |
@@ -678,6 +680,7 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Scripts/Thumbs.ps1         thumbnail creation
   Scripts/Scan.ps1           search of the installed games and apps, and of the tiles no longer installed
   Scripts/Playtime.ps1       play time of the Steam games
+  Scripts/GameUpdates.ps1    Steam games with an update waiting
   Scripts/Helper.ps1         gamepad and focus-loss helper
   Bin/RaintileOptions.exe    Options window (built from src/Options by the release workflow)
   Scripts/Options.ps1        Options window with PowerShell, when the program is missing
@@ -692,6 +695,7 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Generated/Found/           their icons
   Generated/Missing.txt      tiles of games no longer installed (last search)
   Generated/Playtime.txt     play time of the Steam games
+  Generated/GameUpdates.txt  Steam games with an update waiting
   Generated/DashOn.txt       present while a Dashboard is on screen: the helper collects its data
   Generated/DashData.txt     the data of the Dashboard widgets (written by the helper)
 ```

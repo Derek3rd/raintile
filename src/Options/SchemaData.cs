@@ -257,6 +257,7 @@ namespace RaintileOptions
                 new Group { Title = "Performance", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "Thumbnails", Label = "Thumbnails", Help = "Uses copies of the images at the exact displayed size, made in the background." },
+                    new Item { Kind = "choice", Key = "FrameRate", Label = "Animation steps", Help = "Rainmeter draws the whole window on every step: on very large screens fewer steps keep the animations smooth. Automatic: 30 per second from about 3 million pixels (e.g. 3440x1440), otherwise 60. Animations last the same either way.", Choices = new List<string[]> { new[] { "Auto", "Automatic" }, new[] { "60", "60 per second" }, new[] { "30", "30 per second" } } },
                     new Item { Kind = "bool", Key = "TileHover", Label = "Highlight the tile under the mouse", Help = "" },
                 } },
                 new Group { Title = "Updates", Help = null, Items = new List<Item>
@@ -343,6 +344,7 @@ namespace RaintileOptions
             { "FilterPad", "12" },
             { "FilterStores", "1" },
             { "FontFace", "Segoe UI" },
+            { "FrameRate", "Auto" },
             { "Gamepad", "1" },
             { "GamepadDeadZone", "12000" },
             { "GamepadRepeatDelay", "350" },

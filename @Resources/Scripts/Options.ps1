@@ -463,6 +463,8 @@ $schema = @(
         Groups = @(
             @{ Title = 'Performance'; Items = @(
                     (S 'bool' 'Thumbnails' 'Thumbnails' 'Uses copies of the images at the exact displayed size, made in the background.'),
+                    (S 'choice' 'FrameRate' 'Animation steps' 'Rainmeter draws the whole window on every step: on very large screens fewer steps keep the animations smooth. Automatic: 30 per second from about 3 million pixels (e.g. 3440x1440), otherwise 60. Animations last the same either way.' @{ Choices = @(
+                                @('Auto', 'Automatic'), @('60', '60 per second'), @('30', '30 per second')) }),
                     (S 'bool' 'TileHover' 'Highlight the tile under the mouse')
                 ) }
             @{ Title = 'Updates'; Items = @(
@@ -497,7 +499,7 @@ $navTree = @(
 # Default values (as shipped), for "Restore default"
 $defaults = @{
     ScreenX = '#SCREENAREAX#'; ScreenY = '#SCREENAREAY#'; ScreenW = '#SCREENAREAWIDTH#'; ScreenH = '#SCREENAREAHEIGHT#'
-    TileKeysWhen = 'Always'; LauncherMode = 'Fullscreen'; WindowW = '60%'; WindowH = '70%'; DockSide = 'Left'; DockSize = '30%'; DockEdge = '1'; DockEdgeDelay = '300'
+    FrameRate = 'Auto'; TileKeysWhen = 'Always'; LauncherMode = 'Fullscreen'; WindowW = '60%'; WindowH = '70%'; DockSide = 'Left'; DockSize = '30%'; DockEdge = '1'; DockEdgeDelay = '300'
     NX = '4'; NY = '2'; ScrollDir = 'V'; ScrollStep = '1'; InfiniteScroll = '1'
     Gap = '18'; PadX = '40'; PadY = '24'; IconSize = '96'; LabelPad = '14'; ScrollBarSize = '4'
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'

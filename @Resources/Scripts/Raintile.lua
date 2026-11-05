@@ -2350,8 +2350,9 @@ local function placeSlots()
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
 			if t.widget then D.placeWidget(t, x, y, f) end
 			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
-			-- cut by the edge: a fade where it goes on
-			if V.EdgeFade then
+			-- cut by the edge: a fade where it goes on (only with the grid at
+			-- rest: while it scrolls every tile crosses the edges)
+			if V.EdgeFade and pos == offset and not appear then
 				if V.Horizontal then
 					local fw = math.floor(math.min(V.StepX * 0.4, 160))
 					if x + V.TileW > V.GridW + 1 and x < V.GridW then edges[#edges + 1] = { V.GridW - fw, y, fw, V.TileH, 'end' } end
@@ -2791,7 +2792,8 @@ function Initialize()
 		-- gradients of GridFade: from clear to the launcher background
 		local r, g, b = (parseColor(SKIN:GetVariable('BgColor', '')) or '8,8,12,200'):match('^(%d+),(%d+),(%d+)')
 		local rgb = (r or 8) .. ',' .. (g or 8) .. ',' .. (b or 12)
-		for name, angle in pairs({ FadeDown = 90, FadeUp = 270, FadeRight = 0, FadeLeft = 180 }) do
+		-- (Rainmeter turns the angle the other way: 0 runs from the right)
+		for name, angle in pairs({ FadeDown = 270, FadeUp = 90, FadeRight = 180, FadeLeft = 0 }) do
 			SKIN:Bang('!SetOption', 'GridFade', name, angle .. ' | ' .. rgb .. ',0 ; 0.0 | ' .. rgb .. ',235 ; 1.0')
 		end
 	end

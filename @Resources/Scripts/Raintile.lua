@@ -552,6 +552,10 @@ local function loadCategory(file)
 	if catLabel ~= '' then c.label = catLabel end
 	c.order = tonumber(catKeys.order or '') or math.huge
 	c.dashboard = trim(catKeys.type or ''):lower() == 'dashboard'
+	-- background of its tiles: TileColor= and TileOpacity= (0-100, % of the
+	-- colour and image), when a tile has no Color= / Opacity= of its own
+	c.tileColor = parseColor(catKeys.tilecolor)
+	c.tileOpacity = tonumber(trim(catKeys.tileopacity or ''))
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -570,10 +574,12 @@ local function loadCategory(file)
 			local t = {
 				background = findImage(k.background, images .. 'background\\', image, s.name),
 				logo = findImage(k.logo, images .. 'logo\\', image, s.name),
-				color = color or V.TileColor,
+				color = color or c.tileColor or V.TileColor,
 				command = command ~= '' and command or nil,
 			}
-			if V.AutoTileColor and not color and t.logo and not t.background then
+			local opacity = tonumber(trim(k.opacity or '')) or c.tileOpacity or 100
+			t.opacity = math.max(0, math.min(100, opacity)) / 100
+			if V.AutoTileColor and not color and not c.tileColor and t.logo and not t.background then
 				autoColor(t, t.logo)
 			end
 			-- originals, used full screen by the launch animation
@@ -1935,7 +1941,8 @@ function D.placeWidget(t, x, y, alpha)
 	elseif w.kind == 'custom' then
 		set('CW' .. i .. 'Box', 'X', tostring(math.floor(V.PadX + x)))
 		set('CW' .. i .. 'Box', 'Y', tostring(math.floor(V.GridY + y)))
-		set('CW' .. i .. 'Box', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 255,255,255,255 | StrokeWidth 0', V.TileW, V.TileH))
+		set('CW' .. i .. 'Box', 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 255,255,255,255 | StrokeWidth 0', V.TileW, V.TileH,
+			math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))))
 		show('CW' .. i .. 'Box', inside)
 		dash.customShown[i] = inside or nil
 	end
@@ -2176,8 +2183,31 @@ local IDENTITY_ROWS = { '1;0;0;0;0', '0;1;0;0;0', '0;0;1;0;0' }
 local GREY_ROWS = { '0.3;0.3;0.3;0;0', '0.59;0.59;0.59;0;0', '0.11;0.11;0.11;0;0' }
 
 -- Position, opacity and visibility of the slots (also on every animation step).
+-- Rounded corners (TileRadius > 0): the grid container (GridClip) takes the
+-- shape of the visible tiles, rounded rectangles, within the grid area: what
+-- is in it (images, logos, texts, highlight, widgets) is cut to them.
+local clipShapes = 0
+local function roundClip(rects)
+	if V.TileRadius <= 0 then return end
+	local n = 0
+	for _, r in ipairs(rects) do
+		n = n + 1
+		set('GridClip', 'Shape' .. (n + 1), string.format('Rectangle %d,%d,%d,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
+			r[1], r[2], r[3], r[4], math.min(V.TileRadius, math.floor(math.min(r[3], r[4]) / 2))))
+	end
+	if n > 0 then
+		local parts = { 'Combine Shape2' }
+		for k = 3, n + 1 do parts[#parts + 1] = 'Union Shape' .. k end
+		parts[#parts + 1] = 'Intersect Shape'
+		set('GridClip', 'Shape' .. (n + 2), table.concat(parts, ' | '))
+	end
+	for k = (n > 0 and n + 3 or 2), clipShapes do set('GridClip', 'Shape' .. k, '') end
+	clipShapes = n > 0 and n + 2 or 0
+end
+
 local function placeSlots()
 	local frac = pos - base
+	local rects = {}
 	dash.shown = {}
 	dash.skinsWanted = {}
 	dash.customShown = {}
@@ -2214,8 +2244,14 @@ local function placeSlots()
 			set(tile, 'H', tostring(V.TileH))
 			-- a game no longer installed: greyed out and dimmed
 			local dim = t.missing and 0.45 or 1
-			set(tile, 'ImageAlpha', tostring(math.floor(255 * f * dim + 0.5)))
-			set(tile, 'SolidColor', fade(t.color, f * dim))
+			local op = t.opacity or 1
+			set(tile, 'ImageAlpha', tostring(math.floor(255 * f * dim * op + 0.5)))
+			-- never fully transparent: Rainmeter gives the mouse only to
+			-- pixels that are not
+			local solid = fade(t.color, f * dim * op)
+			local sr, sg, sb, sa = solid:match('^(%d+),(%d+),(%d+),(%d+)$')
+			if sa and tonumber(sa) < 1 then solid = sr .. ',' .. sg .. ',' .. sb .. ',1' end
+			set(tile, 'SolidColor', solid)
 			local tileRows = t.missing and GREY_ROWS or IDENTITY_ROWS
 			set(tile, 'ColorMatrix1', tileRows[1])
 			set(tile, 'ColorMatrix2', tileRows[2])
@@ -2269,6 +2305,7 @@ local function placeSlots()
 			show(label, hasLabel and not t.widget)
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
 			if t.widget then D.placeWidget(t, x, y, f) end
+			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
 			V.TileW, V.TileH = catW, catH
 		else
 			show(tile, false)
@@ -2277,6 +2314,7 @@ local function placeSlots()
 			show(infoMeter, false)
 		end
 	end
+	roundClip(rects)
 	-- widgets not on screen (another category, scrolled away)
 	for _, t in ipairs(widgets) do
 		local n = t.widget.idx
@@ -2296,8 +2334,9 @@ local function placeHover()
 	set('TileHover', 'X', tostring(math.floor(x + 0.5)))
 	set('TileHover', 'Y', tostring(math.floor(y + 0.5)))
 	set('TileHover', 'Shape', string.format(
-		'Rectangle 1,1,%d,%d | Fill Color %s | StrokeWidth 2 | Stroke Color %s',
-		math.floor(hover.w + 0.5) - 2, math.floor(hover.h + 0.5) - 2, fade(V.HoverColor, hover.a), fade(V.AccentColor, hover.a)))
+		'Rectangle 1,1,%d,%d,%d | Fill Color %s | StrokeWidth 2 | Stroke Color %s',
+		math.floor(hover.w + 0.5) - 2, math.floor(hover.h + 0.5) - 2, math.max(0, V.TileRadius - 1),
+		fade(V.HoverColor, hover.a), fade(V.AccentColor, hover.a)))
 	show('TileHover', true)
 end
 
@@ -2689,6 +2728,7 @@ function Initialize()
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.GridTop = V.GridY -- without the filter bar (see setGridArea)
 	V.LabelPad = num('LabelPad', 14)
+	V.TileRadius = math.max(0, math.floor(num('TileRadius', 0)))
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
 	V.AnimCategory = num('AnimCategory', 1) ~= 0
 	V.AnimHover = num('AnimHover', 1) ~= 0

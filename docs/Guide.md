@@ -242,6 +242,9 @@ Order=1            ; position in the menu (default: alphabetical)
 NX=4               ; grid of this category (default: NX/NY from Settings.inc)
 NY=1
 IconSize=12%       ; logo size in this category's tiles (pixels or %)
+Type=              ; Dashboard = a category of widgets (see Dashboard)
+TileColor=         ; colour of its tiles without a Color= of their own
+TileOpacity=       ; opacity of their background, 0-100 (tiles without Opacity=)
 
 [Diablo]
 Command=steam://rungameid/2344520
@@ -256,8 +259,9 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | *section name* | tile name; also the default name of its images and what search looks at |
 | `Command` | what to run on launch (see below) |
 | `Label` | text at the bottom left; a tile without images shows its name |
-| `Color` | background colour (`R,G,B,A` or `#RRGGBBAA`, see [Colours](#colours)) when there is no background image (empty: taken from the logo with `AutoTileColor=1`, otherwise `TileColor`) |
+| `Color` | background colour (`R,G,B,A` or `#RRGGBBAA`, see [Colours](#colours)) when there is no background image (empty: the category's `TileColor`, or taken from the logo with `AutoTileColor=1`, otherwise `TileColor`); with an alpha below 255 it is see-through |
 | `Size` | cells the tile takes in the grid, `<columns>x<rows>` (`Size=2x2`, default `1x1`, at most `NX` x `NY`): see [Tiles of more cells](#tiles-of-more-cells) |
+| `Opacity` | opacity of the tile's background, colour and image together, `0` to `100` (default: the category's `TileOpacity`, or `100`). `0` leaves only the logo, the label or the widget: e.g. a skin over the tile without a box behind it. The tile still answers the mouse |
 | `Image` | another name for both images: `Image=diablo4` looks for `background\diablo4.*` and `logo\diablo4.*` |
 | `Background` | specific background file (relative to `background\` or absolute; extension optional) |
 | `Logo` | specific logo file (relative to `logo\` or absolute) |
@@ -606,6 +610,7 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ScanOnStar
 | `MenuFontSize`, `LabelFontSize` | `12`, `14` | font sizes (points) |
 | `BgColor` | `8,8,12,200` | launcher background |
 | `TileColor` | `36,36,44,255` | default tile colour |
+| `TileRadius` | `0` | rounded corners of the tiles and of the highlight, in pixels (`0` = square) |
 | `AutoTileColor` | `1` | tiles with a logo but no background image and no `Color=` get a dark colour taken from the logo's main hue (white/grey logos keep `TileColor`); computed in the background and cached in `Generated\Colors.txt` |
 | `HoverColor`, `AccentColor` | `255,255,255,25`, `0,210,180,255` | highlight fill and border/accent |
 | `ActiveCategoryColor`, `HoverCategoryColor` | `0,210,180,70`, `255,255,255,20` | menu pills |

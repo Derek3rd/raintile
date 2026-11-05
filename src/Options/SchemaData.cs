@@ -103,6 +103,7 @@ namespace RaintileOptions
                 new Group { Title = "Tiles", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "color", Key = "TileColor", Label = "Default tile colour", Help = "" },
+                    new Item { Kind = "int", Key = "TileRadius", Label = "Rounded corners", Help = "Radius of the corners of the tiles and of the highlight. 0 = square.", Min = 0.0, Max = 60.0, Step = 1.0, Unit = "px" },
                     new Item { Kind = "bool", Key = "AutoTileColor", Label = "Colour from the logo", Help = "Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo." },
                     new Item { Kind = "bool", Key = "LogoGreyscale", Label = "Greyscale logos", Help = "They turn to colour under the mouse." },
                 } },
@@ -406,6 +407,7 @@ namespace RaintileOptions
             { "TileColor", "36,36,44,255" },
             { "TileHover", "1" },
             { "TileInfo", "Hover" },
+            { "TileRadius", "0" },
             { "TrackPlaytime", "1" },
             { "UnplayedCount", "24" },
         };

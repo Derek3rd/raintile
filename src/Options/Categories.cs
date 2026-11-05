@@ -51,6 +51,9 @@ namespace RaintileOptions
         ComboBox moveTo;
         Button tileKeyButton;
         CheckBox catDashboard;
+        TextBox catTileColor;
+        ComboBox catOpacity, tileOpacity;
+        Button catColorSwatch;
         ComboBox widgetKind, sizeCols, sizeRows;
         TextBox widgetParam;
         TextBlock widgetHint;
@@ -458,7 +461,25 @@ namespace RaintileOptions
             gridHint.Text = "Empty = default (" + V("NX") + " \u00D7 " + V("NY") + ", from Layout)";
             sizeHint.Text = "Pixels or %. Empty = default (" + V("IconSize") + ")";
             catDashboard.IsChecked = file != null && IsDashboard(file);
+            catTileColor.Text = c != null ? Core.GetKey(c, "TileColor") : "";
+            SelectOpacity(catOpacity, c != null ? Core.GetKey(c, "TileOpacity") : "");
             loading = false;
+        }
+
+        // Opacity of the tile background (colour and image): "" = the default, then 100% to 0%
+        static ComboBox NewOpacityBox(string defaultLabel)
+        {
+            var box = new ComboBox { Width = 170 };
+            box.Items.Add(new ComboBoxItem { Content = defaultLabel, Tag = "" });
+            for (int n = 100; n >= 0; n -= 10) box.Items.Add(new ComboBoxItem { Content = n + "%" + (n == 0 ? " (none)" : ""), Tag = n.ToString() });
+            return box;
+        }
+
+        static void SelectOpacity(ComboBox box, string value)
+        {
+            int v;
+            string tag = int.TryParse((value ?? "").Trim(), out v) ? (Math.Max(0, Math.Min(100, (int)Math.Round(v / 10.0) * 10))).ToString() : "";
+            box.SelectedItem = box.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == tag) ?? box.Items[0];
         }
 
         // A new category file and its image folders
@@ -845,6 +866,7 @@ namespace RaintileOptions
             int sc = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[1].Value))) : 1;
             int sr = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[2].Value))) : 1;
             sizeCols.SelectedItem = sc.ToString();
+            SelectOpacity(tileOpacity, s != null ? Core.GetKey(s, "Opacity") : "");
             sizeRows.SelectedItem = sr.ToString();
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
@@ -1031,6 +1053,37 @@ namespace RaintileOptions
                 string file = GetListFile();
                 if (file == null) return;
                 Core.SetKey(Core.GetCategorySection(GetModel(file)), "Type", catDashboard.IsChecked == true ? "Dashboard" : "");
+                SetChanged(file);
+            };
+            // background of the tiles of the category
+            var catColorRow = NewPanel(Orientation.Horizontal);
+            catColorSwatch = NewButton("", "Swatch", "Pick a colour");
+            catTileColor = new TextBox { Width = 170, Margin = T(10, 0, 0, 0) };
+            AddTo(catColorRow, catColorSwatch); AddTo(catColorRow, catTileColor);
+            AddTo(f, NewFormRow("Tile colour", catColorRow, "For the tiles without a colour of their own. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent."));
+            catColorSwatch.Click += (s, e) =>
+            {
+                if (GetListFile() == null) return;
+                string n = SelectColor(catTileColor.Text);
+                if (n != null) catTileColor.Text = n;
+            };
+            catTileColor.TextChanged += (s, e) =>
+            {
+                if (loading) return;
+                string file = GetListFile();
+                if (file == null) return;
+                Core.SetKey(Core.GetCategorySection(GetModel(file)), "TileColor", catTileColor.Text.Trim());
+                SetChanged(file);
+            };
+            catOpacity = NewOpacityBox("100% (default)");
+            AddTo(f, NewFormRow("Tile background", catOpacity, "Opacity of the colour and the image of its tiles, e.g. lower for a Dashboard with skins over the tiles. Logos, texts and widgets stay as they are."));
+            catOpacity.SelectionChanged += (s, e) =>
+            {
+                if (loading) return;
+                string file = GetListFile();
+                var item = catOpacity.SelectedItem as ComboBoxItem;
+                if (file == null || item == null) return;
+                Core.SetKey(Core.GetCategorySection(GetModel(file)), "TileOpacity", (string)item.Tag);
                 SetChanged(file);
             };
 
@@ -1391,6 +1444,17 @@ namespace RaintileOptions
             tileFields["Color"].Margin = T(10, 0, 0, 0);
             AddTo(colorRow, colorSwatch); AddTo(colorRow, tileFields["Color"]);
             AddTo(f, NewFormRow("Colour", colorRow, "Used when there is no background image. Empty = from the logo, or the default tile colour."));
+            tileOpacity = NewOpacityBox("From the category");
+            AddTo(f, NewFormRow("Background", tileOpacity, "Opacity of the colour and the image of the tile: 0% leaves only the logo, the label or the widget (a skin over the tile, without a box behind it)."));
+            tileOpacity.SelectionChanged += (s, e) =>
+            {
+                if (loading) return;
+                var t = GetCurrentTile();
+                var item = tileOpacity.SelectedItem as ComboBoxItem;
+                if (t == null || item == null) return;
+                Core.SetKey(t, "Opacity", (string)item.Tag);
+                SetChanged(currentFile);
+            };
             // cells taken in the grid (Size=<columns>x<rows>)
             var sizeRow = NewPanel(Orientation.Horizontal);
             sizeCols = new ComboBox { Width = 70 };

@@ -1616,8 +1616,6 @@ namespace RaintileOptions
             SetCol(sv, 1);
             grid.Children.Add(sv);
             var side = NewPanel();
-            side.MaxWidth = 600;
-            side.HorizontalAlignment = HorizontalAlignment.Left;
             sv.Content = side;
             var bar = NewPanel(Orientation.Horizontal);
             bar.Margin = T(0, 0, 0, 12);

@@ -67,6 +67,10 @@ namespace RaintileOptions
             catch { }
 
             win = (Window)XamlReader.Parse(WindowXaml.Text);
+            // the tile editor wants room, but smaller screens get what they have
+            var work = SystemParameters.WorkArea;
+            win.Width = Math.Max(win.MinWidth, Math.Min(win.Width, work.Width - 40));
+            win.Height = Math.Max(win.MinHeight, Math.Min(win.Height, work.Height - 40));
             ((TextBlock)win.FindName("Version")).Text = version;
             AddStartStep("window");
             nav = (ListBox)win.FindName("Nav");

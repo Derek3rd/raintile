@@ -206,7 +206,10 @@ namespace RaintileOptions
             } },
             new Page { Id = "dashboard", Title = "Dashboard", Icon = 0xE9D2, Desc = "Categories of widgets: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>
             {
-                new Group { Title = "Widgets", Help = "A category is a Dashboard with Type=Dashboard (Categories > the category). Its tiles are widgets: pick their kind in the tile editor.", Items = new List<Item>
+                new Group { Title = null, Help = null, Dash = true, Items = new List<Item>
+                {
+                } },
+                new Group { Title = "Widgets", Help = "The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.", Items = new List<Item>
                 {
                     new Item { Kind = "int", Key = "DashInterval", Label = "Update every", Help = "Only while a Dashboard is on screen.", Min = 250.0, Max = 5000.0, Step = 250.0, Unit = "ms" },
                     new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From HWiNFO (free, hwinfo.com): keep it running with Settings > Shared Memory Support on." },

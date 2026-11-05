@@ -175,7 +175,10 @@ On click the tile expands to full screen (with background and logo at full resol
 
 ## Dashboard
 
-A **Dashboard** is a category whose tiles are widgets that watch the PC: processor, graphics card, memory, disks, network, processes, temperatures. The default one (`Categories\Dashboard.ini`, added once to existing data too) has one widget of each kind; make your own with `Type=Dashboard` in the `[Category]` section, or with the **Dashboard** box of the category in Options > Categories.
+A **Dashboard** is a category whose tiles are widgets that watch the PC: processor, graphics card, memory, disks, network, processes, temperatures. The default one (`Categories\Dashboard.ini`, added once to existing data too) is a 5 x 4 grid: CPU, GPU and temperatures of 2 x 2 cells, memory and processes of 1 x 2, network and disks.
+
+- In the Options window the Dashboard has a page of its own, apart from the categories: **Dashboard** turns it on and off (`Hidden=1` in its `[Category]`), names it and sets its grid; **Dashboard > Widgets** edits its widgets like the tiles of a category. *Create the Dashboard* brings the default one back if you deleted it.
+- Any category with `Type=Dashboard` in its `[Category]` section is a Dashboard; `Hidden=1` keeps any category out of the menu.
 
 - The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a Dashboard is on screen, every `DashInterval` ms (default 1000): with the Dashboard closed nothing is measured.
 - Widgets are left out of search, Favorites, Recent and the filters.
@@ -183,7 +186,7 @@ A **Dashboard** is a category whose tiles are widgets that watch the PC: process
 
 ### Widgets
 
-A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options pick **Widget** and **Widget option** in the tile editor. `Label=` is the title shown on the widget (by default the name of the kind), `Size=2x1` makes it larger (see [Tiles of more cells](#tiles-of-more-cells)).
+A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options > Dashboard > Widgets pick **Widget** and **Widget option** in the tile editor. `Label=` is the title shown on the widget (by default the name of the kind), `Size=2x1` makes it larger (see [Tiles of more cells](#tiles-of-more-cells)).
 
 | `Widget=` | Shows | `Param=` |
 | --- | --- | --- |
@@ -243,6 +246,7 @@ NX=4               ; grid of this category (default: NX/NY from Settings.inc)
 NY=1
 IconSize=12%       ; logo size in this category's tiles (pixels or %)
 Type=              ; Dashboard = a category of widgets (see Dashboard)
+Hidden=            ; 1 = not in the menu (the file and its tiles stay)
 TileColor=         ; colour of its tiles without a Color= of their own
 TileOpacity=       ; opacity of their background, 0-100 (tiles without Opacity=)
 

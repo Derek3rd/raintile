@@ -676,6 +676,7 @@ namespace RaintileOptions
                     AddTo(sp, NewFoundCard());
                     continue;
                 }
+                if (group.Dash) { AddTo(sp, NewDashCard()); continue; }
                 if (group.Market)
                 {
                     // widgets to download (its own card)

@@ -20,6 +20,7 @@ namespace RaintileOptions
     {
         public string File, Base, Name, Icon;
         public int Order, Tiles, Imported;
+        public bool Dashboard;
     }
 
     // What an entry of the lists holds
@@ -50,7 +51,6 @@ namespace RaintileOptions
         Slider zoomSlider, logoSlider;
         ComboBox moveTo;
         Button tileKeyButton;
-        CheckBox catDashboard;
         TextBox catTileColor;
         ComboBox catOpacity, tileOpacity;
         Button catColorSwatch;
@@ -290,12 +290,12 @@ namespace RaintileOptions
             var list = new List<CategoryEntry>();
             foreach (var f in Core.GetCategoryFiles())
             {
-                string name = "", orderText = "", iconText = "";
+                string name = "", orderText = "", iconText = "", typeText = "";
                 CategoryModel model;
                 if (models.TryGetValue(f.Name, out model))
                 {
                     var c = Core.GetCategorySection(model);
-                    name = Core.GetKey(c, "Name"); orderText = Core.GetKey(c, "Order"); iconText = Core.GetKey(c, "Icon");
+                    name = Core.GetKey(c, "Name"); orderText = Core.GetKey(c, "Order"); iconText = Core.GetKey(c, "Icon"); typeText = Core.GetKey(c, "Type");
                 }
                 else
                 {
@@ -304,7 +304,7 @@ namespace RaintileOptions
                     var m = Regex.Match(text, @"(?ims)^[ \t]*\[Category\][ \t]*\r?$(.*?)(?=^[ \t]*\[|\z)");
                     if (m.Success)
                     {
-                        foreach (Match kv in Regex.Matches(m.Groups[1].Value, @"(?im)^[ \t]*(Name|Order|Icon)[ \t]*=(.*?)\r?$"))
+                        foreach (Match kv in Regex.Matches(m.Groups[1].Value, @"(?im)^[ \t]*(Name|Order|Icon|Type)[ \t]*=(.*?)\r?$"))
                         {
                             string v = kv.Groups[2].Value.Trim();
                             switch (kv.Groups[1].Value.ToLowerInvariant())
@@ -312,6 +312,7 @@ namespace RaintileOptions
                                 case "name": if (name == "") name = v; break;
                                 case "order": if (orderText == "") orderText = v; break;
                                 case "icon": if (iconText == "") iconText = v; break;
+                                case "type": if (typeText == "") typeText = v; break;
                             }
                         }
                     }
@@ -321,17 +322,20 @@ namespace RaintileOptions
                 {
                     File = f.Name, Base = b, Order = ParseOrder(orderText), Name = name != "" ? name : b,
                     Icon = Core.FindImage(Path.Combine(Core.ImagesRoot, b), iconText != "" ? iconText : "icon"),
+                    Dashboard = string.Equals(typeText.Trim(), "Dashboard", StringComparison.OrdinalIgnoreCase),
                 });
             }
             return list.OrderBy(e => e.Order).ThenBy(e => e.File, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         // Categories in menu order, with their counts
-        List<CategoryEntry> GetCategoryEntries()
+        // (the Dashboards have a page of their own: left out unless asked)
+        List<CategoryEntry> GetCategoryEntries(bool withDashboards = false)
         {
             var list = new List<CategoryEntry>();
             foreach (var f in Core.GetCategoryFiles())
             {
+                if (!withDashboards && IsDashboard(f.Name)) continue;
                 var m = GetModel(f.Name);
                 var c = Core.GetCategorySection(m);
                 string b = Path.GetFileNameWithoutExtension(f.Name);
@@ -460,7 +464,6 @@ namespace RaintileOptions
             catIconHint.Text = file != null ? "Default: Images\\" + GetListBase() + "\\icon.png" : "";
             gridHint.Text = "Empty = default (" + V("NX") + " \u00D7 " + V("NY") + ", from Layout)";
             sizeHint.Text = "Pixels or %. Empty = default (" + V("IconSize") + ")";
-            catDashboard.IsChecked = file != null && IsDashboard(file);
             catTileColor.Text = c != null ? Core.GetKey(c, "TileColor") : "";
             SelectOpacity(catOpacity, c != null ? Core.GetKey(c, "TileOpacity") : "");
             loading = false;
@@ -1046,15 +1049,6 @@ namespace RaintileOptions
             AddTo(f, NewFormRow("Grid", gridRow, "", gridHint));
             sizeHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
             AddTo(f, NewFormRow("Logo size", catFields["IconSize"], "", sizeHint));
-            catDashboard = new CheckBox { Content = "Dashboard" };
-            AddTo(f, NewFormRow("Kind", catDashboard, "A Dashboard holds widgets (CPU, memory, disks, temperatures, skins...) instead of tiles that launch something."));
-            catDashboard.Click += (s, e) =>
-            {
-                string file = GetListFile();
-                if (file == null) return;
-                Core.SetKey(Core.GetCategorySection(GetModel(file)), "Type", catDashboard.IsChecked == true ? "Dashboard" : "");
-                SetChanged(file);
-            };
             // background of the tiles of the category
             var catColorRow = NewPanel(Orientation.Horizontal);
             catColorSwatch = NewButton("", "Swatch", "Pick a colour");

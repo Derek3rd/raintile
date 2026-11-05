@@ -413,7 +413,8 @@ $schema = @(
     @{ Id = 'dashboard'; Title = 'Dashboard'; Icon = 0xE9D2
         Desc = 'Categories of widgets: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.'
         Groups = @(
-            @{ Title = 'Widgets'; Help = 'A category is a Dashboard with Type=Dashboard (Categories > the category). Its tiles are widgets: pick their kind in the tile editor.'; Items = @(
+            @{ Dash = $true; Items = @() }
+            @{ Title = 'Widgets'; Help = 'The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.'; Items = @(
                     (Num 'DashInterval' 'Update every' 250 5000 250 'ms' 'Only while a Dashboard is on screen.'),
                     (S 'info' '' 'Temperatures and fans' 'From HWiNFO (free, hwinfo.com): keep it running with Settings > Shared Memory Support on.'),
                     (S 'info' '' 'Custom widgets' 'Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>.')

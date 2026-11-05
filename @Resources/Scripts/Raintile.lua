@@ -552,6 +552,8 @@ local function loadCategory(file)
 	if catLabel ~= '' then c.label = catLabel end
 	c.order = tonumber(catKeys.order or '') or math.huge
 	c.dashboard = trim(catKeys.type or ''):lower() == 'dashboard'
+	-- Hidden=1: kept in the file but not in the menu (e.g. the Dashboard turned off)
+	c.hidden = trim(catKeys.hidden or '') == '1'
 	-- background of its tiles: TileColor= and TileOpacity= (0-100, % of the
 	-- colour and image), when a tile has no Color= / Opacity= of its own
 	c.tileColor = parseColor(catKeys.tilecolor)
@@ -847,7 +849,7 @@ local function loadCategories(files)
 	readLogoColors()
 	for _, file in ipairs(files) do
 		local c = loadCategory(file)
-		if c then cats[#cats + 1] = c end
+		if c and not c.hidden then cats[#cats + 1] = c end
 	end
 	table.sort(cats, function(a, b)
 		if a.order ~= b.order then return a.order < b.order end

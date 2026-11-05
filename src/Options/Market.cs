@@ -256,7 +256,7 @@ namespace RaintileOptions
             var dashboards = Core.GetCategoryFiles().Select(f => f.Name).Where(IsDashboard).ToList();
             if (dashboards.Count == 0)
             {
-                ShowDialog("Raintile", "There is no Dashboard yet: make a category a Dashboard (Categories > Kind), then add the widget.");
+                ShowDialog("Raintile", "There is no Dashboard yet: create it with Create the Dashboard at the top of this page, then add the widget.");
                 return;
             }
             string file = dashboards[0];

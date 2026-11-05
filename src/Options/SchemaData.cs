@@ -111,6 +111,7 @@ namespace RaintileOptions
                 {
                     new Item { Kind = "color", Key = "TileColor", Label = "Default tile colour", Help = "" },
                     new Item { Kind = "int", Key = "TileRadius", Label = "Rounded corners", Help = "Radius of the corners of the tiles and of the highlight. 0 = square.", Min = 0.0, Max = 60.0, Step = 1.0, Unit = "px" },
+                    new Item { Kind = "bool", Key = "EdgeFade", Label = "Fade at the edge of the grid", Help = "Tiles cut by the edge (e.g. a tall tile only partly on screen) fade into the background there, to show they go on." },
                     new Item { Kind = "bool", Key = "AutoTileColor", Label = "Colour from the logo", Help = "Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo." },
                     new Item { Kind = "bool", Key = "LogoGreyscale", Label = "Greyscale logos", Help = "They turn to colour under the mouse." },
                 } },
@@ -331,6 +332,7 @@ namespace RaintileOptions
             { "DockEdgeDelay", "300" },
             { "DockSide", "Left" },
             { "DockSize", "30%" },
+            { "EdgeFade", "1" },
             { "FadeDuration", "0" },
             { "FilterBar", "1" },
             { "FilterFontSize", "10" },

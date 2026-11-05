@@ -319,6 +319,7 @@ $schema = @(
             @{ Title = 'Tiles'; Items = @(
                     (S 'color' 'TileColor' 'Default tile colour'),
                     (Num 'TileRadius' 'Rounded corners' 0 60 1 'px' 'Radius of the corners of the tiles and of the highlight. 0 = square.'),
+                    (S 'bool' 'EdgeFade' 'Fade at the edge of the grid' 'Tiles cut by the edge (e.g. a tall tile only partly on screen) fade into the background there, to show they go on.'),
                     (S 'bool' 'AutoTileColor' 'Colour from the logo' 'Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo.'),
                     (S 'bool' 'LogoGreyscale' 'Greyscale logos' 'They turn to colour under the mouse.')
                 ) }
@@ -520,7 +521,7 @@ $defaults = @{
     ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps'
     ScanOnStart = '1'; SteamGridDBKey = ''
     CheckUpdates = '1'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
-    BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
+    BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; EdgeFade = '1'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
     AccentColor = '0,210,180,255'; ActiveCategoryColor = '0,210,180,70'; HoverCategoryColor = '255,255,255,20'
     TextColor = '240,240,245,255'; TextDimColor = '150,150,160,255'
     ScrollTrackColor = '255,255,255,25'; ScrollThumbColor = '0,210,180,200'
@@ -3926,8 +3927,7 @@ function Install-Update {
     if (-not (Test-ReleaseUrl $info.Asset)) { Open-ReleasePage $info; return }
     $r = Show-Dialog 'Update Raintile' ("Download Raintile $($info.Latest) and open the Rainmeter installer?`r`n`r`n" +
         "Your settings, categories and images stay: they are in $Data, which the installer does not touch. " +
-        "In the installer keep the default options and press Install.`r`n`r`n" +
-        "This is still experimental: keep a copy of your data folder first.") @('Download and install', 'Cancel')
+        "In the installer keep the default options and press Install.") @('Download and install', 'Cancel')
     if ($r.Button -ne 'Download and install') { return }
     # a new folder of its own, and a name made here: nothing else can be
     # put in its place before it is opened
@@ -3961,10 +3961,6 @@ function Install-Update {
 function New-UpdateCard {
     $card = New-Card 'Updates' ''
     $f = $card.Child
-    $beta = New-Text ('Experimental: installing updates from here is still being tested and could cause problems. ' +
-        'Before installing, keep a copy of your data folder; if something goes wrong, the release page has the package to install by hand.') 12.5 (Res 'AccentBrush') -Wrap
-    $beta.Margin = T 0 0 0 6
-    [void](Add-To $f $beta)
     foreach ($row in @(@('Installed', 'Installed'), @('Latest', 'Latest version'))) {
         $v = New-Text '' 13 -Wrap
         $v.MaxWidth = 460

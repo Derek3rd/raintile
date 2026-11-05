@@ -307,6 +307,8 @@ BgColor=8,8,12,200
 TileColor=36,36,44,255
 ; Rounded corners of the tiles, in pixels (0 = square)
 TileRadius=0
+; 1 = a fade over the tiles cut by the edge of the grid (they go on beyond it)
+EdgeFade=1
 ; 1 = tiles with a logo but no background image (and no Color= in their
 ; category file) get a dark colour taken from the logo, computed once in the
 ; background; 0 = they use TileColor

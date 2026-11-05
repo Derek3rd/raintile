@@ -539,8 +539,7 @@ namespace RaintileOptions
             var r = direct
                 ? ShowDialog("Update Raintile", "Download Raintile " + latest + " and install it now?\r\n\r\n" +
                     "Its files replace the ones of the skin folder (" + skinDir + "); a copy of the current ones is kept in Skins\\@Backup. " +
-                    "Your settings, categories and images stay: they are in " + Core.Data + ". Then Rainmeter reloads.\r\n\r\n" +
-                    "This is still experimental: keep a backup of your data first (Info > Back up).", new[] { "Direct update", "Cancel" })
+                    "Your settings, categories and images stay: they are in " + Core.Data + ". Then Rainmeter reloads.", new[] { "Direct update", "Cancel" })
                 : ShowDialog("Update Raintile", "Download Raintile " + latest + " and open the Rainmeter installer?\r\n\r\n" +
                     "Your settings, categories and images stay: they are in " + Core.Data + ", which the installer does not touch. " +
                     "In the installer keep the default options and press Install.", new[] { "Rainmeter Update", "Cancel" });
@@ -615,10 +614,6 @@ namespace RaintileOptions
         {
             var card = NewCard("Updates", "");
             var f = CardPanel(card);
-            var beta = NewText("Experimental: installing updates from here is still being tested and could cause problems. " +
-                "Before installing, keep a copy of your data folder; if something goes wrong, the release page has the package to install by hand.", 12.5, ResBrush("AccentBrush"), false, true);
-            beta.Margin = T(0, 0, 0, 6);
-            AddTo(f, beta);
             updInstalled = NewText("", 13, null, false, true);
             updLatest = NewText("", 13, null, false, true);
             foreach (var row in new[] { Tuple.Create(updInstalled, "Installed"), Tuple.Create(updLatest, "Latest version") })

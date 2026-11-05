@@ -73,6 +73,7 @@ local tileKeys = {}  -- tile hot keys: { { key, id } }, in the order of their me
 local widgets = {}   -- Dashboard widget tiles, in the order of their meters (t.widget.idx)
 local updateDashState -- defined with the Dashboard widgets
 local D = {}          -- functions and tables of the Dashboard widgets
+local M = {}          -- launcher modes: window, docked
 local renderOsk, oskMove -- defined with the keyboard (Search section)
 
 local function matchesFilter(t)
@@ -920,6 +921,17 @@ local function loadCategories(files)
 					widgets[#widgets + 1] = t
 					t.widget.idx = #widgets
 					t.widget.cat = c
+					-- a custom widget gets its container only with a file that has meters
+					t.widget.boxed = false
+					if t.widget.kind == 'custom' then
+						local path = D.customWidgetFile(t.widget.param)
+						local f = path and io.open(path, 'rb')
+						if f then
+							local text = f:read('*a')
+							f:close()
+							t.widget.boxed = ('\n' .. text):lower():find('\n%s*meter%s*=') ~= nil
+						end
+					end
 				end
 			end
 		end
@@ -1129,15 +1141,19 @@ local function writeGrid(path, sig, files)
 			w('')
 		end
 		-- a custom widget: its sections, in a container over the tile
-		if t.widget.kind == 'custom' then
-			w('[CW' .. i .. 'Box]')
-			w('Meter=Shape')
-			w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
-			w('Hidden=1')
-			w('')
+		-- (only when its file is there: a container without meters would be
+		-- drawn as it is, a white box)
+		if t.widget.boxed then
 			local cc = t.widget.cat
 			local text = D.customWidgetText(t, i, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
-			if text then w(text) end
+			if text and text:find('Container=CW' .. i .. 'Box', 1, true) then
+				w('[CW' .. i .. 'Box]')
+				w('Meter=Shape')
+				w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
+				w('Hidden=1')
+				w('')
+				w(text)
+			end
 		end
 	end
 
@@ -1571,8 +1587,9 @@ local function setGridArea(withFilter)
 	local fs = withFilter and filterSpace() or 0
 	V.GridY = V.GridTop + fs
 	set('GridClip', 'Y', tostring(math.floor(V.GridY)))
-	set('GridClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
-		math.floor(V.AreaW), math.floor(V.AreaH - fs)))
+	-- visible part of the grid (also the edge of the fades)
+	V.ClipW, V.ClipH = math.floor(V.AreaW), math.floor(V.AreaH - fs)
+	set('GridClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', V.ClipW, V.ClipH))
 	for i = 1, #filter.chips do show('FilterText' .. i, withFilter) end
 	if fs == 0 then
 		for i = 1, #filter.chips do show('FilterPill' .. i, false) end
@@ -1944,7 +1961,7 @@ function D.placeWidget(t, x, y, alpha)
 			dash.skinsWanted[config] = { file = file, x = math.floor(SKIN:GetX() + V.PadX + x + V.LabelPad),
 				y = math.floor(SKIN:GetY() + V.GridY + y + V.LabelPad) }
 		end
-	elseif w.kind == 'custom' then
+	elseif w.kind == 'custom' and w.boxed then
 		set('CW' .. i .. 'Box', 'X', tostring(math.floor(V.PadX + x)))
 		set('CW' .. i .. 'Box', 'Y', tostring(math.floor(V.GridY + y)))
 		set('CW' .. i .. 'Box', 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 255,255,255,255 | StrokeWidth 0', V.TileW, V.TileH,
@@ -2039,6 +2056,13 @@ function D.fillWidget(t)
 	text(m .. 'Title', title:upper())
 	w.parts = { Title = true }
 	-- a skin or a custom widget draws itself: only its title, if it has one
+	if w.kind == 'custom' and not w.boxed then
+		-- its file is missing (or has no meters): say where it goes
+		text(m .. 'Value', 'Widget not found')
+		text(m .. 'Sub', 'Widgets\\' .. w.param .. '\\' .. w.param .. '.ini in the data folder')
+		w.parts.Value, w.parts.Sub = true, true
+		return
+	end
 	if w.kind == 'skin' or w.kind == 'custom' then
 		w.parts.Title = w.title ~= nil
 		return
@@ -2211,9 +2235,37 @@ local function roundClip(rects)
 	clipShapes = n > 0 and n + 2 or 0
 end
 
+-- Fade over the tiles cut by the edge of the grid along the scroll (EdgeFade):
+-- a gradient to the launcher background, at the edge they cross. edges =
+-- { { x, y, w, h, side } } with side 'end' (bottom / right) or 'start'.
+-- Its strength (e[6], 0-1) grows with how much of the tile is cut, so that
+-- while the grid scrolls it comes and goes smoothly. Each shape has its own
+-- gradient (G<n>); Rainmeter turns the angle the other way: 0 runs from the
+-- right.
+local FADE_ANGLES = { ['H end'] = 180, ['H start'] = 0, ['V end'] = 270, ['V start'] = 90 }
+local fadeShapes = 0
+-- shown strength of each band ("end 2" -> { k, len }), going towards the
+-- one wanted a step per frame; fadeMoving keeps the animation going
+local fadeShown, fadeMoving = {}, false
+local function edgeFade(edges)
+	if not V.EdgeFade then return end
+	local n = 0
+	for _, e in ipairs(edges) do
+		n = n + 1
+		local angle = FADE_ANGLES[(V.Horizontal and 'H ' or 'V ') .. e[5]]
+		local a = math.floor(235 * e[6] + 0.5)
+		set('GridFade', 'G' .. n, string.format('%d | %s,0 ; 0.0 | %s,%d ; 0.9 | %s,%d ; 1.0', angle, V.FadeRGB, V.FadeRGB, a, V.FadeRGB, a))
+		set('GridFade', n == 1 and 'Shape' or ('Shape' .. n), string.format('Rectangle %d,%d,%d,%d | Fill LinearGradient G%d | StrokeWidth 0',
+			e[1], e[2], e[3], e[4], n))
+	end
+	for k = math.max(2, n + 1), fadeShapes do set('GridFade', 'Shape' .. k, '') end
+	fadeShapes = n
+	show('GridFade', n > 0)
+end
+
 local function placeSlots()
 	local frac = pos - base
-	local rects = {}
+	local rects, cutEnd, cutStart = {}, {}, {}
 	dash.shown = {}
 	dash.skinsWanted = {}
 	dash.customShown = {}
@@ -2312,6 +2364,29 @@ local function placeSlots()
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
 			if t.widget then D.placeWidget(t, x, y, f) end
 			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
+			-- cut by the edge: how much, for each line across the scroll (a
+			-- row, or a column when the grid scrolls vertically) it covers
+			if V.EdgeFade and not appear then
+				local along, size, step = x, V.TileW, V.StepY
+				local across, span, edge = y, V.TileH, V.ClipW or V.GridW
+				if not V.Horizontal then
+					along, size, step = y, V.TileH, V.StepX
+					across, span, edge = x, V.TileW, V.ClipH or V.GridH
+				end
+				local first = math.floor(across / step + 0.5)
+				local last = math.floor((across + span + V.Gap) / step + 0.5) - 1
+				for line = math.max(0, first), last do
+					-- { how much is cut, how much is still visible }
+					if along < edge and along + size > edge then
+						local c = cutEnd[line]
+						if not c or along + size - edge > c[1] then cutEnd[line] = { along + size - edge, edge - along } end
+					end
+					if along < 0 and along + size > 0 then
+						local c = cutStart[line]
+						if not c or -along > c[1] then cutStart[line] = { -along, along + size } end
+					end
+				end
+			end
 			V.TileW, V.TileH = catW, catH
 		else
 			show(tile, false)
@@ -2321,13 +2396,55 @@ local function placeSlots()
 		end
 	end
 	roundClip(rects)
+	-- one fade per line, as strong as its tiles are cut: lines next to each
+	-- other touch, so a tile of more cells is covered all along
+	local edges = {}
+	fadeMoving = false
+	if V.EdgeFade then
+		local lines = V.Horizontal and V.NY or V.NX
+		local step = V.Horizontal and V.StepY or V.StepX
+		local full = V.Horizontal and (V.ClipH or V.GridH) or (V.ClipW or V.GridW)
+		local edge = V.Horizontal and (V.ClipW or V.GridW) or (V.ClipH or V.GridH)
+		local fade = math.floor(math.min((V.Horizontal and V.StepX or V.StepY) * 0.28, 110))
+		for line = 0, lines - 1 do
+			local a = line * step
+			local b = line == lines - 1 and full or (line + 1) * step
+			for _, side in ipairs({ 'end', 'start' }) do
+				local cut = (side == 'end' and cutEnd or cutStart)[line]
+				local want = cut and math.min(1, cut[1] / fade) or 0
+				-- fades in and out: a step towards the strength wanted
+				local key = side .. ' ' .. line
+				local shown = fadeShown[key] or { 0, 0 }
+				local k = shown[1] + (want - shown[1]) * V.AnimSmooth
+				if math.abs(want - k) < 0.02 then k = want else fadeMoving = true end
+				if cut then shown[2] = cut[2] end
+				fadeShown[key] = k > 0 and { k, shown[2] } or nil
+				if k > 0.02 and shown[2] > 0 then
+					cut = { 0, shown[2] }
+					-- only over the visible part of the cut tile (not on the next
+					-- one), and a few pixels past the edge (cut off by the grid):
+					-- no light line
+					local len = math.max(1, math.floor(math.min(fade, cut[2])))
+					local p = side == 'end' and edge - len or -4
+					if V.Horizontal then
+						edges[#edges + 1] = { p, a, len + 4, b - a, side, k }
+					else
+						edges[#edges + 1] = { a, p, b - a, len + 4, side, k }
+					end
+				end
+			end
+		end
+	end
+	edgeFade(edges)
+	-- a fade still on its way with the animation clock stopped: start it
+	if fadeMoving and not ticking and ready and not launching then startTicker() end
 	-- widgets not on screen (another category, scrolled away)
 	for _, t in ipairs(widgets) do
 		local n = t.widget.idx
 		if not dash.shown[n] then
 			for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List', 'Bar', 'Graph' }) do show('W' .. n .. part, false) end
 		end
-		if t.widget.kind == 'custom' and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
+		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
 end
 
@@ -2495,41 +2612,40 @@ end
 
 -- Advances every animation by one step; true if something is still moving.
 -- Docked launcher: it comes in from its side, sliding and fading in, and
--- goes out the same way (dock.p 0 = out, 1 = in; dock.dir +1 / -1). The
+-- goes out the same way (M.dock.p 0 = out, 1 = in; M.dock.dir +1 / -1). The
 -- slide is short: with more monitors a long one would cross into the next.
-local dock = { p = 1, dir = 0 }
-local DOCK_FRAMES, DOCK_SLIDE = 12, 60
-local function dockPlace(p)
+M.dock = { p = 1, dir = 0 }
+M.DOCK_FRAMES, M.DOCK_SLIDE = 12, 60
+function M.dockPlace(p)
 	local e = easeOut(math.min(1, math.max(0, p)))
-	local d = math.floor(DOCK_SLIDE * (1 - e) + 0.5)
+	local d = math.floor(M.DOCK_SLIDE * (1 - e) + 0.5)
 	local dx, dy = 0, 0
 	if V.DockSide == 'left' then dx = -d elseif V.DockSide == 'right' then dx = d
 	elseif V.DockSide == 'top' then dy = -d else dy = d end
 	SKIN:Bang('!Move', tostring(V.ScreenX + dx), tostring(V.ScreenY + dy))
 	SKIN:Bang('!SetTransparency', tostring(math.floor(255 * e + 0.5)))
 end
-local function dockAnimated()
+function M.dockAnimated()
 	return V.Mode == 'dock' and V.AnimOpen
 end
 
-local finishHide -- defined further down
 local function advance()
 	local busy, moving = false, false
 
-	if dock.dir ~= 0 then
-		dock.p = math.min(1, math.max(0, dock.p + dock.dir / DOCK_FRAMES))
-		dockPlace(dock.p)
-		if (dock.dir > 0 and dock.p >= 1) or (dock.dir < 0 and dock.p <= 0) then
-			local closing = dock.dir < 0
-			dock.dir = 0
-			if closing then finishHide() return false end
+	if M.dock.dir ~= 0 then
+		M.dock.p = math.min(1, math.max(0, M.dock.p + M.dock.dir / M.DOCK_FRAMES))
+		M.dockPlace(M.dock.p)
+		if (M.dock.dir > 0 and M.dock.p >= 1) or (M.dock.dir < 0 and M.dock.p <= 0) then
+			local closing = M.dock.dir < 0
+			M.dock.dir = 0
+			if closing then M.finishHide() return false end
 		else
 			busy = true
 		end
 	end
 
 	pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth)
-	busy = busy or moving
+	busy = busy or moving or fadeMoving
 
 	if appear then
 		appear = appear + 1
@@ -2614,7 +2730,7 @@ local knownFiles = {}
 -- on the DockSide edge of that area. The rectangle of the launcher goes to
 -- Generated\Sizes.inc as ScreenX/Y/W/H, so the skin and the script use it as
 -- their "screen"; the area stays as MonitorX/Y/W/H, and percentages are of it.
-local function evalSetting(raw, default)
+function M.evalSetting(raw, default)
 	raw = trim(SKIN:ReplaceVariables(raw or ''))
 	if raw == '' then return default end
 	local n = tonumber(raw)
@@ -2622,13 +2738,13 @@ local function evalSetting(raw, default)
 	return n or default
 end
 
-local function launcherRect(get)
-	local mx, my = evalSetting(get('screenx'), 0), evalSetting(get('screeny'), 0)
-	local mw, mh = evalSetting(get('screenw'), 1920), evalSetting(get('screenh'), 1080)
+function M.launcherRect(get)
+	local mx, my = M.evalSetting(get('screenx'), 0), M.evalSetting(get('screeny'), 0)
+	local mw, mh = M.evalSetting(get('screenw'), 1920), M.evalSetting(get('screenh'), 1080)
 	local function px(raw, total, default)
 		local p = trim(raw or ''):match('^([%d%.]+)%s*%%$')
 		if p then return math.floor((tonumber(p) or 0) * total / 100 + 0.5) end
-		return evalSetting(raw, default)
+		return M.evalSetting(raw, default)
 	end
 	local mode = trim(get('launchermode') or ''):lower()
 	local x, y, w, h = mx, my, mw, mh
@@ -2663,7 +2779,7 @@ local function writeSizes()
 		if values[key] ~= nil then return values[key] end
 		return defaults[key]
 	end
-	local _, rect, mon = launcherRect(get)
+	local _, rect, mon = M.launcherRect(get)
 	V.MonW, V.MonH = mon[3], mon[4] -- for the percentages below
 	local names = {}
 	for name in pairs(SIZE_AXIS) do names[#names + 1] = name end
@@ -2829,6 +2945,10 @@ function Initialize()
 	V.GridTop = V.GridY -- without the filter bar (see setGridArea)
 	V.LabelPad = num('LabelPad', 14)
 	V.TileRadius = math.max(0, math.floor(num('TileRadius', 0)))
+	V.EdgeFade = num('EdgeFade', 1) ~= 0
+	-- colour the fades go to: the launcher background
+	local fr, fg, fb = (parseColor(SKIN:GetVariable('BgColor', '')) or '8,8,12,200'):match('^(%d+),(%d+),(%d+)')
+	V.FadeRGB = (fr or 8) .. ',' .. (fg or 8) .. ',' .. (fb or 12)
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
 	V.AnimCategory = num('AnimCategory', 1) ~= 0
 	V.AnimHover = num('AnimHover', 1) ~= 0
@@ -3104,16 +3224,16 @@ function Show()
 	updateEmptyHint()
 	if V.AnimOpen then appear = 0 end
 	frame() -- first frame drawn before showing the window
-	if dockAnimated() then
+	if M.dockAnimated() then
 		-- from where it is (it may be still going out)
-		if dock.dir == 0 then dock.p = 0 end
-		dock.dir = 1
-		dockPlace(dock.p)
+		if M.dock.dir == 0 then M.dock.p = 0 end
+		M.dock.dir = 1
+		M.dockPlace(M.dock.p)
 	end
 	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
 	SKIN:Bang('!Show')
 	hotKey(true)
-	if appear or dock.dir ~= 0 then startTicker() end
+	if appear or M.dock.dir ~= 0 then startTicker() end
 	ReadPlaytime(60)
 	ClockTick(0)
 	updateDashState()
@@ -3136,9 +3256,9 @@ function Hide()
 	stopClock()
 	closePower()
 	updateDashState()
-	if dockAnimated() then
-		-- goes out first; finishHide() hides the window at the end
-		dock.dir = -1
+	if M.dockAnimated() then
+		-- goes out first; M.finishHide() hides the window at the end
+		M.dock.dir = -1
 		startTicker()
 		return
 	end
@@ -3147,11 +3267,11 @@ end
 
 -- End of the docked launcher going out: the window is hidden, ready (in
 -- place, opaque) for the next time
-finishHide = function()
+function M.finishHide()
 	if visible then return end -- shown again meanwhile
 	SKIN:Bang('!Hide')
 	stopTicker()
-	dock.p = 0
+	M.dock.p = 0
 	SKIN:Bang('!SetTransparency', '255')
 	SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
 end
@@ -3643,6 +3763,7 @@ function SetCategory(i)
 	offset = normalizeOffset(cats[i].offset)
 	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
+	fadeShown = {}
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	updateEmptyHint()
@@ -4035,6 +4156,7 @@ leaveSearch = function()
 	offset = normalizeOffset(cats[active].offset)
 	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
+	fadeShown = {}
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	updateSearchBar()

@@ -423,7 +423,7 @@ When an update adds settings, they are added to your `Settings.inc` with their d
 
 ### Updates
 
-> **Experimental**: installing updates from the Options window is still being tested and could cause problems. Before installing, keep a copy of your data folder (Options > Info > *Your data*); if something goes wrong, install the package from the [releases page](https://github.com/Derek3rd/raintile/releases) by hand.
+If something goes wrong with an update, install the package from the [releases page](https://github.com/Derek3rd/raintile/releases) by hand: your data is in its own folder and stays as it is.
 
 With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps) and on **Info** in the menu of the Options window; a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
 
@@ -615,6 +615,7 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ScanOnStar
 | `BgColor` | `8,8,12,200` | launcher background |
 | `TileColor` | `36,36,44,255` | default tile colour |
 | `TileRadius` | `0` | rounded corners of the tiles and of the highlight, in pixels (`0` = square) |
+| `EdgeFade` | `1` | tiles cut by the edge of the grid (a tile of more cells only partly on screen, a row while scrolling) fade into the background there, to show they go on |
 | `AutoTileColor` | `1` | tiles with a logo but no background image and no `Color=` get a dark colour taken from the logo's main hue (white/grey logos keep `TileColor`); computed in the background and cached in `Generated\Colors.txt` |
 | `HoverColor`, `AccentColor` | `255,255,255,25`, `0,210,180,255` | highlight fill and border/accent |
 | `ActiveCategoryColor`, `HoverCategoryColor` | `0,210,180,70`, `255,255,255,20` | menu pills |

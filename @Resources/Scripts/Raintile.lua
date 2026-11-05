@@ -2241,6 +2241,9 @@ end
 -- right.
 local FADE_ANGLES = { ['H end'] = 180, ['H start'] = 0, ['V end'] = 270, ['V start'] = 90 }
 local fadeShapes = 0
+-- shown strength of each band ("end 2" -> { k, len }), going towards the
+-- one wanted a step per frame; fadeMoving keeps the animation going
+local fadeShown, fadeMoving = {}, false
 local function edgeFade(edges)
 	if not V.EdgeFade then return end
 	local n = 0
@@ -2393,6 +2396,7 @@ local function placeSlots()
 	-- one fade per line, as strong as its tiles are cut: lines next to each
 	-- other touch, so a tile of more cells is covered all along
 	local edges = {}
+	fadeMoving = false
 	if V.EdgeFade then
 		local lines = V.Horizontal and V.NY or V.NX
 		local step = V.Horizontal and V.StepY or V.StepX
@@ -2404,8 +2408,16 @@ local function placeSlots()
 			local b = line == lines - 1 and full or (line + 1) * step
 			for _, side in ipairs({ 'end', 'start' }) do
 				local cut = (side == 'end' and cutEnd or cutStart)[line]
-				local k = cut and math.min(1, cut[1] / fade) or 0
-				if k > 0.02 then
+				local want = cut and math.min(1, cut[1] / fade) or 0
+				-- fades in and out: a step towards the strength wanted
+				local key = side .. ' ' .. line
+				local shown = fadeShown[key] or { 0, 0 }
+				local k = shown[1] + (want - shown[1]) * V.AnimSmooth
+				if math.abs(want - k) < 0.02 then k = want else fadeMoving = true end
+				if cut then shown[2] = cut[2] end
+				fadeShown[key] = k > 0 and { k, shown[2] } or nil
+				if k > 0.02 and shown[2] > 0 then
+					cut = { 0, shown[2] }
 					-- only over the visible part of the cut tile (not on the next
 					-- one), and a few pixels past the edge (cut off by the grid):
 					-- no light line
@@ -2421,6 +2433,8 @@ local function placeSlots()
 		end
 	end
 	edgeFade(edges)
+	-- a fade still on its way with the animation clock stopped: start it
+	if fadeMoving and not ticking and ready and not launching then startTicker() end
 	-- widgets not on screen (another category, scrolled away)
 	for _, t in ipairs(widgets) do
 		local n = t.widget.idx
@@ -2598,7 +2612,7 @@ local function advance()
 	local busy, moving = false, false
 
 	pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth)
-	busy = busy or moving
+	busy = busy or moving or fadeMoving
 
 	if appear then
 		appear = appear + 1
@@ -3592,6 +3606,7 @@ function SetCategory(i)
 	offset = normalizeOffset(cats[i].offset)
 	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
+	fadeShown = {}
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	updateEmptyHint()
@@ -3984,6 +3999,7 @@ leaveSearch = function()
 	offset = normalizeOffset(cats[active].offset)
 	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
+	fadeShown = {}
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	updateSearchBar()

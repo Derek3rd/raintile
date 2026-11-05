@@ -103,9 +103,10 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "MenuFontSize", Label = "Menu font size", Help = "", Min = 6.0, Max = 40.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "int", Key = "LabelFontSize", Label = "Label font size", Help = "", Min = 6.0, Max = 40.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "bool", Key = "ShowLabels", Label = "Show tile labels", Help = "" },
-                    new Item { Kind = "choice", Key = "TileInfo", Label = "Play time and last launch", Help = "A line at the top left of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.", Choices = new List<string[]> { new[] { "Hover", "On the highlighted tile" }, new[] { "Always", "Always" }, new[] { "Never", "Never" } } },
+                    new Item { Kind = "choice", Key = "TileInfo", Label = "Play time and last launch", Help = "A line on the tile, at the top left unless moved in the preview of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.", Choices = new List<string[]> { new[] { "Hover", "On the highlighted tile" }, new[] { "Always", "Always" }, new[] { "Never", "Never" } } },
                     new Item { Kind = "int", Key = "InfoFontSize", Label = "Play time font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "bool", Key = "TrackPlaytime", Label = "Measure play time outside Steam", Help = "The background helper looks for the game a tile starts and counts how long it runs." },
+                    new Item { Kind = "bool", Key = "GameUpdates", Label = "Steam updates waiting", Help = "Steam games with an update to download say so on the play time line, with its size and when Steam scheduled it." },
                 } },
                 new Group { Title = "Tiles", Help = null, Items = new List<Item>
                 {
@@ -348,6 +349,7 @@ namespace RaintileOptions
             { "GamepadRepeatRate", "110" },
             { "GamepadSearch", "Y" },
             { "GamepadToggle", "BACK START" },
+            { "GameUpdates", "1" },
             { "Gap", "18" },
             { "HoverCategoryColor", "255,255,255,20" },
             { "HoverColor", "255,255,255,25" },

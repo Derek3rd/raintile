@@ -343,8 +343,9 @@ local function thumbnail(src, tile, field, dir, name, w, h, mode, rect)
 	return src
 end
 
--- Framing of a background (tile keys): BgFocus=X,Y is the point of the image,
--- in % of its width and height, kept at the centre of the tile; BgZoom (1-4)
+-- Framing of a background (tile keys, or the category's): BgFocus=X,Y is the
+-- point of the image, in % of its width and height, kept at the centre of the
+-- tile; BgZoom (1-4)
 -- enlarges the image beyond filling the tile. Both are relative, so the
 -- framing holds at any resolution and grid. Returns the part of the original
 -- the tile works with, {x, y, w, h} in pixels: the window the tile shows,
@@ -377,8 +378,8 @@ local function frameRect(path, focus, zoom, tw, th)
 	return r
 end
 
--- Placement of a logo (tile keys), independent of the background framing:
--- LogoPos=X,Y is where the centre of the logo goes, in % of the tile's width
+-- Placement of a logo (tile keys, or the category's), independent of the
+-- background framing: LogoPos=X,Y is where the centre of the logo goes, in % of the tile's width
 -- and height; LogoScale (0.25-3) multiplies the category's logo size. Both are
 -- relative, so they hold at any resolution and grid. Sets t.logoX, t.logoY
 -- (0-1), t.logoScale and, for a moved logo, t.logoRatio (width / height of
@@ -409,6 +410,16 @@ local function logoCentre(t, size)
 		return math.min(total - n / 2, math.max(n / 2, p * total))
 	end
 	return place(t.logoX, vw, V.TileW), place(t.logoY, vh, V.TileH)
+end
+
+-- Placement of the play time line (TileInfo): InfoPos=X,Y is where it goes in
+-- the room the line leaves in the tile, in %: 0,0 top left (the default),
+-- 100,0 top right, 50,50 centre, 100,100 bottom right. Its width changes with
+-- the text, so this keeps it inside the tile whatever it says.
+local function infoPlacement(t, pos)
+	local x, y = trim(pos or ''):match('^([%d%.]+)%s*,%s*([%d%.]+)$')
+	t.infoX = math.min(100, math.max(0, tonumber(x) or 0)) / 100
+	t.infoY = math.min(100, math.max(0, tonumber(y) or 0)) / 100
 end
 
 -- Automatic tile colour (AutoTileColor=1): a tile without a background image
@@ -561,6 +572,12 @@ local function loadCategory(file)
 	-- colour and image), when a tile has no Color= / Opacity= of its own
 	c.tileColor = parseColor(catKeys.tilecolor)
 	c.tileOpacity = tonumber(trim(catKeys.tileopacity or ''))
+	-- framing and logo placement of its tiles (same keys as a tile), when a
+	-- tile has none of its own: one setting moves or resets them all
+	local function own(v) v = trim(v or '') if v ~= '' then return v end end
+	c.bgFocus, c.bgZoom = own(catKeys.bgfocus), own(catKeys.bgzoom)
+	c.logoPos, c.logoScale = own(catKeys.logopos), own(catKeys.logoscale)
+	c.infoPos = own(catKeys.infopos)
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -595,10 +612,11 @@ local function loadCategory(file)
 			t.rows = math.max(1, math.min(c.ny, tonumber(sh) or 1))
 			if t.cols > 1 or t.rows > 1 then c.spans = true end
 			local pw, ph = t.cols * (c.tw + V.Gap) - V.Gap, t.rows * (c.th + V.Gap) - V.Gap
-			t.frame = frameRect(t.background, k.bgfocus, k.bgzoom, pw, ph)
+			t.frame = frameRect(t.background, own(k.bgfocus) or c.bgFocus, own(k.bgzoom) or c.bgZoom, pw, ph)
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
 				pw, ph, V.BgThumbMode, t.frame)
-			logoPlacement(t, k.logopos, k.logoscale)
+			logoPlacement(t, own(k.logopos) or c.logoPos, own(k.logoscale) or c.logoScale)
+			infoPlacement(t, own(k.infopos) or c.infoPos)
 			-- logo thumbnails are made at the largest size (zoom included)
 			local logoMax = math.floor(c.iconSize * t.logoScale * V.HoverLogoScale + 0.5)
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
@@ -734,6 +752,51 @@ local function readPlaytime()
 	end
 end
 
+-- Steam games with an update waiting: GameUpdates.ps1 lists them in
+-- Generated\GameUpdates.txt ("<appid>|<bytes to download>|<bytes downloaded>|
+-- <scheduled, unix time or 0>")
+local gameUpdates = {} -- steam app id -> { size, done, when }
+
+local function readGameUpdates()
+	gameUpdates = {}
+	for _, line in ipairs(readLines(resources .. 'Generated\\GameUpdates.txt')) do
+		local id, size, done, when = line:match('^(%d+)|(%d+)|(%d+)|(%d+)$')
+		if id then gameUpdates[id] = { size = tonumber(size), done = tonumber(done), when = tonumber(when) } end
+	end
+end
+
+-- Line of a Steam tile with an update waiting (GameUpdates), as Steam's
+-- downloads page: "Update 5.4 GB - Sat 06:27" (GB of 1024 MB, like Steam),
+-- "Updating 40%" while it downloads
+local function updateInfo(t)
+	local u = V.GameUpdates and t.steamId and gameUpdates[t.steamId]
+	if not u then return nil end
+	if u.done > 0 and u.done < u.size then
+		return 'Updating ' .. math.floor(u.done * 100 / u.size) .. '%'
+	end
+	local text = 'Update'
+	if u.size >= 1024 ^ 3 then
+		text = text .. string.format(' %.1f GB', u.size / 1024 ^ 3):gsub('%.0 GB$', ' GB')
+	elseif u.size > 0 then
+		text = text .. ' ' .. math.max(1, math.floor(u.size / 1024 ^ 2 + 0.5)) .. ' MB'
+	end
+	local now = os.time()
+	if u.when > now then
+		-- days between the two midnights (rounded: a day can last 23 or 25 h)
+		local today, that = os.date('*t', now), os.date('*t', u.when)
+		today.hour, today.min, today.sec = 0, 0, 0
+		that.hour, that.min, that.sec = 0, 0, 0
+		local days = math.floor((os.time(that) - os.time(today)) / 86400 + 0.5)
+		local day
+		if days == 0 then day = 'today'
+		elseif days == 1 then day = 'tomorrow'
+		elseif days < 7 then day = os.date('%a', u.when)
+		else day = os.date('%d %b', u.when) end
+		text = text .. ' - ' .. day .. ' ' .. os.date('%H:%M', u.when)
+	end
+	return text
+end
+
 -- Play time of the other tiles (not Steam), measured by the helper while the
 -- game it started was running: TimePlayed.txt in the data folder,
 -- "<file>|<tile name>|<minutes>|<last played, unix time>"
@@ -757,9 +820,13 @@ local function ago(time)
 	return os.date('%d %b %Y', time)
 end
 
--- Line shown on the tile (TileInfo): play time and last launch
+-- Line shown on the tile (TileInfo): play time and last launch, or a Steam
+-- update waiting. The second value is true for the line shown whatever
+-- TileInfo says: "Not installed".
 local function tileInfo(t)
-	if t.missing then return 'Not installed' end
+	if t.missing then return 'Not installed', true end
+	local update = updateInfo(t)
+	if update then return update end
 	-- Steam's own play time, otherwise the one measured by the helper
 	local p = t.steamId and playtime[t.steamId] or timePlayed[tileId(t)]
 	local u = usage[tileId(t)]
@@ -871,6 +938,7 @@ local function loadCategories(files)
 		readUsage()
 		readMissing()
 		readPlaytime()
+		readGameUpdates()
 		readTimePlayed()
 		fillVirtual()
 	end
@@ -1185,6 +1253,23 @@ local function show(meter, visible)
 		cache[key] = visible
 		SKIN:Bang(visible and '!ShowMeter' or '!HideMeter', meter)
 	end
+end
+
+-- Size of the play time line (with its padding) for a text: the meter is
+-- updated and measured once per text, as the clock is; the font does not
+-- change until a refresh, which starts over. Shown first: a hidden meter
+-- measures 0 (nothing is drawn before the end of the frame anyway).
+local infoSizes = {}
+local function infoSize(meter, text)
+	local s = infoSizes[text]
+	if not s then
+		show(meter, true)
+		SKIN:Bang('!UpdateMeter', meter)
+		local m = SKIN:GetMeter(meter)
+		s = { m and m:GetW() or 0, m and m:GetH() or 0 }
+		if s[1] > 0 then infoSizes[text] = s end
+	end
+	return s[1], s[2]
 end
 
 -- Text in the middle of an empty grid: no search results, no favorites yet,
@@ -1602,7 +1687,7 @@ end
 -- scrolled with the wheel and faded at the edges where more of them are.
 M.compact, M.scroll, M.catL, M.catR, M.total = false, 0, 0, 0, 0
 
-local function menuEnds()
+function M.menuEnds()
 	local first, last
 	for _, c in ipairs(cats) do
 		if c.l then first = first or c last = c end
@@ -1612,7 +1697,7 @@ end
 
 -- Puts the categories at the scroll position and shapes the strip
 function M.applyScroll()
-	local first = menuEnds()
+	local first = M.menuEnds()
 	if not first then return end
 	local pad = V.MenuItemPad
 	local width = M.catR - M.catL
@@ -1640,7 +1725,7 @@ end
 -- After the menu is measured and centred (layoutMenu, layoutLeft): compact
 -- or not
 function M.layoutCompact()
-	local first, last = menuEnds()
+	local first, last = M.menuEnds()
 	if not first then return end
 	local pad = V.MenuItemPad
 	local gap = math.max(8, math.floor(num('MenuGap', 6)))
@@ -2353,7 +2438,7 @@ local GREY_ROWS = { '0.3;0.3;0.3;0;0', '0.59;0.59;0.59;0;0', '0.11;0.11;0.11;0;0
 -- Rounded corners (TileRadius > 0): the grid container (GridClip) takes the
 -- shape of the visible tiles, rounded rectangles, within the grid area: what
 -- is in it (images, logos, texts, highlight, widgets) is cut to them.
-local clipShapes = 0
+M.clipShapes = 0
 local function roundClip(rects)
 	if V.TileRadius <= 0 then return end
 	local n = 0
@@ -2368,8 +2453,8 @@ local function roundClip(rects)
 		parts[#parts + 1] = 'Intersect Shape'
 		set('GridClip', 'Shape' .. (n + 2), table.concat(parts, ' | '))
 	end
-	for k = (n > 0 and n + 3 or 2), clipShapes do set('GridClip', 'Shape' .. k, '') end
-	clipShapes = n > 0 and n + 2 or 0
+	for k = (n > 0 and n + 3 or 2), M.clipShapes do set('GridClip', 'Shape' .. k, '') end
+	M.clipShapes = n > 0 and n + 2 or 0
 end
 
 -- Fade over the tiles cut by the edge of the grid along the scroll (EdgeFade):
@@ -2379,8 +2464,8 @@ end
 -- while the grid scrolls it comes and goes smoothly. Each shape has its own
 -- gradient (G<n>); Rainmeter turns the angle the other way: 0 runs from the
 -- right.
-local FADE_ANGLES = { ['H end'] = 180, ['H start'] = 0, ['V end'] = 270, ['V start'] = 90 }
-local fadeShapes = 0
+M.FADE_ANGLES = { ['H end'] = 180, ['H start'] = 0, ['V end'] = 270, ['V start'] = 90 }
+M.fadeShapes = 0
 -- shown strength of each band ("end 2" -> { k, len }), going towards the
 -- one wanted a step per frame; fadeMoving keeps the animation going
 local fadeShown, fadeMoving = {}, false
@@ -2389,14 +2474,14 @@ local function edgeFade(edges)
 	local n = 0
 	for _, e in ipairs(edges) do
 		n = n + 1
-		local angle = FADE_ANGLES[(V.Horizontal and 'H ' or 'V ') .. e[5]]
+		local angle = M.FADE_ANGLES[(V.Horizontal and 'H ' or 'V ') .. e[5]]
 		local a = math.floor(235 * e[6] + 0.5)
 		set('GridFade', 'G' .. n, string.format('%d | %s,0 ; 0.0 | %s,%d ; 0.9 | %s,%d ; 1.0', angle, V.FadeRGB, V.FadeRGB, a, V.FadeRGB, a))
 		set('GridFade', n == 1 and 'Shape' or ('Shape' .. n), string.format('Rectangle %d,%d,%d,%d | Fill LinearGradient G%d | StrokeWidth 0',
 			e[1], e[2], e[3], e[4], n))
 	end
-	for k = math.max(2, n + 1), fadeShapes do set('GridFade', 'Shape' .. k, '') end
-	fadeShapes = n
+	for k = math.max(2, n + 1), M.fadeShapes do set('GridFade', 'Shape' .. k, '') end
+	M.fadeShapes = n
 	show('GridFade', n > 0)
 end
 
@@ -2478,9 +2563,10 @@ local function placeSlots()
 			end
 			-- play time / last launch: always, only on the highlighted tile
 			-- (fading with the highlight) or never; "Not installed" always
-			local infoText, infoAlpha = nil, f
-			if t.missing or V.TileInfo ~= 'never' then infoText = tileInfo(t) end
-			if infoText and not t.missing and V.TileInfo == 'hover' then
+			local infoAlpha = f
+			local infoText, sticky = tileInfo(t)
+			if not sticky and V.TileInfo == 'never' then infoText = nil end
+			if infoText and not sticky and V.TileInfo == 'hover' then
 				local idx = indexAt(slot)
 				if idx == hover.idx and (hover.on or hover.a > 0) then
 					infoAlpha = f * (V.TileHover and hover.a or (hover.on and 1 or 0))
@@ -2490,8 +2576,15 @@ local function placeSlots()
 			end
 			if infoText and infoAlpha > 0.01 then
 				set(infoMeter, 'Text', infoText)
-				set(infoMeter, 'X', tostring(x + V.LabelPad))
-				set(infoMeter, 'Y', tostring(y + V.LabelPad))
+				-- InfoPos: in the room the line leaves inside the margins
+				local ix, iy = x + V.LabelPad, y + V.LabelPad
+				if (t.infoX > 0 or t.infoY > 0) and not t.widget then
+					local iw, ih = infoSize(infoMeter, infoText)
+					ix = ix + math.floor(t.infoX * math.max(0, V.TileW - 2 * V.LabelPad - iw) + 0.5)
+					iy = iy + math.floor(t.infoY * math.max(0, V.TileH - 2 * V.LabelPad - ih) + 0.5)
+				end
+				set(infoMeter, 'X', tostring(ix))
+				set(infoMeter, 'Y', tostring(iy))
 				set(infoMeter, 'FontColor', fade(V.TextColor, infoAlpha))
 				set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
 			end
@@ -3069,6 +3162,7 @@ function Initialize()
 	V.ShowClock = num('ShowClock', 1) ~= 0
 	V.ShowPower = num('ShowPower', 1) ~= 0
 	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
+	V.GameUpdates = num('GameUpdates', 1) ~= 0
 	V.DashInterval = math.max(250, math.floor(num('DashInterval', 1000)))
 	V.ShowDate = num('ShowDate', 1) ~= 0
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
@@ -3327,7 +3421,7 @@ end
 -- time, MeterMoreItem1-8 the entries.
 M.more = { open = false, hovered = 0, items = {} }
 
-local function moreItems()
+function M.moreItems()
 	local items = {}
 	local function add(glyph, label, action) items[#items + 1] = { text = glyph .. '   ' .. label, action = action } end
 	add('[\\xE721]', 'Search', function() SearchOpen() end)
@@ -3342,7 +3436,7 @@ local function moreItems()
 	return items
 end
 
-local function renderMore()
+function M.renderMore()
 	local more = M.more
 	local m0 = SKIN:GetMeter('MeterMore')
 	local x = m0 and math.floor(m0:GetX()) or math.floor(V.PadX)
@@ -3381,7 +3475,7 @@ end
 function M.closeMore()
 	if not M.more.open then return false end
 	M.more.open, M.more.hovered = false, 0
-	renderMore()
+	M.renderMore()
 	return true
 end
 
@@ -3390,14 +3484,14 @@ function MoreMenu()
 	closePower()
 	M.more.open = not M.more.open
 	M.more.hovered = 0
-	if M.more.open then M.more.items = moreItems() end
-	renderMore()
+	if M.more.open then M.more.items = M.moreItems() end
+	M.renderMore()
 end
 
 function MoreHover(i)
 	if not M.more.open then return end
 	M.more.hovered = i
-	renderMore()
+	M.renderMore()
 end
 
 function MoreAction(i)
@@ -3871,7 +3965,8 @@ end
 
 -- Play time (Playtime.ps1, in the background on load) ------------------------------
 -- On load, and when the launcher opens (minAge: seconds since the last
--- reading, the play time changes when a game is closed)
+-- reading, the play time changes when a game is closed). The Steam updates
+-- waiting (GameUpdates.ps1) are read at the same moments.
 local playtimeRead = nil -- os.time() of the last reading
 function ReadPlaytime(minAge)
 	if not ready or V.TileInfo == 'never' then return end
@@ -3881,6 +3976,7 @@ function ReadPlaytime(minAge)
 		for _, t in ipairs(c.tiles) do
 			if t.steamId then
 				SKIN:Bang('!CommandMeasure', 'MeasurePlaytime', 'Run')
+				if V.GameUpdates then SKIN:Bang('!CommandMeasure', 'MeasureGameUpdates', 'Run') end
 				return
 			end
 		end
@@ -3889,6 +3985,12 @@ end
 
 function OnPlaytime()
 	readPlaytime()
+	base = -1
+	render(false)
+end
+
+function OnGameUpdates()
+	readGameUpdates()
 	base = -1
 	render(false)
 end
@@ -3973,7 +4075,7 @@ end
 -- a click on it to the tile below as well. While one is open, and just after
 -- an entry was picked (M.picked, until the mouse moves onto a tile), the
 -- tiles leave the click alone.
-local function menuOverGrid()
+function M.menuOverGrid()
 	if M.more.open or power.open then return true end
 	return M.picked ~= nil and os.time() - M.picked <= 1
 end
@@ -4237,7 +4339,7 @@ end
 
 function Launch(slot)
 	if not ready or launching then return end
-	if menuOverGrid() then M.picked = nil return end
+	if M.menuOverGrid() then M.picked = nil return end
 	local x, y = gridToPx(slotToGrid(slot))
 	launchTile(tileAt(slot), x, y)
 end

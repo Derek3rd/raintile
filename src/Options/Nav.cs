@@ -67,6 +67,10 @@ namespace RaintileOptions
             catch { }
 
             win = (Window)XamlReader.Parse(WindowXaml.Text);
+            // the tile editor wants room, but smaller screens get what they have
+            var work = SystemParameters.WorkArea;
+            win.Width = Math.Max(win.MinWidth, Math.Min(win.Width, work.Width - 40));
+            win.Height = Math.Max(win.MinHeight, Math.Min(win.Height, work.Height - 40));
             ((TextBlock)win.FindName("Version")).Text = version;
             AddStartStep("window");
             nav = (ListBox)win.FindName("Nav");
@@ -443,7 +447,7 @@ namespace RaintileOptions
             pageTitle.Text = name != "" ? name : System.IO.Path.GetFileNameWithoutExtension(file);
             pageDesc.Text = IsDashboard(file)
                 ? "Categories\\" + file + ": its widgets. Name and grid of the Dashboard are on the Dashboard page."
-                : "Categories\\" + file + ": its tiles. Name, icon and grid of the category are on the Categories page.";
+                : "Categories\\" + file + ": its tiles. All tiles, the first entry, holds the settings of the whole category; name and icon are on the Categories page.";
         }
 
         void ShowNavTarget(NavTag tag)

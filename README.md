@@ -7,12 +7,12 @@ Your games, apps, links and system tools become large tiles with background art 
 ## Features
 
 - **Categories** in a centred menu at the top (icon, text or both), each with its own grid size.
-- **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs. Tiles can take more cells (`Size=2x2`) for a featured game or a bigger widget. Backgrounds fit the tile by themselves; you can also frame each one by dragging and zooming it in Options, and move and resize its logo on its own.
+- **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs. Tiles can take more cells (`Size=2x2`) for a featured game or a bigger widget. Backgrounds fit the tile by themselves; you can also frame each one by dragging and zooming it in Options, and move and resize its logo on its own, or set both once for a whole category (every logo on the right, say) and reset them all.
 - **Add games and apps** found on this PC — Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Battle.net, EA app, Xbox, and the programs of the Start menu — picking them from a list, with background and logo (local Steam cache, [SteamGridDB](https://www.steamgriddb.com/), program icons). New ones are signalled with a dot on the gear.
 - **Clock and date** at the top left, and a **search** across all categories that opens when you hover it, with results that follow every key.
 - **Favorites and Recent**: your favorite tiles and the ones launched lately (or most often), one click away from the buttons next to the search bar.
 - **Tags**: tag your tiles (multiplayer, coop, ...); search finds them, and chips above the results filter by tag or by store with a click.
-- **Play time**: hours played (from Steam, or measured by Raintile for the other games) and last launch, and a **Not played yet** category for what you never started.
+- **Play time**: hours played (from Steam, or measured by Raintile for the other games) and last launch, on a line you can drag anywhere on the tile (or once for a whole category), Steam updates waiting to download on the same line, and a **Not played yet** category for what you never started.
 - **Games no longer installed** are found by the same search: greyed out in the launcher, removed or kept with a click.
 - **Tile menu**: right click a tile to edit it, add it to Favorites, open its file location, run it as administrator or remove it.
 - **Mouse, keyboard and gamepad**: WASD/arrows, Space/Enter, Xbox-compatible controllers (open the launcher with Back + Start), with an on-screen keyboard to search from the couch.

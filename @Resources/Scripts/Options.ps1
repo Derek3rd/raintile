@@ -311,10 +311,11 @@ $schema = @(
                     (Num 'MenuFontSize' 'Menu font size' 6 40 1 'pt'),
                     (Num 'LabelFontSize' 'Label font size' 6 40 1 'pt'),
                     (S 'bool' 'ShowLabels' 'Show tile labels'),
-                    (S 'choice' 'TileInfo' 'Play time and last launch' 'A line at the top left of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.' @{ Choices = @(
+                    (S 'choice' 'TileInfo' 'Play time and last launch' 'A line on the tile, at the top left unless moved in the preview of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.' @{ Choices = @(
                                 @('Hover', 'On the highlighted tile'), @('Always', 'Always'), @('Never', 'Never')) }),
                     (Num 'InfoFontSize' 'Play time font size' 6 30 1 'pt'),
-                    (S 'bool' 'TrackPlaytime' 'Measure play time outside Steam' 'The background helper looks for the game a tile starts and counts how long it runs.')
+                    (S 'bool' 'TrackPlaytime' 'Measure play time outside Steam' 'The background helper looks for the game a tile starts and counts how long it runs.'),
+                    (S 'bool' 'GameUpdates' 'Steam updates waiting' 'Steam games with an update to download say so on the play time line, with its size and when Steam scheduled it.')
                 ) }
             @{ Title = 'Tiles'; Items = @(
                     (S 'color' 'TileColor' 'Default tile colour'),
@@ -502,7 +503,7 @@ $defaults = @{
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'; ShowUnplayed = '1'; UnplayedCount = '24'
-    ShowPower = '1'; TrackPlaytime = '1'; GamepadSearch = 'Y'; DashInterval = '1000'
+    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; GamepadSearch = 'Y'; DashInterval = '1000'
     FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
     TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'
@@ -1098,7 +1099,7 @@ try {
 $win = [System.Windows.Markup.XamlReader]::Parse(@'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Raintile - Options" Width="1180" Height="800" MinWidth="960" MinHeight="580"
+        Title="Raintile - Options" Width="1300" Height="1100" MinWidth="960" MinHeight="580"
         WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}" Foreground="{StaticResource TextBrush}"
         FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
   <Grid>
@@ -1127,7 +1128,7 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
       </Grid.RowDefinitions>
       <StackPanel Margin="36,24,36,14">
         <TextBlock x:Name="PageTitle" FontSize="24" FontWeight="SemiBold"/>
-        <TextBlock x:Name="PageDesc" Foreground="{StaticResource DimBrush}" Margin="0,5,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
+        <TextBlock x:Name="PageDesc" Foreground="{StaticResource DimBrush}" Margin="0,5,0,0" TextWrapping="Wrap" HorizontalAlignment="Left"/>
       </StackPanel>
       <Grid x:Name="PageHost" Grid.Row="1"/>
       <Border Grid.Row="2" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="28,12">
@@ -1160,6 +1161,10 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
   </Grid>
 </Window>
 '@)
+# the tile editor wants room, but smaller screens get what they have
+$work = [System.Windows.SystemParameters]::WorkArea
+$win.Width = [Math]::Max($win.MinWidth, [Math]::Min($win.Width, $work.Width - 40))
+$win.Height = [Math]::Max($win.MinHeight, [Math]::Min($win.Height, $work.Height - 40))
 $win.FindName('Version').Text = $version
 Add-StartStep 'window'
 $nav = $win.FindName('Nav')
@@ -1793,9 +1798,8 @@ function New-SettingsPage($page) {
     $sv = New-Object System.Windows.Controls.ScrollViewer
     $sv.VerticalScrollBarVisibility = 'Auto'
     $sp = New-Panel
+    # as wide as the window: the rows stretch and their help text wraps less
     $sp.Margin = T 36 4 36 24
-    $sp.MaxWidth = 920
-    $sp.HorizontalAlignment = 'Left'
     $sv.Content = $sp
     $schemaKeys = Get-SchemaKeys
     foreach ($group in $page.Groups) {
@@ -2505,8 +2509,6 @@ function New-CategoryListPage {
     Set-Col $sv 1
     [void]$grid.Children.Add($sv)
     $side = New-Panel
-    $side.MaxWidth = 600
-    $side.HorizontalAlignment = 'Left'
     $sv.Content = $side
     $bar = New-Panel 'Horizontal'
     $bar.Margin = T 0 0 0 12
@@ -2665,8 +2667,6 @@ function New-CategoryPage {
     Set-Col $sv 1
     [void]$grid.Children.Add($sv)
     $details = New-Panel
-    $details.MaxWidth = 640
-    $details.HorizontalAlignment = 'Left'
     $sv.Content = $details
 
     # Imported game: read-only, can become a normal tile
@@ -4008,9 +4008,8 @@ function New-InfoPage {
     $sv = New-Object System.Windows.Controls.ScrollViewer
     $sv.VerticalScrollBarVisibility = 'Auto'
     $sp = New-Panel
+    # as wide as the window: the rows stretch and their help text wraps less
     $sp.Margin = T 36 4 36 24
-    $sp.MaxWidth = 920
-    $sp.HorizontalAlignment = 'Left'
     $sv.Content = $sp
 
     $card = New-Card '' ''

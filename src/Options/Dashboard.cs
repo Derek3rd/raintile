@@ -45,14 +45,10 @@ namespace RaintileOptions
             AddTo(f, NewFormRow("Name", name, "In the menu. Empty = the file name."));
             name.TextChanged += (s, e) => { Core.SetKey(c, "Name", name.Text.Trim()); changed(); };
 
-            var grid = NewPanel(Orientation.Horizontal);
-            var nx = new TextBox { Width = 60, Text = Core.GetKey(c, "NX") };
-            var ny = new TextBox { Width = 60, Text = Core.GetKey(c, "NY") };
-            var by = NewText("×", 13, ResBrush("DimBrush"));
-            by.VerticalAlignment = VerticalAlignment.Center;
-            by.Margin = T(10, 0, 10, 0);
-            AddTo(grid, nx); AddTo(grid, by); AddTo(grid, ny);
-            AddTo(f, NewFormRow("Grid", grid, "Columns × rows of cells on screen; a widget can take more cells (Size). Empty = default (" + V("NX") + " × " + V("NY") + ")."));
+            var nx = new TextBox { Text = Core.GetKey(c, "NX") };
+            var ny = new TextBox { Text = Core.GetKey(c, "NY") };
+            var grid = NewPairRow(nx, ny);
+            AddTo(f, NewFormRow("Grid", grid, "Columns \u00D7 rows of cells on screen; a widget can take more cells (Size). Empty = default (" + V("NX") + " \u00D7 " + V("NY") + ")."));
             nx.TextChanged += (s, e) => { Core.SetKey(c, "NX", nx.Text.Trim()); changed(); };
             ny.TextChanged += (s, e) => { Core.SetKey(c, "NY", ny.Text.Trim()); changed(); };
 

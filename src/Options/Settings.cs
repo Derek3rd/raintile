@@ -669,9 +669,8 @@ namespace RaintileOptions
         {
             var sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
             sp = NewPanel();
+            // as wide as the window: the rows stretch and their help text wraps less
             sp.Margin = T(36, 4, 36, 24);
-            sp.MaxWidth = 920;
-            sp.HorizontalAlignment = HorizontalAlignment.Left;
             sv.Content = sp;
             return sv;
         }

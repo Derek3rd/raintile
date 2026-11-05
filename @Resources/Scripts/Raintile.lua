@@ -2247,7 +2247,8 @@ local function edgeFade(edges)
 	for _, e in ipairs(edges) do
 		n = n + 1
 		local angle = FADE_ANGLES[(V.Horizontal and 'H ' or 'V ') .. e[5]]
-		set('GridFade', 'G' .. n, string.format('%d | %s,0 ; 0.0 | %s,%d ; 1.0', angle, V.FadeRGB, V.FadeRGB, math.floor(235 * e[6] + 0.5)))
+		local a = math.floor(235 * e[6] + 0.5)
+		set('GridFade', 'G' .. n, string.format('%d | %s,0 ; 0.0 | %s,%d ; 0.9 | %s,%d ; 1.0', angle, V.FadeRGB, V.FadeRGB, a, V.FadeRGB, a))
 		set('GridFade', n == 1 and 'Shape' or ('Shape' .. n), string.format('Rectangle %d,%d,%d,%d | Fill LinearGradient G%d | StrokeWidth 0',
 			e[1], e[2], e[3], e[4], n))
 	end
@@ -2258,7 +2259,7 @@ end
 
 local function placeSlots()
 	local frac = pos - base
-	local rects, edges = {}, {}
+	local rects, cutEnd, cutStart = {}, {}, {}
 	dash.shown = {}
 	dash.skinsWanted = {}
 	dash.customShown = {}
@@ -2357,23 +2358,20 @@ local function placeSlots()
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
 			if t.widget then D.placeWidget(t, x, y, f) end
 			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
-			-- cut by the edge: a fade where it goes on, as strong as the
-			-- tile is cut (up to the size of the fade)
+			-- cut by the edge: how much, for each line across the scroll (a
+			-- row, or a column when the grid scrolls vertically) it covers
 			if V.EdgeFade and not appear then
-				local function add(cut, size, rect)
-					local k = math.min(1, cut / size)
-					if k > 0.02 then rect[6] = k edges[#edges + 1] = rect end
+				local along, size, step = x, V.TileW, V.StepY
+				local across, span, edge = y, V.TileH, V.ClipW or V.GridW
+				if not V.Horizontal then
+					along, size, step = y, V.TileH, V.StepX
+					across, span, edge = x, V.TileW, V.ClipH or V.GridH
 				end
-				if V.Horizontal then
-					local fw = math.floor(math.min(V.StepX * 0.4, 160))
-					local edge = V.ClipW or V.GridW
-					if x < edge then add(x + V.TileW - edge, fw, { edge - fw, y, fw, V.TileH, 'end' }) end
-					if x + V.TileW > 0 then add(-x, fw, { 0, y, fw, V.TileH, 'start' }) end
-				else
-					local fh = math.floor(math.min(V.StepY * 0.4, 160))
-					local edge = V.ClipH or V.GridH
-					if y < edge then add(y + V.TileH - edge, fh, { x, edge - fh, V.TileW, fh, 'end' }) end
-					if y + V.TileH > 0 then add(-y, fh, { x, 0, V.TileW, fh, 'start' }) end
+				local first = math.floor(across / step + 0.5)
+				local last = math.floor((across + span + V.Gap) / step + 0.5) - 1
+				for line = math.max(0, first), last do
+					if along < edge then cutEnd[line] = math.max(cutEnd[line] or 0, along + size - edge) end
+					if along + size > 0 then cutStart[line] = math.max(cutStart[line] or 0, -along) end
 				end
 			end
 			V.TileW, V.TileH = catW, catH
@@ -2385,6 +2383,33 @@ local function placeSlots()
 		end
 	end
 	roundClip(rects)
+	-- one fade per line, as strong as its tiles are cut: lines next to each
+	-- other touch, so a tile of more cells is covered all along
+	local edges = {}
+	if V.EdgeFade then
+		local lines = V.Horizontal and V.NY or V.NX
+		local step = V.Horizontal and V.StepY or V.StepX
+		local full = V.Horizontal and (V.ClipH or V.GridH) or (V.ClipW or V.GridW)
+		local edge = V.Horizontal and (V.ClipW or V.GridW) or (V.ClipH or V.GridH)
+		local fade = math.floor(math.min((V.Horizontal and V.StepX or V.StepY) * 0.4, 160))
+		for line = 0, lines - 1 do
+			local a = line * step
+			local b = line == lines - 1 and full or (line + 1) * step
+			for _, side in ipairs({ 'end', 'start' }) do
+				local cut = (side == 'end' and cutEnd or cutStart)[line]
+				local k = cut and math.min(1, cut / fade) or 0
+				if k > 0.02 then
+					-- a few pixels past the edge (cut off by the grid): no light line
+					local p = side == 'end' and edge - fade or -4
+					if V.Horizontal then
+						edges[#edges + 1] = { p, a, fade + 4, b - a, side, k }
+					else
+						edges[#edges + 1] = { a, p, b - a, fade + 4, side, k }
+					end
+				end
+			end
+		end
+	end
 	edgeFade(edges)
 	-- widgets not on screen (another category, scrolled away)
 	for _, t in ipairs(widgets) do

@@ -159,7 +159,9 @@ local SIZE_AXIS = {
 local function size(raw, axis)
 	local pct = trim(raw or ''):match('^([%d%.]+)%s*%%$')
 	if pct then
-		local total = axis == 'W' and V.ScreenW or V.ScreenH
+		-- of the monitor (MonitorW/H), also when the launcher is a window
+		-- or docked on a side
+		local total = axis == 'W' and (V.MonW or V.ScreenW) or (V.MonH or V.ScreenH)
 		return math.floor((toNumber(pct) or 0) * total / 100 + 0.5)
 	end
 	return toNumber(raw)
@@ -2492,8 +2494,39 @@ local function stopTicker()
 end
 
 -- Advances every animation by one step; true if something is still moving.
+-- Docked launcher: it comes in from its side, sliding and fading in, and
+-- goes out the same way (dock.p 0 = out, 1 = in; dock.dir +1 / -1). The
+-- slide is short: with more monitors a long one would cross into the next.
+local dock = { p = 1, dir = 0 }
+local DOCK_FRAMES, DOCK_SLIDE = 12, 60
+local function dockPlace(p)
+	local e = easeOut(math.min(1, math.max(0, p)))
+	local d = math.floor(DOCK_SLIDE * (1 - e) + 0.5)
+	local dx, dy = 0, 0
+	if V.DockSide == 'left' then dx = -d elseif V.DockSide == 'right' then dx = d
+	elseif V.DockSide == 'top' then dy = -d else dy = d end
+	SKIN:Bang('!Move', tostring(V.ScreenX + dx), tostring(V.ScreenY + dy))
+	SKIN:Bang('!SetTransparency', tostring(math.floor(255 * e + 0.5)))
+end
+local function dockAnimated()
+	return V.Mode == 'dock' and V.AnimOpen
+end
+
+local finishHide -- defined further down
 local function advance()
 	local busy, moving = false, false
+
+	if dock.dir ~= 0 then
+		dock.p = math.min(1, math.max(0, dock.p + dock.dir / DOCK_FRAMES))
+		dockPlace(dock.p)
+		if (dock.dir > 0 and dock.p >= 1) or (dock.dir < 0 and dock.p <= 0) then
+			local closing = dock.dir < 0
+			dock.dir = 0
+			if closing then finishHide() return false end
+		else
+			busy = true
+		end
+	end
 
 	pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth)
 	busy = busy or moving
@@ -2574,11 +2607,64 @@ local knownFiles = {}
 -- Generated\Sizes.inc is included after Settings.inc and takes precedence. It
 -- is only rewritten (and the skin refreshed) when something changes: a
 -- percentage or the screen resolution.
+-- Launcher mode ----------------------------------------------------------------
+-- LauncherMode=Fullscreen: the area of ScreenX/Y/W/H (a monitor, or its work
+-- area). Window: WindowW x WindowH, moved by dragging an empty part of it and
+-- left where it was put. Dock: DockSize wide (Left/Right) or tall (Top/Bottom)
+-- on the DockSide edge of that area. The rectangle of the launcher goes to
+-- Generated\Sizes.inc as ScreenX/Y/W/H, so the skin and the script use it as
+-- their "screen"; the area stays as MonitorX/Y/W/H, and percentages are of it.
+local function evalSetting(raw, default)
+	raw = trim(SKIN:ReplaceVariables(raw or ''))
+	if raw == '' then return default end
+	local n = tonumber(raw)
+	if not n and raw:match('^%(') then n = tonumber(SKIN:ParseFormula(raw)) end
+	return n or default
+end
+
+local function launcherRect(get)
+	local mx, my = evalSetting(get('screenx'), 0), evalSetting(get('screeny'), 0)
+	local mw, mh = evalSetting(get('screenw'), 1920), evalSetting(get('screenh'), 1080)
+	local function px(raw, total, default)
+		local p = trim(raw or ''):match('^([%d%.]+)%s*%%$')
+		if p then return math.floor((tonumber(p) or 0) * total / 100 + 0.5) end
+		return evalSetting(raw, default)
+	end
+	local mode = trim(get('launchermode') or ''):lower()
+	local x, y, w, h = mx, my, mw, mh
+	if mode == 'window' then
+		w = math.max(320, math.min(mw, px(get('windoww'), mw, math.floor(mw * 0.6))))
+		h = math.max(240, math.min(mh, px(get('windowh'), mh, math.floor(mh * 0.7))))
+		x, y = mx + math.floor((mw - w) / 2), my + math.floor((mh - h) / 2)
+	elseif mode == 'dock' then
+		local side = trim(get('dockside') or ''):lower()
+		if side == 'top' or side == 'bottom' then
+			h = math.max(160, math.min(mh, px(get('docksize'), mh, math.floor(mh * 0.35))))
+			if side == 'bottom' then y = my + mh - h end
+		else
+			w = math.max(240, math.min(mw, px(get('docksize'), mw, math.floor(mw * 0.3))))
+			if side == 'right' then x = mx + mw - w end
+		end
+	else
+		mode = 'fullscreen'
+	end
+	return mode, { math.floor(x), math.floor(y), math.floor(w), math.floor(h) }, { mx, my, mw, mh }
+end
+
 local function writeSizes()
-	local values = {}
+	local values, defaults = {}, {}
 	for _, s in ipairs(parseIni(data .. 'Settings.inc') or {}) do
 		for key, value in pairs(s.keys) do values[key] = value end -- lower-case keys
 	end
+	for _, s in ipairs(parseIni(resources .. 'Settings.inc') or {}) do
+		for key, value in pairs(s.keys) do defaults[key] = value end
+	end
+	local function get(key)
+		if values[key] ~= nil then return values[key] end
+		return defaults[key]
+	end
+	local _, rect, mon = launcherRect(get)
+	V.MonW, V.MonH = mon[3], mon[4] -- for the percentages below
 	local names = {}
 	for name in pairs(SIZE_AXIS) do names[#names + 1] = name end
 	table.sort(names)
@@ -2586,6 +2672,9 @@ local function writeSizes()
 		'; GENERATED BY Raintile.lua: percentage sizes and #hex colours from',
 		'; Settings.inc converted for Rainmeter. Do not edit by hand.',
 		'[Variables]',
+		-- the launcher (LauncherMode) and the area it is in
+		'ScreenX=' .. rect[1], 'ScreenY=' .. rect[2], 'ScreenW=' .. rect[3], 'ScreenH=' .. rect[4],
+		'MonitorX=' .. mon[1], 'MonitorY=' .. mon[2], 'MonitorW=' .. mon[3], 'MonitorH=' .. mon[4],
 	}
 	for _, name in ipairs(names) do
 		local raw = values[name:lower()]
@@ -2680,8 +2769,15 @@ function Initialize()
 	V.DefNY = math.max(1, math.floor(num('NY', 2)))
 	V.Horizontal = SKIN:GetVariable('ScrollDir', 'V'):upper():sub(1, 1) == 'H'
 	V.ScrollStep = math.max(1, math.floor(num('ScrollStep', 1)))
+	V.ScreenX, V.ScreenY = num('ScreenX', 0), num('ScreenY', 0)
 	V.ScreenW = num('ScreenW', 1920)
 	V.ScreenH = num('ScreenH', 1080) -- before the sizes: percentages need it
+	V.MonW, V.MonH = num('MonitorW', 0), num('MonitorH', 0)
+	if V.MonW <= 0 or V.MonH <= 0 then V.MonW, V.MonH = nil, nil end
+	local lmode = SKIN:GetVariable('LauncherMode', 'Fullscreen'):lower()
+	V.Mode = (lmode == 'window' or lmode == 'dock') and lmode or 'fullscreen'
+	local side = SKIN:GetVariable('DockSide', 'Left'):lower()
+	V.DockSide = (side == 'right' or side == 'top' or side == 'bottom') and side or 'left'
 	V.Gap = num('Gap', 16)
 	V.PadX = num('PadX', 40)
 	V.PadY = num('PadY', 24)
@@ -3008,10 +3104,16 @@ function Show()
 	updateEmptyHint()
 	if V.AnimOpen then appear = 0 end
 	frame() -- first frame drawn before showing the window
+	if dockAnimated() then
+		-- from where it is (it may be still going out)
+		if dock.dir == 0 then dock.p = 0 end
+		dock.dir = 1
+		dockPlace(dock.p)
+	end
 	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
 	SKIN:Bang('!Show')
 	hotKey(true)
-	if appear then startTicker() end
+	if appear or dock.dir ~= 0 then startTicker() end
 	ReadPlaytime(60)
 	ClockTick(0)
 	updateDashState()
@@ -3030,11 +3132,28 @@ function Hide()
 		SKIN:Bang('!CommandMeasure', 'MeasureLaunchAnim', 'Stop 1')
 		launching = nil
 	end
-	SKIN:Bang('!Hide')
 	hotKey(false)
 	stopClock()
 	closePower()
 	updateDashState()
+	if dockAnimated() then
+		-- goes out first; finishHide() hides the window at the end
+		dock.dir = -1
+		startTicker()
+		return
+	end
+	SKIN:Bang('!Hide')
+end
+
+-- End of the docked launcher going out: the window is hidden, ready (in
+-- place, opaque) for the next time
+finishHide = function()
+	if visible then return end -- shown again meanwhile
+	SKIN:Bang('!Hide')
+	stopTicker()
+	dock.p = 0
+	SKIN:Bang('!SetTransparency', '255')
+	SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
 end
 
 function Toggle()
@@ -3074,6 +3193,44 @@ end
 function Setup()
 	if V.NeedsSetup then SKIN:Bang('!CommandMeasure', 'MeasureSetup', 'Run') end
 end
+
+-- Where the skin goes when it loads (OnRefreshAction). Full screen and
+-- docked: on its rectangle, fixed. Window: draggable, and left where it was
+-- put (Rainmeter keeps the position); centred the first time it is a window
+-- (WindowPlaced in State.inc).
+function PlaceWindow()
+	-- docked with DockEdge=1: the helper opens it when the mouse rests on
+	-- that edge (Generated\DockEdge.txt: side, area, delay)
+	local edgeFile = resources .. 'Generated\\DockEdge.txt'
+	if V.Mode == 'dock' and num('DockEdge', 1) ~= 0 then
+		local line = table.concat({ V.DockSide, math.floor(num('MonitorX', V.ScreenX)), math.floor(num('MonitorY', V.ScreenY)),
+			math.floor(V.MonW or V.ScreenW), math.floor(V.MonH or V.ScreenH), math.max(0, math.floor(num('DockEdgeDelay', 300))) }, '|')
+		local f = io.open(edgeFile, 'rb')
+		local old = f and f:read('*a')
+		if f then f:close() end
+		if old ~= line then
+			f = io.open(edgeFile, 'wb')
+			if f then f:write(line) f:close() end
+		end
+	else
+		os.remove(edgeFile)
+	end
+	if V.Mode == 'window' then
+		SKIN:Bang('!Draggable', '1')
+		SKIN:Bang('!KeepOnScreen', '1')
+		if num('WindowPlaced', 0) ~= 1 then
+			SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
+			SKIN:Bang('!WriteKeyValue', 'Variables', 'WindowPlaced', '1', data .. 'State.inc')
+		end
+	else
+		SKIN:Bang('!Draggable', '0')
+		SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
+		if num('WindowPlaced', 0) ~= 0 then
+			SKIN:Bang('!WriteKeyValue', 'Variables', 'WindowPlaced', '0', data .. 'State.inc')
+		end
+	end
+end
+
 
 function OnSetup()
 	local output = SKIN:GetMeasure('MeasureSetup'):GetStringValue()
@@ -4104,6 +4261,7 @@ end
 function FocusLost()
 	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
 	if not ready or not visible or launching then return end
+	if V.Mode == 'window' then return end -- a window stays open beside the others
 	Hide()
 end
 

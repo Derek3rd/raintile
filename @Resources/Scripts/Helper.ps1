@@ -869,6 +869,94 @@ public class RaintilePad
         StartWatch(pid, pendingId, image);
     }
 
+    // --- Docked launcher: open from the edge of the screen --------------------
+    // While the skin is docked with DockEdge=1 it keeps Generated\DockEdge.txt
+    // ("<side>|<x>|<y>|<w>|<h>|<delay ms>": the side and the area it is
+    // docked in). When the mouse rests on that edge for the delay, with no
+    // button down and no full-screen program in front, Show() opens it; the
+    // mouse must leave the edge before it can open it again.
+    public string EdgeFile;
+    long nextEdgeCheck, edgeSince = -1;
+    bool edgeOn, edgeArmed = true;
+    string edgeSide = "left";
+    int edgeX, edgeY, edgeW, edgeH, edgeDelay = 300;
+    DateTime edgeStamp = DateTime.MinValue;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int size);
+
+    void ReadEdge()
+    {
+        edgeOn = false;
+        if (!System.IO.File.Exists(EdgeFile)) return;
+        DateTime stamp = System.IO.File.GetLastWriteTimeUtc(EdgeFile);
+        string[] p = System.IO.File.ReadAllText(EdgeFile).Trim().Split('|');
+        if (p.Length < 6) return;
+        edgeSide = p[0].ToLowerInvariant();
+        if (!int.TryParse(p[1], out edgeX) || !int.TryParse(p[2], out edgeY) || !int.TryParse(p[3], out edgeW)
+            || !int.TryParse(p[4], out edgeH) || !int.TryParse(p[5], out edgeDelay)) return;
+        edgeStamp = stamp;
+        edgeOn = edgeW > 0 && edgeH > 0;
+    }
+
+    // A program covering the whole area in front (a game, a video): not the
+    // desktop, not Rainmeter
+    bool FullScreenInFront(IntPtr rainmeterWindow)
+    {
+        IntPtr fg = GetForegroundWindow();
+        if (fg == IntPtr.Zero || ProcessOf(fg) == ProcessOf(rainmeterWindow)) return false;
+        var name = new System.Text.StringBuilder(64);
+        GetClassName(fg, name, name.Capacity);
+        string cls = name.ToString();
+        if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd") return false;
+        Rect r;
+        if (!GetWindowRect(fg, out r)) return false;
+        return r.Left <= edgeX && r.Top <= edgeY && r.Right >= edgeX + edgeW && r.Bottom >= edgeY + edgeH;
+    }
+
+    void EdgeStep(IntPtr window, long now)
+    {
+        if (now >= nextEdgeCheck)
+        {
+            nextEdgeCheck = now + 1000;
+            try
+            {
+                if (!System.IO.File.Exists(EdgeFile)) edgeOn = false;
+                else if (System.IO.File.GetLastWriteTimeUtc(EdgeFile) != edgeStamp || !edgeOn) ReadEdge();
+            }
+            catch { edgeOn = false; }
+        }
+        if (!edgeOn) return;
+        Point p;
+        if (!GetCursorPos(out p)) return;
+        bool along = edgeSide == "top" || edgeSide == "bottom"
+            ? p.X >= edgeX && p.X < edgeX + edgeW
+            : p.Y >= edgeY && p.Y < edgeY + edgeH;
+        bool at;
+        if (edgeSide == "right") at = p.X >= edgeX + edgeW - 1;
+        else if (edgeSide == "top") at = p.Y <= edgeY;
+        else if (edgeSide == "bottom") at = p.Y >= edgeY + edgeH - 1;
+        else at = p.X <= edgeX;
+        // (a cursor past the edge, on the next monitor, is not on it)
+        if (edgeSide == "right") at = at && p.X < edgeX + edgeW;
+        else if (edgeSide == "top") at = at && p.Y >= edgeY;
+        else if (edgeSide == "bottom") at = at && p.Y < edgeY + edgeH;
+        else at = at && p.X >= edgeX;
+        if (!at || !along || MouseDown())
+        {
+            edgeSince = -1;
+            if (!at || !along) edgeArmed = true;
+            return;
+        }
+        if (!edgeArmed) return;
+        if (edgeSince < 0) { edgeSince = now; return; }
+        if (now - edgeSince < edgeDelay) return;
+        edgeArmed = false;
+        edgeSince = -1;
+        if (FullScreenInFront(window)) return;
+        Send(window, Call("Show()"));
+    }
+
     // --- Dashboard ---------------------------------------------------------------
     // While the skin shows the Dashboard it keeps Generated\DashOn.txt
     // ("<interval ms>|<processes 0/1>|<sensors 0/1>"): the data is collected,
@@ -943,6 +1031,7 @@ public class RaintilePad
             if (AutoHide && window != IntPtr.Zero && FocusLost(window, now)) Send(window, Call("FocusLost()"));
             if (TrackEnabled) { try { TrackStep(now); } catch { } }
             if (DashFlag != null && window != IntPtr.Zero) { try { DashStep(window, now); } catch { } }
+            if (EdgeFile != null && window != IntPtr.Zero) { try { EdgeStep(window, now); } catch { } }
             if (!PadEnabled) continue;
 
             // disconnected controllers are checked again every 2 s (the call
@@ -987,6 +1076,7 @@ $pad.TrackEnabled = [bool]$Track -and $Generated -and $Data
 if ($Generated) {
     $pad.DashFlag = Join-Path $Generated 'DashOn.txt'
     $pad.DashFile = Join-Path $Generated 'DashData.txt'
+    $pad.EdgeFile = Join-Path $Generated 'DockEdge.txt'
 }
 if ($pad.TrackEnabled) {
     $pad.LaunchFile = Join-Path $Generated 'Launch.txt'

@@ -11,7 +11,14 @@ namespace RaintileOptions
             {
                 new Group { Title = "Screen", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "screen", Key = "ScreenX", Label = "Area covered", Help = "The launcher covers the whole area. The work area leaves the taskbar free." },
+                    new Item { Kind = "screen", Key = "ScreenX", Label = "Area", Help = "Where the launcher shows: a monitor, or its work area (the taskbar stays free)." },
+                    new Item { Kind = "choice", Key = "LauncherMode", Label = "Mode", Help = "Full screen: all of the area. Window: drag an empty part of it to move it; it stays open when you click elsewhere. Docked: on a side of the screen, it comes in from there.", Choices = new List<string[]> { new[] { "Fullscreen", "Full screen" }, new[] { "Window", "Window" }, new[] { "Dock", "Docked on a side" } } },
+                    new Item { Kind = "size", Key = "WindowW", Label = "Window width", Help = "", Axis = "W" },
+                    new Item { Kind = "size", Key = "WindowH", Label = "Window height", Help = "", Axis = "H" },
+                    new Item { Kind = "choice", Key = "DockSide", Label = "Docked side", Help = "", Choices = new List<string[]> { new[] { "Left", "Left" }, new[] { "Right", "Right" }, new[] { "Top", "Top" }, new[] { "Bottom", "Bottom" } } },
+                    new Item { Kind = "size", Key = "DockSize", Label = "Docked size", Help = "Width when docked left or right; height (of the screen height) when docked at the top or bottom.", Axis = "W" },
+                    new Item { Kind = "bool", Key = "DockEdge", Label = "Open from the edge", Help = "Docked: it also opens when the mouse rests on that edge of the screen. Not while a full-screen program (e.g. a game) is in front." },
+                    new Item { Kind = "int", Key = "DockEdgeDelay", Label = "Edge delay", Help = "How long the mouse rests on the edge before it opens.", Min = 0.0, Max = 2000.0, Step = 50.0, Unit = "ms" },
                 } },
                 new Group { Title = "Opening and closing", Help = null, Items = new List<Item>
                 {
@@ -320,6 +327,10 @@ namespace RaintileOptions
             { "DashInterval", "1000" },
             { "DateFormat", "%A %#d %B" },
             { "DebugLog", "0" },
+            { "DockEdge", "1" },
+            { "DockEdgeDelay", "300" },
+            { "DockSide", "Left" },
+            { "DockSize", "30%" },
             { "FadeDuration", "0" },
             { "FilterBar", "1" },
             { "FilterFontSize", "10" },
@@ -348,6 +359,7 @@ namespace RaintileOptions
             { "LabelPad", "14" },
             { "LaunchAnimation", "1" },
             { "LaunchAnimFrames", "15" },
+            { "LauncherMode", "Fullscreen" },
             { "LaunchFontSize", "48" },
             { "LaunchHold", "1500" },
             { "LaunchLogoSize", "33%" },
@@ -413,6 +425,8 @@ namespace RaintileOptions
             { "TileRadius", "0" },
             { "TrackPlaytime", "1" },
             { "UnplayedCount", "24" },
+            { "WindowH", "70%" },
+            { "WindowW", "60%" },
         };
 
         public static readonly string[] GAMEPAD_BUTTONS = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };

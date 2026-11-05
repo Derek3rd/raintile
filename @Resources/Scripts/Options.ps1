@@ -217,7 +217,16 @@ $schema = @(
         Desc = 'Where the launcher appears and how it opens and closes.'
         Groups = @(
             @{ Title = 'Screen'; Items = @(
-                    (S 'screen' 'ScreenX' 'Area covered' 'The launcher covers the whole area. The work area leaves the taskbar free.')
+                    (S 'screen' 'ScreenX' 'Area' 'Where the launcher shows: a monitor, or its work area (the taskbar stays free).'),
+                    (S 'choice' 'LauncherMode' 'Mode' 'Full screen: all of the area. Window: drag an empty part of it to move it; it stays open when you click elsewhere. Docked: on a side of the screen, it comes in from there.' @{ Choices = @(
+                                @('Fullscreen', 'Full screen'), @('Window', 'Window'), @('Dock', 'Docked on a side')) }),
+                    (Size 'WindowW' 'Window width' 'W'),
+                    (Size 'WindowH' 'Window height' 'H'),
+                    (S 'choice' 'DockSide' 'Docked side' '' @{ Choices = @(
+                                @('Left', 'Left'), @('Right', 'Right'), @('Top', 'Top'), @('Bottom', 'Bottom')) }),
+                    (Size 'DockSize' 'Docked size' 'W' 'Width when docked left or right; height (of the screen height) when docked at the top or bottom.'),
+                    (S 'bool' 'DockEdge' 'Open from the edge' 'Docked: it also opens when the mouse rests on that edge of the screen. Not while a full-screen program (e.g. a game) is in front.'),
+                    (Num 'DockEdgeDelay' 'Edge delay' 0 2000 50 'ms' 'How long the mouse rests on the edge before it opens.')
                 ) }
             @{ Title = 'Opening and closing'; Items = @(
                     (S 'bool' 'StartHidden' 'Start hidden' 'Stay hidden when Rainmeter starts, until you open it with the shortcut or the gamepad.'),
@@ -484,6 +493,7 @@ $navTree = @(
 # Default values (as shipped), for "Restore default"
 $defaults = @{
     ScreenX = '#SCREENAREAX#'; ScreenY = '#SCREENAREAY#'; ScreenW = '#SCREENAREAWIDTH#'; ScreenH = '#SCREENAREAHEIGHT#'
+    LauncherMode = 'Fullscreen'; WindowW = '60%'; WindowH = '70%'; DockSide = 'Left'; DockSize = '30%'; DockEdge = '1'; DockEdgeDelay = '300'
     NX = '4'; NY = '2'; ScrollDir = 'V'; ScrollStep = '1'; InfiniteScroll = '1'
     Gap = '18'; PadX = '40'; PadY = '24'; IconSize = '96'; LabelPad = '14'; ScrollBarSize = '4'
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'

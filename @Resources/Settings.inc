@@ -1,11 +1,29 @@
 [Variables]
 ; --- Screen ---------------------------------------------------------------------
-; The launcher covers the whole screen. To keep the taskbar free use WORKAREA
-; instead of SCREENAREA; for another monitor add @N (e.g. #SCREENAREAWIDTH@2#).
+; The area of the launcher: the whole screen. To keep the taskbar free use
+; WORKAREA instead of SCREENAREA; for another monitor add @N (e.g.
+; #SCREENAREAWIDTH@2#).
 ScreenX=#SCREENAREAX#
 ScreenY=#SCREENAREAY#
 ScreenW=#SCREENAREAWIDTH#
 ScreenH=#SCREENAREAHEIGHT#
+; How the launcher shows on that area:
+;   Fullscreen  all of it
+;   Window      a window of WindowW x WindowH: drag an empty part of it to
+;               move it; it stays open when you click elsewhere
+;   Dock        on a side of the screen (DockSide: Left, Right, Top, Bottom),
+;               DockSize wide (or tall): it comes in from that side
+; Sizes in pixels or % of the area.
+LauncherMode=Fullscreen
+WindowW=60%
+WindowH=70%
+DockSide=Left
+DockSize=30%
+; Docked: 1 = it also opens when the mouse rests on that edge of the screen
+; for DockEdgeDelay ms (not while a full-screen program, e.g. a game, is in
+; front)
+DockEdge=1
+DockEdgeDelay=300
 
 ; --- Grid -----------------------------------------------------------------------
 ; Default visible tiles: NX columns x NY rows. Each category can have its own

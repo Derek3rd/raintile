@@ -2234,15 +2234,21 @@ end
 -- Fade over the tiles cut by the edge of the grid along the scroll (EdgeFade):
 -- a gradient to the launcher background, at the edge they cross. edges =
 -- { { x, y, w, h, side } } with side 'end' (bottom / right) or 'start'.
+-- Its strength (e[6], 0-1) grows with how much of the tile is cut, so that
+-- while the grid scrolls it comes and goes smoothly. Each shape has its own
+-- gradient (G<n>); Rainmeter turns the angle the other way: 0 runs from the
+-- right.
+local FADE_ANGLES = { ['H end'] = 180, ['H start'] = 0, ['V end'] = 270, ['V start'] = 90 }
 local fadeShapes = 0
 local function edgeFade(edges)
 	if not V.EdgeFade then return end
 	local n = 0
 	for _, e in ipairs(edges) do
 		n = n + 1
-		local grad = V.Horizontal and (e[5] == 'end' and 'FadeRight' or 'FadeLeft') or (e[5] == 'end' and 'FadeDown' or 'FadeUp')
-		set('GridFade', n == 1 and 'Shape' or ('Shape' .. n), string.format('Rectangle %d,%d,%d,%d | Fill LinearGradient %s | StrokeWidth 0',
-			e[1], e[2], e[3], e[4], grad))
+		local angle = FADE_ANGLES[(V.Horizontal and 'H ' or 'V ') .. e[5]]
+		set('GridFade', 'G' .. n, string.format('%d | %s,0 ; 0.0 | %s,%d ; 1.0', angle, V.FadeRGB, V.FadeRGB, math.floor(235 * e[6] + 0.5)))
+		set('GridFade', n == 1 and 'Shape' or ('Shape' .. n), string.format('Rectangle %d,%d,%d,%d | Fill LinearGradient G%d | StrokeWidth 0',
+			e[1], e[2], e[3], e[4], n))
 	end
 	for k = math.max(2, n + 1), fadeShapes do set('GridFade', 'Shape' .. k, '') end
 	fadeShapes = n
@@ -2350,17 +2356,21 @@ local function placeSlots()
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
 			if t.widget then D.placeWidget(t, x, y, f) end
 			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
-			-- cut by the edge: a fade where it goes on (only with the grid at
-			-- rest: while it scrolls every tile crosses the edges)
-			if V.EdgeFade and pos == offset and not appear then
+			-- cut by the edge: a fade where it goes on, as strong as the
+			-- tile is cut (up to the size of the fade)
+			if V.EdgeFade and not appear then
+				local function add(cut, size, rect)
+					local k = math.min(1, cut / size)
+					if k > 0.02 then rect[6] = k edges[#edges + 1] = rect end
+				end
 				if V.Horizontal then
 					local fw = math.floor(math.min(V.StepX * 0.4, 160))
-					if x + V.TileW > V.GridW + 1 and x < V.GridW then edges[#edges + 1] = { V.GridW - fw, y, fw, V.TileH, 'end' } end
-					if x < -1 and x + V.TileW > 0 then edges[#edges + 1] = { 0, y, fw, V.TileH, 'start' } end
+					if x < V.GridW then add(x + V.TileW - V.GridW, fw, { V.GridW - fw, y, fw, V.TileH, 'end' }) end
+					if x + V.TileW > 0 then add(-x, fw, { 0, y, fw, V.TileH, 'start' }) end
 				else
 					local fh = math.floor(math.min(V.StepY * 0.4, 160))
-					if y + V.TileH > V.GridH + 1 and y < V.GridH then edges[#edges + 1] = { x, V.GridH - fh, V.TileW, fh, 'end' } end
-					if y < -1 and y + V.TileH > 0 then edges[#edges + 1] = { x, 0, V.TileW, fh, 'start' } end
+					if y < V.GridH then add(y + V.TileH - V.GridH, fh, { x, V.GridH - fh, V.TileW, fh, 'end' }) end
+					if y + V.TileH > 0 then add(-y, fh, { x, 0, V.TileW, fh, 'start' }) end
 				end
 			end
 			V.TileW, V.TileH = catW, catH
@@ -2788,15 +2798,9 @@ function Initialize()
 	V.LabelPad = num('LabelPad', 14)
 	V.TileRadius = math.max(0, math.floor(num('TileRadius', 0)))
 	V.EdgeFade = num('EdgeFade', 1) ~= 0
-	if V.EdgeFade then
-		-- gradients of GridFade: from clear to the launcher background
-		local r, g, b = (parseColor(SKIN:GetVariable('BgColor', '')) or '8,8,12,200'):match('^(%d+),(%d+),(%d+)')
-		local rgb = (r or 8) .. ',' .. (g or 8) .. ',' .. (b or 12)
-		-- (Rainmeter turns the angle the other way: 0 runs from the right)
-		for name, angle in pairs({ FadeDown = 270, FadeUp = 90, FadeRight = 180, FadeLeft = 0 }) do
-			SKIN:Bang('!SetOption', 'GridFade', name, angle .. ' | ' .. rgb .. ',0 ; 0.0 | ' .. rgb .. ',235 ; 1.0')
-		end
-	end
+	-- colour the fades go to: the launcher background
+	local fr, fg, fb = (parseColor(SKIN:GetVariable('BgColor', '')) or '8,8,12,200'):match('^(%d+),(%d+),(%d+)')
+	V.FadeRGB = (fr or 8) .. ',' .. (fg or 8) .. ',' .. (fb or 12)
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
 	V.AnimCategory = num('AnimCategory', 1) ~= 0
 	V.AnimHover = num('AnimHover', 1) ~= 0

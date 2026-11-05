@@ -49,7 +49,6 @@ namespace RaintileOptions
         Image previewBg, previewLogo;
         Panel frameRow, logoRow;
         Slider zoomSlider, logoSlider;
-        ComboBox moveTo;
         Button tileKeyButton;
         TextBox catTileColor;
         ComboBox catOpacity, tileOpacity;
@@ -874,13 +873,6 @@ namespace RaintileOptions
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
             tileNote.Visibility = tileNote.Text != "" ? Visibility.Visible : Visibility.Collapsed;
-            // other categories the tile can move to
-            moveTo.Items.Clear();
-            foreach (var e in GetCategoryEntries())
-            {
-                if (e.File == currentFile) continue;
-                moveTo.Items.Add(new ComboBoxItem { Content = e.Name, Tag = e.File });
-            }
             loading = false;
             UpdateTilePreview();
         }
@@ -990,6 +982,47 @@ namespace RaintileOptions
                 if (from < 0) return;
                 if (to > from) to--;   // the item leaves its place first
                 if (to != from) move(from, to);
+            };
+        }
+
+        // A tile of the list dropped on another category of the menu moves there
+        // with its images (both category files are saved at once). Not for imported
+        // tiles, the Dashboard and its widgets.
+        void EnableTileDropOnNav()
+        {
+            ListBoxItem marked = null;
+            Action unmark = () => { if (marked != null) marked.BorderThickness = T(0); marked = null; };
+            Func<DragEventArgs, string> target = e =>
+            {
+                var tile = e.Data.GetData("RaintileItem") as ListBoxItem;
+                if (tile == null || !tilesList.Items.Contains(tile) || currentFile == null || IsDashboard(currentFile)) return null;
+                var over = ItemAt(nav, e.OriginalSource as DependencyObject);
+                var tag = over != null ? over.Tag as NavTag : null;
+                if (tag == null || tag.Type != "category" || tag.File == currentFile || IsDashboard(tag.File)) return null;
+                return tag.File;
+            };
+            nav.AllowDrop = true;
+            nav.DragOver += (s, e) =>
+            {
+                unmark();
+                e.Handled = true;
+                if (target(e) == null) { e.Effects = DragDropEffects.None; return; }
+                e.Effects = DragDropEffects.Move;
+                marked = ItemAt(nav, e.OriginalSource as DependencyObject);
+                marked.BorderBrush = ResBrush("AccentBrush");
+                marked.BorderThickness = T(1);
+            };
+            nav.DragLeave += (s, e) => unmark();
+            nav.Drop += (s, e) =>
+            {
+                unmark();
+                string to = target(e);
+                if (to == null) return;
+                var tile = (ListBoxItem)e.Data.GetData("RaintileItem");
+                int index = tilesList.Items.IndexOf(tile);
+                string err = MoveTileToCategory(currentFile, ((ListTag)tile.Tag).Section, to);
+                if (err != null) { ShowDialog("Raintile", err); return; }
+                RefreshTiles(Math.Max(0, index - 1));   // the tile before it
             };
         }
 
@@ -1559,24 +1592,6 @@ namespace RaintileOptions
                 tileKeyButton.Content = Schema.FormatHotKey("");
                 SetChanged(currentFile);
             };
-            var moveRow = NewPanel(Orientation.Horizontal);
-            moveTo = new ComboBox { Width = 200 };
-            var btnMove = NewButton("Move");
-            btnMove.Margin = T(8, 0, 0, 0);
-            AddTo(moveRow, moveTo); AddTo(moveRow, btnMove);
-            AddTo(f, NewFormRow("Move to", moveRow, "Moves the tile and its images to another category. Both category files are saved at once."));
-            btnMove.Click += (s, e) =>
-            {
-                var t = GetCurrentTile();
-                if (t == null) return;
-                var target = moveTo.SelectedItem as ComboBoxItem;
-                if (target == null) { ShowDialog("Raintile", "Choose the category to move the tile to."); return; }
-                var r = ShowDialog("Move tile", "Move '" + t.Name + "' to " + target.Content + "?", new[] { "Move", "Cancel" });
-                if (r.Button != "Move") return;
-                string err = MoveTileToCategory(currentFile, t, (string)target.Tag);
-                if (err != null) { ShowDialog("Raintile", err); return; }
-                RefreshTiles(Math.Max(0, tilesList.SelectedIndex - 1));
-            };
             foreach (var kind in new[] { "Background", "Logo" })
             {
                 var row = NewPanel(Orientation.Horizontal);
@@ -1641,6 +1656,7 @@ namespace RaintileOptions
                 SetChanged(currentFile);
                 RefreshTiles(to);
             });
+            EnableTileDropOnNav();
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" })
             {
                 string key = k;

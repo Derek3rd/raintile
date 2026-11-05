@@ -217,7 +217,16 @@ $schema = @(
         Desc = 'Where the launcher appears and how it opens and closes.'
         Groups = @(
             @{ Title = 'Screen'; Items = @(
-                    (S 'screen' 'ScreenX' 'Area covered' 'The launcher covers the whole area. The work area leaves the taskbar free.')
+                    (S 'screen' 'ScreenX' 'Area' 'Where the launcher shows: a monitor, or its work area (the taskbar stays free).'),
+                    (S 'choice' 'LauncherMode' 'Mode' 'Full screen: all of the area. Window: drag an empty part of it to move it; it stays open when you click elsewhere. Docked: on a side of the screen, it comes in from there.' @{ Choices = @(
+                                @('Fullscreen', 'Full screen'), @('Window', 'Window'), @('Dock', 'Docked on a side')) }),
+                    (Size 'WindowW' 'Window width' 'W'),
+                    (Size 'WindowH' 'Window height' 'H'),
+                    (S 'choice' 'DockSide' 'Docked side' '' @{ Choices = @(
+                                @('Left', 'Left'), @('Right', 'Right'), @('Top', 'Top'), @('Bottom', 'Bottom')) }),
+                    (Size 'DockSize' 'Docked size' 'W' 'Width when docked left or right; height (of the screen height) when docked at the top or bottom.'),
+                    (S 'bool' 'DockEdge' 'Open from the edge' 'Docked: it also opens when the mouse rests on that edge of the screen. Not while a full-screen program (e.g. a game) is in front.'),
+                    (Num 'DockEdgeDelay' 'Edge delay' 0 2000 50 'ms' 'How long the mouse rests on the edge before it opens.')
                 ) }
             @{ Title = 'Opening and closing'; Items = @(
                     (S 'bool' 'StartHidden' 'Start hidden' 'Stay hidden when Rainmeter starts, until you open it with the shortcut or the gamepad.'),
@@ -302,14 +311,16 @@ $schema = @(
                     (Num 'MenuFontSize' 'Menu font size' 6 40 1 'pt'),
                     (Num 'LabelFontSize' 'Label font size' 6 40 1 'pt'),
                     (S 'bool' 'ShowLabels' 'Show tile labels'),
-                    (S 'choice' 'TileInfo' 'Play time and last launch' 'A line at the top left of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.' @{ Choices = @(
+                    (S 'choice' 'TileInfo' 'Play time and last launch' 'A line on the tile, at the top left unless moved in the preview of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.' @{ Choices = @(
                                 @('Hover', 'On the highlighted tile'), @('Always', 'Always'), @('Never', 'Never')) }),
                     (Num 'InfoFontSize' 'Play time font size' 6 30 1 'pt'),
-                    (S 'bool' 'TrackPlaytime' 'Measure play time outside Steam' 'The background helper looks for the game a tile starts and counts how long it runs.')
+                    (S 'bool' 'TrackPlaytime' 'Measure play time outside Steam' 'The background helper looks for the game a tile starts and counts how long it runs.'),
+                    (S 'bool' 'GameUpdates' 'Steam updates waiting' 'Steam games with an update to download say so on the play time line, with its size and when Steam scheduled it.')
                 ) }
             @{ Title = 'Tiles'; Items = @(
                     (S 'color' 'TileColor' 'Default tile colour'),
                     (Num 'TileRadius' 'Rounded corners' 0 60 1 'px' 'Radius of the corners of the tiles and of the highlight. 0 = square.'),
+                    (S 'bool' 'EdgeFade' 'Fade at the edge of the grid' 'Tiles cut by the edge (e.g. a tall tile only partly on screen) fade into the background there, to show they go on.'),
                     (S 'bool' 'AutoTileColor' 'Colour from the logo' 'Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo.'),
                     (S 'bool' 'LogoGreyscale' 'Greyscale logos' 'They turn to colour under the mouse.')
                 ) }
@@ -375,7 +386,9 @@ $schema = @(
         Groups = @(
             @{ Title = 'Open and close'; Items = @(
                     (S 'combo' 'OpenHotKey' 'Open / close the launcher' 'Works everywhere, also while the launcher is hidden. Hold the modifiers, then press the key.'),
-                    (S 'key' 'CloseHotKey' 'Close' 'Closes the search first, if it is open.')
+                    (S 'key' 'CloseHotKey' 'Close' 'Closes the search first, if it is open.'),
+                    (S 'choice' 'TileKeysWhen' 'Tile hot keys' 'When the key combinations of the tiles (tile editor > Hot key) start them. Only with the launcher open, the keys stay free for other programs the rest of the time.' @{ Choices = @(
+                                @('Always', 'Always, also with the launcher closed'), @('Open', 'Only with the launcher open')) })
                 ) }
             @{ Title = 'Navigation'; Items = @(
                     (S 'bool' 'KeyboardNav' 'Keyboard navigation'),
@@ -484,12 +497,13 @@ $navTree = @(
 # Default values (as shipped), for "Restore default"
 $defaults = @{
     ScreenX = '#SCREENAREAX#'; ScreenY = '#SCREENAREAY#'; ScreenW = '#SCREENAREAWIDTH#'; ScreenH = '#SCREENAREAHEIGHT#'
+    TileKeysWhen = 'Always'; LauncherMode = 'Fullscreen'; WindowW = '60%'; WindowH = '70%'; DockSide = 'Left'; DockSize = '30%'; DockEdge = '1'; DockEdgeDelay = '300'
     NX = '4'; NY = '2'; ScrollDir = 'V'; ScrollStep = '1'; InfiniteScroll = '1'
     Gap = '18'; PadX = '40'; PadY = '24'; IconSize = '96'; LabelPad = '14'; ScrollBarSize = '4'
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'; ShowUnplayed = '1'; UnplayedCount = '24'
-    ShowPower = '1'; TrackPlaytime = '1'; GamepadSearch = 'Y'; DashInterval = '1000'
+    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; GamepadSearch = 'Y'; DashInterval = '1000'
     FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
     TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'
@@ -510,7 +524,7 @@ $defaults = @{
     ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps'
     ScanOnStart = '1'; SteamGridDBKey = ''
     CheckUpdates = '1'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
-    BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
+    BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; EdgeFade = '1'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
     AccentColor = '0,210,180,255'; ActiveCategoryColor = '0,210,180,70'; HoverCategoryColor = '255,255,255,20'
     TextColor = '240,240,245,255'; TextDimColor = '150,150,160,255'
     ScrollTrackColor = '255,255,255,25'; ScrollThumbColor = '0,210,180,200'
@@ -1085,7 +1099,7 @@ try {
 $win = [System.Windows.Markup.XamlReader]::Parse(@'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Raintile - Options" Width="1180" Height="800" MinWidth="960" MinHeight="580"
+        Title="Raintile - Options" Width="1300" Height="1100" MinWidth="960" MinHeight="580"
         WindowStartupLocation="CenterScreen" Background="{StaticResource Bg}" Foreground="{StaticResource TextBrush}"
         FontFamily="Segoe UI" FontSize="13" UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
   <Grid>
@@ -1114,7 +1128,7 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
       </Grid.RowDefinitions>
       <StackPanel Margin="36,24,36,14">
         <TextBlock x:Name="PageTitle" FontSize="24" FontWeight="SemiBold"/>
-        <TextBlock x:Name="PageDesc" Foreground="{StaticResource DimBrush}" Margin="0,5,0,0" TextWrapping="Wrap" MaxWidth="820" HorizontalAlignment="Left"/>
+        <TextBlock x:Name="PageDesc" Foreground="{StaticResource DimBrush}" Margin="0,5,0,0" TextWrapping="Wrap" HorizontalAlignment="Left"/>
       </StackPanel>
       <Grid x:Name="PageHost" Grid.Row="1"/>
       <Border Grid.Row="2" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="28,12">
@@ -1147,6 +1161,10 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
   </Grid>
 </Window>
 '@)
+# the tile editor wants room, but smaller screens get what they have
+$work = [System.Windows.SystemParameters]::WorkArea
+$win.Width = [Math]::Max($win.MinWidth, [Math]::Min($win.Width, $work.Width - 40))
+$win.Height = [Math]::Max($win.MinHeight, [Math]::Min($win.Height, $work.Height - 40))
 $win.FindName('Version').Text = $version
 Add-StartStep 'window'
 $nav = $win.FindName('Nav')
@@ -1780,9 +1798,8 @@ function New-SettingsPage($page) {
     $sv = New-Object System.Windows.Controls.ScrollViewer
     $sv.VerticalScrollBarVisibility = 'Auto'
     $sp = New-Panel
+    # as wide as the window: the rows stretch and their help text wraps less
     $sp.Margin = T 36 4 36 24
-    $sp.MaxWidth = 920
-    $sp.HorizontalAlignment = 'Left'
     $sv.Content = $sp
     $schemaKeys = Get-SchemaKeys
     foreach ($group in $page.Groups) {
@@ -2492,8 +2509,6 @@ function New-CategoryListPage {
     Set-Col $sv 1
     [void]$grid.Children.Add($sv)
     $side = New-Panel
-    $side.MaxWidth = 600
-    $side.HorizontalAlignment = 'Left'
     $sv.Content = $side
     $bar = New-Panel 'Horizontal'
     $bar.Margin = T 0 0 0 12
@@ -2652,8 +2667,6 @@ function New-CategoryPage {
     Set-Col $sv 1
     [void]$grid.Children.Add($sv)
     $details = New-Panel
-    $details.MaxWidth = 640
-    $details.HorizontalAlignment = 'Left'
     $sv.Content = $details
 
     # Imported game: read-only, can become a normal tile
@@ -3916,8 +3929,7 @@ function Install-Update {
     if (-not (Test-ReleaseUrl $info.Asset)) { Open-ReleasePage $info; return }
     $r = Show-Dialog 'Update Raintile' ("Download Raintile $($info.Latest) and open the Rainmeter installer?`r`n`r`n" +
         "Your settings, categories and images stay: they are in $Data, which the installer does not touch. " +
-        "In the installer keep the default options and press Install.`r`n`r`n" +
-        "This is still experimental: keep a copy of your data folder first.") @('Download and install', 'Cancel')
+        "In the installer keep the default options and press Install.") @('Download and install', 'Cancel')
     if ($r.Button -ne 'Download and install') { return }
     # a new folder of its own, and a name made here: nothing else can be
     # put in its place before it is opened
@@ -3951,10 +3963,6 @@ function Install-Update {
 function New-UpdateCard {
     $card = New-Card 'Updates' ''
     $f = $card.Child
-    $beta = New-Text ('Experimental: installing updates from here is still being tested and could cause problems. ' +
-        'Before installing, keep a copy of your data folder; if something goes wrong, the release page has the package to install by hand.') 12.5 (Res 'AccentBrush') -Wrap
-    $beta.Margin = T 0 0 0 6
-    [void](Add-To $f $beta)
     foreach ($row in @(@('Installed', 'Installed'), @('Latest', 'Latest version'))) {
         $v = New-Text '' 13 -Wrap
         $v.MaxWidth = 460
@@ -4000,9 +4008,8 @@ function New-InfoPage {
     $sv = New-Object System.Windows.Controls.ScrollViewer
     $sv.VerticalScrollBarVisibility = 'Auto'
     $sp = New-Panel
+    # as wide as the window: the rows stretch and their help text wraps less
     $sp.Margin = T 36 4 36 24
-    $sp.MaxWidth = 920
-    $sp.HorizontalAlignment = 'Left'
     $sv.Content = $sp
 
     $card = New-Card '' ''

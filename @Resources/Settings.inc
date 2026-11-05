@@ -1,11 +1,29 @@
 [Variables]
 ; --- Screen ---------------------------------------------------------------------
-; The launcher covers the whole screen. To keep the taskbar free use WORKAREA
-; instead of SCREENAREA; for another monitor add @N (e.g. #SCREENAREAWIDTH@2#).
+; The area of the launcher: the whole screen. To keep the taskbar free use
+; WORKAREA instead of SCREENAREA; for another monitor add @N (e.g.
+; #SCREENAREAWIDTH@2#).
 ScreenX=#SCREENAREAX#
 ScreenY=#SCREENAREAY#
 ScreenW=#SCREENAREAWIDTH#
 ScreenH=#SCREENAREAHEIGHT#
+; How the launcher shows on that area:
+;   Fullscreen  all of it
+;   Window      a window of WindowW x WindowH: drag an empty part of it to
+;               move it; it stays open when you click elsewhere
+;   Dock        on a side of the screen (DockSide: Left, Right, Top, Bottom),
+;               DockSize wide (or tall): it comes in from that side
+; Sizes in pixels or % of the area.
+LauncherMode=Fullscreen
+WindowW=60%
+WindowH=70%
+DockSide=Left
+DockSize=30%
+; Docked: 1 = it also opens when the mouse rests on that edge of the screen
+; for DockEdgeDelay ms (not while a full-screen program, e.g. a game, is in
+; front)
+DockEdge=1
+DockEdgeDelay=300
 
 ; --- Grid -----------------------------------------------------------------------
 ; Default visible tiles: NX columns x NY rows. Each category can have its own
@@ -89,6 +107,10 @@ ShowPower=1
 ; Key that closes the launcher (HotKey plugin), registered only while the
 ; launcher is visible. Empty = no key.
 CloseHotKey=ESCAPE
+; Hot keys of the tiles (HotKey= in the category files): Always = they start
+; their tile also while the launcher is closed; Open = only while it is open
+; (the keys stay free for other programs the rest of the time)
+TileKeysWhen=Always
 ; Keyboard navigation, only active while the launcher is visible (HotKey
 ; plugin): 1 = on, 0 = off. Each action has two keys (HotKey plugin names:
 ; letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
@@ -271,15 +293,20 @@ DebugLog=0
 ; --- Appearance -----------------------------------------------------------------
 ; 1 = show the tile label (Label= in the category file), 0 = hide it
 ShowLabels=1
-; Line at the top left of the tiles with the play time (Steam games) and the
-; last launch: Hover (only on the highlighted tile), Always or Never. Tiles
-; of games no longer installed always say so.
+; Line on the tiles with the play time (Steam games) and the last launch, at
+; the top left unless moved (InfoPos= of the tile or the category): Hover
+; (only on the highlighted tile), Always or Never. Tiles of games no longer
+; installed always say so.
 TileInfo=Hover
 InfoFontSize=10
 ; 1 = measure the play time of the tiles that are not Steam games: the
 ; background helper looks for the game started by the tile and counts how
 ; long it runs (TimePlayed.txt in the data folder)
 TrackPlaytime=1
+; 1 = Steam games with an update waiting say so on the TileInfo line, in place
+; of the play time: "Update 5.4 GB - Sat 06:27" (size and time Steam
+; scheduled it), read from Steam's appmanifest files
+GameUpdates=1
 FontFace=Segoe UI
 MenuFontSize=12
 LabelFontSize=14
@@ -289,6 +316,8 @@ BgColor=8,8,12,200
 TileColor=36,36,44,255
 ; Rounded corners of the tiles, in pixels (0 = square)
 TileRadius=0
+; 1 = a fade over the tiles cut by the edge of the grid (they go on beyond it)
+EdgeFade=1
 ; 1 = tiles with a logo but no background image (and no Color= in their
 ; category file) get a dark colour taken from the logo, computed once in the
 ; background; 0 = they use TileColor

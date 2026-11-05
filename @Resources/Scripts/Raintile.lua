@@ -73,6 +73,7 @@ local tileKeys = {}  -- tile hot keys: { { key, id } }, in the order of their me
 local widgets = {}   -- Dashboard widget tiles, in the order of their meters (t.widget.idx)
 local updateDashState -- defined with the Dashboard widgets
 local D = {}          -- functions and tables of the Dashboard widgets
+local M = {}          -- launcher modes: window, docked
 local renderOsk, oskMove -- defined with the keyboard (Search section)
 
 local function matchesFilter(t)
@@ -159,7 +160,9 @@ local SIZE_AXIS = {
 local function size(raw, axis)
 	local pct = trim(raw or ''):match('^([%d%.]+)%s*%%$')
 	if pct then
-		local total = axis == 'W' and V.ScreenW or V.ScreenH
+		-- of the monitor (MonitorW/H), also when the launcher is a window
+		-- or docked on a side
+		local total = axis == 'W' and (V.MonW or V.ScreenW) or (V.MonH or V.ScreenH)
 		return math.floor((toNumber(pct) or 0) * total / 100 + 0.5)
 	end
 	return toNumber(raw)
@@ -340,8 +343,9 @@ local function thumbnail(src, tile, field, dir, name, w, h, mode, rect)
 	return src
 end
 
--- Framing of a background (tile keys): BgFocus=X,Y is the point of the image,
--- in % of its width and height, kept at the centre of the tile; BgZoom (1-4)
+-- Framing of a background (tile keys, or the category's): BgFocus=X,Y is the
+-- point of the image, in % of its width and height, kept at the centre of the
+-- tile; BgZoom (1-4)
 -- enlarges the image beyond filling the tile. Both are relative, so the
 -- framing holds at any resolution and grid. Returns the part of the original
 -- the tile works with, {x, y, w, h} in pixels: the window the tile shows,
@@ -374,8 +378,8 @@ local function frameRect(path, focus, zoom, tw, th)
 	return r
 end
 
--- Placement of a logo (tile keys), independent of the background framing:
--- LogoPos=X,Y is where the centre of the logo goes, in % of the tile's width
+-- Placement of a logo (tile keys, or the category's), independent of the
+-- background framing: LogoPos=X,Y is where the centre of the logo goes, in % of the tile's width
 -- and height; LogoScale (0.25-3) multiplies the category's logo size. Both are
 -- relative, so they hold at any resolution and grid. Sets t.logoX, t.logoY
 -- (0-1), t.logoScale and, for a moved logo, t.logoRatio (width / height of
@@ -406,6 +410,16 @@ local function logoCentre(t, size)
 		return math.min(total - n / 2, math.max(n / 2, p * total))
 	end
 	return place(t.logoX, vw, V.TileW), place(t.logoY, vh, V.TileH)
+end
+
+-- Placement of the play time line (TileInfo): InfoPos=X,Y is where it goes in
+-- the room the line leaves in the tile, in %: 0,0 top left (the default),
+-- 100,0 top right, 50,50 centre, 100,100 bottom right. Its width changes with
+-- the text, so this keeps it inside the tile whatever it says.
+local function infoPlacement(t, pos)
+	local x, y = trim(pos or ''):match('^([%d%.]+)%s*,%s*([%d%.]+)$')
+	t.infoX = math.min(100, math.max(0, tonumber(x) or 0)) / 100
+	t.infoY = math.min(100, math.max(0, tonumber(y) or 0)) / 100
 end
 
 -- Automatic tile colour (AutoTileColor=1): a tile without a background image
@@ -558,6 +572,12 @@ local function loadCategory(file)
 	-- colour and image), when a tile has no Color= / Opacity= of its own
 	c.tileColor = parseColor(catKeys.tilecolor)
 	c.tileOpacity = tonumber(trim(catKeys.tileopacity or ''))
+	-- framing and logo placement of its tiles (same keys as a tile), when a
+	-- tile has none of its own: one setting moves or resets them all
+	local function own(v) v = trim(v or '') if v ~= '' then return v end end
+	c.bgFocus, c.bgZoom = own(catKeys.bgfocus), own(catKeys.bgzoom)
+	c.logoPos, c.logoScale = own(catKeys.logopos), own(catKeys.logoscale)
+	c.infoPos = own(catKeys.infopos)
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -592,10 +612,11 @@ local function loadCategory(file)
 			t.rows = math.max(1, math.min(c.ny, tonumber(sh) or 1))
 			if t.cols > 1 or t.rows > 1 then c.spans = true end
 			local pw, ph = t.cols * (c.tw + V.Gap) - V.Gap, t.rows * (c.th + V.Gap) - V.Gap
-			t.frame = frameRect(t.background, k.bgfocus, k.bgzoom, pw, ph)
+			t.frame = frameRect(t.background, own(k.bgfocus) or c.bgFocus, own(k.bgzoom) or c.bgZoom, pw, ph)
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
 				pw, ph, V.BgThumbMode, t.frame)
-			logoPlacement(t, k.logopos, k.logoscale)
+			logoPlacement(t, own(k.logopos) or c.logoPos, own(k.logoscale) or c.logoScale)
+			infoPlacement(t, own(k.infopos) or c.infoPos)
 			-- logo thumbnails are made at the largest size (zoom included)
 			local logoMax = math.floor(c.iconSize * t.logoScale * V.HoverLogoScale + 0.5)
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
@@ -731,6 +752,51 @@ local function readPlaytime()
 	end
 end
 
+-- Steam games with an update waiting: GameUpdates.ps1 lists them in
+-- Generated\GameUpdates.txt ("<appid>|<bytes to download>|<bytes downloaded>|
+-- <scheduled, unix time or 0>")
+local gameUpdates = {} -- steam app id -> { size, done, when }
+
+local function readGameUpdates()
+	gameUpdates = {}
+	for _, line in ipairs(readLines(resources .. 'Generated\\GameUpdates.txt')) do
+		local id, size, done, when = line:match('^(%d+)|(%d+)|(%d+)|(%d+)$')
+		if id then gameUpdates[id] = { size = tonumber(size), done = tonumber(done), when = tonumber(when) } end
+	end
+end
+
+-- Line of a Steam tile with an update waiting (GameUpdates), as Steam's
+-- downloads page: "Update 5.4 GB - Sat 06:27" (GB of 1024 MB, like Steam),
+-- "Updating 40%" while it downloads
+local function updateInfo(t)
+	local u = V.GameUpdates and t.steamId and gameUpdates[t.steamId]
+	if not u then return nil end
+	if u.done > 0 and u.done < u.size then
+		return 'Updating ' .. math.floor(u.done * 100 / u.size) .. '%'
+	end
+	local text = 'Update'
+	if u.size >= 1024 ^ 3 then
+		text = text .. string.format(' %.1f GB', u.size / 1024 ^ 3):gsub('%.0 GB$', ' GB')
+	elseif u.size > 0 then
+		text = text .. ' ' .. math.max(1, math.floor(u.size / 1024 ^ 2 + 0.5)) .. ' MB'
+	end
+	local now = os.time()
+	if u.when > now then
+		-- days between the two midnights (rounded: a day can last 23 or 25 h)
+		local today, that = os.date('*t', now), os.date('*t', u.when)
+		today.hour, today.min, today.sec = 0, 0, 0
+		that.hour, that.min, that.sec = 0, 0, 0
+		local days = math.floor((os.time(that) - os.time(today)) / 86400 + 0.5)
+		local day
+		if days == 0 then day = 'today'
+		elseif days == 1 then day = 'tomorrow'
+		elseif days < 7 then day = os.date('%a', u.when)
+		else day = os.date('%d %b', u.when) end
+		text = text .. ' - ' .. day .. ' ' .. os.date('%H:%M', u.when)
+	end
+	return text
+end
+
 -- Play time of the other tiles (not Steam), measured by the helper while the
 -- game it started was running: TimePlayed.txt in the data folder,
 -- "<file>|<tile name>|<minutes>|<last played, unix time>"
@@ -754,9 +820,13 @@ local function ago(time)
 	return os.date('%d %b %Y', time)
 end
 
--- Line shown on the tile (TileInfo): play time and last launch
+-- Line shown on the tile (TileInfo): play time and last launch, or a Steam
+-- update waiting. The second value is true for the line shown whatever
+-- TileInfo says: "Not installed".
 local function tileInfo(t)
-	if t.missing then return 'Not installed' end
+	if t.missing then return 'Not installed', true end
+	local update = updateInfo(t)
+	if update then return update end
 	-- Steam's own play time, otherwise the one measured by the helper
 	local p = t.steamId and playtime[t.steamId] or timePlayed[tileId(t)]
 	local u = usage[tileId(t)]
@@ -868,6 +938,7 @@ local function loadCategories(files)
 		readUsage()
 		readMissing()
 		readPlaytime()
+		readGameUpdates()
 		readTimePlayed()
 		fillVirtual()
 	end
@@ -918,6 +989,17 @@ local function loadCategories(files)
 					widgets[#widgets + 1] = t
 					t.widget.idx = #widgets
 					t.widget.cat = c
+					-- a custom widget gets its container only with a file that has meters
+					t.widget.boxed = false
+					if t.widget.kind == 'custom' then
+						local path = D.customWidgetFile(t.widget.param)
+						local f = path and io.open(path, 'rb')
+						if f then
+							local text = f:read('*a')
+							f:close()
+							t.widget.boxed = ('\n' .. text):lower():find('\n%s*meter%s*=') ~= nil
+						end
+					end
 				end
 			end
 		end
@@ -966,6 +1048,7 @@ end
 local function signature()
 	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
 	for _, chip in ipairs(filter.chips) do s[#s + 1] = 'chip:' .. chip.label end
+	if V.TileKeysOpen then s[#s + 1] = 'keys:open' end
 	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
 	for _, t in ipairs(widgets) do
 		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param .. ':' .. t.cols .. 'x' .. t.rows
@@ -1048,7 +1131,9 @@ local function writeGrid(path, sig, files)
 	end
 
 	-- Tile hot keys (HotKey plugin): active also while the launcher is hidden
-	for i, k in ipairs(tileKeys) do
+	-- (TileKeysWhen=Always); otherwise in the TileKeys mini-skin, only while
+	-- it is open (writeTileKeys)
+	for i, k in ipairs(V.TileKeysOpen and {} or tileKeys) do
 		w('[MeasureTileKey' .. i .. ']')
 		w('Measure=Plugin')
 		w('Plugin=HotKey')
@@ -1127,15 +1212,19 @@ local function writeGrid(path, sig, files)
 			w('')
 		end
 		-- a custom widget: its sections, in a container over the tile
-		if t.widget.kind == 'custom' then
-			w('[CW' .. i .. 'Box]')
-			w('Meter=Shape')
-			w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
-			w('Hidden=1')
-			w('')
+		-- (only when its file is there: a container without meters would be
+		-- drawn as it is, a white box)
+		if t.widget.boxed then
 			local cc = t.widget.cat
 			local text = D.customWidgetText(t, i, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
-			if text then w(text) end
+			if text and text:find('Container=CW' .. i .. 'Box', 1, true) then
+				w('[CW' .. i .. 'Box]')
+				w('Meter=Shape')
+				w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
+				w('Hidden=1')
+				w('')
+				w(text)
+			end
 		end
 	end
 
@@ -1164,6 +1253,23 @@ local function show(meter, visible)
 		cache[key] = visible
 		SKIN:Bang(visible and '!ShowMeter' or '!HideMeter', meter)
 	end
+end
+
+-- Size of the play time line (with its padding) for a text: the meter is
+-- updated and measured once per text, as the clock is; the font does not
+-- change until a refresh, which starts over. Shown first: a hidden meter
+-- measures 0 (nothing is drawn before the end of the frame anyway).
+local infoSizes = {}
+local function infoSize(meter, text)
+	local s = infoSizes[text]
+	if not s then
+		show(meter, true)
+		SKIN:Bang('!UpdateMeter', meter)
+		local m = SKIN:GetMeter(meter)
+		s = { m and m:GetW() or 0, m and m:GetH() or 0 }
+		if s[1] > 0 then infoSizes[text] = s end
+	end
+	return s[1], s[2]
 end
 
 -- Text in the middle of an empty grid: no search results, no favorites yet,
@@ -1449,6 +1555,16 @@ local function sideIndex(kind)
 end
 
 local function renderSide()
+	if M.compact then
+		for _, kind in ipairs(SIDE_KINDS) do
+			local name = SIDE_METERS[kind]
+			show('SidePill' .. name, false)
+			show('SideIcon' .. name, false)
+			show('SideHit' .. name, false)
+		end
+		show('SideLabel', false)
+		return
+	end
 	local size = math.floor(V.MenuH)
 	local gap = math.max(8, math.floor(num('MenuGap', 6)))
 	local x = side.x0 or math.floor(V.PadX)
@@ -1562,6 +1678,130 @@ local function renderCategories()
 	end
 end
 
+-- Compact menu ---------------------------------------------------------------
+-- When the categories do not all fit between the left part (clock, buttons,
+-- search) and the buttons on the right, e.g. in a narrow window or a launcher
+-- docked on a side: the left part, the power button and the gear give way to
+-- the "more" button (MeterMore), which opens them as a list, and the categories
+-- stay in a strip between it and the close button (the MenuClip container),
+-- scrolled with the wheel and faded at the edges where more of them are.
+M.compact, M.scroll, M.catL, M.catR, M.total = false, 0, 0, 0, 0
+
+function M.menuEnds()
+	local first, last
+	for _, c in ipairs(cats) do
+		if c.l then first = first or c last = c end
+	end
+	return first, last
+end
+
+-- Puts the categories at the scroll position and shapes the strip
+function M.applyScroll()
+	local first = M.menuEnds()
+	if not first then return end
+	local pad = V.MenuItemPad
+	local width = M.catR - M.catL
+	local maxScroll = math.max(0, M.total - width)
+	M.scroll = math.min(math.max(0, M.scroll), maxScroll)
+	local shift = (M.catL + pad - M.scroll) - first.l
+	if shift ~= 0 then
+		set(first.parts[1], 'X', tostring(first.l + shift))
+		for i, c in ipairs(cats) do
+			if c.l then
+				c.l, c.r = c.l + shift, c.r + shift
+				rect('CatHit' .. i, c.l - pad, V.PadY, c.r - c.l + 2 * pad, V.MenuH, '0,0,0,1')
+			end
+		end
+		if pillPos then pillPos.x = pillPos.x + shift end
+	end
+	-- faded where more categories are hidden
+	local f = math.min(0.25, 28 / math.max(1, width))
+	local a0, a1 = M.scroll > 0 and 0 or 255, M.scroll < maxScroll and 0 or 255
+	set('MenuClip', 'MenuFade', string.format('180 | 0,0,0,%d ; 0.0 | 0,0,0,255 ; %.3f | 0,0,0,255 ; %.3f | 0,0,0,%d ; 1.0', a0, f, 1 - f, a1))
+	set('MenuClip', 'Shape', string.format('Rectangle %d,0,%d,%d | Fill LinearGradient MenuFade | StrokeWidth 0',
+		M.catL, width, math.floor(V.PadY + V.MenuH + 2)))
+end
+
+-- After the menu is measured and centred (layoutMenu, layoutLeft): compact
+-- or not
+function M.layoutCompact()
+	local first, last = M.menuEnds()
+	if not first then return end
+	local pad = V.MenuItemPad
+	local gap = math.max(8, math.floor(num('MenuGap', 6)))
+	M.total = last.r - first.l + 2 * pad
+	local right = SKIN:GetMeter(V.ShowPower and 'MeterPower' or 'MeterOptions')
+	local leftEnd = (side.searchX or V.PadX) + V.MenuH + gap
+	local rightStart = right and right:GetX() - gap or V.ScreenW - V.PadX
+	M.compact = first.l - pad < leftEnd or first.l - pad + M.total > rightStart
+	show('MeterMore', M.compact)
+	show('MeterOptions', not M.compact)
+	show('MeterPower', V.ShowPower and not M.compact)
+	if not M.compact then
+		set('MenuClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
+			math.floor(V.ScreenW), math.floor(V.PadY + V.MenuH + 2)))
+		M.drawStrip()
+		return
+	end
+	show('MeterClock', false)
+	show('MeterDate', false)
+	SKIN:Bang('!UpdateMeter', 'MeterMore')
+	local more, close = SKIN:GetMeter('MeterMore'), SKIN:GetMeter('MeterClose')
+	M.catL = math.floor(more:GetX() + more:GetW() + gap)
+	M.catR = math.floor(close:GetX() - gap)
+	-- the dot of the gear goes on the "more" button; the power list opens below it
+	set('MeterNotice', 'X', tostring(math.floor(more:GetX() + more:GetW() - 15)))
+	set('MeterPowerItem1', 'X', tostring(math.floor(more:GetX())))
+	M.applyScroll()
+	M.reveal()
+	M.drawStrip()
+end
+
+-- Background of the strip: lit while the mouse is over it or over one of
+-- its categories (almost clear otherwise: it still takes the mouse)
+M.stripHit = false
+function M.drawStrip()
+	local on = M.compact and not typing and searchCat == nil
+	if on then
+		local lit = M.stripHit or hovered ~= 0
+		rect('MenuStripBg', M.catL, math.floor(V.PadY), M.catR - M.catL, math.floor(V.MenuH),
+			lit and '255,255,255,18' or '255,255,255,1')
+	end
+	show('MenuStripBg', on)
+end
+
+function StripHover(on)
+	if not ready then return end
+	M.stripHit = on == 1
+	M.drawStrip()
+	SKIN:Bang('!UpdateMeter', 'MenuStripBg')
+	SKIN:Bang('!Redraw')
+end
+
+-- The active category fully in the strip
+function M.reveal()
+	if not M.compact then return end
+	local c = cats[active]
+	if not c or not c.l then return end
+	local pad = V.MenuItemPad
+	local left, right = c.l - pad - M.catL, c.r + pad - M.catL
+	if left < 0 then M.scroll = M.scroll + left
+	elseif right > M.catR - M.catL then M.scroll = M.scroll + right - (M.catR - M.catL) end
+	M.applyScroll()
+end
+
+-- The wheel on the menu: the categories of the compact menu, otherwise the grid
+function MenuScroll(delta)
+	if not ready then return end
+	if not M.compact then Scroll(delta) return end
+	M.scroll = M.scroll + delta * math.max(40, math.floor(V.MenuH * 1.5))
+	M.applyScroll()
+	renderCategories()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!UpdateMeter', 'MenuClip')
+	SKIN:Bang('!Redraw')
+end
+
 -- Filter bar ---------------------------------------------------------------------
 -- Only with the search results: the grid (GridClip) moves down to make room
 -- for it, and goes back when the search ends.
@@ -1569,8 +1809,9 @@ local function setGridArea(withFilter)
 	local fs = withFilter and filterSpace() or 0
 	V.GridY = V.GridTop + fs
 	set('GridClip', 'Y', tostring(math.floor(V.GridY)))
-	set('GridClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
-		math.floor(V.AreaW), math.floor(V.AreaH - fs)))
+	-- visible part of the grid (also the edge of the fades)
+	V.ClipW, V.ClipH = math.floor(V.AreaW), math.floor(V.AreaH - fs)
+	set('GridClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', V.ClipW, V.ClipH))
 	for i = 1, #filter.chips do show('FilterText' .. i, withFilter) end
 	if fs == 0 then
 		for i = 1, #filter.chips do show('FilterPill' .. i, false) end
@@ -1942,7 +2183,7 @@ function D.placeWidget(t, x, y, alpha)
 			dash.skinsWanted[config] = { file = file, x = math.floor(SKIN:GetX() + V.PadX + x + V.LabelPad),
 				y = math.floor(SKIN:GetY() + V.GridY + y + V.LabelPad) }
 		end
-	elseif w.kind == 'custom' then
+	elseif w.kind == 'custom' and w.boxed then
 		set('CW' .. i .. 'Box', 'X', tostring(math.floor(V.PadX + x)))
 		set('CW' .. i .. 'Box', 'Y', tostring(math.floor(V.GridY + y)))
 		set('CW' .. i .. 'Box', 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 255,255,255,255 | StrokeWidth 0', V.TileW, V.TileH,
@@ -2037,6 +2278,13 @@ function D.fillWidget(t)
 	text(m .. 'Title', title:upper())
 	w.parts = { Title = true }
 	-- a skin or a custom widget draws itself: only its title, if it has one
+	if w.kind == 'custom' and not w.boxed then
+		-- its file is missing (or has no meters): say where it goes
+		text(m .. 'Value', 'Widget not found')
+		text(m .. 'Sub', 'Widgets\\' .. w.param .. '\\' .. w.param .. '.ini in the data folder')
+		w.parts.Value, w.parts.Sub = true, true
+		return
+	end
 	if w.kind == 'skin' or w.kind == 'custom' then
 		w.parts.Title = w.title ~= nil
 		return
@@ -2190,7 +2438,7 @@ local GREY_ROWS = { '0.3;0.3;0.3;0;0', '0.59;0.59;0.59;0;0', '0.11;0.11;0.11;0;0
 -- Rounded corners (TileRadius > 0): the grid container (GridClip) takes the
 -- shape of the visible tiles, rounded rectangles, within the grid area: what
 -- is in it (images, logos, texts, highlight, widgets) is cut to them.
-local clipShapes = 0
+M.clipShapes = 0
 local function roundClip(rects)
 	if V.TileRadius <= 0 then return end
 	local n = 0
@@ -2205,13 +2453,41 @@ local function roundClip(rects)
 		parts[#parts + 1] = 'Intersect Shape'
 		set('GridClip', 'Shape' .. (n + 2), table.concat(parts, ' | '))
 	end
-	for k = (n > 0 and n + 3 or 2), clipShapes do set('GridClip', 'Shape' .. k, '') end
-	clipShapes = n > 0 and n + 2 or 0
+	for k = (n > 0 and n + 3 or 2), M.clipShapes do set('GridClip', 'Shape' .. k, '') end
+	M.clipShapes = n > 0 and n + 2 or 0
+end
+
+-- Fade over the tiles cut by the edge of the grid along the scroll (EdgeFade):
+-- a gradient to the launcher background, at the edge they cross. edges =
+-- { { x, y, w, h, side } } with side 'end' (bottom / right) or 'start'.
+-- Its strength (e[6], 0-1) grows with how much of the tile is cut, so that
+-- while the grid scrolls it comes and goes smoothly. Each shape has its own
+-- gradient (G<n>); Rainmeter turns the angle the other way: 0 runs from the
+-- right.
+M.FADE_ANGLES = { ['H end'] = 180, ['H start'] = 0, ['V end'] = 270, ['V start'] = 90 }
+M.fadeShapes = 0
+-- shown strength of each band ("end 2" -> { k, len }), going towards the
+-- one wanted a step per frame; fadeMoving keeps the animation going
+local fadeShown, fadeMoving = {}, false
+local function edgeFade(edges)
+	if not V.EdgeFade then return end
+	local n = 0
+	for _, e in ipairs(edges) do
+		n = n + 1
+		local angle = M.FADE_ANGLES[(V.Horizontal and 'H ' or 'V ') .. e[5]]
+		local a = math.floor(235 * e[6] + 0.5)
+		set('GridFade', 'G' .. n, string.format('%d | %s,0 ; 0.0 | %s,%d ; 0.9 | %s,%d ; 1.0', angle, V.FadeRGB, V.FadeRGB, a, V.FadeRGB, a))
+		set('GridFade', n == 1 and 'Shape' or ('Shape' .. n), string.format('Rectangle %d,%d,%d,%d | Fill LinearGradient G%d | StrokeWidth 0',
+			e[1], e[2], e[3], e[4], n))
+	end
+	for k = math.max(2, n + 1), M.fadeShapes do set('GridFade', 'Shape' .. k, '') end
+	M.fadeShapes = n
+	show('GridFade', n > 0)
 end
 
 local function placeSlots()
 	local frac = pos - base
-	local rects = {}
+	local rects, cutEnd, cutStart = {}, {}, {}
 	dash.shown = {}
 	dash.skinsWanted = {}
 	dash.customShown = {}
@@ -2287,9 +2563,10 @@ local function placeSlots()
 			end
 			-- play time / last launch: always, only on the highlighted tile
 			-- (fading with the highlight) or never; "Not installed" always
-			local infoText, infoAlpha = nil, f
-			if t.missing or V.TileInfo ~= 'never' then infoText = tileInfo(t) end
-			if infoText and not t.missing and V.TileInfo == 'hover' then
+			local infoAlpha = f
+			local infoText, sticky = tileInfo(t)
+			if not sticky and V.TileInfo == 'never' then infoText = nil end
+			if infoText and not sticky and V.TileInfo == 'hover' then
 				local idx = indexAt(slot)
 				if idx == hover.idx and (hover.on or hover.a > 0) then
 					infoAlpha = f * (V.TileHover and hover.a or (hover.on and 1 or 0))
@@ -2299,8 +2576,15 @@ local function placeSlots()
 			end
 			if infoText and infoAlpha > 0.01 then
 				set(infoMeter, 'Text', infoText)
-				set(infoMeter, 'X', tostring(x + V.LabelPad))
-				set(infoMeter, 'Y', tostring(y + V.LabelPad))
+				-- InfoPos: in the room the line leaves inside the margins
+				local ix, iy = x + V.LabelPad, y + V.LabelPad
+				if (t.infoX > 0 or t.infoY > 0) and not t.widget then
+					local iw, ih = infoSize(infoMeter, infoText)
+					ix = ix + math.floor(t.infoX * math.max(0, V.TileW - 2 * V.LabelPad - iw) + 0.5)
+					iy = iy + math.floor(t.infoY * math.max(0, V.TileH - 2 * V.LabelPad - ih) + 0.5)
+				end
+				set(infoMeter, 'X', tostring(ix))
+				set(infoMeter, 'Y', tostring(iy))
 				set(infoMeter, 'FontColor', fade(V.TextColor, infoAlpha))
 				set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
 			end
@@ -2310,6 +2594,29 @@ local function placeSlots()
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
 			if t.widget then D.placeWidget(t, x, y, f) end
 			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
+			-- cut by the edge: how much, for each line across the scroll (a
+			-- row, or a column when the grid scrolls vertically) it covers
+			if V.EdgeFade and not appear then
+				local along, size, step = x, V.TileW, V.StepY
+				local across, span, edge = y, V.TileH, V.ClipW or V.GridW
+				if not V.Horizontal then
+					along, size, step = y, V.TileH, V.StepX
+					across, span, edge = x, V.TileW, V.ClipH or V.GridH
+				end
+				local first = math.floor(across / step + 0.5)
+				local last = math.floor((across + span + V.Gap) / step + 0.5) - 1
+				for line = math.max(0, first), last do
+					-- { how much is cut, how much is still visible }
+					if along < edge and along + size > edge then
+						local c = cutEnd[line]
+						if not c or along + size - edge > c[1] then cutEnd[line] = { along + size - edge, edge - along } end
+					end
+					if along < 0 and along + size > 0 then
+						local c = cutStart[line]
+						if not c or -along > c[1] then cutStart[line] = { -along, along + size } end
+					end
+				end
+			end
 			V.TileW, V.TileH = catW, catH
 		else
 			show(tile, false)
@@ -2319,13 +2626,55 @@ local function placeSlots()
 		end
 	end
 	roundClip(rects)
+	-- one fade per line, as strong as its tiles are cut: lines next to each
+	-- other touch, so a tile of more cells is covered all along
+	local edges = {}
+	fadeMoving = false
+	if V.EdgeFade then
+		local lines = V.Horizontal and V.NY or V.NX
+		local step = V.Horizontal and V.StepY or V.StepX
+		local full = V.Horizontal and (V.ClipH or V.GridH) or (V.ClipW or V.GridW)
+		local edge = V.Horizontal and (V.ClipW or V.GridW) or (V.ClipH or V.GridH)
+		local fade = math.floor(math.min((V.Horizontal and V.StepX or V.StepY) * 0.28, 110))
+		for line = 0, lines - 1 do
+			local a = line * step
+			local b = line == lines - 1 and full or (line + 1) * step
+			for _, side in ipairs({ 'end', 'start' }) do
+				local cut = (side == 'end' and cutEnd or cutStart)[line]
+				local want = cut and math.min(1, cut[1] / fade) or 0
+				-- fades in and out: a step towards the strength wanted
+				local key = side .. ' ' .. line
+				local shown = fadeShown[key] or { 0, 0 }
+				local k = shown[1] + (want - shown[1]) * V.AnimSmooth
+				if math.abs(want - k) < 0.02 then k = want else fadeMoving = true end
+				if cut then shown[2] = cut[2] end
+				fadeShown[key] = k > 0 and { k, shown[2] } or nil
+				if k > 0.02 and shown[2] > 0 then
+					cut = { 0, shown[2] }
+					-- only over the visible part of the cut tile (not on the next
+					-- one), and a few pixels past the edge (cut off by the grid):
+					-- no light line
+					local len = math.max(1, math.floor(math.min(fade, cut[2])))
+					local p = side == 'end' and edge - len or -4
+					if V.Horizontal then
+						edges[#edges + 1] = { p, a, len + 4, b - a, side, k }
+					else
+						edges[#edges + 1] = { a, p, b - a, len + 4, side, k }
+					end
+				end
+			end
+		end
+	end
+	edgeFade(edges)
+	-- a fade still on its way with the animation clock stopped: start it
+	if fadeMoving and not ticking and ready and not launching then startTicker() end
 	-- widgets not on screen (another category, scrolled away)
 	for _, t in ipairs(widgets) do
 		local n = t.widget.idx
 		if not dash.shown[n] then
 			for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List', 'Bar', 'Graph' }) do show('W' .. n .. part, false) end
 		end
-		if t.widget.kind == 'custom' and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
+		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
 end
 
@@ -2368,6 +2717,7 @@ local function render(menu)
 			SKIN:Bang('!UpdateMeterGroup', 'Menu')
 			layoutMenu()
 			layoutLeft()
+			M.layoutCompact()
 			updateSearchBar()
 		end
 		renderCategories()
@@ -2492,11 +2842,41 @@ local function stopTicker()
 end
 
 -- Advances every animation by one step; true if something is still moving.
+-- Docked launcher: it comes in from its side, sliding and fading in, and
+-- goes out the same way (M.dock.p 0 = out, 1 = in; M.dock.dir +1 / -1). The
+-- slide is short: with more monitors a long one would cross into the next.
+M.dock = { p = 1, dir = 0 }
+M.DOCK_FRAMES, M.DOCK_SLIDE = 12, 60
+function M.dockPlace(p)
+	local e = easeOut(math.min(1, math.max(0, p)))
+	local d = math.floor(M.DOCK_SLIDE * (1 - e) + 0.5)
+	local dx, dy = 0, 0
+	if V.DockSide == 'left' then dx = -d elseif V.DockSide == 'right' then dx = d
+	elseif V.DockSide == 'top' then dy = -d else dy = d end
+	SKIN:Bang('!Move', tostring(V.ScreenX + dx), tostring(V.ScreenY + dy))
+	SKIN:Bang('!SetTransparency', tostring(math.floor(255 * e + 0.5)))
+end
+function M.dockAnimated()
+	return V.Mode == 'dock' and V.AnimOpen
+end
+
 local function advance()
 	local busy, moving = false, false
 
+	if M.dock.dir ~= 0 then
+		M.dock.p = math.min(1, math.max(0, M.dock.p + M.dock.dir / M.DOCK_FRAMES))
+		M.dockPlace(M.dock.p)
+		if (M.dock.dir > 0 and M.dock.p >= 1) or (M.dock.dir < 0 and M.dock.p <= 0) then
+			local closing = M.dock.dir < 0
+			M.dock.dir = 0
+			if closing then M.finishHide() return false end
+		else
+			busy = true
+		end
+	end
+
 	pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth)
-	busy = busy or moving
+	busy = busy or moving or fadeMoving
 
 	if appear then
 		appear = appear + 1
@@ -2574,11 +2954,64 @@ local knownFiles = {}
 -- Generated\Sizes.inc is included after Settings.inc and takes precedence. It
 -- is only rewritten (and the skin refreshed) when something changes: a
 -- percentage or the screen resolution.
+-- Launcher mode ----------------------------------------------------------------
+-- LauncherMode=Fullscreen: the area of ScreenX/Y/W/H (a monitor, or its work
+-- area). Window: WindowW x WindowH, moved by dragging an empty part of it and
+-- left where it was put. Dock: DockSize wide (Left/Right) or tall (Top/Bottom)
+-- on the DockSide edge of that area. The rectangle of the launcher goes to
+-- Generated\Sizes.inc as ScreenX/Y/W/H, so the skin and the script use it as
+-- their "screen"; the area stays as MonitorX/Y/W/H, and percentages are of it.
+function M.evalSetting(raw, default)
+	raw = trim(SKIN:ReplaceVariables(raw or ''))
+	if raw == '' then return default end
+	local n = tonumber(raw)
+	if not n and raw:match('^%(') then n = tonumber(SKIN:ParseFormula(raw)) end
+	return n or default
+end
+
+function M.launcherRect(get)
+	local mx, my = M.evalSetting(get('screenx'), 0), M.evalSetting(get('screeny'), 0)
+	local mw, mh = M.evalSetting(get('screenw'), 1920), M.evalSetting(get('screenh'), 1080)
+	local function px(raw, total, default)
+		local p = trim(raw or ''):match('^([%d%.]+)%s*%%$')
+		if p then return math.floor((tonumber(p) or 0) * total / 100 + 0.5) end
+		return M.evalSetting(raw, default)
+	end
+	local mode = trim(get('launchermode') or ''):lower()
+	local x, y, w, h = mx, my, mw, mh
+	if mode == 'window' then
+		w = math.max(320, math.min(mw, px(get('windoww'), mw, math.floor(mw * 0.6))))
+		h = math.max(240, math.min(mh, px(get('windowh'), mh, math.floor(mh * 0.7))))
+		x, y = mx + math.floor((mw - w) / 2), my + math.floor((mh - h) / 2)
+	elseif mode == 'dock' then
+		local side = trim(get('dockside') or ''):lower()
+		if side == 'top' or side == 'bottom' then
+			h = math.max(160, math.min(mh, px(get('docksize'), mh, math.floor(mh * 0.35))))
+			if side == 'bottom' then y = my + mh - h end
+		else
+			w = math.max(240, math.min(mw, px(get('docksize'), mw, math.floor(mw * 0.3))))
+			if side == 'right' then x = mx + mw - w end
+		end
+	else
+		mode = 'fullscreen'
+	end
+	return mode, { math.floor(x), math.floor(y), math.floor(w), math.floor(h) }, { mx, my, mw, mh }
+end
+
 local function writeSizes()
-	local values = {}
+	local values, defaults = {}, {}
 	for _, s in ipairs(parseIni(data .. 'Settings.inc') or {}) do
 		for key, value in pairs(s.keys) do values[key] = value end -- lower-case keys
 	end
+	for _, s in ipairs(parseIni(resources .. 'Settings.inc') or {}) do
+		for key, value in pairs(s.keys) do defaults[key] = value end
+	end
+	local function get(key)
+		if values[key] ~= nil then return values[key] end
+		return defaults[key]
+	end
+	local _, rect, mon = M.launcherRect(get)
+	V.MonW, V.MonH = mon[3], mon[4] -- for the percentages below
 	local names = {}
 	for name in pairs(SIZE_AXIS) do names[#names + 1] = name end
 	table.sort(names)
@@ -2586,6 +3019,9 @@ local function writeSizes()
 		'; GENERATED BY Raintile.lua: percentage sizes and #hex colours from',
 		'; Settings.inc converted for Rainmeter. Do not edit by hand.',
 		'[Variables]',
+		-- the launcher (LauncherMode) and the area it is in
+		'ScreenX=' .. rect[1], 'ScreenY=' .. rect[2], 'ScreenW=' .. rect[3], 'ScreenH=' .. rect[4],
+		'MonitorX=' .. mon[1], 'MonitorY=' .. mon[2], 'MonitorW=' .. mon[3], 'MonitorH=' .. mon[4],
 	}
 	for _, name in ipairs(names) do
 		local raw = values[name:lower()]
@@ -2680,8 +3116,15 @@ function Initialize()
 	V.DefNY = math.max(1, math.floor(num('NY', 2)))
 	V.Horizontal = SKIN:GetVariable('ScrollDir', 'V'):upper():sub(1, 1) == 'H'
 	V.ScrollStep = math.max(1, math.floor(num('ScrollStep', 1)))
+	V.ScreenX, V.ScreenY = num('ScreenX', 0), num('ScreenY', 0)
 	V.ScreenW = num('ScreenW', 1920)
 	V.ScreenH = num('ScreenH', 1080) -- before the sizes: percentages need it
+	V.MonW, V.MonH = num('MonitorW', 0), num('MonitorH', 0)
+	if V.MonW <= 0 or V.MonH <= 0 then V.MonW, V.MonH = nil, nil end
+	local lmode = SKIN:GetVariable('LauncherMode', 'Fullscreen'):lower()
+	V.Mode = (lmode == 'window' or lmode == 'dock') and lmode or 'fullscreen'
+	local side = SKIN:GetVariable('DockSide', 'Left'):lower()
+	V.DockSide = (side == 'right' or side == 'top' or side == 'bottom') and side or 'left'
 	V.Gap = num('Gap', 16)
 	V.PadX = num('PadX', 40)
 	V.PadY = num('PadY', 24)
@@ -2719,10 +3162,14 @@ function Initialize()
 	V.ShowClock = num('ShowClock', 1) ~= 0
 	V.ShowPower = num('ShowPower', 1) ~= 0
 	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
+	V.GameUpdates = num('GameUpdates', 1) ~= 0
 	V.DashInterval = math.max(250, math.floor(num('DashInterval', 1000)))
 	V.ShowDate = num('ShowDate', 1) ~= 0
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
+	V.TileKeysConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\TileKeys'
+	-- tile hot keys: always (Always), or only while the launcher is open (Open)
+	V.TileKeysOpen = SKIN:GetVariable('TileKeysWhen', 'Always'):lower() == 'open'
 	V.TypingConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Typing'
 	V.FilterBar = num('FilterBar', 1) ~= 0
 	V.FilterStores = num('FilterStores', 1) ~= 0
@@ -2733,6 +3180,10 @@ function Initialize()
 	V.GridTop = V.GridY -- without the filter bar (see setGridArea)
 	V.LabelPad = num('LabelPad', 14)
 	V.TileRadius = math.max(0, math.floor(num('TileRadius', 0)))
+	V.EdgeFade = num('EdgeFade', 1) ~= 0
+	-- colour the fades go to: the launcher background
+	local fr, fg, fb = (parseColor(SKIN:GetVariable('BgColor', '')) or '8,8,12,200'):match('^(%d+),(%d+),(%d+)')
+	V.FadeRGB = (fr or 8) .. ',' .. (fg or 8) .. ',' .. (fb or 12)
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
 	V.AnimCategory = num('AnimCategory', 1) ~= 0
 	V.AnimHover = num('AnimHover', 1) ~= 0
@@ -2789,6 +3240,7 @@ function Initialize()
 	if writeSizes() then return end
 
 	loadCategories(knownFiles)
+	M.writeTileKeys()
 	if regenerate(knownFiles) then return end
 
 	active = math.min(math.max(1, math.floor(num('LastCategory', 1))), #cats)
@@ -2804,7 +3256,36 @@ end
 
 -- Turns on or off the mini-skin that registers the close key (Esc). When it
 -- is off the key is free again for other applications.
+-- Generated\TileKeys.inc: the measures of the TileKeys mini-skin
+-- (TileKeysWhen=Open), written when they change
+function M.writeTileKeys()
+	local o = { '; GENERATED BY Raintile.lua: tile hot keys for the TileKeys mini-skin.' }
+	for i, k in ipairs(V.TileKeysOpen and tileKeys or {}) do
+		o[#o + 1] = '[MeasureTileKey' .. i .. ']'
+		o[#o + 1] = 'Measure=Plugin'
+		o[#o + 1] = 'Plugin=HotKey'
+		o[#o + 1] = 'HotKey=' .. k.key
+		o[#o + 1] = 'KeyDownAction=[!CommandMeasure MeasureScript "TileHotKey(' .. i .. ')" "#ROOTCONFIG#"]'
+		o[#o + 1] = ''
+	end
+	local text = table.concat(o, '\n') .. '\n'
+	local path = resources .. 'Generated\\TileKeys.inc'
+	local f = io.open(path, 'rb')
+	local old = f and f:read('*a')
+	if f then f:close() end
+	if old == text then return end
+	f = io.open(path, 'wb')
+	if f then f:write(text) f:close() end
+end
+
 local function hotKey(on)
+	if V.TileKeysOpen and #tileKeys > 0 then
+		if on then
+			SKIN:Bang('!ActivateConfig', V.TileKeysConfig, 'TileKeys.ini')
+		else
+			SKIN:Bang('!DeactivateConfig', V.TileKeysConfig)
+		end
+	end
 	if V.HotKey ~= '' then
 		if on then
 			SKIN:Bang('!ActivateConfig', V.HotKeyConfig, 'Hotkey.ini')
@@ -2835,7 +3316,7 @@ function Update()
 		updateEmptyHint()
 		render(true)
 		if notice.missing > 0 then showNotice() end
-		show('MeterPower', V.ShowPower)
+		show('MeterPower', V.ShowPower and not M.compact)
 		updateDashState()
 		if showNow then
 			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
@@ -2914,6 +3395,7 @@ end
 function PowerAction(i)
 	local p = POWER[i]
 	if not ready or not p or not power.open then return end
+	M.picked = os.time()
 	if p.confirm and power.armed ~= i then
 		power.armed = i
 		renderPower()
@@ -2931,6 +3413,93 @@ function PowerAction(i)
 	else
 		SKIN:Bang('["shutdown.exe" /s /t 0]')
 	end
+end
+
+-- The "more" list of the compact menu: the time and the date, then search,
+-- Favorites, Recent, Not played yet, the dot's news, Options and the power
+-- button (its list opens below, in the same place). MeterMoreItem0 is the
+-- time, MeterMoreItem1-8 the entries.
+M.more = { open = false, hovered = 0, items = {} }
+
+function M.moreItems()
+	local items = {}
+	local function add(glyph, label, action) items[#items + 1] = { text = glyph .. '   ' .. label, action = action } end
+	add('[\\xE721]', 'Search', function() SearchOpen() end)
+	local glyphs = { favorites = '[\\xE734]', recent = '[\\xE81C]', unplayed = '[\\xE768]' }
+	for _, kind in ipairs(SIDE_KINDS) do
+		local i = sideIndex(kind)
+		if i then add(glyphs[kind], cats[i].label, function() SideCategory(kind) end) end
+	end
+	if M.noticeTip then add('[\\xE7E7]', M.noticeTip, function() OpenNotice() end) end
+	add('[\\xE713]', 'Options', function() OpenOptions('') end)
+	if V.ShowPower then add('[\\xE7E8]', 'Power', function() PowerMenu() end) end
+	return items
+end
+
+function M.renderMore()
+	local more = M.more
+	local m0 = SKIN:GetMeter('MeterMore')
+	local x = m0 and math.floor(m0:GetX()) or math.floor(V.PadX)
+	local y = math.floor(V.PadY + V.MenuH + 6)
+	local header = V.ShowClock and more.open
+	if header then
+		local t = SKIN:GetMeasure('MeasureClockTime')
+		local d = SKIN:GetMeasure('MeasureClockDate')
+		local time, date = t and t:GetStringValue() or '', (V.ShowDate and d) and d:GetStringValue() or ''
+		set('MeterMoreItem0', 'Text', (time or '') .. ((date or '') ~= '' and ('   ' .. date) or ''))
+		set('MeterMoreItem0', 'X', tostring(x))
+		set('MeterMoreItem0', 'Y', tostring(y))
+		SKIN:Bang('!UpdateMeter', 'MeterMoreItem0')
+		local h = SKIN:GetMeter('MeterMoreItem0')
+		y = y + (h and h:GetH() or 40) + 2
+	end
+	show('MeterMoreItem0', header)
+	for n = 1, 8 do
+		local m = 'MeterMoreItem' .. n
+		local it = more.open and more.items[n]
+		if it then
+			set(m, 'Text', it.text)
+			set(m, 'X', tostring(x))
+			set(m, 'Y', tostring(y))
+			set(m, 'SolidColor', more.hovered == n and '44,44,54,245' or '24,24,30,240')
+			SKIN:Bang('!UpdateMeter', m)
+			local h = SKIN:GetMeter(m)
+			y = y + (h and h:GetH() or 40) + 2
+		end
+		show(m, it and true or false)
+	end
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
+end
+
+function M.closeMore()
+	if not M.more.open then return false end
+	M.more.open, M.more.hovered = false, 0
+	M.renderMore()
+	return true
+end
+
+function MoreMenu()
+	if not ready then return end
+	closePower()
+	M.more.open = not M.more.open
+	M.more.hovered = 0
+	if M.more.open then M.more.items = M.moreItems() end
+	M.renderMore()
+end
+
+function MoreHover(i)
+	if not M.more.open then return end
+	M.more.hovered = i
+	M.renderMore()
+end
+
+function MoreAction(i)
+	local it = M.more.open and M.more.items[i]
+	if not it then return end
+	M.picked = os.time()
+	M.closeMore()
+	it.action()
 end
 
 -- Clock -----------------------------------------------------------------------------
@@ -3008,10 +3577,16 @@ function Show()
 	updateEmptyHint()
 	if V.AnimOpen then appear = 0 end
 	frame() -- first frame drawn before showing the window
+	if M.dockAnimated() then
+		-- from where it is (it may be still going out)
+		if M.dock.dir == 0 then M.dock.p = 0 end
+		M.dock.dir = 1
+		M.dockPlace(M.dock.p)
+	end
 	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
 	SKIN:Bang('!Show')
 	hotKey(true)
-	if appear then startTicker() end
+	if appear or M.dock.dir ~= 0 then startTicker() end
 	ReadPlaytime(60)
 	ClockTick(0)
 	updateDashState()
@@ -3030,11 +3605,29 @@ function Hide()
 		SKIN:Bang('!CommandMeasure', 'MeasureLaunchAnim', 'Stop 1')
 		launching = nil
 	end
-	SKIN:Bang('!Hide')
 	hotKey(false)
 	stopClock()
 	closePower()
+	M.closeMore()
 	updateDashState()
+	if M.dockAnimated() then
+		-- goes out first; M.finishHide() hides the window at the end
+		M.dock.dir = -1
+		startTicker()
+		return
+	end
+	SKIN:Bang('!Hide')
+end
+
+-- End of the docked launcher going out: the window is hidden, ready (in
+-- place, opaque) for the next time
+function M.finishHide()
+	if visible then return end -- shown again meanwhile
+	SKIN:Bang('!Hide')
+	stopTicker()
+	M.dock.p = 0
+	SKIN:Bang('!SetTransparency', '255')
+	SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
 end
 
 function Toggle()
@@ -3065,6 +3658,7 @@ function OnCategoryList()
 	if table.concat(files, '|') ~= table.concat(knownFiles, '|') then
 		knownFiles = files
 		loadCategories(files)
+		M.writeTileKeys()
 		regenerate(files)
 	end
 end
@@ -3074,6 +3668,53 @@ end
 function Setup()
 	if V.NeedsSetup then SKIN:Bang('!CommandMeasure', 'MeasureSetup', 'Run') end
 end
+
+-- Where the skin goes when it loads (OnRefreshAction). Full screen and
+-- docked: on its rectangle, fixed. Window: draggable, and left where it was
+-- put (Rainmeter keeps the position); centred the first time it is a window
+-- (WindowPlaced in State.inc).
+function PlaceWindow()
+	-- docked with DockEdge=1: the helper opens it when the mouse rests on
+	-- that edge (Generated\DockEdge.txt: side, area, delay)
+	local edgeFile = resources .. 'Generated\\DockEdge.txt'
+	if V.Mode == 'dock' and num('DockEdge', 1) ~= 0 then
+		local line = table.concat({ V.DockSide, math.floor(num('MonitorX', V.ScreenX)), math.floor(num('MonitorY', V.ScreenY)),
+			math.floor(V.MonW or V.ScreenW), math.floor(V.MonH or V.ScreenH), math.max(0, math.floor(num('DockEdgeDelay', 300))) }, '|')
+		local f = io.open(edgeFile, 'rb')
+		local old = f and f:read('*a')
+		if f then f:close() end
+		if old ~= line then
+			f = io.open(edgeFile, 'wb')
+			if f then f:write(line) f:close() end
+		end
+	else
+		os.remove(edgeFile)
+	end
+	-- its size, for the helper to tell its window from the other skins
+	local sizeLine = math.floor(V.ScreenW) .. '|' .. math.floor(V.ScreenH)
+	local sf = io.open(resources .. 'Generated\\LauncherSize.txt', 'rb')
+	local oldSize = sf and sf:read('*a')
+	if sf then sf:close() end
+	if oldSize ~= sizeLine then
+		sf = io.open(resources .. 'Generated\\LauncherSize.txt', 'wb')
+		if sf then sf:write(sizeLine) sf:close() end
+	end
+	if V.Mode == 'window' then
+		SKIN:Bang('!Draggable', '1')
+		SKIN:Bang('!KeepOnScreen', '1')
+		if num('WindowPlaced', 0) ~= 1 then
+			SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
+			SKIN:Bang('!WriteKeyValue', 'Variables', 'WindowPlaced', '1', data .. 'State.inc')
+		end
+	else
+		SKIN:Bang('!Draggable', '0')
+		SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
+		if num('WindowPlaced', 0) ~= 0 then
+			SKIN:Bang('!WriteKeyValue', 'Variables', 'WindowPlaced', '0', data .. 'State.inc')
+		end
+	end
+end
+
 
 function OnSetup()
 	local output = SKIN:GetMeasure('MeasureSetup'):GetStringValue()
@@ -3108,6 +3749,7 @@ showNotice = function()
 			or (notice.missing .. ' games are no longer installed: click to remove or keep their tiles')
 	end
 	if tip then SKIN:Bang('!SetOption', 'MeterNotice', 'ToolTipText', tip) end
+	M.noticeTip = tip -- also an entry of the "more" list (compact menu)
 	show('MeterNotice', tip ~= nil)
 	SKIN:Bang('!UpdateMeter', 'MeterNotice')
 	SKIN:Bang('!Redraw')
@@ -3323,7 +3965,8 @@ end
 
 -- Play time (Playtime.ps1, in the background on load) ------------------------------
 -- On load, and when the launcher opens (minAge: seconds since the last
--- reading, the play time changes when a game is closed)
+-- reading, the play time changes when a game is closed). The Steam updates
+-- waiting (GameUpdates.ps1) are read at the same moments.
 local playtimeRead = nil -- os.time() of the last reading
 function ReadPlaytime(minAge)
 	if not ready or V.TileInfo == 'never' then return end
@@ -3333,6 +3976,7 @@ function ReadPlaytime(minAge)
 		for _, t in ipairs(c.tiles) do
 			if t.steamId then
 				SKIN:Bang('!CommandMeasure', 'MeasurePlaytime', 'Run')
+				if V.GameUpdates then SKIN:Bang('!CommandMeasure', 'MeasureGameUpdates', 'Run') end
 				return
 			end
 		end
@@ -3341,6 +3985,12 @@ end
 
 function OnPlaytime()
 	readPlaytime()
+	base = -1
+	render(false)
+end
+
+function OnGameUpdates()
+	readGameUpdates()
 	base = -1
 	render(false)
 end
@@ -3421,7 +4071,18 @@ local function focus(t, idx, tx, ty)
 	if animate then startTicker() else frame() end
 end
 
+-- A list over the grid (the "more" list, the power list): Rainmeter can give
+-- a click on it to the tile below as well. While one is open, and just after
+-- an entry was picked (M.picked, until the mouse moves onto a tile), the
+-- tiles leave the click alone.
+function M.menuOverGrid()
+	if M.more.open or power.open then return true end
+	return M.picked ~= nil and os.time() - M.picked <= 1
+end
+
 function HoverTile(slot)
+	M.picked = nil
+	if M.more.open or power.open then return end
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
 	setPointed(t)
@@ -3447,6 +4108,7 @@ function Layout()
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	layoutMenu()
 	layoutLeft()
+	M.layoutCompact()
 	updateSearchBar()
 	filter.laidOut = false
 	renderCategories()
@@ -3486,6 +4148,7 @@ function SetCategory(i)
 	offset = normalizeOffset(cats[i].offset)
 	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
+	fadeShown = {}
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	updateEmptyHint()
@@ -3493,6 +4156,7 @@ function SetCategory(i)
 		appear = 0
 		startTicker()
 	end
+	M.reveal()
 	render(true)
 	updateDashState()
 end
@@ -3513,6 +4177,7 @@ end
 function HoverCategory(i)
 	if not ready then return end
 	hovered = i
+	M.drawStrip()
 	renderCategories()
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	SKIN:Bang('!Redraw')
@@ -3674,6 +4339,7 @@ end
 
 function Launch(slot)
 	if not ready or launching then return end
+	if M.menuOverGrid() then M.picked = nil return end
 	local x, y = gridToPx(slotToGrid(slot))
 	launchTile(tileAt(slot), x, y)
 end
@@ -3846,6 +4512,20 @@ updateSearchBar = function()
 	local x = side.searchX or math.floor(V.PadX)
 	local h = math.floor(V.MenuH)
 	local w = open and math.max(h, math.floor(V.SearchW)) or h
+	if M.compact then
+		-- only while searching (from the "more" list), in the place of the categories
+		local searching = typing or searchCat ~= nil
+		show('MenuClip', not searching)
+		M.drawStrip()
+		show('SearchPill', searching)
+		show('SearchIcon', searching)
+		if not searching then show('SearchText', false) return end
+		open, x, w = true, M.catL, math.max(h, M.catR - M.catL)
+	else
+		show('MenuClip', true)
+		show('SearchPill', true)
+		show('SearchIcon', true)
+	end
 	set('SearchPill', 'X', tostring(x))
 	set('SearchPill', 'Shape', string.format(
 		'Rectangle 0,0,%d,%d,%d | Fill Color %s | StrokeWidth 0', w, h,
@@ -3878,6 +4558,7 @@ leaveSearch = function()
 	offset = normalizeOffset(cats[active].offset)
 	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
+	fadeShown = {}
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	updateSearchBar()
@@ -4104,6 +4785,7 @@ end
 function FocusLost()
 	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
 	if not ready or not visible or launching then return end
+	if V.Mode == 'window' then return end -- a window stays open beside the others
 	Hide()
 end
 
@@ -4111,6 +4793,7 @@ end
 function Escape()
 	if not ready then return end
 	if closePower() then return end
+	if M.closeMore() then return end
 	if typing then
 		TypeKey('ESC')
 	elseif searchCat and not launching then

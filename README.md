@@ -1,22 +1,23 @@
 # Raintile
 
-**Raintile** is a full-screen tile launcher for [Rainmeter](https://www.rainmeter.net/), meant to replace the icons on your Windows desktop.
+**Raintile** is a tile launcher for [Rainmeter](https://www.rainmeter.net/), full screen, in a window or docked on a side, meant to replace the icons on your Windows desktop.
 
 Your games, apps, links and system tools become large tiles with background art and logos, organised in categories you switch between from a menu at the top. Open it with a shortcut, pick a tile with the mouse, the keyboard or a gamepad, and it gets out of the way.
 
 ## Features
 
 - **Categories** in a centred menu at the top (icon, text or both), each with its own grid size.
-- **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs. Tiles can take more cells (`Size=2x2`) for a featured game or a bigger widget. Backgrounds fit the tile by themselves; you can also frame each one by dragging and zooming it in Options, and move and resize its logo on its own.
+- **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs. Tiles can take more cells (`Size=2x2`) for a featured game or a bigger widget. Backgrounds fit the tile by themselves; you can also frame each one by dragging and zooming it in Options, and move and resize its logo on its own, or set both once for a whole category (every logo on the right, say) and reset them all.
 - **Add games and apps** found on this PC — Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Battle.net, EA app, Xbox, and the programs of the Start menu — picking them from a list, with background and logo (local Steam cache, [SteamGridDB](https://www.steamgriddb.com/), program icons). New ones are signalled with a dot on the gear.
 - **Clock and date** at the top left, and a **search** across all categories that opens when you hover it, with results that follow every key.
 - **Favorites and Recent**: your favorite tiles and the ones launched lately (or most often), one click away from the buttons next to the search bar.
 - **Tags**: tag your tiles (multiplayer, coop, ...); search finds them, and chips above the results filter by tag or by store with a click.
-- **Play time**: hours played (from Steam, or measured by Raintile for the other games) and last launch, and a **Not played yet** category for what you never started.
+- **Play time**: hours played (from Steam, or measured by Raintile for the other games) and last launch, on a line you can drag anywhere on the tile (or once for a whole category), Steam updates waiting to download on the same line, and a **Not played yet** category for what you never started.
 - **Games no longer installed** are found by the same search: greyed out in the launcher, removed or kept with a click.
 - **Tile menu**: right click a tile to edit it, add it to Favorites, open its file location, run it as administrator or remove it.
 - **Mouse, keyboard and gamepad**: WASD/arrows, Space/Enter, Xbox-compatible controllers (open the launcher with Back + Start), with an on-screen keyboard to search from the couch.
 - **Dashboard**: widgets for CPU, GPU, memory, disks, network, processes and temperatures (with [HWiNFO](https://www.hwinfo.com/)), your Rainmeter skins in a tile, custom widgets, and a widget gallery to install new ones from Options.
+- **Full screen, window or docked**: the launcher can cover the screen, be a window you move around, or sit on a side of the screen and slide in when the mouse touches that edge. When the menu gets narrow, the categories scroll and the rest goes into a ☰ list.
 - **Power button**: lock, sleep, restart or shut down the PC from the launcher.
 - **Hot keys for tiles**: give a game a key combination and start it from anywhere, even with the launcher closed.
 - **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.
@@ -46,7 +47,7 @@ Your games, apps, links and system tools become large tiles with background art 
 3. In Rainmeter: **Manage** > **Refresh all**, then load `Raintile\Raintile.ini`.
 4. Press **Ctrl+Alt+G** to show or hide the launcher.
 
-**Updates** (experimental): Raintile checks GitHub once a day and shows a dot on the gear when a new version is out; Options > Info installs it with one click. This is still being tested and could cause problems: keep a copy of your data before updating. Your settings, categories and images live in `%APPDATA%\Rainmeter\Raintile\`, so updating never touches them.
+**Updates**: Raintile checks GitHub once a day and shows a dot on the gear when a new version is out; Options > Info installs it with one click (directly, or with the Rainmeter installer). Your settings, categories and images live in `%APPDATA%\Rainmeter\Raintile\`, so updating never touches them.
 
 The launcher places itself at the top-left corner and covers the screen. Do not load the `Raintile\Hotkey`, `Raintile\Navigation` and `Raintile\Typing` skins by hand: the launcher turns them on and off by itself.
 

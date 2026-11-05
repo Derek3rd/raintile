@@ -29,8 +29,10 @@ namespace RaintileOptions
         public string File;
         public IniSection Section;
         public bool Imported;
+        public bool All;   // the "All tiles" entry of a category: its own settings
         public Border Thumb;
         public TextBlock Title;
+        public FrameworkElement Dot;   // a tile with settings of its own
     }
 
     public partial class OptionsApp
@@ -49,15 +51,28 @@ namespace RaintileOptions
         Image previewBg, previewLogo;
         Panel frameRow, logoRow;
         Slider zoomSlider, logoSlider;
-        ComboBox moveTo;
         Button tileKeyButton;
         TextBox catTileColor;
         ComboBox catOpacity, tileOpacity;
         Button catColorSwatch;
         ComboBox widgetKind, sizeCols, sizeRows;
         TextBox widgetParam;
-        TextBlock widgetHint;
-        FrameworkElement widgetRow, widgetParamRow;
+        TextBlock widgetHint, placementHint;
+        FrameworkElement widgetRow, widgetParamRow, placementRow;
+        // the category page: preview column, All tiles card, inheritance chips
+        Border allCard, previewCard, frameChip, logoChip;
+        FrameworkElement previewOnRow;
+        ComboBox previewOn;
+        TextBlock allNote;
+        Button btnFrameReset, btnLogoReset;
+        // the play time line (InfoPos): its sample in the preview and its row
+        Border previewInfo, infoChip;
+        TextBlock infoPosText;
+        Button btnInfoReset;
+        Panel infoRow;
+        Panel previewColumn;
+        readonly Dictionary<string, TextBox> allFields = new Dictionary<string, TextBox>();
+        BitmapSource placeholderBg, placeholderLogo;
 
         // Widgets of a Dashboard: kind, label in the list, what Param= means
         static readonly string[][] WIDGET_KINDS =
@@ -264,7 +279,10 @@ namespace RaintileOptions
         // Colour of a tile as the skin shows it
         Brush GetTileBrush(string b, IniSection section, string bg, string logo)
         {
-            Brush brush = NewColorBrush(Core.GetKey(section, "Color"));
+            Brush brush = NewColorBrush(section != null ? Core.GetKey(section, "Color") : "");
+            if (brush != null) return brush;
+            // the category's TileColor, as in Raintile.lua (it also turns AutoTileColor off)
+            brush = currentFile != null ? NewColorBrush(Core.GetKey(Core.GetCategorySection(GetModel(currentFile)), "TileColor")) : null;
             if (brush != null) return brush;
             if (V("AutoTileColor") == "1" && logo != null && bg == null)
             {
@@ -394,38 +412,167 @@ namespace RaintileOptions
             if (currentFile == file && navCurrent == "cat:" + file) pageTitle.Text = name;
         }
 
+        // Keys a tile can take from All tiles (framing, logo, play time line, TileColor,
+        // TileOpacity): a tile with one of them has settings of its own (the dot in the strip)
+        static readonly string[] OWN_KEYS = { "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "Color", "Opacity" };
+
+        static bool HasOwnValues(IniSection s)
+        {
+            return s != null && OWN_KEYS.Any(k => Core.GetKey(s, k).Trim() != "");
+        }
+
+        // Entry of the tile strip: a small tile (background, logo) and the name below
+        ListBoxItem NewStripEntry(string title, ListTag tag)
+        {
+            var item = new ListBoxItem { Width = 132, Padding = T(6), Margin = T(0, 0, 4, 0), VerticalContentAlignment = VerticalAlignment.Top };
+            var sp = NewPanel();
+            var g = new Grid();
+            var thumb = new Border { Height = 68, CornerRadius = new CornerRadius(6), Background = ResBrush("FieldBg"), ClipToBounds = true };
+            thumb.Child = new Image { Stretch = Stretch.Uniform, Margin = T(14, 10) };
+            g.Children.Add(thumb);
+            var dot = new Border
+            {
+                Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = ResBrush("AccentBrush"),
+                BorderBrush = ResBrush("CardBg"), BorderThickness = T(1.5), Margin = T(0, 5, 5, 0),
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+                Visibility = Visibility.Collapsed, ToolTip = "Its own colour, background, framing, logo or play time placement, not the one of All tiles",
+            };
+            g.Children.Add(dot);
+            AddTo(sp, g);
+            var t = NewText(title, 12);
+            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            t.Margin = T(2, 6, 2, 0);
+            t.ToolTip = title;
+            AddTo(sp, t);
+            item.Content = sp;
+            tag.Thumb = thumb; tag.Title = t; tag.Dot = dot;
+            item.Tag = tag;
+            return item;
+        }
+
+        // A small tile: the background filling it (or the colour) and the logo on it
+        static void SetStripThumb(ListTag tag, ImageSource bg, ImageSource logo, Brush color)
+        {
+            tag.Thumb.Background = bg != null ? new ImageBrush(bg) { Stretch = Stretch.UniformToFill } : color;
+            ((Image)tag.Thumb.Child).Source = logo;
+        }
+
         void UpdateTileEntry(ListBoxItem item)
         {
-            string b = GetCurrentBase();
             var tag = (ListTag)item.Tag;
+            if (tag.All)
+            {
+                SetStripThumb(tag, GetPlaceholderBackground(), GetPlaceholderLogo(), null);
+                return;
+            }
+            string b = GetCurrentBase();
             var s = tag.Section;
             string bg = Core.GetTileImage(b, s, "Background"), logo = Core.GetTileImage(b, s, "Logo");
             tag.Title.Text = s.Name;
-            SetThumb(tag.Thumb, logo ?? bg, GetTileBrush(b, s, bg, logo));
+            tag.Title.ToolTip = s.Name;
+            SetStripThumb(tag, GetBitmap(bg, 264), GetBitmap(logo, 160), GetTileBrush(b, s, bg, logo));
+            tag.Dot.Visibility = !tag.Imported && HasOwnValues(s) ? Visibility.Visible : Visibility.Collapsed;
         }
 
+        // Only the dots: placement changes leave the small tiles as they are
+        void UpdateTileDots()
+        {
+            foreach (ListBoxItem it in tilesList.Items)
+            {
+                var tag = (ListTag)it.Tag;
+                if (tag.Dot != null && !tag.All) tag.Dot.Visibility = !tag.Imported && HasOwnValues(tag.Section) ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        void UpdateTileEntries()
+        {
+            foreach (ListBoxItem it in tilesList.Items) if (((ListTag)it.Tag).All || ((ListTag)it.Tag).Section != null) UpdateTileEntry(it);
+        }
+
+        // 'select': the tile to select (its index among the tiles, the imported ones
+        // after them), -1 = All tiles, the first entry of the strip
         void RefreshTiles(int select = 0)
         {
             tilesList.Items.Clear();
             if (currentFile != null)
             {
                 var m = GetModel(currentFile);
+                var all = NewStripEntry("All tiles", new ListTag { All = true });
+                all.ToolTip = "Settings of every tile of this category";
+                tilesList.Items.Add(all);
+                UpdateTileEntry(all);
                 foreach (var s in Core.GetTiles(m))
                 {
-                    var item = NewListEntry(s.Name, "", new ListTag { Section = s });
+                    var item = NewStripEntry(s.Name, new ListTag { Section = s });
                     tilesList.Items.Add(item);
                     UpdateTileEntry(item);
                 }
                 foreach (var n in Core.GetImportedNames(m))
                 {
-                    var item = NewListEntry(n, "imported", new ListTag { Section = GetImportedSection(m, n), Imported = true });
+                    var item = NewStripEntry(n + " (imported)", new ListTag { Section = GetImportedSection(m, n), Imported = true });
                     item.Opacity = 0.7;
                     tilesList.Items.Add(item);
                     if (((ListTag)item.Tag).Section != null) UpdateTileEntry(item);
                 }
             }
-            if (tilesList.Items.Count > 0) tilesList.SelectedIndex = Math.Max(0, Math.Min(select, tilesList.Items.Count - 1));
+            if (tilesList.Items.Count > 0)
+            {
+                tilesList.SelectedIndex = Math.Max(0, Math.Min(select + 1, tilesList.Items.Count - 1));
+                tilesList.ScrollIntoView(tilesList.SelectedItem);
+            }
             else ShowTile();
+        }
+
+        bool IsAllSelected()
+        {
+            var t = tilesList != null ? TagOf(tilesList.SelectedItem) : null;
+            return t != null && t.All;
+        }
+
+        // Background and logo standing in for any image under All tiles: a grid,
+        // so moving and zooming show, and the category's icon (a game pad glyph
+        // for a category without one)
+        BitmapSource GetPlaceholderBackground()
+        {
+            if (placeholderBg != null) return placeholderBg;
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+            {
+                dc.DrawRectangle(new LinearGradientBrush(Color.FromRgb(0x24, 0x3B, 0x5E), Color.FromRgb(0x5B, 0x2C, 0x52), 35), null, new Rect(0, 0, 1920, 1080));
+                var pen = new Pen(new SolidColorBrush(Color.FromArgb(0x2A, 255, 255, 255)), 2);
+                for (int x = 0; x <= 1920; x += 120) dc.DrawLine(pen, new Point(x, 0), new Point(x, 1080));
+                for (int y = 0; y <= 1080; y += 120) dc.DrawLine(pen, new Point(0, y), new Point(1920, y));
+                var mark = new Pen(new SolidColorBrush(Color.FromArgb(0x70, 255, 255, 255)), 4);
+                dc.DrawEllipse(null, mark, new Point(960, 540), 90, 90);
+                dc.DrawLine(mark, new Point(900, 540), new Point(1020, 540));
+                dc.DrawLine(mark, new Point(960, 480), new Point(960, 600));
+            }
+            var bmp = new RenderTargetBitmap(1920, 1080, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return placeholderBg = bmp;
+        }
+
+        BitmapSource GetPlaceholderLogo()
+        {
+            if (currentFile != null)
+            {
+                string icon = Core.GetCategoryIcon(GetCurrentBase(), Core.GetCategorySection(GetModel(currentFile)));
+                var b = GetBitmap(icon, 256);
+                if (b != null) return b;
+            }
+            if (placeholderLogo != null) return placeholderLogo;
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+            {
+                var text = new FormattedText("\uE7FC", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    new Typeface("Segoe MDL2 Assets"), 200, Brushes.White, 1.0);
+                dc.DrawText(text, new Point((256 - text.Width) / 2, (256 - text.Height) / 2));
+            }
+            var bmp = new RenderTargetBitmap(256, 256, 96, 96, PixelFormats.Pbgra32);
+            bmp.Render(dv);
+            bmp.Freeze();
+            return placeholderLogo = bmp;
         }
 
         // Tiles of the category chosen in the menu
@@ -459,20 +606,16 @@ namespace RaintileOptions
             string file = GetListFile();
             catCard.IsEnabled = file != null;
             var c = file != null ? Core.GetCategorySection(GetModel(file)) : null;
-            foreach (var k in new[] { "Name", "NX", "NY", "IconSize" }) catFields[k].Text = c != null ? Core.GetKey(c, k) : "";
+            catFields["Name"].Text = c != null ? Core.GetKey(c, "Name") : "";
             SetThumb(catIcon, c != null ? Core.GetCategoryIcon(GetListBase(), c) : null);
             catIconHint.Text = file != null ? "Default: Images\\" + GetListBase() + "\\icon.png" : "";
-            gridHint.Text = "Empty = default (" + V("NX") + " \u00D7 " + V("NY") + ", from Layout)";
-            sizeHint.Text = "Pixels or %. Empty = default (" + V("IconSize") + ")";
-            catTileColor.Text = c != null ? Core.GetKey(c, "TileColor") : "";
-            SelectOpacity(catOpacity, c != null ? Core.GetKey(c, "TileOpacity") : "");
             loading = false;
         }
 
         // Opacity of the tile background (colour and image): "" = the default, then 100% to 0%
         static ComboBox NewOpacityBox(string defaultLabel)
         {
-            var box = new ComboBox { Width = 170 };
+            var box = new ComboBox();
             box.Items.Add(new ComboBoxItem { Content = defaultLabel, Tag = "" });
             for (int n = 100; n >= 0; n -= 10) box.Items.Add(new ComboBoxItem { Content = n + "%" + (n == 0 ? " (none)" : ""), Tag = n.ToString() });
             return box;
@@ -524,8 +667,16 @@ namespace RaintileOptions
             public bool Dragging, Moved, Sync;
             public Point DragPoint; public double DragX, DragY;
         }
+        // X, Y: InfoPos (0-1); DragX, DragY: where the line was, in preview pixels
+        class InfoState
+        {
+            public double X, Y;
+            public bool Dragging, Moved;
+            public Point DragPoint; public double DragX, DragY;
+        }
         readonly FrameState bgFrame = new FrameState();
         readonly LogoState logoPlace = new LogoState();
+        readonly InfoState infoPlace = new InfoState();
 
         // Size in pixels of a tile of category 'file' (only its proportions count)
         double[] GetTileSize(string file)
@@ -564,13 +715,189 @@ namespace RaintileOptions
             return m.Success && double.TryParse(m.Groups[1].Value, NumberStyles.Float, Inv, out x) && double.TryParse(m.Groups[2].Value, NumberStyles.Float, Inv, out y);
         }
 
+        // --- Placement keys of the category ----------------------------------------------
+        // BgFocus, BgZoom, LogoPos, LogoScale and InfoPos in [Category] are the placement of the
+        // tiles without their own, as in Raintile.lua: one setting moves them all.
+        // A tile keeps a key only when it differs from the category's.
+
+        // Value of a placement key for a tile: its own, else the category's
+        string GetPlaceKey(IniSection tile, string key)
+        {
+            string v = tile != null ? Core.GetKey(tile, key).Trim() : "";
+            if (v != "" || currentFile == null) return v;
+            return Core.GetKey(Core.GetCategorySection(GetModel(currentFile)), key).Trim();
+        }
+
+        // As saved: a point in % (fractions given) and a factor
+        static string FormatPair(double x, double y) { return Math.Round(x * 100, 1).ToString("0.#", Inv) + "," + Math.Round(y * 100, 1).ToString("0.#", Inv); }
+        static string FormatFactor(double z) { return Math.Round(z, 2).ToString("0.##", Inv); }
+
+        // Point of a placement key when nobody sets it: the centre, the top left for
+        // the play time line
+        static string DefaultPos(string key) { return key == "InfoPos" ? "0,0" : "50,50"; }
+
+        // The category's value of a key, formatted as saved (the default point or "1" when it has none)
+        static string GetCategoryPlace(CategoryModel model, string key)
+        {
+            string raw = Core.GetKey(Core.GetCategorySection(model), key);
+            double x, y;
+            if (key == "BgFocus" || key == "LogoPos" || key == "InfoPos")
+                return ParsePair(raw, out x, out y) ? FormatPair(Math.Min(100.0, x) / 100, Math.Min(100.0, y) / 100) : DefaultPos(key);
+            if (!double.TryParse(raw, NumberStyles.Float, Inv, out x)) return "1";
+            return FormatFactor(key == "BgZoom" ? Math.Min(4.0, Math.Max(1.0, x)) : Math.Min(3.0, Math.Max(0.25, x)));
+        }
+
+        // Writes a placement key of the current tile: removed when it is the category's
+        bool SetPlaceKey(IniSection tile, string key, string value)
+        {
+            if (value == GetCategoryPlace(GetModel(currentFile), key)) value = "";
+            if (Core.GetKey(tile, key) == value) return false;
+            Core.SetKey(tile, key, value);
+            return true;
+        }
+
+        // The tile back to the category's placement (its own keys removed)
+        void ClearPlaceKeys(IniSection tile, params string[] keys)
+        {
+            bool changed = false;
+            foreach (var k in keys) if (Core.GetKey(tile, k) != "") { Core.SetKey(tile, k, ""); changed = true; }
+            if (changed) SetChanged(currentFile);
+        }
+
+        // Category name as in the menu
+        string GetCategoryName(string file)
+        {
+            string n = Core.GetKey(Core.GetCategorySection(GetModel(file)), "Name").Trim();
+            return n != "" ? n : Path.GetFileNameWithoutExtension(file);
+        }
+
+        // What the framing and the logo editor write: the category under All tiles,
+        // else the selected tile (null: nothing to edit)
+        IniSection GetPlaceTarget()
+        {
+            if (IsAllSelected()) return currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null;
+            return GetCurrentTile();
+        }
+
+        // Writes a point and a factor (BgFocus/BgZoom or LogoPos/LogoScale; InfoPos has
+        // no factor: sizeKey null): under All tiles to the category (the default point
+        // at 1 = no key), on a tile only where it differs from the category
+        void SavePlace(string posKey, string sizeKey, string pos, string size)
+        {
+            if (IsAllSelected())
+            {
+                var c = GetPlaceTarget();
+                if (c == null) return;
+                string p = pos == DefaultPos(posKey) ? "" : pos, z = size == "1" ? "" : size;
+                if (Core.GetKey(c, posKey) == p && (sizeKey == null || Core.GetKey(c, sizeKey) == z)) return;
+                Core.SetKey(c, posKey, p);
+                if (sizeKey != null) Core.SetKey(c, sizeKey, z);
+                SetChanged(currentFile);
+                AfterCategoryPlace();
+                return;
+            }
+            var t = GetCurrentTile();
+            if (t == null) return;
+            bool a = SetPlaceKey(t, posKey, pos);
+            bool b = sizeKey != null && SetPlaceKey(t, sizeKey, size);
+            if (!a && !b) return;
+            SetChanged(currentFile);
+            UpdatePlaceState();
+            UpdateTileDots();
+        }
+
+        // The category's placement changed: the dots, the chips and the summary
+        void AfterCategoryPlace()
+        {
+            UpdateTileDots();
+            UpdatePlaceState();
+            UpdatePlacementHint();
+        }
+
+        // Chip and reset (x) of the framing and logo rows
+        void UpdatePlaceState()
+        {
+            if (frameChip == null) return;
+            bool all = IsAllSelected();
+            var t = GetCurrentTile();
+            var c = currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null;
+            Func<IniSection, string, string, bool> has = (s, a, b) => s != null && (Core.GetKey(s, a) != "" || Core.GetKey(s, b) != "");
+            bool frameOwn = has(t, "BgFocus", "BgZoom"), logoOwn = has(t, "LogoPos", "LogoScale");
+            SetChip(frameChip, all ? null : (bool?)frameOwn);
+            SetChip(logoChip, all ? null : (bool?)logoOwn);
+            // the icon buttons have no disabled look of their own
+            Action<Button, bool> enable = (b, on) => { b.IsEnabled = on; b.Opacity = on ? 1 : 0.35; };
+            enable(btnFrameReset, all ? has(c, "BgFocus", "BgZoom") : frameOwn);
+            enable(btnLogoReset, all ? has(c, "LogoPos", "LogoScale") : logoOwn);
+            btnFrameReset.ToolTip = all ? "Back to the centre, at zoom 1" : "Back to the framing of All tiles";
+            btnLogoReset.ToolTip = all ? "Back to the centre, at the normal size" : "Back to the logo placement of All tiles";
+            bool infoOwn = t != null && Core.GetKey(t, "InfoPos") != "";
+            SetChip(infoChip, all ? null : (bool?)infoOwn);
+            enable(btnInfoReset, all ? c != null && Core.GetKey(c, "InfoPos") != "" : infoOwn);
+            btnInfoReset.ToolTip = all ? "Back to the top left" : "Back to the play time placement of All tiles";
+        }
+
+        // own: true = Own, false = From All tiles, null = hidden (All tiles itself)
+        void SetChip(Border chip, bool? own)
+        {
+            chip.Visibility = own == null ? Visibility.Collapsed : Visibility.Visible;
+            if (own == null) return;
+            var text = (TextBlock)chip.Child;
+            text.Text = own.Value ? "Own" : "From All tiles";
+            text.Foreground = own.Value ? ResBrush("AccentBrush") : ResBrush("DimBrush");
+            chip.Background = own.Value ? ResBrush("AccentSoftBrush") : ResBrush("FieldBg");
+            chip.ToolTip = own.Value ? "This tile has its own; the x on its row gives it back the one of All tiles" : "Follows All tiles; move it to give this tile its own";
+        }
+
+        Border NewChip()
+        {
+            var t = NewText("", 11);
+            return new Border { CornerRadius = new CornerRadius(9), Padding = T(8, 1, 8, 2), Margin = T(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = t };
+        }
+
+        // Reset of a whole category: the default place ('back'), for the category and every tile
+        void ResetCategoryPlace(string file, string what, string[] keys, string back = "the centre, at the normal size")
+        {
+            var model = GetModel(file);
+            var tiles = Core.GetTiles(model);
+            var r = ShowDialog("Raintile", "Reset the " + what + " of all " + tiles.Count + " tiles of " + GetCategoryName(file) +
+                "? They go back to " + back + ".", new[] { "Reset", "Cancel" });
+            if (r.Button != "Reset") return;
+            foreach (var s in new[] { Core.GetCategorySection(model) }.Concat(tiles)) foreach (var k in keys) Core.SetKey(s, k, "");
+            SetChanged(file);
+            AfterCategoryPlace();
+            UpdateTilePreview();
+        }
+
+        // Summary under All tiles: the category's placement and the tiles with their own
+        void UpdatePlacementHint()
+        {
+            string file = currentFile;
+            if (placementHint == null) return;
+            placementRow.Visibility = file != null && !IsDashboard(file) ? Visibility.Visible : Visibility.Collapsed;
+            if (file == null) { SetLabelHint(placementHint, ""); return; }
+            var model = GetModel(file);
+            var tiles = Core.GetTiles(model);
+            // size null: a point only (InfoPos)
+            Func<string, string, string> describe = (pos, size) =>
+            {
+                string p = GetCategoryPlace(model, pos), z = size != null ? GetCategoryPlace(model, size) : "1";
+                string text = (p == "50,50" ? "centre" : p == "0,0" ? "top left" : p + "%") + (z == "1" ? "" : ", " + z + "\u00D7");
+                int own = tiles.Count(t => Core.GetKey(t, pos) != "" || (size != null && Core.GetKey(t, size) != ""));
+                return text + (own > 0 ? " (" + own + (own == 1 ? " tile has its own)" : " tiles have their own)") : "");
+            };
+            SetLabelHint(placementHint, "Logos: " + describe("LogoPos", "LogoScale") + ". Framing: " + describe("BgFocus", "BgZoom") +
+                ". Play time: " + describe("InfoPos", null) +
+                ". These buttons put every tile back at the default place (the centre, the top left for the play time), the ones with their own included.");
+        }
+
         void ReadFraming(IniSection section)
         {
             bgFrame.FX = 0.5; bgFrame.FY = 0.5; bgFrame.Zoom = 1.0;
             if (section == null) return;
             double x, y, z;
-            if (ParsePair(Core.GetKey(section, "BgFocus"), out x, out y)) { bgFrame.FX = Math.Min(100.0, x) / 100; bgFrame.FY = Math.Min(100.0, y) / 100; }
-            if (double.TryParse(Core.GetKey(section, "BgZoom"), NumberStyles.Float, Inv, out z)) bgFrame.Zoom = Math.Min(4.0, Math.Max(1.0, z));
+            if (ParsePair(GetPlaceKey(section, "BgFocus"), out x, out y)) { bgFrame.FX = Math.Min(100.0, x) / 100; bgFrame.FY = Math.Min(100.0, y) / 100; }
+            if (double.TryParse(GetPlaceKey(section, "BgZoom"), NumberStyles.Float, Inv, out z)) bgFrame.Zoom = Math.Min(4.0, Math.Max(1.0, z));
         }
 
         // Part of the image shown, in image pixels; S = preview pixels per image pixel
@@ -600,13 +927,15 @@ namespace RaintileOptions
 
         void UpdateFraming()
         {
-            double k = Math.Min(384 / bgFrame.TW, 260 / bgFrame.TH);
+            // as large as the preview column allows (it follows the window)
+            double maxW = previewColumn != null && previewColumn.ActualWidth > 0 ? Math.Min(640.0, previewColumn.ActualWidth) : 384;
+            double k = Math.Min(maxW / bgFrame.TW, 440 / bgFrame.TH);
             preview.Width = Math.Max(40.0, Math.Round(bgFrame.TW * k));
             preview.Height = Math.Max(40.0, Math.Round(bgFrame.TH * k));
             previewBg.Source = bgFrame.Bitmap;
             bool has = bgFrame.Bitmap != null;
             frameRow.IsEnabled = has;
-            preview.Cursor = has || previewLogo.Source != null ? Cursors.SizeAll : null;
+            preview.Cursor = has || previewLogo.Source != null || previewInfo.Visibility == Visibility.Visible ? Cursors.SizeAll : null;
             bgFrame.Sync = true;
             zoomSlider.Value = bgFrame.Zoom;
             bgFrame.Sync = false;
@@ -619,18 +948,11 @@ namespace RaintileOptions
             Canvas.SetTop(previewBg, -v.Y * v.S);
         }
 
-        // Writes BgFocus/BgZoom; the centre at zoom 1 (the default) removes them
+        // Writes BgFocus/BgZoom; the category's framing (the centre at zoom 1 by
+        // default) removes them
         void SaveFraming()
         {
-            var t = GetCurrentTile();
-            if (t == null) return;
-            double fx = Math.Round(bgFrame.FX * 100, 1), fy = Math.Round(bgFrame.FY * 100, 1), z = Math.Round(bgFrame.Zoom, 2);
-            string focus = fx == 50 && fy == 50 ? "" : fx.ToString("0.#", Inv) + "," + fy.ToString("0.#", Inv);
-            string zoom = z <= 1 ? "" : z.ToString("0.##", Inv);
-            if (Core.GetKey(t, "BgFocus") == focus && Core.GetKey(t, "BgZoom") == zoom) return;
-            Core.SetKey(t, "BgFocus", focus);
-            Core.SetKey(t, "BgZoom", zoom);
-            SetChanged(currentFile);
+            SavePlace("BgFocus", "BgZoom", FormatPair(bgFrame.FX, bgFrame.FY), FormatFactor(bgFrame.Zoom));
         }
 
         // New zoom; 'anchor' (a point of the preview) keeps showing the same part of
@@ -671,8 +993,8 @@ namespace RaintileOptions
             logoPlace.X = 0.5; logoPlace.Y = 0.5; logoPlace.Scale = 1.0;
             if (section == null) return;
             double x, y, z;
-            if (ParsePair(Core.GetKey(section, "LogoPos"), out x, out y)) { logoPlace.X = Math.Min(100.0, x) / 100; logoPlace.Y = Math.Min(100.0, y) / 100; }
-            if (double.TryParse(Core.GetKey(section, "LogoScale"), NumberStyles.Float, Inv, out z)) logoPlace.Scale = Math.Min(3.0, Math.Max(0.25, z));
+            if (ParsePair(GetPlaceKey(section, "LogoPos"), out x, out y)) { logoPlace.X = Math.Min(100.0, x) / 100; logoPlace.Y = Math.Min(100.0, y) / 100; }
+            if (double.TryParse(GetPlaceKey(section, "LogoScale"), NumberStyles.Float, Inv, out z)) logoPlace.Scale = Math.Min(3.0, Math.Max(0.25, z));
         }
 
         // Logo size of category 'file' in pixels (IconSize: pixels or % of the
@@ -738,18 +1060,11 @@ namespace RaintileOptions
             Canvas.SetTop(previewLogo, r.CY - r.S / 2);
         }
 
-        // Writes LogoPos/LogoScale; the centre at scale 1 (the default) removes them
+        // Writes LogoPos/LogoScale; the category's placement (the centre at scale 1
+        // by default) removes them
         void SaveLogoPlace()
         {
-            var t = GetCurrentTile();
-            if (t == null) return;
-            double x = Math.Round(logoPlace.X * 100, 1), y = Math.Round(logoPlace.Y * 100, 1), z = Math.Round(logoPlace.Scale, 2);
-            string pos = x == 50 && y == 50 ? "" : x.ToString("0.#", Inv) + "," + y.ToString("0.#", Inv);
-            string scale = z == 1 ? "" : z.ToString("0.##", Inv);
-            if (Core.GetKey(t, "LogoPos") == pos && Core.GetKey(t, "LogoScale") == scale) return;
-            Core.SetKey(t, "LogoPos", pos);
-            Core.SetKey(t, "LogoScale", scale);
-            SetChanged(currentFile);
+            SavePlace("LogoPos", "LogoScale", FormatPair(logoPlace.X, logoPlace.Y), FormatFactor(logoPlace.Scale));
         }
 
         // The position is not limited here: a logo pushed into a corner stays there
@@ -760,40 +1075,137 @@ namespace RaintileOptions
             SaveLogoPlace();
         }
 
+        // --- Placement of the play time line (InfoPos) ------------------------------------
+        // Same maths as infoPlacement in Raintile.lua: InfoPos is where the line goes in
+        // the room it leaves inside the margins (LabelPad), 0,0 = top left, so it stays
+        // in the tile whatever it says. The preview shows a sample line at the size
+        // the skin draws it.
+
+        void ReadInfoPlace(IniSection section)
+        {
+            infoPlace.X = 0; infoPlace.Y = 0;
+            if (section == null) return;
+            double x, y;
+            if (ParsePair(GetPlaceKey(section, "InfoPos"), out x, out y)) { infoPlace.X = Math.Min(100.0, x) / 100; infoPlace.Y = Math.Min(100.0, y) / 100; }
+        }
+
+        // Preview pixels per screen pixel, and the margin of the line (LabelPad: pixels
+        // or % of the screen height)
+        double PreviewScale() { return preview.Width / bgFrame.TW; }
+
+        double GetInfoPad()
+        {
+            string raw = V("LabelPad");
+            double n;
+            var m = Regex.Match(raw, @"^\s*([\d.]+)\s*%\s*$");
+            if (m.Success && double.TryParse(m.Groups[1].Value, NumberStyles.Float, Inv, out n)) n = n * screenPx[1] / 100;
+            else if (!double.TryParse(raw.Trim(), NumberStyles.Float, Inv, out n) || n < 0) n = 14;
+            return n * PreviewScale();
+        }
+
+        // The line in the preview, in preview pixels (measured by UpdateInfoPlace)
+        Rect GetInfoRect()
+        {
+            double pad = GetInfoPad();
+            var d = previewInfo.DesiredSize;
+            double fw = Math.Max(0.0, preview.Width - 2 * pad - d.Width), fh = Math.Max(0.0, preview.Height - 2 * pad - d.Height);
+            return new Rect(pad + infoPlace.X * fw, pad + infoPlace.Y * fh, d.Width, d.Height);
+        }
+
+        bool TestOnInfo(Point pt)
+        {
+            if (previewInfo.Visibility != Visibility.Visible) return false;
+            var r = GetInfoRect();
+            r.Inflate(4, 4);
+            return r.Contains(pt);
+        }
+
+        // The line moved to (left, top) in the preview: back to InfoPos, close to an
+        // edge it snaps to it (top right is 100,0, not 99.4,0.3)
+        void MoveInfo(double left, double top)
+        {
+            double pad = GetInfoPad();
+            var d = previewInfo.DesiredSize;
+            double fw = preview.Width - 2 * pad - d.Width, fh = preview.Height - 2 * pad - d.Height;
+            Func<double, double> snap = v => { v = Math.Min(1.0, Math.Max(0.0, v)); return v < 0.03 ? 0 : v > 0.97 ? 1 : v; };
+            if (fw > 0) infoPlace.X = snap((left - pad) / fw);
+            if (fh > 0) infoPlace.Y = snap((top - pad) / fh);
+        }
+
+        void UpdateInfoPlace()
+        {
+            if (previewInfo == null) return;
+            bool top = infoPlace.X == 0 && infoPlace.Y == 0;
+            infoPosText.Text = top ? "top left" : FormatPair(infoPlace.X, infoPlace.Y).Replace(",", ", ") + "%";
+            if (previewInfo.Visibility != Visibility.Visible) return;
+            // as the skin: InfoFontSize in points, Padding=7,3,7,4 (StyleTileInfo)
+            double k = PreviewScale(), font;
+            if (!double.TryParse(V("InfoFontSize"), NumberStyles.Float, Inv, out font) || font <= 0) font = 10;
+            var text = (TextBlock)previewInfo.Child;
+            text.FontSize = Math.Max(1.0, font * 96 / 72 * k);
+            text.Foreground = NewColorBrush(V("TextColor"));
+            if (V("FontFace") != "") text.FontFamily = new FontFamily(V("FontFace"));
+            previewInfo.Padding = new Thickness(7 * k, 3 * k, 7 * k, 4 * k);
+            previewInfo.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var r = GetInfoRect();
+            Canvas.SetLeft(previewInfo, r.X);
+            Canvas.SetTop(previewInfo, r.Y);
+        }
+
+        void SaveInfoPlace()
+        {
+            SavePlace("InfoPos", null, FormatPair(infoPlace.X, infoPlace.Y), null);
+        }
+
         void UpdateTilePreview()
         {
+            bool all = IsAllSelected();
             var s = GetShownTile();
             string b = GetCurrentBase();
-            string bg = s != null ? Core.GetTileImage(b, s, "Background") : null;
-            string logo = s != null ? Core.GetTileImage(b, s, "Logo") : null;
-            preview.Background = s != null ? GetTileBrush(b, s, bg, logo) : ResBrush("FieldBg");
+            // All tiles: the category's values on the images of the tile chosen in
+            // Preview on, or on the placeholders
+            var sampleItem = all && previewOn != null ? previewOn.SelectedItem as ComboBoxItem : null;
+            var sample = sampleItem != null ? sampleItem.Tag as IniSection : null;
+            var images = all ? sample : s;
+            string bg = images != null ? Core.GetTileImage(b, images, "Background") : null;
+            string logo = images != null ? Core.GetTileImage(b, images, "Logo") : null;
+            preview.Background = all ? GetTileBrush(b, null, bg, logo) : s != null ? GetTileBrush(b, s, bg, logo) : ResBrush("FieldBg");
             // decoded large enough to stay sharp when zoomed in
-            if (bgFrame.Path != bg) { bgFrame.Path = bg; bgFrame.Bitmap = GetBitmap(bg, 1200); }
-            if (bg == null) bgFrame.Bitmap = null;
+            string bgKey = all && sample == null ? "*placeholder" : bg;
+            if (bgFrame.Path != bgKey) { bgFrame.Path = bgKey; bgFrame.Bitmap = bgKey == "*placeholder" ? GetPlaceholderBackground() : GetBitmap(bg, 1200); }
+            if (bgKey == null) bgFrame.Bitmap = null;
+            if (all) s = currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null;
             ReadFraming(s);
             var size = currentFile != null ? GetTileSize(currentFile) : new double[] { 16, 9 };
             // a tile of more cells (Size=): its own proportions (gaps left out)
-            var span = Regex.Match(s != null ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
+            var span = Regex.Match(s != null && !all ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
             if (span.Success)
             {
                 size = new[] { size[0] * Math.Max(1, int.Parse(span.Groups[1].Value)), size[1] * Math.Max(1, int.Parse(span.Groups[2].Value)) };
             }
             bgFrame.TW = size[0]; bgFrame.TH = size[1];
-            previewLogo.Source = GetBitmap(logo, 384);
+            previewLogo.Source = all && sample == null ? GetPlaceholderLogo() : GetBitmap(logo, 384);
             ReadLogoPlace(s);
             logoPlace.Box = currentFile != null ? GetLogoBox(currentFile) : 96.0;
+            ReadInfoPlace(s);
+            // the line is not drawn with TileInfo=Never, nor on the widgets of a Dashboard
+            bool info = currentFile != null && !IsDashboard(currentFile) && !V("TileInfo").Equals("never", StringComparison.OrdinalIgnoreCase);
+            previewInfo.Visibility = info ? Visibility.Visible : Visibility.Collapsed;
+            infoRow.Visibility = info ? Visibility.Visible : Visibility.Collapsed;
             UpdateFraming();
             UpdateLogoPlace();
-            string label = s != null ? Core.GetKey(s, "Label") : "";
-            if (label == "" && s != null && bg == null && logo == null) label = s.Name;
+            UpdateInfoPlace();
+            UpdatePlaceState();
+            string label = s != null && !all ? Core.GetKey(s, "Label") : "";
+            if (label == "" && s != null && !all && bg == null && logo == null) label = s.Name;
             previewLabel.Text = label;
             previewLabel.Visibility = label != "" && V("ShowLabels") != "0" ? Visibility.Visible : Visibility.Collapsed;
+            if (all) return;
             SetThumb(bgThumb, bg);
             SetThumb(logoThumb, logo);
-            bgPath.Text = bg ?? (s != null ? "None. Default: Images\\" + b + "\\background\\" + s.Name + ".jpg" : "");
-            logoPath.Text = logo ?? (s != null ? "None. Default: Images\\" + b + "\\logo\\" + s.Name + ".png" : "");
-            var sw = NewColorBrush(s != null ? Core.GetKey(s, "Color") : "", true);
-            colorSwatch.Background = (Brush)sw ?? ResBrush("FieldBg");
+            SetLabelHint(bgPath, bg ?? (s != null ? "None. Default: Images\\" + b + "\\background\\" + s.Name + ".jpg" : ""));
+            SetLabelHint(logoPath, logo ?? (s != null ? "None. Default: Images\\" + b + "\\logo\\" + s.Name + ".png" : ""));
+            SetSwatch(colorSwatch, s != null ? Core.GetKey(s, "Color") : "");
             var sel = tilesList.SelectedItem as ListBoxItem;
             if (sel != null && ((ListTag)sel.Tag).Section != null) UpdateTileEntry(sel);
         }
@@ -853,8 +1265,13 @@ namespace RaintileOptions
             var s = GetShownTile();
             var sel = TagOf(tilesList.SelectedItem);
             bool imported = sel != null && sel.Imported;
+            bool all = sel != null && sel.All;
             tileCard.IsEnabled = s != null && !imported;
+            tileCard.Visibility = all ? Visibility.Collapsed : Visibility.Visible;
+            allCard.Visibility = all ? Visibility.Visible : Visibility.Collapsed;
+            previewOnRow.Visibility = all ? Visibility.Visible : Visibility.Collapsed;
             importedCard.Visibility = imported ? Visibility.Visible : Visibility.Collapsed;
+            if (all) ShowAllTiles();
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" }) tileFields[k].Text = s != null ? Core.GetKey(s, k) : "";
             UpdateTagSuggestions();
             tileKeyButton.Content = Schema.FormatHotKey(s != null ? Core.GetKey(s, "HotKey") : "");
@@ -874,32 +1291,173 @@ namespace RaintileOptions
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
             tileNote.Visibility = tileNote.Text != "" ? Visibility.Visible : Visibility.Collapsed;
-            // other categories the tile can move to
-            moveTo.Items.Clear();
-            foreach (var e in GetCategoryEntries())
-            {
-                if (e.File == currentFile) continue;
-                moveTo.Items.Add(new ComboBoxItem { Content = e.Name, Tag = e.File });
-            }
+            // a Dashboard has widgets: no backgrounds or logos to place
+            bool dash = IsDashboard(currentFile);
+            frameRow.Visibility = logoRow.Visibility = dash ? Visibility.Collapsed : Visibility.Visible;
             loading = false;
             UpdateTilePreview();
+        }
+
+        // All tiles: the settings of the category (its [Category] section)
+        void ShowAllTiles()
+        {
+            var c = currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null;
+            foreach (var kv in allFields) kv.Value.Text = c != null ? Core.GetKey(c, kv.Key) : "";
+            SetLabelHint(gridHint, "Columns \u00D7 rows. Empty = default (" + V("NX") + " \u00D7 " + V("NY") + ", from Layout)");
+            SetLabelHint(sizeHint, "Pixels or % of the screen height. Empty = default (" + V("IconSize") + ")");
+            catTileColor.Text = c != null ? Core.GetKey(c, "TileColor") : "";
+            SetSwatch(catColorSwatch, catTileColor.Text);
+            SelectOpacity(catOpacity, c != null ? Core.GetKey(c, "TileOpacity") : "");
+            int count = currentFile != null ? Core.GetTiles(GetModel(currentFile)).Count : 0;
+            allNote.Text = count == 0 ? "No tiles yet: add one with the + button." : "";
+            allNote.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            // Preview on: the placeholders or a tile with images
+            var keep = previewOn.SelectedItem as ComboBoxItem;
+            var keepTile = keep != null ? keep.Tag as IniSection : null;
+            previewOn.Items.Clear();
+            previewOn.Items.Add(new ComboBoxItem { Content = "Placeholder images", Tag = null });
+            string b = GetCurrentBase();
+            if (currentFile != null)
+                foreach (var t in Core.GetTiles(GetModel(currentFile)))
+                    if (Core.GetTileImage(b, t, "Background") != null || Core.GetTileImage(b, t, "Logo") != null)
+                        previewOn.Items.Add(new ComboBoxItem { Content = t.Name, Tag = t });
+            previewOn.SelectedItem = previewOn.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag == keepTile) ?? previewOn.Items[0];
+            UpdatePlacementHint();
+        }
+
+        // Every field of a form fills the column, so all of them share both edges; a
+        // button after it (Browse..., the clear button) takes its room from the field.
+        const double PairGap = 32;
+
+        // Every field of a form is as high as a button (Choose...), so all the rows
+        // have the same height: text boxes, lists, buttons, swatches, thumbnails
+        const double FieldHeight = 30;
+
+        void FitFieldHeight(DependencyObject d)
+        {
+            var tb = d as TextBox;
+            if (tb != null)
+            {
+                // the style's 5 px above and below would cut the text at this height;
+                // centred anyway, in the size of the labels
+                tb.Height = FieldHeight;
+                tb.Padding = T(8, 0);
+                tb.FontSize = 13;
+                return;
+            }
+            if (d is ComboBox) { ((ComboBox)d).Height = FieldHeight; return; }
+            var b = d as Button;
+            if (b != null)
+            {
+                if (b.Style == ResStyle("IconButton")) return;   // the small x keeps its size
+                b.Height = FieldHeight;
+                if (b.Style == ResStyle("Swatch")) b.Width = FieldHeight;
+                return;
+            }
+            var p = d as Panel;
+            if (p != null) foreach (UIElement c in p.Children) FitFieldHeight(c);
         }
 
         Grid NewFormRow(string label, UIElement control, string hint = "", FrameworkElement hintBlock = null)
         {
             var g = NewGrid("118", "*");
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             g.Margin = T(0, 7);
+            // centred on the control, not on the hint below it
             var l = NewText(label, 13, ResBrush("DimBrush"));
-            l.VerticalAlignment = VerticalAlignment.Top;
-            l.Margin = T(0, 6, 0, 0);
+            l.VerticalAlignment = VerticalAlignment.Center;
             g.Children.Add(l);
-            var sp = NewPanel();
-            AddTo(sp, control);
-            if (hintBlock == null && !string.IsNullOrEmpty(hint)) hintBlock = NewText(hint, 11.5, ResBrush("DimBrush"), false, true);
-            if (hintBlock != null) { hintBlock.Margin = T(0, 4, 0, 0); AddTo(sp, hintBlock); }
-            SetCol(sp, 1);
-            g.Children.Add(sp);
+            // A fixed hint is the tooltip of the label (dotted underline), to keep the form short;
+            // hintBlock stays below the control: it shows current values or holds buttons.
+            if (!string.IsNullOrEmpty(hint)) SetLabelHint(l, hint);
+            // a field with its own width starts at the left edge (stretched, it would be centred)
+            var fe = control as FrameworkElement;
+            if (fe != null && !double.IsNaN(fe.Width)) fe.HorizontalAlignment = HorizontalAlignment.Left;
+            FitFieldHeight(control);
+            SetCol(control, 1);
+            g.Children.Add(control);
+            if (hintBlock != null)
+            {
+                hintBlock.Margin = T(0, 4, 0, 0);
+                SetCol(hintBlock, 1);
+                Grid.SetRow(hintBlock, 1);
+                g.Children.Add(hintBlock);
+            }
             return g;
+        }
+
+        // Two fields split the column around a dimmed x (grid, size)
+        Grid NewPairRow(FrameworkElement a, FrameworkElement b)
+        {
+            var g = NewGrid("*", PairGap.ToString(System.Globalization.CultureInfo.InvariantCulture), "*");
+            var by = NewText(((char)0xD7).ToString(), 13, ResBrush("DimBrush"));
+            by.VerticalAlignment = VerticalAlignment.Center;
+            by.HorizontalAlignment = HorizontalAlignment.Center;
+            SetCol(by, 1); SetCol(b, 2);
+            g.Children.Add(a); g.Children.Add(by); g.Children.Add(b);
+            return g;
+        }
+
+        // A colour swatch shows its field: empty = the field background, as an empty field
+        void SetSwatch(Button swatch, string value)
+        {
+            swatch.Background = (Brush)NewColorBrush(value, true) ?? ResBrush("FieldBg");
+        }
+
+        // The one button that empties a field (hot key, image, icon); the trash is for
+        // deleting a tile or a category
+        Button NewClearButton(string tip)
+        {
+            var b = NewIconButton(0xE711, tip);
+            b.Margin = T(6, 0, 0, 0);
+            return b;
+        }
+
+        // A field that fills the column between an optional element before it
+        // (swatch, thumbnail) and one after it (clear button)
+        Grid NewFieldRow(FrameworkElement lead, FrameworkElement field, FrameworkElement tail)
+        {
+            var g = NewGrid("Auto", "*", "Auto");
+            if (lead != null)
+            {
+                lead.VerticalAlignment = VerticalAlignment.Center;
+                g.Children.Add(lead);
+                field.Margin = T(8, 0, 0, 0);
+            }
+            field.VerticalAlignment = VerticalAlignment.Center;
+            SetCol(field, 1);
+            g.Children.Add(field);
+            if (tail != null)
+            {
+                tail.VerticalAlignment = VerticalAlignment.Center;
+                SetCol(tail, 2);
+                g.Children.Add(tail);
+            }
+            return g;
+        }
+
+        static TextDecorationCollection hintUnderline;
+
+        void SetLabelHint(TextBlock label, string hint)
+        {
+            if (string.IsNullOrEmpty(hint)) { label.TextDecorations = null; label.ClearValue(FrameworkElement.CursorProperty); label.ToolTip = null; return; }
+            if (hintUnderline == null)
+            {
+                var dim = ResBrush("DimBrush") as SolidColorBrush;
+                var brush = new SolidColorBrush(dim != null ? dim.Color : Colors.Gray) { Opacity = 0.6 };
+                // 1 px dots 2 px apart (DashStyles.Dot has zero-length dashes: invisible with flat caps)
+                var pen = new Pen(brush, 1) { DashStyle = new DashStyle(new double[] { 1, 2 }, 0) };
+                pen.Freeze();
+                hintUnderline = new TextDecorationCollection { new TextDecoration(TextDecorationLocation.Underline, pen, 2, TextDecorationUnit.FontRecommended, TextDecorationUnit.Pixel) };
+                hintUnderline.Freeze();
+            }
+            label.TextDecorations = hintUnderline;
+            label.Cursor = Cursors.Help;
+            // the default tooltip neither wraps nor stays long enough for two lines of text
+            label.ToolTip = new TextBlock { Text = hint, TextWrapping = TextWrapping.Wrap, MaxWidth = 340 };
+            ToolTipService.SetInitialShowDelay(label, 250);
+            ToolTipService.SetShowDuration(label, 60000);
         }
 
         Border NewListColumn(string title, UIElement list, params UIElement[] buttons)
@@ -925,7 +1483,7 @@ namespace RaintileOptions
         // Drag and drop in a list: 'move(from, to)' moves the item at index 'from'
         // to index 'to' (both in the list as it is before the move). A thin line
         // shows where it goes. 'canDrag' leaves some items out (imported tiles).
-        void EnableDragReorder(ListBox list, Func<ListBoxItem, bool> canDrag, Action<int, int> move)
+        void EnableDragReorder(ListBox list, Func<ListBoxItem, bool> canDrag, Action<int, int> move, bool horizontal = false)
         {
             list.AllowDrop = true;
             Point start = new Point();
@@ -950,10 +1508,10 @@ namespace RaintileOptions
             {
                 e.Effects = e.Data.GetDataPresent("RaintileItem") ? DragDropEffects.Move : DragDropEffects.None;
                 e.Handled = true;
-                int to = DropIndex(list, e);
+                int to = DropIndex(list, e, horizontal);
                 ClearDropMark(list);
-                if (to < list.Items.Count) ((ListBoxItem)list.Items[to]).BorderThickness = T(0, 2, 0, 0);
-                else if (list.Items.Count > 0) ((ListBoxItem)list.Items[list.Items.Count - 1]).BorderThickness = T(0, 0, 0, 2);
+                if (to < list.Items.Count) ((ListBoxItem)list.Items[to]).BorderThickness = horizontal ? T(2, 0, 0, 0) : T(0, 2, 0, 0);
+                else if (list.Items.Count > 0) ((ListBoxItem)list.Items[list.Items.Count - 1]).BorderThickness = horizontal ? T(0, 0, 2, 0) : T(0, 0, 0, 2);
             };
             list.DragLeave += (s, e) => ClearDropMark(list);
             list.Drop += (s, e) =>
@@ -961,11 +1519,65 @@ namespace RaintileOptions
                 ClearDropMark(list);
                 var item = e.Data.GetData("RaintileItem") as ListBoxItem;
                 if (item == null) return;
-                int from = list.Items.IndexOf(item), to = DropIndex(list, e);
+                int from = list.Items.IndexOf(item), to = DropIndex(list, e, horizontal);
                 if (from < 0) return;
                 if (to > from) to--;   // the item leaves its place first
                 if (to != from) move(from, to);
             };
+        }
+
+        // A tile of the strip dropped on another category of the menu moves there
+        // with its images (both category files are saved at once). Not for imported
+        // tiles, the Dashboard and its widgets.
+        void EnableTileDropOnNav()
+        {
+            ListBoxItem marked = null;
+            Action unmark = () => { if (marked != null) marked.BorderThickness = T(0); marked = null; };
+            Func<DragEventArgs, string> target = e =>
+            {
+                var tile = e.Data.GetData("RaintileItem") as ListBoxItem;
+                if (tile == null || !tilesList.Items.Contains(tile) || currentFile == null || IsDashboard(currentFile)) return null;
+                var over = ItemAt(nav, e.OriginalSource as DependencyObject);
+                var tag = over != null ? over.Tag as NavTag : null;
+                if (tag == null || tag.Type != "category" || tag.File == currentFile || IsDashboard(tag.File)) return null;
+                return tag.File;
+            };
+            nav.AllowDrop = true;
+            nav.DragOver += (s, e) =>
+            {
+                unmark();
+                e.Handled = true;
+                if (target(e) == null) { e.Effects = DragDropEffects.None; return; }
+                e.Effects = DragDropEffects.Move;
+                marked = ItemAt(nav, e.OriginalSource as DependencyObject);
+                marked.BorderBrush = ResBrush("AccentBrush");
+                marked.BorderThickness = T(1);
+            };
+            nav.DragLeave += (s, e) => unmark();
+            nav.Drop += (s, e) =>
+            {
+                unmark();
+                string to = target(e);
+                if (to == null) return;
+                var tile = (ListBoxItem)e.Data.GetData("RaintileItem");
+                int index = tilesList.Items.IndexOf(tile);
+                string err = MoveTileToCategory(currentFile, ((ListTag)tile.Tag).Section, to);
+                if (err != null) { ShowDialog("Raintile", err); return; }
+                RefreshTiles(Math.Max(0, index - 2));   // the tile before it (All tiles is entry 0)
+            };
+        }
+
+        // The scroll viewer inside a control's template (the strip scrolls with the wheel)
+        static ScrollViewer FindScrollViewer(DependencyObject d)
+        {
+            var sv = d as ScrollViewer;
+            if (sv != null) return sv;
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+            {
+                sv = FindScrollViewer(VisualTreeHelper.GetChild(d, i));
+                if (sv != null) return sv;
+            }
+            return null;
         }
 
         static ListBoxItem ItemAt(ListBox list, DependencyObject element)
@@ -974,13 +1586,14 @@ namespace RaintileOptions
         }
 
         // Index the dragged item would take: before the item under the mouse, or
-        // after it in its lower half
-        static int DropIndex(ListBox list, DragEventArgs e)
+        // after it in its lower (horizontal list: right) half
+        static int DropIndex(ListBox list, DragEventArgs e, bool horizontal = false)
         {
             var over = ItemAt(list, e.OriginalSource as DependencyObject);
             if (over == null) return list.Items.Count;
             int i = list.Items.IndexOf(over);
-            return e.GetPosition(over).Y > over.ActualHeight / 2 ? i + 1 : i;
+            var p = e.GetPosition(over);
+            return (horizontal ? p.X > over.ActualWidth / 2 : p.Y > over.ActualHeight / 2) ? i + 1 : i;
         }
 
         void ClearDropMark(ListBox list)
@@ -1003,8 +1616,6 @@ namespace RaintileOptions
             SetCol(sv, 1);
             grid.Children.Add(sv);
             var side = NewPanel();
-            side.MaxWidth = 600;
-            side.HorizontalAlignment = HorizontalAlignment.Left;
             sv.Content = side;
             var bar = NewPanel(Orientation.Horizontal);
             bar.Margin = T(0, 0, 0, 12);
@@ -1026,60 +1637,17 @@ namespace RaintileOptions
             catCard = NewCard("Category", "");
             AddTo(side, catCard);
             var f = CardPanel(catCard);
-            foreach (var k in new[] { "Name", "NX", "NY", "IconSize" }) catFields[k] = new TextBox();
-            catFields["NX"].Width = 64; catFields["NY"].Width = 64; catFields["IconSize"].Width = 100;
+            catFields["Name"] = new TextBox();
             AddTo(f, NewFormRow("Name", catFields["Name"], "Text shown in the menu."));
-            var iconRow = NewPanel(Orientation.Horizontal);
-            catIcon = NewThumb(36);
+            catIcon = NewThumb(FieldHeight);
             var btnIcon = NewButton("Choose...");
-            btnIcon.Margin = T(10, 0, 0, 0);
-            var btnIconDel = NewButton("Remove");
-            btnIconDel.Margin = T(6, 0, 0, 0);
-            AddTo(iconRow, catIcon); AddTo(iconRow, btnIcon); AddTo(iconRow, btnIconDel);
+            var btnIconDel = NewClearButton("Remove the icon");
+            var iconRow = NewFieldRow(catIcon, btnIcon, btnIconDel);
             catIconHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
             AddTo(f, NewFormRow("Icon", iconRow, "", catIconHint));
-            var gridRow = NewPanel(Orientation.Horizontal);
-            AddTo(gridRow, catFields["NX"]);
-            var x = NewText("\u00D7", 13, ResBrush("DimBrush"));
-            x.Margin = T(8, 0, 8, 0);
-            x.VerticalAlignment = VerticalAlignment.Center;
-            AddTo(gridRow, x);
-            AddTo(gridRow, catFields["NY"]);
-            gridHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
-            AddTo(f, NewFormRow("Grid", gridRow, "", gridHint));
-            sizeHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
-            AddTo(f, NewFormRow("Logo size", catFields["IconSize"], "", sizeHint));
-            // background of the tiles of the category
-            var catColorRow = NewPanel(Orientation.Horizontal);
-            catColorSwatch = NewButton("", "Swatch", "Pick a colour");
-            catTileColor = new TextBox { Width = 170, Margin = T(10, 0, 0, 0) };
-            AddTo(catColorRow, catColorSwatch); AddTo(catColorRow, catTileColor);
-            AddTo(f, NewFormRow("Tile colour", catColorRow, "For the tiles without a colour of their own. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent."));
-            catColorSwatch.Click += (s, e) =>
-            {
-                if (GetListFile() == null) return;
-                string n = SelectColor(catTileColor.Text);
-                if (n != null) catTileColor.Text = n;
-            };
-            catTileColor.TextChanged += (s, e) =>
-            {
-                if (loading) return;
-                string file = GetListFile();
-                if (file == null) return;
-                Core.SetKey(Core.GetCategorySection(GetModel(file)), "TileColor", catTileColor.Text.Trim());
-                SetChanged(file);
-            };
-            catOpacity = NewOpacityBox("100% (default)");
-            AddTo(f, NewFormRow("Tile background", catOpacity, "Opacity of the colour and the image of its tiles, e.g. lower for a Dashboard with skins over the tiles. Logos, texts and widgets stay as they are."));
-            catOpacity.SelectionChanged += (s, e) =>
-            {
-                if (loading) return;
-                string file = GetListFile();
-                var item = catOpacity.SelectedItem as ComboBoxItem;
-                if (file == null || item == null) return;
-                Core.SetKey(Core.GetCategorySection(GetModel(file)), "TileOpacity", (string)item.Tag);
-                SetChanged(file);
-            };
+            var more = NewText("Grid, logo size, tile colour and background, framing and logo of all its tiles: open the category (double click) and choose All tiles, the first entry above its tiles.", 12, ResBrush("DimBrush"), false, true);
+            more.Margin = T(0, 6, 0, 10);
+            AddTo(f, more);
 
             catsList.SelectionChanged += (s, e) => ShowCategoryDetails();
             // drag a category to change the order of the menu
@@ -1199,62 +1767,69 @@ namespace RaintileOptions
             return grid;
         }
 
-        // Page of one category (the same page for all: ShowCategory fills it)
+        // Page of one category (the same page for all: ShowCategory fills it). On
+        // top the strip of its tiles, All tiles first; below, the preview with the
+        // framing and the logo on the left, the settings on the right.
         UIElement NewCategoryPage()
         {
-            var grid = NewGrid("300", "*");
-            grid.Margin = T(36, 4, 36, 20);
+            var grid = new Grid { Margin = T(36, 4, 36, 20) };
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(11, GridUnitType.Star), MinWidth = 260 });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10, GridUnitType.Star), MinWidth = 330 });
 
-            // Column 1: tiles of the category
+            // Row 0: the tiles side by side, scrolled with the wheel
             tilesList = new ListBox();
+            var ip = new FrameworkElementFactory(typeof(StackPanel));
+            ip.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            tilesList.ItemsPanel = new ItemsPanelTemplate(ip);
+            ScrollViewer.SetHorizontalScrollBarVisibility(tilesList, ScrollBarVisibility.Auto);
+            ScrollViewer.SetVerticalScrollBarVisibility(tilesList, ScrollBarVisibility.Disabled);
+            tilesList.PreviewMouseWheel += (s, e) =>
+            {
+                var scroll = FindScrollViewer(tilesList);
+                if (scroll == null) return;
+                for (int n = 0; n < 2; n++) { if (e.Delta > 0) scroll.LineLeft(); else scroll.LineRight(); }
+                e.Handled = true;
+            };
             var btnTileNew = NewIconButton(0xE710, "New tile");
             var btnTileDel = NewIconButton(0xE74D, "Delete tile");
-            var btnTileUp = NewIconButton(0xE70E, "Move up");
-            var btnTileDown = NewIconButton(0xE70D, "Move down");
-            grid.Children.Add(NewListColumn("Tiles", tilesList, btnTileNew, btnTileUp, btnTileDown, btnTileDel));
+            var btnTileUp = NewIconButton(0xE76B, "Move left");
+            var btnTileDown = NewIconButton(0xE76C, "Move right");
+            var strip = NewListColumn("Tiles", tilesList, btnTileNew, btnTileUp, btnTileDown, btnTileDel);
+            strip.Margin = T(0, 0, 0, 14);
+            Grid.SetColumnSpan(strip, 2);
+            grid.Children.Add(strip);
 
-            // Column 2: details
-            var sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-            SetCol(sv, 1);
-            grid.Children.Add(sv);
-            var details = NewPanel();
-            details.MaxWidth = 640;
-            details.HorizontalAlignment = HorizontalAlignment.Left;
-            sv.Content = details;
+            // Row 1, left: the preview, as the tile looks in the launcher
+            var leftScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = T(0, 0, 14, 0) };
+            Grid.SetRow(leftScroll, 1);
+            grid.Children.Add(leftScroll);
+            previewCard = new Border { Style = ResStyle("Card"), Padding = T(20, 16, 20, 14), VerticalAlignment = VerticalAlignment.Top };
+            leftScroll.Content = previewCard;
+            var left = NewPanel();
+            previewCard.Child = left;
+            previewColumn = left;
+            // the preview follows the width of the column
+            left.SizeChanged += (s, e) => { if (e.WidthChanged && preview != null) { UpdateFraming(); UpdateLogoPlace(); UpdateInfoPlace(); } };
 
-            // Imported game: read-only, can become a normal tile
-            importedCard = NewCard("Imported game", "");
-            importedCard.Visibility = Visibility.Collapsed;
-            AddTo(details, importedCard);
-            var txt = NewText("From the old automatic import (written below its marker line), so it cannot be edited here. Make it a normal tile to edit or move it: its images are copied to the category folders. Opening Import turns all of them into normal tiles.", 12.5, ResBrush("DimBrush"), false, true);
-            txt.Margin = T(0, 0, 0, 10);
-            AddTo(CardPanel(importedCard), txt);
-            var btnConvert = NewButton("Make it a normal tile", "AccentButton");
-            btnConvert.HorizontalAlignment = HorizontalAlignment.Left;
-            btnConvert.Margin = T(0, 0, 0, 10);
-            AddTo(CardPanel(importedCard), btnConvert);
-            btnConvert.Click += (s, e) =>
-            {
-                var sel = TagOf(tilesList.SelectedItem);
-                if (sel == null || !sel.Imported || sel.Section == null) return;
-                var n = ConvertImportedTile(currentFile, sel.Section.Name);
-                if (n != null) RefreshTiles(Core.GetTiles(GetModel(currentFile)).Count - 1);
-            };
+            // All tiles: the tile whose images show the category's values
+            var por = NewPanel(Orientation.Horizontal);
+            por.Margin = T(0, 0, 0, 12);
+            var pol = NewText("Preview on", 13, ResBrush("DimBrush"));
+            pol.VerticalAlignment = VerticalAlignment.Center;
+            pol.Margin = T(0, 0, 10, 0);
+            previewOn = new ComboBox { MinWidth = 200, Height = FieldHeight };
+            AddTo(por, pol); AddTo(por, previewOn);
+            previewOnRow = por;
+            AddTo(left, por);
+            previewOn.SelectionChanged += (s, e) => { if (!loading && IsAllSelected()) UpdateTilePreview(); };
 
-            // Tile card
-            tileCard = NewCard("Tile", "");
-            AddTo(details, tileCard);
-            var f = CardPanel(tileCard);
-            tileNote = NewText("", 12.5, ResBrush("AccentBrush"), false, true);
-            tileNote.Margin = T(0, 0, 0, 8);
-            AddTo(f, tileNote);
-
-            // preview, as the tile looks in the launcher (sized by UpdateFraming); the
-            // background sits on a canvas, positioned by the framing
+            // the background sits on a canvas, positioned by the framing (sized by UpdateFraming)
             preview = new Border
             {
-                Width = 384, Height = 216, CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Left,
-                Margin = T(0, 4, 0, 10), ClipToBounds = true,
+                Width = 384, Height = 216, CornerRadius = new CornerRadius(8), HorizontalAlignment = HorizontalAlignment.Center,
+                ClipToBounds = true,
             };
             var pg = new Grid();
             preview.Child = pg;
@@ -1264,6 +1839,14 @@ namespace RaintileOptions
             // the logo on the same canvas, positioned by UpdateLogoPlace
             previewLogo = new Image { Stretch = Stretch.Uniform };
             canvas.Children.Add(previewLogo);
+            // the play time line over the logo, as in the skin: a sample text, placed
+            // by UpdateInfoPlace
+            previewInfo = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)), IsHitTestVisible = false,
+                Child = new TextBlock { Text = "24 h played - yesterday", FontWeight = FontWeights.SemiBold },
+            };
+            canvas.Children.Add(previewInfo);
             previewLabel = NewText("", 14, NewColorBrush(V("TextColor")));
             previewLabel.HorizontalAlignment = HorizontalAlignment.Left;
             previewLabel.VerticalAlignment = VerticalAlignment.Bottom;
@@ -1274,40 +1857,91 @@ namespace RaintileOptions
             previewLabel.IsHitTestVisible = false;
             pg.Children.Add(canvas);
             pg.Children.Add(previewLabel);
-            AddTo(f, preview);
+            AddTo(left, preview);
+            var how = NewText("Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. The preview has the proportions of this category's tiles on this screen.", 11.5, ResBrush("DimBrush"), false, true);
+            how.Margin = T(0, 8, 0, 4);
+            AddTo(left, how);
 
-            // framing: drag the preview, wheel or slider to zoom
-            var fr = NewPanel(Orientation.Horizontal);
-            zoomSlider = new Slider { Width = 180, Minimum = 1, Maximum = 4, SmallChange = 0.05, LargeChange = 0.25, VerticalAlignment = VerticalAlignment.Center };
+            // framing and logo: name and value, the chip on the right; below, the
+            // slider with its reset (x), as the fields with a clear button
+            Func<string, Slider, TextBlock, Border, Button, StackPanel> placeBlock = (title, slider, value, chip, reset) =>
+            {
+                var block = NewPanel();
+                block.Margin = T(0, 12, 0, 0);
+                var head = NewGrid("Auto", "*", "Auto");
+                var name = NewText(title, 13, null, true);
+                name.VerticalAlignment = VerticalAlignment.Center;
+                head.Children.Add(name);
+                value.Margin = T(8, 0, 0, 0);
+                value.VerticalAlignment = VerticalAlignment.Center;
+                SetCol(value, 1);
+                head.Children.Add(value);
+                SetCol(chip, 2);
+                head.Children.Add(chip);
+                AddTo(block, head);
+                var line = NewGrid("*", "Auto");
+                line.Margin = T(0, 4, 0, 0);
+                slider.VerticalAlignment = VerticalAlignment.Center;
+                line.Children.Add(slider);
+                reset.Margin = T(8, 0, 0, 0);
+                reset.VerticalAlignment = VerticalAlignment.Center;
+                SetCol(reset, 1);
+                line.Children.Add(reset);
+                AddTo(block, line);
+                return block;
+            };
+            zoomSlider = new Slider { Minimum = 1, Maximum = 4, SmallChange = 0.05, LargeChange = 0.25 };
             zoomText = NewText("", 12, ResBrush("DimBrush"));
-            zoomText.Width = 48;
-            zoomText.Margin = T(10, 0, 0, 0);
-            zoomText.VerticalAlignment = VerticalAlignment.Center;
-            var btnFrameReset = NewButton("Reset");
-            btnFrameReset.Margin = T(6, 0, 0, 0);
-            AddTo(fr, zoomSlider); AddTo(fr, zoomText); AddTo(fr, btnFrameReset);
-            frameRow = fr;
-            AddTo(f, NewFormRow("Framing", fr, "Drag the background in the preview to choose the part shown; zoom with the wheel or the slider. The preview has the size of this category's tiles on this screen."));
-
-            // logo: drag it in the preview, wheel over it or slider to resize
-            var lr = NewPanel(Orientation.Horizontal);
-            logoSlider = new Slider { Width = 180, Minimum = 0.25, Maximum = 3, SmallChange = 0.05, LargeChange = 0.25, VerticalAlignment = VerticalAlignment.Center };
+            frameChip = NewChip();
+            btnFrameReset = NewIconButton(0xE711, "Reset the framing");
+            var frameBlock = placeBlock("Framing", zoomSlider, zoomText, frameChip, btnFrameReset);
+            frameRow = frameBlock;
+            AddTo(left, frameBlock);
+            logoSlider = new Slider { Minimum = 0.25, Maximum = 3, SmallChange = 0.05, LargeChange = 0.25 };
             logoScaleText = NewText("", 12, ResBrush("DimBrush"));
-            logoScaleText.Width = 48;
-            logoScaleText.Margin = T(10, 0, 0, 0);
-            logoScaleText.VerticalAlignment = VerticalAlignment.Center;
-            var btnLogoReset = NewButton("Reset");
-            btnLogoReset.Margin = T(6, 0, 0, 0);
-            AddTo(lr, logoSlider); AddTo(lr, logoScaleText); AddTo(lr, btnLogoReset);
-            logoRow = lr;
-            AddTo(f, NewFormRow("Logo", lr, "Drag the logo in the preview to move it; resize it with the wheel over it or the slider (times the category's logo size). Independent of the framing."));
+            logoChip = NewChip();
+            btnLogoReset = NewIconButton(0xE711, "Reset the logo");
+            var logoBlock = placeBlock("Logo", logoSlider, logoScaleText, logoChip, btnLogoReset);
+            logoRow = logoBlock;
+            AddTo(left, logoBlock);
+            // play time line: only a place, so the reset sits on the name's line
+            infoPosText = NewText("", 12, ResBrush("DimBrush"));
+            infoChip = NewChip();
+            btnInfoReset = NewIconButton(0xE711, "Reset the play time line");
+            var infoBlock = NewPanel();
+            infoBlock.Margin = T(0, 12, 0, 0);
+            var infoHead = NewGrid("Auto", "*", "Auto", "Auto");
+            var infoName = NewText("Play time", 13, null, true);
+            infoName.VerticalAlignment = VerticalAlignment.Center;
+            infoName.ToolTip = "The line with the play time and the last launch (Appearance > Text): drag it in the preview";
+            infoHead.Children.Add(infoName);
+            infoPosText.Margin = T(8, 0, 0, 0);
+            infoPosText.VerticalAlignment = VerticalAlignment.Center;
+            SetCol(infoPosText, 1);
+            infoHead.Children.Add(infoPosText);
+            SetCol(infoChip, 2);
+            infoHead.Children.Add(infoChip);
+            btnInfoReset.Margin = T(8, 0, 0, 0);
+            btnInfoReset.VerticalAlignment = VerticalAlignment.Center;
+            SetCol(btnInfoReset, 3);
+            infoHead.Children.Add(btnInfoReset);
+            AddTo(infoBlock, infoHead);
+            infoRow = infoBlock;
+            AddTo(left, infoBlock);
 
-            // a press on the logo moves the logo, anywhere else the background
+            // a press on the play time line moves it, on the logo the logo, anywhere
+            // else the background (the line is drawn over the logo)
             preview.MouseLeftButtonDown += (s, e) =>
             {
-                if (GetCurrentTile() == null) return;
+                if (GetPlaceTarget() == null) return;
                 var pt = e.GetPosition(preview);
-                if (TestOnLogo(pt))
+                if (TestOnInfo(pt))
+                {
+                    var r = GetInfoRect();
+                    infoPlace.Dragging = true; infoPlace.DragPoint = pt; infoPlace.DragX = r.X; infoPlace.DragY = r.Y;
+                    infoPlace.Moved = false;
+                }
+                else if (TestOnLogo(pt))
                 {
                     LimitLogoPos();
                     logoPlace.Dragging = true; logoPlace.DragPoint = pt; logoPlace.DragX = logoPlace.X; logoPlace.DragY = logoPlace.Y;
@@ -1326,6 +1960,13 @@ namespace RaintileOptions
             preview.MouseMove += (s, e) =>
             {
                 var pt = e.GetPosition(preview);
+                if (infoPlace.Dragging)
+                {
+                    MoveInfo(infoPlace.DragX + pt.X - infoPlace.DragPoint.X, infoPlace.DragY + pt.Y - infoPlace.DragPoint.Y);
+                    infoPlace.Moved = true;
+                    UpdateInfoPlace();
+                    return;
+                }
                 if (logoPlace.Dragging)
                 {
                     logoPlace.X = logoPlace.DragX + (pt.X - logoPlace.DragPoint.X) / preview.Width;
@@ -1347,6 +1988,11 @@ namespace RaintileOptions
             // end of the drag (also when the capture is lost): written once
             preview.LostMouseCapture += (s, e) =>
             {
+                if (infoPlace.Dragging)
+                {
+                    infoPlace.Dragging = false;
+                    if (infoPlace.Moved) SaveInfoPlace();
+                }
                 if (logoPlace.Dragging)
                 {
                     logoPlace.Dragging = false;
@@ -1358,7 +2004,7 @@ namespace RaintileOptions
             };
             preview.MouseWheel += (s, e) =>
             {
-                if (GetCurrentTile() == null) return;
+                if (GetPlaceTarget() == null) return;
                 var pt = e.GetPosition(preview);
                 if (TestOnLogo(pt))
                 {
@@ -1372,28 +2018,137 @@ namespace RaintileOptions
             };
             logoSlider.ValueChanged += (s, e) =>
             {
-                if (logoPlace.Sync || previewLogo.Source == null || GetCurrentTile() == null) return;
+                if (logoPlace.Sync || previewLogo.Source == null || GetPlaceTarget() == null) return;
                 SetLogoScale(logoSlider.Value);
-            };
-            btnLogoReset.Click += (s, e) =>
-            {
-                if (previewLogo.Source == null || GetCurrentTile() == null) return;
-                logoPlace.X = 0.5; logoPlace.Y = 0.5; logoPlace.Scale = 1.0;
-                UpdateLogoPlace();
-                SaveLogoPlace();
             };
             zoomSlider.ValueChanged += (s, e) =>
             {
-                if (bgFrame.Sync || bgFrame.Bitmap == null || GetCurrentTile() == null) return;
+                if (bgFrame.Sync || bgFrame.Bitmap == null || GetPlaceTarget() == null) return;
                 SetFrameZoom(zoomSlider.Value);
             };
-            btnFrameReset.Click += (s, e) =>
+            // Reset: a tile goes back to All tiles, All tiles to the centre
+            Action<string[]> resetPlace = keys =>
             {
-                if (bgFrame.Bitmap == null || GetCurrentTile() == null) return;
-                bgFrame.FX = 0.5; bgFrame.FY = 0.5; bgFrame.Zoom = 1.0;
-                UpdateFraming();
-                SaveFraming();
+                var t = GetPlaceTarget();
+                if (t == null) return;
+                ClearPlaceKeys(t, keys);
+                if (IsAllSelected()) AfterCategoryPlace();
+                else { UpdatePlaceState(); UpdateTileDots(); }
+                UpdateTilePreview();
             };
+            btnFrameReset.Click += (s, e) => resetPlace(new[] { "BgFocus", "BgZoom" });
+            btnLogoReset.Click += (s, e) => resetPlace(new[] { "LogoPos", "LogoScale" });
+            btnInfoReset.Click += (s, e) => resetPlace(new[] { "InfoPos" });
+
+            // Row 1, right: the settings of the tile, or of the category under All tiles
+            var sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            Grid.SetRow(sv, 1);
+            SetCol(sv, 1);
+            grid.Children.Add(sv);
+            var details = NewPanel();
+            sv.Content = details;
+
+            // Imported game: read-only, can become a normal tile
+            importedCard = NewCard("Imported game", "");
+            importedCard.Visibility = Visibility.Collapsed;
+            AddTo(details, importedCard);
+            var txt = NewText("From the old automatic import (written below its marker line), so it cannot be edited here. Make it a normal tile to edit or move it: its images are copied to the category folders. Opening Import turns all of them into normal tiles.", 12.5, ResBrush("DimBrush"), false, true);
+            txt.Margin = T(0, 0, 0, 10);
+            AddTo(CardPanel(importedCard), txt);
+            var btnConvert = NewButton("Make it a normal tile", "AccentButton");
+            btnConvert.HorizontalAlignment = HorizontalAlignment.Left;
+            btnConvert.Margin = T(0, 0, 0, 10);
+            AddTo(CardPanel(importedCard), btnConvert);
+            btnConvert.Click += (s, e) =>
+            {
+                var sel = TagOf(tilesList.SelectedItem);
+                if (sel == null || !sel.Imported || sel.Section == null) return;
+                var n = ConvertImportedTile(currentFile, sel.Section.Name);
+                if (n != null) RefreshTiles(Core.GetTiles(GetModel(currentFile)).Count - 1);
+            };
+
+            // All tiles: the settings of the category ([Category])
+            allCard = NewCard("All tiles", "Settings of every tile of this category. A tile can have its own colour, background, framing and logo; a dot in the strip marks the tiles with one of them.");
+            allCard.Visibility = Visibility.Collapsed;
+            AddTo(details, allCard);
+            var af = CardPanel(allCard);
+            allNote = NewText("", 12.5, ResBrush("AccentBrush"), false, true);
+            allNote.Margin = T(0, 0, 0, 8);
+            AddTo(af, allNote);
+            foreach (var k in new[] { "NX", "NY", "IconSize" }) allFields[k] = new TextBox();
+            var gridRow = NewPairRow(allFields["NX"], allFields["NY"]);
+            // the hints of these rows change with the values: set on their labels by ShowAllTiles
+            var gridFormRow = AddTo(af, NewFormRow("Grid", gridRow));
+            gridHint = (TextBlock)gridFormRow.Children[0];
+            var sizeFormRow = AddTo(af, NewFormRow("Logo size", allFields["IconSize"]));
+            sizeHint = (TextBlock)sizeFormRow.Children[0];
+            foreach (var kv in allFields)
+            {
+                string key = kv.Key;
+                var tb = kv.Value;
+                tb.TextChanged += (s, e) =>
+                {
+                    if (loading || currentFile == null) return;
+                    Core.SetKey(Core.GetCategorySection(GetModel(currentFile)), key, tb.Text.Trim());
+                    SetChanged(currentFile);
+                    UpdateTilePreview();   // the tile's proportions and logo size
+                };
+            }
+            catColorSwatch = NewButton("", "Swatch", "Pick a colour");
+            catTileColor = new TextBox();
+            var catColorClear = NewClearButton("No colour: the default tile colour");
+            catColorClear.Click += (s, e) => catTileColor.Text = "";   // TextChanged writes it
+            var catColorRow = NewFieldRow(catColorSwatch, catTileColor, catColorClear);
+            AddTo(af, NewFormRow("Colour", catColorRow, "Colour of the tiles without one of their own (their Colour), used when there is no background image. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent."));
+            catColorSwatch.Click += (s, e) =>
+            {
+                if (currentFile == null) return;
+                string n = SelectColor(catTileColor.Text);
+                if (n != null) catTileColor.Text = n;
+            };
+            catTileColor.TextChanged += (s, e) =>
+            {
+                if (loading || currentFile == null) return;
+                Core.SetKey(Core.GetCategorySection(GetModel(currentFile)), "TileColor", catTileColor.Text.Trim());
+                SetChanged(currentFile);
+                SetSwatch(catColorSwatch, catTileColor.Text);
+                UpdateTileEntries();
+                UpdateTilePreview();
+            };
+            catOpacity = NewOpacityBox("100% (default)");
+            AddTo(af, NewFormRow("Background", catOpacity, "Opacity of the colour and the image of the tiles without one of their own (their Background), e.g. lower for a Dashboard with skins over the tiles. Logos, texts and widgets stay as they are."));
+            catOpacity.SelectionChanged += (s, e) =>
+            {
+                if (loading || currentFile == null) return;
+                var item = catOpacity.SelectedItem as ComboBoxItem;
+                if (item == null) return;
+                Core.SetKey(Core.GetCategorySection(GetModel(currentFile)), "TileOpacity", (string)item.Tag);
+                SetChanged(currentFile);
+            };
+            // framing, logo and play time line of every tile back to their default place,
+            // the ones with their own too; the buttons share the column
+            var placeButtons = NewGrid("*", "8", "*", "8", "*");
+            var btnResetLogos = NewButton("Logo");
+            var btnResetFraming = NewButton("Framing");
+            var btnResetInfo = NewButton("Play time");
+            SetCol(btnResetFraming, 2);
+            SetCol(btnResetInfo, 4);
+            placeButtons.Children.Add(btnResetLogos); placeButtons.Children.Add(btnResetFraming); placeButtons.Children.Add(btnResetInfo);
+            var placeFormRow = NewFormRow("Reset", placeButtons);
+            placementHint = (TextBlock)placeFormRow.Children[0];   // its label: the summary is its tooltip
+            placementRow = placeFormRow;
+            AddTo(af, placementRow);
+            btnResetLogos.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "logo placement", new[] { "LogoPos", "LogoScale" }); };
+            btnResetFraming.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "background framing", new[] { "BgFocus", "BgZoom" }); };
+            btnResetInfo.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "play time placement", new[] { "InfoPos" }, "the top left"); };
+
+            // Tile card
+            tileCard = NewCard("Tile", "");
+            AddTo(details, tileCard);
+            var f = CardPanel(tileCard);
+            tileNote = NewText("", 12.5, ResBrush("AccentBrush"), false, true);
+            tileNote.Margin = T(0, 0, 0, 8);
+            AddTo(f, tileNote);
 
             foreach (var k in new[] { "Name", "Command", "Label", "Color", "Tags" }) tileFields[k] = new TextBox();
             AddTo(f, NewFormRow("Name", tileFields["Name"], "Also the name of its images and what search looks at."));
@@ -1405,7 +2160,7 @@ namespace RaintileOptions
             cmdRow.Children.Add(btnCmd);
             AddTo(f, NewFormRow("Command", cmdRow, "A program, a .lnk/.url shortcut, a URL (also steam://...), a folder or a Rainmeter bang."));
             // widgets: only in a Dashboard
-            widgetKind = new ComboBox { Width = 260 };
+            widgetKind = new ComboBox();
             foreach (var k in WIDGET_KINDS) widgetKind.Items.Add(new ComboBoxItem { Content = k[1], Tag = k[0] });
             widgetRow = NewFormRow("Widget", widgetKind, "What the tile shows in the Dashboard. A click opens its Command, or the tool that fits.");
             AddTo(f, widgetRow);
@@ -1432,13 +2187,12 @@ namespace RaintileOptions
                 SetChanged(currentFile);
             };
             AddTo(f, NewFormRow("Label", tileFields["Label"], "Text at the bottom left. Empty = none (tiles without images show their name)."));
-            var colorRow = NewPanel(Orientation.Horizontal);
             colorSwatch = NewButton("", "Swatch", "Pick a colour");
-            tileFields["Color"].Width = 170;
-            tileFields["Color"].Margin = T(10, 0, 0, 0);
-            AddTo(colorRow, colorSwatch); AddTo(colorRow, tileFields["Color"]);
-            AddTo(f, NewFormRow("Colour", colorRow, "Used when there is no background image. Empty = from the logo, or the default tile colour."));
-            tileOpacity = NewOpacityBox("From the category");
+            var colorClear = NewClearButton("No colour of its own: the one of All tiles");
+            colorClear.Click += (s, e) => { if (GetCurrentTile() != null) tileFields["Color"].Text = ""; };
+            var colorRow = NewFieldRow(colorSwatch, tileFields["Color"], colorClear);
+            AddTo(f, NewFormRow("Colour", colorRow, "Used when there is no background image. Empty = the Colour of All tiles, or taken from the logo, or the default tile colour."));
+            tileOpacity = NewOpacityBox("From All tiles");
             AddTo(f, NewFormRow("Background", tileOpacity, "Opacity of the colour and the image of the tile: 0% leaves only the logo, the label or the widget (a skin over the tile, without a box behind it)."));
             tileOpacity.SelectionChanged += (s, e) =>
             {
@@ -1448,16 +2202,13 @@ namespace RaintileOptions
                 if (t == null || item == null) return;
                 Core.SetKey(t, "Opacity", (string)item.Tag);
                 SetChanged(currentFile);
+                UpdateTileDots();
             };
             // cells taken in the grid (Size=<columns>x<rows>)
-            var sizeRow = NewPanel(Orientation.Horizontal);
-            sizeCols = new ComboBox { Width = 70 };
-            sizeRows = new ComboBox { Width = 70 };
+            sizeCols = new ComboBox();
+            sizeRows = new ComboBox();
             for (int n = 1; n <= 8; n++) { sizeCols.Items.Add(n.ToString()); sizeRows.Items.Add(n.ToString()); }
-            var by = NewText("\u00D7", 13, ResBrush("DimBrush"));
-            by.VerticalAlignment = VerticalAlignment.Center;
-            by.Margin = T(10, 0, 10, 0);
-            AddTo(sizeRow, sizeCols); AddTo(sizeRow, by); AddTo(sizeRow, sizeRows);
+            var sizeRow = NewPairRow(sizeCols, sizeRows);
             AddTo(f, NewFormRow("Size", sizeRow, "Cells the tile takes in the grid: columns \u00D7 rows (at most the grid of the category). The other tiles fill the space around it. Search, Favorites and Recent show it in one cell."));
             SelectionChangedEventHandler sizeChanged = (s, e) =>
             {
@@ -1471,16 +2222,12 @@ namespace RaintileOptions
             };
             sizeCols.SelectionChanged += sizeChanged;
             sizeRows.SelectionChanged += sizeChanged;
-            var tagHint = NewPanel();
-            AddTo(tagHint, NewText("Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", 11.5, ResBrush("DimBrush"), false, true));
-            tagSuggestions = new WrapPanel { Margin = T(0, 4, 0, 0) };
-            AddTo(tagHint, tagSuggestions);
-            AddTo(f, NewFormRow("Tags", tileFields["Tags"], "", tagHint));
+            tagSuggestions = new WrapPanel();
+            AddTo(f, NewFormRow("Tags", tileFields["Tags"], "Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", tagSuggestions));
             // hot key: click, then press the combination (with modifiers)
-            var keyRow = NewPanel(Orientation.Horizontal);
             tileKeyButton = NewButton("None", "KeyButton", "Click, then press the combination");
-            var keyClear = NewIconButton(0xE711, "No hot key");
-            AddTo(keyRow, tileKeyButton); AddTo(keyRow, keyClear);
+            var keyClear = NewClearButton("No hot key");
+            var keyRow = NewFieldRow(null, tileKeyButton, keyClear);
             AddTo(f, NewFormRow("Hot key", keyRow, "Starts the tile also while the launcher is hidden, e.g. Ctrl + Alt + 1. Hold the modifiers, then press the key."));
             tileKeyButton.Click += (s, e) =>
             {
@@ -1537,36 +2284,17 @@ namespace RaintileOptions
                 tileKeyButton.Content = Schema.FormatHotKey("");
                 SetChanged(currentFile);
             };
-            var moveRow = NewPanel(Orientation.Horizontal);
-            moveTo = new ComboBox { Width = 200 };
-            var btnMove = NewButton("Move");
-            btnMove.Margin = T(8, 0, 0, 0);
-            AddTo(moveRow, moveTo); AddTo(moveRow, btnMove);
-            AddTo(f, NewFormRow("Move to", moveRow, "Moves the tile and its images to another category. Both category files are saved at once."));
-            btnMove.Click += (s, e) =>
-            {
-                var t = GetCurrentTile();
-                if (t == null) return;
-                var target = moveTo.SelectedItem as ComboBoxItem;
-                if (target == null) { ShowDialog("Raintile", "Choose the category to move the tile to."); return; }
-                var r = ShowDialog("Move tile", "Move '" + t.Name + "' to " + target.Content + "?", new[] { "Move", "Cancel" });
-                if (r.Button != "Move") return;
-                string err = MoveTileToCategory(currentFile, t, (string)target.Tag);
-                if (err != null) { ShowDialog("Raintile", err); return; }
-                RefreshTiles(Math.Max(0, tilesList.SelectedIndex - 1));
-            };
             foreach (var kind in new[] { "Background", "Logo" })
             {
-                var row = NewPanel(Orientation.Horizontal);
-                var thumb = NewThumb(44);
+                var thumb = NewThumb(FieldHeight);
                 var choose = NewButton("Choose...");
-                choose.Margin = T(10, 0, 0, 0);
-                var remove = NewButton("Remove");
-                remove.Margin = T(6, 0, 0, 0);
-                AddTo(row, thumb); AddTo(row, choose); AddTo(row, remove);
-                var pathText = NewText("", 11.5, ResBrush("DimBrush"), false, true);
-                AddTo(f, NewFormRow(kind, row, "", pathText));
-                if (kind == "Background") { bgThumb = thumb; bgPath = pathText; } else { logoThumb = thumb; logoPath = pathText; }
+                var remove = NewClearButton("Remove the " + kind.ToLowerInvariant());
+                var row = NewFieldRow(thumb, choose, remove);
+                // the path of the image is the tooltip of the label (set with the tile)
+                var imageRow = NewFormRow(kind, row);
+                AddTo(f, imageRow);
+                var pathLabel = (TextBlock)imageRow.Children[0];
+                if (kind == "Background") { bgThumb = thumb; bgPath = pathLabel; } else { logoThumb = thumb; logoPath = pathLabel; }
                 string k = kind;
                 choose.Click += (s, e) =>
                 {
@@ -1602,8 +2330,10 @@ namespace RaintileOptions
             tilesList.SelectionChanged += (s, e) => ShowTile();
             // drag a tile to change its place (hand-written tiles; the imported
             // ones stay at the end)
-            EnableDragReorder(tilesList, it => !((ListTag)it.Tag).Imported, (from, to) =>
+            EnableDragReorder(tilesList, it => !((ListTag)it.Tag).Imported && !((ListTag)it.Tag).All, (from, to) =>
             {
+                // indices of the strip: All tiles comes first
+                from--; to = Math.Max(0, to - 1);
                 var m = GetModel(currentFile);
                 var tiles = Core.GetTiles(m);
                 if (from >= tiles.Count) return;
@@ -1616,7 +2346,8 @@ namespace RaintileOptions
                 m.Sections.Insert(to > from ? ins + 1 : ins, t);
                 SetChanged(currentFile);
                 RefreshTiles(to);
-            });
+            }, true);
+            EnableTileDropOnNav();
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" })
             {
                 string key = k;
@@ -1687,7 +2418,7 @@ namespace RaintileOptions
                 if (r.Button != "Delete") return;
                 GetModel(currentFile).Sections.Remove(t);
                 SetChanged(currentFile);
-                RefreshTiles(Math.Max(0, tilesList.SelectedIndex - 1));
+                RefreshTiles(Math.Max(0, tilesList.SelectedIndex - 2));   // the tile before it (All tiles is entry 0)
             };
             foreach (var pair in new[] { Tuple.Create(btnTileUp, -1), Tuple.Create(btnTileDown, 1) })
             {

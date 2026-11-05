@@ -11,7 +11,14 @@ namespace RaintileOptions
             {
                 new Group { Title = "Screen", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "screen", Key = "ScreenX", Label = "Area covered", Help = "The launcher covers the whole area. The work area leaves the taskbar free." },
+                    new Item { Kind = "screen", Key = "ScreenX", Label = "Area", Help = "Where the launcher shows: a monitor, or its work area (the taskbar stays free)." },
+                    new Item { Kind = "choice", Key = "LauncherMode", Label = "Mode", Help = "Full screen: all of the area. Window: drag an empty part of it to move it; it stays open when you click elsewhere. Docked: on a side of the screen, it comes in from there.", Choices = new List<string[]> { new[] { "Fullscreen", "Full screen" }, new[] { "Window", "Window" }, new[] { "Dock", "Docked on a side" } } },
+                    new Item { Kind = "size", Key = "WindowW", Label = "Window width", Help = "", Axis = "W" },
+                    new Item { Kind = "size", Key = "WindowH", Label = "Window height", Help = "", Axis = "H" },
+                    new Item { Kind = "choice", Key = "DockSide", Label = "Docked side", Help = "", Choices = new List<string[]> { new[] { "Left", "Left" }, new[] { "Right", "Right" }, new[] { "Top", "Top" }, new[] { "Bottom", "Bottom" } } },
+                    new Item { Kind = "size", Key = "DockSize", Label = "Docked size", Help = "Width when docked left or right; height (of the screen height) when docked at the top or bottom.", Axis = "W" },
+                    new Item { Kind = "bool", Key = "DockEdge", Label = "Open from the edge", Help = "Docked: it also opens when the mouse rests on that edge of the screen. Not while a full-screen program (e.g. a game) is in front." },
+                    new Item { Kind = "int", Key = "DockEdgeDelay", Label = "Edge delay", Help = "How long the mouse rests on the edge before it opens.", Min = 0.0, Max = 2000.0, Step = 50.0, Unit = "ms" },
                 } },
                 new Group { Title = "Opening and closing", Help = null, Items = new List<Item>
                 {
@@ -96,14 +103,16 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "MenuFontSize", Label = "Menu font size", Help = "", Min = 6.0, Max = 40.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "int", Key = "LabelFontSize", Label = "Label font size", Help = "", Min = 6.0, Max = 40.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "bool", Key = "ShowLabels", Label = "Show tile labels", Help = "" },
-                    new Item { Kind = "choice", Key = "TileInfo", Label = "Play time and last launch", Help = "A line at the top left of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.", Choices = new List<string[]> { new[] { "Hover", "On the highlighted tile" }, new[] { "Always", "Always" }, new[] { "Never", "Never" } } },
+                    new Item { Kind = "choice", Key = "TileInfo", Label = "Play time and last launch", Help = "A line on the tile, at the top left unless moved in the preview of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.", Choices = new List<string[]> { new[] { "Hover", "On the highlighted tile" }, new[] { "Always", "Always" }, new[] { "Never", "Never" } } },
                     new Item { Kind = "int", Key = "InfoFontSize", Label = "Play time font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "bool", Key = "TrackPlaytime", Label = "Measure play time outside Steam", Help = "The background helper looks for the game a tile starts and counts how long it runs." },
+                    new Item { Kind = "bool", Key = "GameUpdates", Label = "Steam updates waiting", Help = "Steam games with an update to download say so on the play time line, with its size and when Steam scheduled it." },
                 } },
                 new Group { Title = "Tiles", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "color", Key = "TileColor", Label = "Default tile colour", Help = "" },
                     new Item { Kind = "int", Key = "TileRadius", Label = "Rounded corners", Help = "Radius of the corners of the tiles and of the highlight. 0 = square.", Min = 0.0, Max = 60.0, Step = 1.0, Unit = "px" },
+                    new Item { Kind = "bool", Key = "EdgeFade", Label = "Fade at the edge of the grid", Help = "Tiles cut by the edge (e.g. a tall tile only partly on screen) fade into the background there, to show they go on." },
                     new Item { Kind = "bool", Key = "AutoTileColor", Label = "Colour from the logo", Help = "Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo." },
                     new Item { Kind = "bool", Key = "LogoGreyscale", Label = "Greyscale logos", Help = "They turn to colour under the mouse." },
                 } },
@@ -170,6 +179,7 @@ namespace RaintileOptions
                 {
                     new Item { Kind = "combo", Key = "OpenHotKey", Label = "Open / close the launcher", Help = "Works everywhere, also while the launcher is hidden. Hold the modifiers, then press the key." },
                     new Item { Kind = "key", Key = "CloseHotKey", Label = "Close", Help = "Closes the search first, if it is open." },
+                    new Item { Kind = "choice", Key = "TileKeysWhen", Label = "Tile hot keys", Help = "When the key combinations of the tiles (tile editor > Hot key) start them. Only with the launcher open, the keys stay free for other programs the rest of the time.", Choices = new List<string[]> { new[] { "Always", "Always, also with the launcher closed" }, new[] { "Open", "Only with the launcher open" } } },
                 } },
                 new Group { Title = "Navigation", Help = null, Items = new List<Item>
                 {
@@ -320,6 +330,11 @@ namespace RaintileOptions
             { "DashInterval", "1000" },
             { "DateFormat", "%A %#d %B" },
             { "DebugLog", "0" },
+            { "DockEdge", "1" },
+            { "DockEdgeDelay", "300" },
+            { "DockSide", "Left" },
+            { "DockSize", "30%" },
+            { "EdgeFade", "1" },
             { "FadeDuration", "0" },
             { "FilterBar", "1" },
             { "FilterFontSize", "10" },
@@ -334,6 +349,7 @@ namespace RaintileOptions
             { "GamepadRepeatRate", "110" },
             { "GamepadSearch", "Y" },
             { "GamepadToggle", "BACK START" },
+            { "GameUpdates", "1" },
             { "Gap", "18" },
             { "HoverCategoryColor", "255,255,255,20" },
             { "HoverColor", "255,255,255,25" },
@@ -348,6 +364,7 @@ namespace RaintileOptions
             { "LabelPad", "14" },
             { "LaunchAnimation", "1" },
             { "LaunchAnimFrames", "15" },
+            { "LauncherMode", "Fullscreen" },
             { "LaunchFontSize", "48" },
             { "LaunchHold", "1500" },
             { "LaunchLogoSize", "33%" },
@@ -410,9 +427,12 @@ namespace RaintileOptions
             { "TileColor", "36,36,44,255" },
             { "TileHover", "1" },
             { "TileInfo", "Hover" },
+            { "TileKeysWhen", "Always" },
             { "TileRadius", "0" },
             { "TrackPlaytime", "1" },
             { "UnplayedCount", "24" },
+            { "WindowH", "70%" },
+            { "WindowW", "60%" },
         };
 
         public static readonly string[] GAMEPAD_BUTTONS = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };

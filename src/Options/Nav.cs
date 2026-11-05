@@ -67,6 +67,10 @@ namespace RaintileOptions
             catch { }
 
             win = (Window)XamlReader.Parse(WindowXaml.Text);
+            // the tile editor wants room, but smaller screens get what they have
+            var work = SystemParameters.WorkArea;
+            win.Width = Math.Max(win.MinWidth, Math.Min(win.Width, work.Width - 40));
+            win.Height = Math.Max(win.MinHeight, Math.Min(win.Height, work.Height - 40));
             ((TextBlock)win.FindName("Version")).Text = version;
             AddStartStep("window");
             nav = (ListBox)win.FindName("Nav");
@@ -443,7 +447,7 @@ namespace RaintileOptions
             pageTitle.Text = name != "" ? name : System.IO.Path.GetFileNameWithoutExtension(file);
             pageDesc.Text = IsDashboard(file)
                 ? "Categories\\" + file + ": its widgets. Name and grid of the Dashboard are on the Dashboard page."
-                : "Categories\\" + file + ": its tiles. Name, icon and grid of the category are on the Categories page.";
+                : "Categories\\" + file + ": its tiles. All tiles, the first entry, holds the settings of the whole category; name and icon are on the Categories page.";
         }
 
         void ShowNavTarget(NavTag tag)
@@ -539,8 +543,7 @@ namespace RaintileOptions
             var r = direct
                 ? ShowDialog("Update Raintile", "Download Raintile " + latest + " and install it now?\r\n\r\n" +
                     "Its files replace the ones of the skin folder (" + skinDir + "); a copy of the current ones is kept in Skins\\@Backup. " +
-                    "Your settings, categories and images stay: they are in " + Core.Data + ". Then Rainmeter reloads.\r\n\r\n" +
-                    "This is still experimental: keep a backup of your data first (Info > Back up).", new[] { "Direct update", "Cancel" })
+                    "Your settings, categories and images stay: they are in " + Core.Data + ". Then Rainmeter reloads.", new[] { "Direct update", "Cancel" })
                 : ShowDialog("Update Raintile", "Download Raintile " + latest + " and open the Rainmeter installer?\r\n\r\n" +
                     "Your settings, categories and images stay: they are in " + Core.Data + ", which the installer does not touch. " +
                     "In the installer keep the default options and press Install.", new[] { "Rainmeter Update", "Cancel" });
@@ -615,10 +618,6 @@ namespace RaintileOptions
         {
             var card = NewCard("Updates", "");
             var f = CardPanel(card);
-            var beta = NewText("Experimental: installing updates from here is still being tested and could cause problems. " +
-                "Before installing, keep a copy of your data folder; if something goes wrong, the release page has the package to install by hand.", 12.5, ResBrush("AccentBrush"), false, true);
-            beta.Margin = T(0, 0, 0, 6);
-            AddTo(f, beta);
             updInstalled = NewText("", 13, null, false, true);
             updLatest = NewText("", 13, null, false, true);
             foreach (var row in new[] { Tuple.Create(updInstalled, "Installed"), Tuple.Create(updLatest, "Latest version") })

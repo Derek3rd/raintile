@@ -5,7 +5,7 @@ namespace RaintileOptions
     {
         public const string Text = @"<Window xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation""
         xmlns:x=""http://schemas.microsoft.com/winfx/2006/xaml""
-        Title=""Raintile - Options"" Width=""1180"" Height=""800"" MinWidth=""960"" MinHeight=""580""
+        Title=""Raintile - Options"" Width=""1300"" Height=""1100"" MinWidth=""960"" MinHeight=""580""
         WindowStartupLocation=""CenterScreen"" Background=""{StaticResource Bg}"" Foreground=""{StaticResource TextBrush}""
         FontFamily=""Segoe UI"" FontSize=""13"" UseLayoutRounding=""True"" TextOptions.TextFormattingMode=""Display"">
   <Grid>
@@ -34,7 +34,7 @@ namespace RaintileOptions
       </Grid.RowDefinitions>
       <StackPanel Margin=""36,24,36,14"">
         <TextBlock x:Name=""PageTitle"" FontSize=""24"" FontWeight=""SemiBold""/>
-        <TextBlock x:Name=""PageDesc"" Foreground=""{StaticResource DimBrush}"" Margin=""0,5,0,0"" TextWrapping=""Wrap"" MaxWidth=""820"" HorizontalAlignment=""Left""/>
+        <TextBlock x:Name=""PageDesc"" Foreground=""{StaticResource DimBrush}"" Margin=""0,5,0,0"" TextWrapping=""Wrap"" HorizontalAlignment=""Left""/>
       </StackPanel>
       <Grid x:Name=""PageHost"" Grid.Row=""1""/>
       <Border Grid.Row=""2"" BorderBrush=""{StaticResource LineBrush}"" BorderThickness=""0,1,0,0"" Padding=""28,12"">

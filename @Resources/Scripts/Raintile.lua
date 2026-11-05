@@ -2370,8 +2370,15 @@ local function placeSlots()
 				local first = math.floor(across / step + 0.5)
 				local last = math.floor((across + span + V.Gap) / step + 0.5) - 1
 				for line = math.max(0, first), last do
-					if along < edge then cutEnd[line] = math.max(cutEnd[line] or 0, along + size - edge) end
-					if along + size > 0 then cutStart[line] = math.max(cutStart[line] or 0, -along) end
+					-- { how much is cut, how much is still visible }
+					if along < edge and along + size > edge then
+						local c = cutEnd[line]
+						if not c or along + size - edge > c[1] then cutEnd[line] = { along + size - edge, edge - along } end
+					end
+					if along < 0 and along + size > 0 then
+						local c = cutStart[line]
+						if not c or -along > c[1] then cutStart[line] = { -along, along + size } end
+					end
 				end
 			end
 			V.TileW, V.TileH = catW, catH
@@ -2391,20 +2398,23 @@ local function placeSlots()
 		local step = V.Horizontal and V.StepY or V.StepX
 		local full = V.Horizontal and (V.ClipH or V.GridH) or (V.ClipW or V.GridW)
 		local edge = V.Horizontal and (V.ClipW or V.GridW) or (V.ClipH or V.GridH)
-		local fade = math.floor(math.min((V.Horizontal and V.StepX or V.StepY) * 0.4, 160))
+		local fade = math.floor(math.min((V.Horizontal and V.StepX or V.StepY) * 0.28, 110))
 		for line = 0, lines - 1 do
 			local a = line * step
 			local b = line == lines - 1 and full or (line + 1) * step
 			for _, side in ipairs({ 'end', 'start' }) do
 				local cut = (side == 'end' and cutEnd or cutStart)[line]
-				local k = cut and math.min(1, cut / fade) or 0
+				local k = cut and math.min(1, cut[1] / fade) or 0
 				if k > 0.02 then
-					-- a few pixels past the edge (cut off by the grid): no light line
-					local p = side == 'end' and edge - fade or -4
+					-- only over the visible part of the cut tile (not on the next
+					-- one), and a few pixels past the edge (cut off by the grid):
+					-- no light line
+					local len = math.max(1, math.floor(math.min(fade, cut[2])))
+					local p = side == 'end' and edge - len or -4
 					if V.Horizontal then
-						edges[#edges + 1] = { p, a, fade + 4, b - a, side, k }
+						edges[#edges + 1] = { p, a, len + 4, b - a, side, k }
 					else
-						edges[#edges + 1] = { a, p, b - a, fade + 4, side, k }
+						edges[#edges + 1] = { a, p, b - a, len + 4, side, k }
 					end
 				end
 			end

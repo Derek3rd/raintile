@@ -249,6 +249,10 @@ Type=              ; Dashboard = a category of widgets (see Dashboard)
 Hidden=            ; 1 = not in the menu (the file and its tiles stay)
 TileColor=         ; colour of its tiles without a Color= of their own
 TileOpacity=       ; opacity of their background, 0-100 (tiles without Opacity=)
+LogoPos=           ; logo placement of its tiles without their own (e.g. 85,50: on the right)
+LogoScale=
+BgFocus=           ; background framing of its tiles without their own
+BgZoom=
 
 [Diablo]
 Command=steam://rungameid/2344520
@@ -269,10 +273,10 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `Image` | another name for both images: `Image=diablo4` looks for `background\diablo4.*` and `logo\diablo4.*` |
 | `Background` | specific background file (relative to `background\` or absolute; extension optional) |
 | `Logo` | specific logo file (relative to `logo\` or absolute) |
-| `BgFocus` | framing of the background: the point of the image kept at the centre of the tile, `X,Y` in % of its width and height (default `50,50`); see [Framing a background](#framing-a-background) |
-| `BgZoom` | framing of the background: enlargement beyond filling the tile, `1` to `4` (default `1`) |
-| `LogoPos` | where the centre of the logo goes, `X,Y` in % of the tile's width and height (default `50,50`); see [Placing the logo](#placing-the-logo) |
-| `LogoScale` | size of the logo, times the category's `IconSize`, `0.25` to `3` (default `1`) |
+| `BgFocus` | framing of the background: the point of the image kept at the centre of the tile, `X,Y` in % of its width and height (default: the category's `BgFocus`, or `50,50`); see [Framing a background](#framing-a-background) |
+| `BgZoom` | framing of the background: enlargement beyond filling the tile, `1` to `4` (default: the category's `BgZoom`, or `1`) |
+| `LogoPos` | where the centre of the logo goes, `X,Y` in % of the tile's width and height (default: the category's `LogoPos`, or `50,50`); see [Placing the logo](#placing-the-logo) |
+| `LogoScale` | size of the logo, times the category's `IconSize`, `0.25` to `3` (default: the category's `LogoScale`, or `1`) |
 | `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
 | `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
 | `HotKey` | key combination that starts the tile, also while the launcher is hidden: HotKey plugin names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
@@ -280,7 +284,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 
 ### Tiles of more cells
 
-A tile with `Size=` takes more cells: `Size=2x1` is two columns wide, `Size=2x2` twice as wide and tall (Options > Categories > the tile > **Size**). It works for every tile, games and widgets alike: a featured game, a bigger CPU graph.
+A tile with `Size=` takes more cells: `Size=2x1` is two columns wide, `Size=2x2` twice as wide and tall (Options > *the category* > *the tile* > **Size**). It works for every tile, games and widgets alike: a featured game, a bigger CPU graph.
 
 - The tiles are placed in order, each one in the first free spot where it fits (row by row; column by column with `Horizontal=1`), so the smaller ones after it fill the space around it.
 - A size larger than the grid is reduced to it (`NX` columns, `NY` rows).
@@ -315,15 +319,23 @@ Each tile looks for images named after itself, with the extensions `.png`, `.jpg
 
 ### Framing a background
 
-A background fills its tile and, by default, is cropped at the centre. When the subject is off-centre, or the image is much wider or taller than the tile, choose the part to show in Options > *the category* > *the tile* > **Framing** (or right click on the tile > **Edit \<tile\>...**): drag the background in the preview to move the image, zoom with the mouse wheel (it zooms on the point under the mouse) or the slider, and **Reset** to go back to the centre. The preview has the proportions of this category's tiles on this screen.
+A background fills its tile and, by default, is cropped at the centre. When the subject is off-centre, or the image is much wider or taller than the tile, choose the part to show in Options > *the category* > *the tile* (or right click on the tile > **Edit \<tile\>...**): in the large preview on the left drag the background to move the image, zoom with the mouse wheel (it zooms on the point under the mouse) or the **Framing** slider, and the **x** next to the slider to give the tile back the framing of **All tiles** (the centre unless the category has one, see [Placement for a whole category](#placement-for-a-whole-category)). The preview has the proportions of this category's tiles on this screen.
 
 The framing is saved in the tile as `BgFocus` (the point kept at the centre, in % of the image) and `BgZoom`. Both are relative, so it holds when the resolution, the margins or the grid change: only the edges of the image limit it. With the sliding styles (`BgStyle` `Pan`, `Parallax`, `Zoom`) the tile starts from the framed part and moves within `BgOverscan` of it, instead of across the whole image. Choosing or removing the background resets the framing. The launch animation still shows the whole image.
 
 ### Placing the logo
 
-The logo is centred in its tile and as large as the category's `IconSize`. To move it, drag the logo itself in the same preview (Options > *the category* > *the tile*); to resize it, use the mouse wheel over it or the **Logo** slider, and **Reset** to centre it again at its normal size. It is independent of the framing: the background and the logo move separately.
+The logo is centred in its tile and as large as the category's `IconSize`. To move it, drag the logo itself in the same preview (Options > *the category* > *the tile*); to resize it, use the mouse wheel over it or the **Logo** slider, and the **x** next to it to give it back the placement of **All tiles** (centred at its normal size unless the category has one of its own). It is independent of the framing: the background and the logo move separately.
 
 The placement is saved in the tile as `LogoPos` (where the centre of the logo goes, in % of the tile) and `LogoScale` (times the category's logo size). Both are relative, so the logo keeps its place when the resolution or the grid change. What is visible of the logo always stays inside the tile, also while it grows under the mouse: pushed into a corner, it stays in the corner at any size. The launch animation starts from where the logo is and brings it to the centre of the screen.
+
+### Placement for a whole category
+
+Logo placement and framing can also be set once for all the tiles of a category, e.g. every logo on the right or every background framed on its top part. The page of a category in Options shows its tiles side by side at the top, with **All tiles** first: it holds the settings of the whole category.
+
+- **All tiles**: the large preview shows the category's framing and logo placement on placeholder images, or on the images of a tile chosen in **Preview on**; drag and zoom them as on a tile. They are saved in `[Category]` with the same keys (`BgFocus`, `BgZoom`, `LogoPos`, `LogoScale`), and every tile without its own follows them, the tiles added later too. The framing is relative to each image, so on other backgrounds it frames the same relative part. On the right: the grid, the logo size, the tile colour and background of the category.
+- On a tile, a chip next to **Framing** and **Logo** says **From All tiles** or **Own**; a dot on the small tile in the strip marks the tiles with something of their own instead of the one of All tiles (colour, background opacity, framing or logo). Moving a tile's logo or background gives it its own; the **x** next to the slider gives it back the one of All tiles. To change every tile at once, use All tiles.
+- **Reset logos** / **Reset framing** (All tiles > **Every tile**): every tile of the category back to the centre at the normal size, the category's placement included. The row also says how many tiles have a placement of their own.
 
 ## Adding games and apps
 
@@ -383,15 +395,15 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 | Search | search bar |
 | Import | the games and apps found on this PC, to add; where to look and where they go |
 | Advanced | performance, debug log, entries without a page of their own |
-| Categories | the list of categories (create, open, reorder, delete) and the settings of the selected one: name, icon, grid, logo size |
-| Categories > *each category* | its tiles, with a preview: edit, frame the background, drag a tile onto another category in the menu to move it there, turn imported games into normal tiles |
+| Categories | the list of categories (create, open, reorder, delete), name and icon of the selected one |
+| Categories > *each category* | its tiles side by side, **All tiles** first (grid, logo size, tile colour and background, framing and logo of every tile); a large preview to frame the background and place the logo; edit, drag a tile onto another category in the menu to move it there, turn imported games into normal tiles |
 | Info (at the bottom) | version and updates, your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide |
 
 - Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default, and restores it.
 - **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
-  - **Moving a tile to another category**: drag it from the list onto that category in the menu on the left (the entry is outlined when it can take it). The tile and its images move, and both category files are saved at once. Imported games move only once they are normal tiles.
+  - **Moving a tile to another category**: drag it from the strip onto that category in the menu on the left (the entry is outlined when it can take it). The tile and its images move, and both category files are saved at once. Imported games move only once they are normal tiles.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 

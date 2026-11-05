@@ -340,8 +340,9 @@ local function thumbnail(src, tile, field, dir, name, w, h, mode, rect)
 	return src
 end
 
--- Framing of a background (tile keys): BgFocus=X,Y is the point of the image,
--- in % of its width and height, kept at the centre of the tile; BgZoom (1-4)
+-- Framing of a background (tile keys, or the category's): BgFocus=X,Y is the
+-- point of the image, in % of its width and height, kept at the centre of the
+-- tile; BgZoom (1-4)
 -- enlarges the image beyond filling the tile. Both are relative, so the
 -- framing holds at any resolution and grid. Returns the part of the original
 -- the tile works with, {x, y, w, h} in pixels: the window the tile shows,
@@ -374,8 +375,8 @@ local function frameRect(path, focus, zoom, tw, th)
 	return r
 end
 
--- Placement of a logo (tile keys), independent of the background framing:
--- LogoPos=X,Y is where the centre of the logo goes, in % of the tile's width
+-- Placement of a logo (tile keys, or the category's), independent of the
+-- background framing: LogoPos=X,Y is where the centre of the logo goes, in % of the tile's width
 -- and height; LogoScale (0.25-3) multiplies the category's logo size. Both are
 -- relative, so they hold at any resolution and grid. Sets t.logoX, t.logoY
 -- (0-1), t.logoScale and, for a moved logo, t.logoRatio (width / height of
@@ -558,6 +559,11 @@ local function loadCategory(file)
 	-- colour and image), when a tile has no Color= / Opacity= of its own
 	c.tileColor = parseColor(catKeys.tilecolor)
 	c.tileOpacity = tonumber(trim(catKeys.tileopacity or ''))
+	-- framing and logo placement of its tiles (same keys as a tile), when a
+	-- tile has none of its own: one setting moves or resets them all
+	local function own(v) v = trim(v or '') if v ~= '' then return v end end
+	c.bgFocus, c.bgZoom = own(catKeys.bgfocus), own(catKeys.bgzoom)
+	c.logoPos, c.logoScale = own(catKeys.logopos), own(catKeys.logoscale)
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -592,10 +598,10 @@ local function loadCategory(file)
 			t.rows = math.max(1, math.min(c.ny, tonumber(sh) or 1))
 			if t.cols > 1 or t.rows > 1 then c.spans = true end
 			local pw, ph = t.cols * (c.tw + V.Gap) - V.Gap, t.rows * (c.th + V.Gap) - V.Gap
-			t.frame = frameRect(t.background, k.bgfocus, k.bgzoom, pw, ph)
+			t.frame = frameRect(t.background, own(k.bgfocus) or c.bgFocus, own(k.bgzoom) or c.bgZoom, pw, ph)
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
 				pw, ph, V.BgThumbMode, t.frame)
-			logoPlacement(t, k.logopos, k.logoscale)
+			logoPlacement(t, own(k.logopos) or c.logoPos, own(k.logoscale) or c.logoScale)
 			-- logo thumbnails are made at the largest size (zoom included)
 			local logoMax = math.floor(c.iconSize * t.logoScale * V.HoverLogoScale + 0.5)
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,

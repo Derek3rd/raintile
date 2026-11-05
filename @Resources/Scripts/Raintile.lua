@@ -1467,6 +1467,16 @@ local function sideIndex(kind)
 end
 
 local function renderSide()
+	if M.compact then
+		for _, kind in ipairs(SIDE_KINDS) do
+			local name = SIDE_METERS[kind]
+			show('SidePill' .. name, false)
+			show('SideIcon' .. name, false)
+			show('SideHit' .. name, false)
+		end
+		show('SideLabel', false)
+		return
+	end
 	local size = math.floor(V.MenuH)
 	local gap = math.max(8, math.floor(num('MenuGap', 6)))
 	local x = side.x0 or math.floor(V.PadX)
@@ -1578,6 +1588,107 @@ local function renderCategories()
 	else
 		show('CatPillHover', false)
 	end
+end
+
+-- Compact menu ---------------------------------------------------------------
+-- When the categories do not all fit between the left part (clock, buttons,
+-- search) and the buttons on the right, e.g. in a narrow window or a launcher
+-- docked on a side: the left part, the power button and the gear give way to
+-- the "more" button (MeterMore), which opens them as a list, and the categories
+-- stay in a strip between it and the close button (the MenuClip container),
+-- scrolled with the wheel and faded at the edges where more of them are.
+M.compact, M.scroll, M.catL, M.catR, M.total = false, 0, 0, 0, 0
+
+local function menuEnds()
+	local first, last
+	for _, c in ipairs(cats) do
+		if c.l then first = first or c last = c end
+	end
+	return first, last
+end
+
+-- Puts the categories at the scroll position and shapes the strip
+function M.applyScroll()
+	local first = menuEnds()
+	if not first then return end
+	local pad = V.MenuItemPad
+	local width = M.catR - M.catL
+	local maxScroll = math.max(0, M.total - width)
+	M.scroll = math.min(math.max(0, M.scroll), maxScroll)
+	local shift = (M.catL + pad - M.scroll) - first.l
+	if shift ~= 0 then
+		set(first.parts[1], 'X', tostring(first.l + shift))
+		for i, c in ipairs(cats) do
+			if c.l then
+				c.l, c.r = c.l + shift, c.r + shift
+				rect('CatHit' .. i, c.l - pad, V.PadY, c.r - c.l + 2 * pad, V.MenuH, '0,0,0,1')
+			end
+		end
+		if pillPos then pillPos.x = pillPos.x + shift end
+	end
+	-- faded where more categories are hidden
+	local f = math.min(0.25, 28 / math.max(1, width))
+	local a0, a1 = M.scroll > 0 and 0 or 255, M.scroll < maxScroll and 0 or 255
+	set('MenuClip', 'MenuFade', string.format('180 | 0,0,0,%d ; 0.0 | 0,0,0,255 ; %.3f | 0,0,0,255 ; %.3f | 0,0,0,%d ; 1.0', a0, f, 1 - f, a1))
+	set('MenuClip', 'Shape', string.format('Rectangle %d,0,%d,%d | Fill LinearGradient MenuFade | StrokeWidth 0',
+		M.catL, width, math.floor(V.PadY + V.MenuH + 2)))
+end
+
+-- After the menu is measured and centred (layoutMenu, layoutLeft): compact
+-- or not
+function M.layoutCompact()
+	local first, last = menuEnds()
+	if not first then return end
+	local pad = V.MenuItemPad
+	local gap = math.max(8, math.floor(num('MenuGap', 6)))
+	M.total = last.r - first.l + 2 * pad
+	local right = SKIN:GetMeter(V.ShowPower and 'MeterPower' or 'MeterOptions')
+	local leftEnd = (side.searchX or V.PadX) + V.MenuH + gap
+	local rightStart = right and right:GetX() - gap or V.ScreenW - V.PadX
+	M.compact = first.l - pad < leftEnd or first.l - pad + M.total > rightStart
+	show('MeterMore', M.compact)
+	show('MeterOptions', not M.compact)
+	show('MeterPower', V.ShowPower and not M.compact)
+	if not M.compact then
+		set('MenuClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
+			math.floor(V.ScreenW), math.floor(V.PadY + V.MenuH + 2)))
+		return
+	end
+	show('MeterClock', false)
+	show('MeterDate', false)
+	SKIN:Bang('!UpdateMeter', 'MeterMore')
+	local more, close = SKIN:GetMeter('MeterMore'), SKIN:GetMeter('MeterClose')
+	M.catL = math.floor(more:GetX() + more:GetW() + gap)
+	M.catR = math.floor(close:GetX() - gap)
+	-- the dot of the gear goes on the "more" button; the power list opens below it
+	set('MeterNotice', 'X', tostring(math.floor(more:GetX() + more:GetW() - 15)))
+	set('MeterPowerItem1', 'X', tostring(math.floor(more:GetX())))
+	M.applyScroll()
+	M.reveal()
+end
+
+-- The active category fully in the strip
+function M.reveal()
+	if not M.compact then return end
+	local c = cats[active]
+	if not c or not c.l then return end
+	local pad = V.MenuItemPad
+	local left, right = c.l - pad - M.catL, c.r + pad - M.catL
+	if left < 0 then M.scroll = M.scroll + left
+	elseif right > M.catR - M.catL then M.scroll = M.scroll + right - (M.catR - M.catL) end
+	M.applyScroll()
+end
+
+-- The wheel on the menu: the categories of the compact menu, otherwise the grid
+function MenuScroll(delta)
+	if not ready then return end
+	if not M.compact then Scroll(delta) return end
+	M.scroll = M.scroll + delta * math.max(40, math.floor(V.MenuH * 1.5))
+	M.applyScroll()
+	renderCategories()
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!UpdateMeter', 'MenuClip')
+	SKIN:Bang('!Redraw')
 end
 
 -- Filter bar ---------------------------------------------------------------------
@@ -2487,6 +2598,7 @@ local function render(menu)
 			SKIN:Bang('!UpdateMeterGroup', 'Menu')
 			layoutMenu()
 			layoutLeft()
+			M.layoutCompact()
 			updateSearchBar()
 		end
 		renderCategories()
@@ -3051,7 +3163,7 @@ function Update()
 		updateEmptyHint()
 		render(true)
 		if notice.missing > 0 then showNotice() end
-		show('MeterPower', V.ShowPower)
+		show('MeterPower', V.ShowPower and not M.compact)
 		updateDashState()
 		if showNow then
 			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
@@ -3147,6 +3259,92 @@ function PowerAction(i)
 	else
 		SKIN:Bang('["shutdown.exe" /s /t 0]')
 	end
+end
+
+-- The "more" list of the compact menu: the time and the date, then search,
+-- Favorites, Recent, Not played yet, the dot's news, Options and the power
+-- button (its list opens below, in the same place). MeterMoreItem0 is the
+-- time, MeterMoreItem1-8 the entries.
+M.more = { open = false, hovered = 0, items = {} }
+
+local function moreItems()
+	local items = {}
+	local function add(glyph, label, action) items[#items + 1] = { text = glyph .. '   ' .. label, action = action } end
+	add('[\\xE721]', 'Search', function() SearchOpen() end)
+	local glyphs = { favorites = '[\\xE734]', recent = '[\\xE81C]', unplayed = '[\\xE768]' }
+	for _, kind in ipairs(SIDE_KINDS) do
+		local i = sideIndex(kind)
+		if i then add(glyphs[kind], cats[i].label, function() SideCategory(kind) end) end
+	end
+	if M.noticeTip then add('[\\xE7E7]', M.noticeTip, function() OpenNotice() end) end
+	add('[\\xE713]', 'Options', function() OpenOptions('') end)
+	if V.ShowPower then add('[\\xE7E8]', 'Power', function() PowerMenu() end) end
+	return items
+end
+
+local function renderMore()
+	local more = M.more
+	local m0 = SKIN:GetMeter('MeterMore')
+	local x = m0 and math.floor(m0:GetX()) or math.floor(V.PadX)
+	local y = math.floor(V.PadY + V.MenuH + 6)
+	local header = V.ShowClock and more.open
+	if header then
+		local t = SKIN:GetMeasure('MeasureClockTime')
+		local d = SKIN:GetMeasure('MeasureClockDate')
+		local time, date = t and t:GetStringValue() or '', (V.ShowDate and d) and d:GetStringValue() or ''
+		set('MeterMoreItem0', 'Text', (time or '') .. ((date or '') ~= '' and ('   ' .. date) or ''))
+		set('MeterMoreItem0', 'X', tostring(x))
+		set('MeterMoreItem0', 'Y', tostring(y))
+		SKIN:Bang('!UpdateMeter', 'MeterMoreItem0')
+		local h = SKIN:GetMeter('MeterMoreItem0')
+		y = y + (h and h:GetH() or 40) + 2
+	end
+	show('MeterMoreItem0', header)
+	for n = 1, 8 do
+		local m = 'MeterMoreItem' .. n
+		local it = more.open and more.items[n]
+		if it then
+			set(m, 'Text', it.text)
+			set(m, 'X', tostring(x))
+			set(m, 'Y', tostring(y))
+			set(m, 'SolidColor', more.hovered == n and '44,44,54,245' or '24,24,30,240')
+			SKIN:Bang('!UpdateMeter', m)
+			local h = SKIN:GetMeter(m)
+			y = y + (h and h:GetH() or 40) + 2
+		end
+		show(m, it and true or false)
+	end
+	SKIN:Bang('!UpdateMeterGroup', 'Menu')
+	SKIN:Bang('!Redraw')
+end
+
+function M.closeMore()
+	if not M.more.open then return false end
+	M.more.open, M.more.hovered = false, 0
+	renderMore()
+	return true
+end
+
+function MoreMenu()
+	if not ready then return end
+	closePower()
+	M.more.open = not M.more.open
+	M.more.hovered = 0
+	if M.more.open then M.more.items = moreItems() end
+	renderMore()
+end
+
+function MoreHover(i)
+	if not M.more.open then return end
+	M.more.hovered = i
+	renderMore()
+end
+
+function MoreAction(i)
+	local it = M.more.open and M.more.items[i]
+	if not it then return end
+	M.closeMore()
+	it.action()
 end
 
 -- Clock -----------------------------------------------------------------------------
@@ -3255,6 +3453,7 @@ function Hide()
 	hotKey(false)
 	stopClock()
 	closePower()
+	M.closeMore()
 	updateDashState()
 	if M.dockAnimated() then
 		-- goes out first; M.finishHide() hides the window at the end
@@ -3385,6 +3584,7 @@ showNotice = function()
 			or (notice.missing .. ' games are no longer installed: click to remove or keep their tiles')
 	end
 	if tip then SKIN:Bang('!SetOption', 'MeterNotice', 'ToolTipText', tip) end
+	M.noticeTip = tip -- also an entry of the "more" list (compact menu)
 	show('MeterNotice', tip ~= nil)
 	SKIN:Bang('!UpdateMeter', 'MeterNotice')
 	SKIN:Bang('!Redraw')
@@ -3724,6 +3924,7 @@ function Layout()
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	layoutMenu()
 	layoutLeft()
+	M.layoutCompact()
 	updateSearchBar()
 	filter.laidOut = false
 	renderCategories()
@@ -3771,6 +3972,7 @@ function SetCategory(i)
 		appear = 0
 		startTicker()
 	end
+	M.reveal()
 	render(true)
 	updateDashState()
 end
@@ -4124,6 +4326,19 @@ updateSearchBar = function()
 	local x = side.searchX or math.floor(V.PadX)
 	local h = math.floor(V.MenuH)
 	local w = open and math.max(h, math.floor(V.SearchW)) or h
+	if M.compact then
+		-- only while searching (from the "more" list), in the place of the categories
+		local searching = typing or searchCat ~= nil
+		show('MenuClip', not searching)
+		show('SearchPill', searching)
+		show('SearchIcon', searching)
+		if not searching then show('SearchText', false) return end
+		open, x, w = true, M.catL, math.max(h, M.catR - M.catL)
+	else
+		show('MenuClip', true)
+		show('SearchPill', true)
+		show('SearchIcon', true)
+	end
 	set('SearchPill', 'X', tostring(x))
 	set('SearchPill', 'Shape', string.format(
 		'Rectangle 0,0,%d,%d,%d | Fill Color %s | StrokeWidth 0', w, h,
@@ -4391,6 +4606,7 @@ end
 function Escape()
 	if not ready then return end
 	if closePower() then return end
+	if M.closeMore() then return end
 	if typing then
 		TypeKey('ESC')
 	elseif searchCat and not launching then

@@ -1578,7 +1578,7 @@ end
 -- placed over the tile's slot. The data comes from the helper (Helper.ps1),
 -- only while a Dashboard is shown: Generated\DashOn.txt asks for it, and
 -- DashTick() reads Generated\DashData.txt.
-local dash = { data = nil, hist = { cpu = {}, gpu = {}, down = {}, up = {} }, on = false, shown = {}, barCount = {},
+local dash = { data = nil, hist = { cpu = {}, gpu = {}, ram = {}, down = {}, up = {} }, on = false, shown = {}, barCount = {},
 	skinsWanted = {}, skinsActive = {}, customShown = {} }
 D.DASH_HISTORY = 60 -- samples kept for the graphs
 
@@ -1798,6 +1798,32 @@ function D.syncSkins()
 end
 
 -- Placement of a widget's meters in its tile (x, y: the slot in the grid)
+-- Rainmeter takes the strings of the script as ANSI: the characters past
+-- ASCII (UTF-8: from the helper, the INI files, and the dots and arrows of
+-- the widgets) go as character references, [\xHHHH]
+function D.text(s)
+	return (s:gsub('[\194-\244][\128-\191]*', function(c)
+		local b1, n = c:byte(1), #c
+		local cp
+		if n == 2 and b1 < 224 then cp = (b1 - 192) * 64 + c:byte(2) - 128
+		elseif n == 3 and b1 >= 224 and b1 < 240 then cp = ((b1 - 224) * 64 + c:byte(2) - 128) * 64 + c:byte(3) - 128
+		elseif n == 4 and b1 >= 240 then cp = (((b1 - 240) * 64 + c:byte(2) - 128) * 64 + c:byte(3) - 128) * 64 + c:byte(4) - 128
+		end
+		return cp and string.format('[\\x%X]', cp) or '?'
+	end))
+end
+
+-- Font sizes of a widget, growing with the tile: title and small texts, the
+-- big value, and the height of a line of small text (Segoe UI: 1.33 em, at
+-- 96 dpi a point is 1.33 px)
+function D.sizes()
+	local W, H = V.TileW, V.TileH
+	local k = math.max(1, math.min(2.6, math.min(W / 300, H / 220)))
+	local small = math.max(8, math.floor((V.InfoFontSize or 10) * k + 0.5))
+	local value = math.max(14, math.min(96, math.floor(math.min(H * 0.15, W * 0.13))))
+	return small, value, small * 1.78, k
+end
+
 function D.placeWidget(t, x, y, alpha)
 	local w = t.widget
 	local i = w.idx
@@ -1825,13 +1851,12 @@ function D.placeWidget(t, x, y, alpha)
 		set(m, 'FontColor', fade(color, alpha))
 		set(m, 'W', tostring(math.max(1, width or (W - 2 * pad))))
 	end
-	local valueSize = math.max(14, math.min(44, math.floor(H * 0.13)))
-	local small = math.max(8, math.floor(V.InfoFontSize or 10))
-	txt('W' .. i .. 'Title', pad, pad, small + 1, V.TextDimColor)
-	txt('W' .. i .. 'Value', pad, pad + small * 2 + 4, valueSize, V.TextColor)
-	txt('W' .. i .. 'Sub', pad, pad + small * 2 + 10 + math.floor(valueSize * 1.45), small, V.TextDimColor)
-	local listY = w.list and (pad + small * 2 + 6) or (pad + small * 4 + 18 + math.floor(valueSize * 1.45))
-	txt('W' .. i .. 'List', pad, listY, small, V.TextColor)
+	local small, valueSize, line = D.sizes()
+	local L = D.layout(small, valueSize, line)
+	txt('W' .. i .. 'Title', pad, pad, small, V.TextDimColor)
+	txt('W' .. i .. 'Value', pad, L.value, valueSize, V.TextColor)
+	txt('W' .. i .. 'Sub', pad, L.sub, small, V.TextDimColor)
+	txt('W' .. i .. 'List', pad, w.list and L.top or L.list, small, V.TextColor)
 	set('W' .. i .. 'Bar', 'X', tostring(x))
 	set('W' .. i .. 'Bar', 'Y', tostring(y))
 	set('W' .. i .. 'Graph', 'X', tostring(x))
@@ -1843,11 +1868,22 @@ function D.placeWidget(t, x, y, alpha)
 	dash.shown[i] = true
 end
 
+-- Where the parts of a widget go (from the top of the tile): the value, the
+-- line under it, the list (after them, or 'top' when it is alone), the graph
+function D.layout(small, valueSize, line)
+	local pad = V.LabelPad
+	local top = pad + math.floor(line * 1.6)
+	local value = top - math.floor(valueSize * 0.15)
+	local sub = value + math.floor(valueSize * 1.78 * 0.92)
+	local list = sub + math.floor(line * 1.5)
+	return { top = top, value = value, sub = sub, list = list, graph = sub + math.floor(line * 1.6) }
+end
+
 -- Graph of 'list' (0-'max') as a filled line along the bottom of the tile
 function D.graphPath(list, max, top)
 	local W, H, pad = V.TileW, V.TileH, V.LabelPad
 	local x0, x1, y1 = pad, W - pad, H - pad
-	local y0 = math.max(top, y1 - 10)
+	local y0 = math.min(math.max(top, y1 - (H - pad) * 0.6), y1 - 10)
 	local n = #list
 	if n < 2 or max <= 0 then return nil end
 	local parts = {}
@@ -1861,15 +1897,16 @@ function D.graphPath(list, max, top)
 end
 
 -- Bars (value 0-1) stacked from 'top', one per entry
-function D.barShapes(meter, values, top, step, color)
+function D.barShapes(meter, values, top, step, color, height)
 	local W, pad = V.TileW, V.LabelPad
+	local bh = height or 6
 	local width = W - 2 * pad
 	local k = 1
 	for n, v in ipairs(values) do
 		local y = top + (n - 1) * step
-		set(meter, k == 1 and 'Shape' or ('Shape' .. k), string.format('Rectangle %d,%d,%d,6,3 | Fill Color %s | StrokeWidth 0', pad, y, width, V.ScrollTrackColor))
-		set(meter, 'Shape' .. (k + 1), string.format('Rectangle %d,%d,%d,6,3 | Fill Color %s | StrokeWidth 0', pad, y,
-			math.max(6, math.floor(width * math.min(1, math.max(0, v)))), color or V.AccentColor))
+		set(meter, k == 1 and 'Shape' or ('Shape' .. k), string.format('Rectangle %d,%d,%d,%d,%d | Fill Color %s | StrokeWidth 0', pad, y, width, bh, math.floor(bh / 2), V.ScrollTrackColor))
+		set(meter, 'Shape' .. (k + 1), string.format('Rectangle %d,%d,%d,%d,%d | Fill Color %s | StrokeWidth 0', pad, y,
+			math.max(bh, math.floor(width * math.min(1, math.max(0, v)))), bh, math.floor(bh / 2), color or V.AccentColor))
 		k = k + 2
 	end
 	-- the ones left from a longer list
@@ -1883,11 +1920,13 @@ function D.fillWidget(t)
 	local i = w.idx
 	local m = 'W' .. i
 	local W, H, pad = V.TileW, V.TileH, V.LabelPad
-	local small = math.max(8, math.floor(V.InfoFontSize or 10))
-	local valueSize = math.max(14, math.min(44, math.floor(H * 0.13)))
-	local graphTop = pad + small * 4 + 24 + math.floor(valueSize * 1.45)
+	local small, valueSize, line, k = D.sizes()
+	local L = D.layout(small, valueSize, line)
+	local barH = math.floor(6 * k + 0.5)
+	local maxLines = math.max(1, math.floor((H - pad - L.top) / line))
+	local function text(meter, s) set(meter, 'Text', D.text(s)) end
 	local title = w.title or D.WIDGET_TITLES[w.kind] or t.name
-	set(m .. 'Title', 'Text', title:upper())
+	text(m .. 'Title', title:upper())
 	w.parts = { Title = true }
 	-- a skin or a custom widget draws itself: only its title, if it has one
 	if w.kind == 'skin' or w.kind == 'custom' then
@@ -1895,21 +1934,21 @@ function D.fillWidget(t)
 		return
 	end
 	if not d then
-		set(m .. 'Value', 'Text', '...')
+		text(m .. 'Value', '...')
 		w.parts.Value = true
 		return
 	end
-	local function value(text, sub)
-		set(m .. 'Value', 'Text', text)
+	local function value(v, sub)
+		text(m .. 'Value', v)
 		w.parts.Value = true
-		if sub and sub ~= '' then set(m .. 'Sub', 'Text', sub) w.parts.Sub = true end
+		if sub and sub ~= '' then text(m .. 'Sub', sub) w.parts.Sub = true end
 	end
 	local function list(lines)
-		set(m .. 'List', 'Text', table.concat(lines, '\n'))
+		text(m .. 'List', table.concat(lines, '\n'))
 		w.parts.List = #lines > 0
 	end
 	local function graph(series, max)
-		local p = D.graphPath(series, max, graphTop)
+		local p = D.graphPath(series, max, L.graph)
 		if p then
 			set(m .. 'Graph', 'Shape', 'Path P1 | Fill Color ' .. fade(V.AccentColor, 0.18) .. ' | StrokeWidth 2 | Stroke Color ' .. V.AccentColor)
 			set(m .. 'Graph', 'P1', p)
@@ -1934,8 +1973,9 @@ function D.fillWidget(t)
 		local used, total = tonumber(d['ram.used'] or '') or 0, tonumber(d['ram.total'] or '') or 0
 		local frac = total > 0 and used / total or 0
 		value(string.format('%d%%', math.floor(frac * 100 + 0.5)), D.fmtBytes(used) .. ' / ' .. D.fmtBytes(total))
-		D.barShapes(m .. 'Bar', { frac }, H - pad - 6, 0)
+		D.barShapes(m .. 'Bar', { frac }, L.sub + math.floor(line * 1.3), 0, nil, barH)
 		w.parts.Bar = true
+		graph(dash.hist.ram, 100)
 	elseif kind == 'disk' then
 		local disks = {}
 		for _, v in ipairs(d.disk) do
@@ -1946,22 +1986,23 @@ function D.fillWidget(t)
 		end
 		if w.param ~= '' and disks[1] then
 			local k = disks[1]
-			set(m .. 'Title', 'Text', ((w.title or ('Disk ' .. k.letter)) .. (k.label ~= '' and ('  ' .. k.label) or '')):upper())
+			text(m .. 'Title', ((w.title or ('Disk ' .. k.letter)) .. (k.label ~= '' and ('  ' .. k.label) or '')):upper())
 			value(D.fmtBytes(k.free) .. ' free', 'of ' .. D.fmtBytes(k.total))
-			D.barShapes(m .. 'Bar', { 1 - k.free / math.max(1, k.total) }, H - pad - 6, 0)
+			D.barShapes(m .. 'Bar', { 1 - k.free / math.max(1, k.total) }, L.sub + math.floor(line * 1.3), 0, nil, barH)
 			w.parts.Bar = true
 		else
 			-- all the disks: a line and a bar each
+			-- (two lines each: the text, then the bar in the empty one)
 			local lines, fracs = {}, {}
-			for _, k in ipairs(disks) do
-				lines[#lines + 1] = k.letter .. '  ' .. D.fmtBytes(k.free) .. ' free of ' .. D.fmtBytes(k.total)
+			for _, dk in ipairs(disks) do
+				if #lines + 2 > maxLines then break end
+				lines[#lines + 1] = dk.letter .. (dk.label ~= '' and ('  ' .. dk.label) or '') .. '   ' .. D.fmtBytes(dk.free) .. ' free of ' .. D.fmtBytes(dk.total)
 				lines[#lines + 1] = ' '
-				fracs[#fracs + 1] = 1 - k.free / math.max(1, k.total)
+				fracs[#fracs + 1] = 1 - dk.free / math.max(1, dk.total)
 			end
 			w.list = true
 			list(lines)
-			local line = math.floor(small * 1.4 + 0.5)
-			D.barShapes(m .. 'Bar', fracs, pad + small * 2 + 6 + line + 2, line * 2)
+			D.barShapes(m .. 'Bar', fracs, L.top + math.floor(line * 1.25), math.floor(line * 2 + 0.5), nil, barH)
 			w.parts.Bar = #fracs > 0
 		end
 	elseif kind == 'network' then
@@ -1971,18 +2012,18 @@ function D.fillWidget(t)
 		graph(dash.hist.down, max * 1.1)
 	elseif kind == 'processes' then
 		local byRam = w.param:lower() == 'ram'
-		set(m .. 'Title', 'Text', ((w.title or 'Processes') .. (byRam and '  \194\183  memory' or '  \194\183  CPU')):upper())
+		text(m .. 'Title', ((w.title or 'Processes') .. (byRam and '  \194\183  memory' or '  \194\183  CPU')):upper())
 		local lines = {}
 		for n, v in ipairs(d[byRam and 'proc.ram' or 'proc.cpu']) do
 			local name, val = v:match('^(.-)|(.*)$')
-			if name and n <= 6 then
+			if name and n <= math.min(8, maxLines) then
 				lines[#lines + 1] = byRam and (D.fmtBytes(val) .. '   ' .. name) or (string.format('%4.1f%%', tonumber(val) or 0) .. '   ' .. name)
 			end
 		end
 		w.list = true
 		list(lines)
 	elseif kind == 'system' then
-		set(m .. 'Title', 'Text', (w.title or d['sys.name'] or 'System'):upper())
+		text(m .. 'Title', (w.title or d['sys.name'] or 'System'):upper())
 		local lines = { d['sys.os'] or '', 'Up for ' .. D.fmtUptime(d['sys.uptime']) }
 		local pct, plugged = (d['sys.battery'] or ''):match('^(%d+)|(%d)$')
 		if pct then lines[#lines + 1] = 'Battery ' .. pct .. '%' .. (plugged == '1' and ' (charging)' or '') end
@@ -2205,6 +2246,8 @@ function DashTick()
 	D.pushHistory(dash.hist.gpu, d.gpu)
 	D.pushHistory(dash.hist.down, d['net.down'])
 	D.pushHistory(dash.hist.up, d['net.up'])
+	local ramUsed, ramTotal = tonumber(d['ram.used'] or ''), tonumber(d['ram.total'] or '')
+	if ramUsed and ramTotal and ramTotal > 0 then D.pushHistory(dash.hist.ram, 100 * ramUsed / ramTotal) end
 	for _, t in ipairs(cats[active].tiles) do
 		if t.widget then D.fillWidget(t) end
 	end

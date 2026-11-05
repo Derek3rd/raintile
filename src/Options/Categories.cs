@@ -893,13 +893,37 @@ namespace RaintileOptions
             l.VerticalAlignment = VerticalAlignment.Top;
             l.Margin = T(0, 6, 0, 0);
             g.Children.Add(l);
+            // A fixed hint is the tooltip of the label (dotted underline), to keep the form short;
+            // hintBlock stays below the control: it shows current values or holds buttons.
+            if (!string.IsNullOrEmpty(hint)) SetLabelHint(l, hint);
             var sp = NewPanel();
             AddTo(sp, control);
-            if (hintBlock == null && !string.IsNullOrEmpty(hint)) hintBlock = NewText(hint, 11.5, ResBrush("DimBrush"), false, true);
             if (hintBlock != null) { hintBlock.Margin = T(0, 4, 0, 0); AddTo(sp, hintBlock); }
             SetCol(sp, 1);
             g.Children.Add(sp);
             return g;
+        }
+
+        static TextDecorationCollection hintUnderline;
+
+        void SetLabelHint(TextBlock label, string hint)
+        {
+            if (hintUnderline == null)
+            {
+                var dim = ResBrush("DimBrush") as SolidColorBrush;
+                var brush = new SolidColorBrush(dim != null ? dim.Color : Colors.Gray) { Opacity = 0.6 };
+                // 1 px dots 2 px apart (DashStyles.Dot has zero-length dashes: invisible with flat caps)
+                var pen = new Pen(brush, 1) { DashStyle = new DashStyle(new double[] { 1, 2 }, 0) };
+                pen.Freeze();
+                hintUnderline = new TextDecorationCollection { new TextDecoration(TextDecorationLocation.Underline, pen, 2, TextDecorationUnit.FontRecommended, TextDecorationUnit.Pixel) };
+                hintUnderline.Freeze();
+            }
+            label.TextDecorations = hintUnderline;
+            label.Cursor = Cursors.Help;
+            // the default tooltip neither wraps nor stays long enough for two lines of text
+            label.ToolTip = new TextBlock { Text = hint, TextWrapping = TextWrapping.Wrap, MaxWidth = 340 };
+            ToolTipService.SetInitialShowDelay(label, 250);
+            ToolTipService.SetShowDuration(label, 60000);
         }
 
         Border NewListColumn(string title, UIElement list, params UIElement[] buttons)
@@ -1471,11 +1495,8 @@ namespace RaintileOptions
             };
             sizeCols.SelectionChanged += sizeChanged;
             sizeRows.SelectionChanged += sizeChanged;
-            var tagHint = NewPanel();
-            AddTo(tagHint, NewText("Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", 11.5, ResBrush("DimBrush"), false, true));
-            tagSuggestions = new WrapPanel { Margin = T(0, 4, 0, 0) };
-            AddTo(tagHint, tagSuggestions);
-            AddTo(f, NewFormRow("Tags", tileFields["Tags"], "", tagHint));
+            tagSuggestions = new WrapPanel();
+            AddTo(f, NewFormRow("Tags", tileFields["Tags"], "Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", tagSuggestions));
             // hot key: click, then press the combination (with modifiers)
             var keyRow = NewPanel(Orientation.Horizontal);
             tileKeyButton = NewButton("None", "KeyButton", "Click, then press the combination");

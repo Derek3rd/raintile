@@ -310,6 +310,7 @@ $schema = @(
             @{ Title = 'Tiles'; Items = @(
                     (S 'color' 'TileColor' 'Default tile colour'),
                     (Num 'TileRadius' 'Rounded corners' 0 60 1 'px' 'Radius of the corners of the tiles and of the highlight. 0 = square.'),
+                    (S 'bool' 'EdgeFade' 'Fade at the edge of the grid' 'Tiles cut by the edge (e.g. a tall tile only partly on screen) fade into the background there, to show they go on.'),
                     (S 'bool' 'AutoTileColor' 'Colour from the logo' 'Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo.'),
                     (S 'bool' 'LogoGreyscale' 'Greyscale logos' 'They turn to colour under the mouse.')
                 ) }
@@ -510,7 +511,7 @@ $defaults = @{
     ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps'
     ScanOnStart = '1'; SteamGridDBKey = ''
     CheckUpdates = '1'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
-    BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
+    BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; EdgeFade = '1'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
     AccentColor = '0,210,180,255'; ActiveCategoryColor = '0,210,180,70'; HoverCategoryColor = '255,255,255,20'
     TextColor = '240,240,245,255'; TextDimColor = '150,150,160,255'
     ScrollTrackColor = '255,255,255,25'; ScrollThumbColor = '0,210,180,200'

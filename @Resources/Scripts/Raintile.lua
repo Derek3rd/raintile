@@ -2231,9 +2231,27 @@ local function roundClip(rects)
 	clipShapes = n > 0 and n + 2 or 0
 end
 
+-- Fade over the tiles cut by the edge of the grid along the scroll (EdgeFade):
+-- a gradient to the launcher background, at the edge they cross. edges =
+-- { { x, y, w, h, side } } with side 'end' (bottom / right) or 'start'.
+local fadeShapes = 0
+local function edgeFade(edges)
+	if not V.EdgeFade then return end
+	local n = 0
+	for _, e in ipairs(edges) do
+		n = n + 1
+		local grad = V.Horizontal and (e[5] == 'end' and 'FadeRight' or 'FadeLeft') or (e[5] == 'end' and 'FadeDown' or 'FadeUp')
+		set('GridFade', n == 1 and 'Shape' or ('Shape' .. n), string.format('Rectangle %d,%d,%d,%d | Fill LinearGradient %s | StrokeWidth 0',
+			e[1], e[2], e[3], e[4], grad))
+	end
+	for k = math.max(2, n + 1), fadeShapes do set('GridFade', 'Shape' .. k, '') end
+	fadeShapes = n
+	show('GridFade', n > 0)
+end
+
 local function placeSlots()
 	local frac = pos - base
-	local rects = {}
+	local rects, edges = {}, {}
 	dash.shown = {}
 	dash.skinsWanted = {}
 	dash.customShown = {}
@@ -2332,6 +2350,18 @@ local function placeSlots()
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
 			if t.widget then D.placeWidget(t, x, y, f) end
 			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
+			-- cut by the edge: a fade where it goes on
+			if V.EdgeFade then
+				if V.Horizontal then
+					local fw = math.floor(math.min(V.StepX * 0.4, 160))
+					if x + V.TileW > V.GridW + 1 and x < V.GridW then edges[#edges + 1] = { V.GridW - fw, y, fw, V.TileH, 'end' } end
+					if x < -1 and x + V.TileW > 0 then edges[#edges + 1] = { 0, y, fw, V.TileH, 'start' } end
+				else
+					local fh = math.floor(math.min(V.StepY * 0.4, 160))
+					if y + V.TileH > V.GridH + 1 and y < V.GridH then edges[#edges + 1] = { x, V.GridH - fh, V.TileW, fh, 'end' } end
+					if y < -1 and y + V.TileH > 0 then edges[#edges + 1] = { x, 0, V.TileW, fh, 'start' } end
+				end
+			end
 			V.TileW, V.TileH = catW, catH
 		else
 			show(tile, false)
@@ -2341,6 +2371,7 @@ local function placeSlots()
 		end
 	end
 	roundClip(rects)
+	edgeFade(edges)
 	-- widgets not on screen (another category, scrolled away)
 	for _, t in ipairs(widgets) do
 		local n = t.widget.idx
@@ -2755,6 +2786,15 @@ function Initialize()
 	V.GridTop = V.GridY -- without the filter bar (see setGridArea)
 	V.LabelPad = num('LabelPad', 14)
 	V.TileRadius = math.max(0, math.floor(num('TileRadius', 0)))
+	V.EdgeFade = num('EdgeFade', 1) ~= 0
+	if V.EdgeFade then
+		-- gradients of GridFade: from clear to the launcher background
+		local r, g, b = (parseColor(SKIN:GetVariable('BgColor', '')) or '8,8,12,200'):match('^(%d+),(%d+),(%d+)')
+		local rgb = (r or 8) .. ',' .. (g or 8) .. ',' .. (b or 12)
+		for name, angle in pairs({ FadeDown = 90, FadeUp = 270, FadeRight = 0, FadeLeft = 180 }) do
+			SKIN:Bang('!SetOption', 'GridFade', name, angle .. ' | ' .. rgb .. ',0 ; 0.0 | ' .. rgb .. ',235 ; 1.0')
+		end
+	end
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
 	V.AnimCategory = num('AnimCategory', 1) ~= 0
 	V.AnimHover = num('AnimHover', 1) ~= 0

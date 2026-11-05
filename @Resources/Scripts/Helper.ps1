@@ -600,15 +600,40 @@ public class RaintilePad
 
     // The launcher window: the largest of Rainmeter's visible skins (the
     // launcher covers the screen).
-    static IntPtr LauncherWindow(uint rainmeter)
+    // The launcher's window: the visible Rainmeter window of the size the skin
+    // wrote to Generated\LauncherSize.txt ("<w>|<h>"); without it, the
+    // largest one (right when it covers the screen, not when it is a window
+    // or docked on a side next to bigger skins)
+    public string SizeFile;
+    int launcherW, launcherH;
+    DateTime sizeStamp = DateTime.MinValue;
+
+    void ReadLauncherSize()
     {
+        try
+        {
+            if (SizeFile == null || !System.IO.File.Exists(SizeFile)) { launcherW = launcherH = 0; return; }
+            DateTime stamp = System.IO.File.GetLastWriteTimeUtc(SizeFile);
+            if (stamp == sizeStamp) return;
+            sizeStamp = stamp;
+            string[] p = System.IO.File.ReadAllText(SizeFile).Trim().Split('|');
+            if (p.Length < 2 || !int.TryParse(p[0], out launcherW) || !int.TryParse(p[1], out launcherH)) launcherW = launcherH = 0;
+        }
+        catch { launcherW = launcherH = 0; }
+    }
+
+    IntPtr LauncherWindow(uint rainmeter)
+    {
+        ReadLauncherSize();
         IntPtr best = IntPtr.Zero, window = IntPtr.Zero;
         long bestArea = 0;
         while ((window = FindWindowEx(IntPtr.Zero, window, "RainmeterMeterWindow", null)) != IntPtr.Zero)
         {
             Rect r;
             if (ProcessOf(window) != rainmeter || !IsWindowVisible(window) || !GetWindowRect(window, out r)) continue;
-            long area = (long)(r.Right - r.Left) * (r.Bottom - r.Top);
+            int w = r.Right - r.Left, h = r.Bottom - r.Top;
+            if (launcherW > 0 && Math.Abs(w - launcherW) <= 1 && Math.Abs(h - launcherH) <= 1) return window;
+            long area = (long)w * h;
             if (area > bestArea) { bestArea = area; best = window; }
         }
         return best;
@@ -1077,6 +1102,7 @@ if ($Generated) {
     $pad.DashFlag = Join-Path $Generated 'DashOn.txt'
     $pad.DashFile = Join-Path $Generated 'DashData.txt'
     $pad.EdgeFile = Join-Path $Generated 'DockEdge.txt'
+    $pad.SizeFile = Join-Path $Generated 'LauncherSize.txt'
 }
 if ($pad.TrackEnabled) {
     $pad.LaunchFile = Join-Path $Generated 'Launch.txt'

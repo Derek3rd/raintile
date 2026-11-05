@@ -3534,6 +3534,15 @@ function PlaceWindow()
 	else
 		os.remove(edgeFile)
 	end
+	-- its size, for the helper to tell its window from the other skins
+	local sizeLine = math.floor(V.ScreenW) .. '|' .. math.floor(V.ScreenH)
+	local sf = io.open(resources .. 'Generated\\LauncherSize.txt', 'rb')
+	local oldSize = sf and sf:read('*a')
+	if sf then sf:close() end
+	if oldSize ~= sizeLine then
+		sf = io.open(resources .. 'Generated\\LauncherSize.txt', 'wb')
+		if sf then sf:write(sizeLine) sf:close() end
+	end
 	if V.Mode == 'window' then
 		SKIN:Bang('!Draggable', '1')
 		SKIN:Bang('!KeepOnScreen', '1')

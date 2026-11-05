@@ -1652,6 +1652,7 @@ function M.layoutCompact()
 	if not M.compact then
 		set('MenuClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
 			math.floor(V.ScreenW), math.floor(V.PadY + V.MenuH + 2)))
+		M.drawStrip()
 		return
 	end
 	show('MeterClock', false)
@@ -1665,6 +1666,28 @@ function M.layoutCompact()
 	set('MeterPowerItem1', 'X', tostring(math.floor(more:GetX())))
 	M.applyScroll()
 	M.reveal()
+	M.drawStrip()
+end
+
+-- Background of the strip: lit while the mouse is over it or over one of
+-- its categories (almost clear otherwise: it still takes the mouse)
+M.stripHit = false
+function M.drawStrip()
+	local on = M.compact and not typing and searchCat == nil
+	if on then
+		local lit = M.stripHit or hovered ~= 0
+		rect('MenuStripBg', M.catL, math.floor(V.PadY), M.catR - M.catL, math.floor(V.MenuH),
+			lit and '255,255,255,18' or '255,255,255,1')
+	end
+	show('MenuStripBg', on)
+end
+
+function StripHover(on)
+	if not ready then return end
+	M.stripHit = on == 1
+	M.drawStrip()
+	SKIN:Bang('!UpdateMeter', 'MenuStripBg')
+	SKIN:Bang('!Redraw')
 end
 
 -- The active category fully in the strip
@@ -4002,6 +4025,7 @@ end
 function HoverCategory(i)
 	if not ready then return end
 	hovered = i
+	M.drawStrip()
 	renderCategories()
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	SKIN:Bang('!Redraw')
@@ -4339,6 +4363,7 @@ updateSearchBar = function()
 		-- only while searching (from the "more" list), in the place of the categories
 		local searching = typing or searchCat ~= nil
 		show('MenuClip', not searching)
+		M.drawStrip()
 		show('SearchPill', searching)
 		show('SearchIcon', searching)
 		if not searching then show('SearchText', false) return end

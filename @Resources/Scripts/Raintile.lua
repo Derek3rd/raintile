@@ -1782,7 +1782,9 @@ function D.tempRows(d, param, ty)
 		return rows
 	end
 	for _, w in ipairs(wanted) do
-		local r = D.findReading(d, w[1], ty)
+		-- readings of the kind first (temperatures, fans), then any other
+		-- (usage, clocks, power...) with that label
+		local r = D.findReading(d, w[1], ty) or (param ~= '' and D.findReading(d, w[1], nil))
 		if r and not seen[r] then
 			seen[r] = true
 			rows[#rows + 1] = { label = w[2] or r.label, text = D.fmtReading(r), value = r.value }

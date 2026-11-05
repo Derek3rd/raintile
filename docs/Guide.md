@@ -207,7 +207,7 @@ A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Optio
 Windows does not give temperatures to programs without a driver, so Raintile reads them from [HWiNFO](https://www.hwinfo.com/) (free): start it (sensors only is enough), open **Settings** and turn on **Shared Memory Support**. With the free version the shared memory turns off after 12 hours: start HWiNFO again, or keep it running at login.
 
 - Without `Param=`, `temps` shows the CPU and GPU temperatures it finds (package, die, hot spot, ...), `fans` the first fans.
-- `Param=` picks the readings, separated by `;`, each one a part of the label as HWiNFO writes it (any case): `Param=CPU Package;GPU Temperature;SSD`. Add `=Name` to rename one: `Param=CPU Package=CPU;GPU Hot Spot=GPU hot`.
+- `Param=` picks the readings, separated by `;`, each one a part of the label as HWiNFO writes it (any case): `Param=CPU Package;GPU Temperature;SSD`. Add `=Name` to rename one: `Param=CPU Package=CPU;GPU Hot Spot=GPU hot`. A label that is not a temperature (or a fan) is looked for among the other readings too, so the widget can show anything HWiNFO measures: `Param=CPU Package;Total CPU Usage=CPU use;GPU Power`. Give it a title of your own with `Label=` (e.g. `Label=HWiNFO`).
 
 ### Skins in a tile
 

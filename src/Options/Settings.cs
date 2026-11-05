@@ -132,6 +132,22 @@ namespace RaintileOptions
             UpdateDirty();
             UpdateResets();
             if (keyButtons.ContainsKey(key)) UpdateKeyConflicts();
+            if (key == "LauncherMode") UpdateModeRows();
+        }
+
+        // Rows that only matter in one LauncherMode: the window size, the docked side
+        static readonly Dictionary<string, string> MODE_KEYS = new Dictionary<string, string>
+        {
+            { "WindowW", "window" }, { "WindowH", "window" },
+            { "DockSide", "dock" }, { "DockSize", "dock" }, { "DockEdge", "dock" }, { "DockEdgeDelay", "dock" },
+        };
+        readonly Dictionary<string, UIElement> modeRows = new Dictionary<string, UIElement>();
+
+        void UpdateModeRows()
+        {
+            string mode = V("LauncherMode").Trim().ToLowerInvariant();
+            foreach (var r in modeRows)
+                r.Value.Visibility = MODE_KEYS[r.Key] == mode ? Visibility.Visible : Visibility.Collapsed;
         }
 
         static bool TryNum(string t, out double n) { return Core.TryNumber(t, out n); }
@@ -139,6 +155,7 @@ namespace RaintileOptions
         // Shows the current value of 'key' in its controls (after a reset)
         void UpdateControl(string key)
         {
+            if (key == "LauncherMode") UpdateModeRows();
             Ctl c;
             if (!ctl.TryGetValue(key, out c)) return;
             string v = V(key);
@@ -699,10 +716,12 @@ namespace RaintileOptions
                     {
                         var row = NewItemRow(item);
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
+                        if (row != null && item.Key != null && MODE_KEYS.ContainsKey(item.Key)) modeRows[item.Key] = row;
                     }
                 }
                 if (rows > 0) AddTo(sp, card);
             }
+            UpdateModeRows();
             return sv;
         }
     }

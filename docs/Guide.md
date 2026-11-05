@@ -5,6 +5,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 ## Contents
 
 - [Opening and closing](#opening-and-closing)
+  - [Full screen, window or docked](#full-screen-window-or-docked)
 - [Controls](#controls)
   - [Mouse](#mouse)
   - [Keyboard](#keyboard)
@@ -49,13 +50,26 @@ The launcher loads **once** (when Rainmeter starts, or on *Refresh skin*) and th
 | `Esc` (`CloseHotKey`) | | ✓ (closes the search first, if open) |
 | The **X** at the top right (`CloseAction`) | | ✓ |
 | After launching a tile (`CloseOnLaunch=1`) | | ✓ |
-| Losing focus: a click outside the launcher (e.g. on a second monitor) or another program coming to the foreground (`AutoHide=1`) | | ✓ |
+| Losing focus: a click outside the launcher (e.g. on a second monitor) or another program coming to the foreground (`AutoHide=1`; not as a window) | | ✓ |
+| Docked: the mouse resting on that edge of the screen (`DockEdge=1`) | ✓ | |
 
 Without the HotKey plugin you can toggle it from a Windows shortcut: create a shortcut with this target and assign it a *Shortcut key* in its properties:
 
 ```
 "C:\Program Files\Rainmeter\Rainmeter.exe" !CommandMeasure MeasureScript "Toggle()" "Raintile"
 ```
+
+### Full screen, window or docked
+
+`LauncherMode` (Options > General > Screen) sets how the launcher shows on its area (`ScreenX/Y/W/H`, a monitor or its work area):
+
+- **Fullscreen** (default): all of the area.
+- **Window**: a window of `WindowW` x `WindowH` (pixels or % of the area), centred the first time. Drag an empty part of it (the background, the space around the menu) to move it: it stays where you put it. It does not hide when another program gets the focus; close it with the X, `Esc` or the shortcut.
+- **Dock**: on a side of the screen (`DockSide`: `Left`, `Right`, `Top`, `Bottom`), `DockSize` wide (left and right) or tall (top and bottom). It comes in from that side, sliding and fading, and goes back the same way; it hides when you click outside it (`AutoHide`). With `DockEdge=1` it also opens when the mouse rests on that edge of the screen for `DockEdgeDelay` ms, but not while a full-screen program (a game, a video) is in front; move the mouse away from the edge to open it again from there.
+
+Sizes in percent (margins, menu, fonts) are of the area, not of the window, so they stay the same in every mode.
+
+**Compact menu**: when the categories do not all fit in the menu (a narrow window, a launcher docked left or right, or just many categories) the clock, Favorites/Recent/Not played yet, the search, the power button and the gear move into a list opened by the **☰** button at the top left (with the time and date at its top). The categories stay in a strip between it and the X: scroll it with the wheel; its edges fade where more categories are hidden, and it follows the active one. *Search* in that list opens the search bar in the place of the categories.
 
 Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter starts; `ShowZPos=1` brings it above other windows when shown (`-2` = on the desktop); `CloseAction=[!DeactivateConfig]` unloads the skin on close instead of hiding it (slower to reopen).
 
@@ -452,7 +466,13 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `ScreenX`, `ScreenY`, `ScreenW`, `ScreenH` | `#SCREENAREA...#` | area covered by the launcher. Use `#WORKAREA...#` to keep the taskbar free, or `#SCREENAREAWIDTH@2#` (etc.) for another monitor |
+| `ScreenX`, `ScreenY`, `ScreenW`, `ScreenH` | `#SCREENAREA...#` | area of the launcher. Use `#WORKAREA...#` to keep the taskbar free, or `#SCREENAREAWIDTH@2#` (etc.) for another monitor |
+| `LauncherMode` | `Fullscreen` | `Fullscreen`, `Window` or `Dock`: see [Full screen, window or docked](#full-screen-window-or-docked) |
+| `WindowW`, `WindowH` | `60%`, `70%` | size of the window (pixels or % of the area) |
+| `DockSide` | `Left` | side it is docked on: `Left`, `Right`, `Top`, `Bottom` |
+| `DockSize` | `30%` | width when docked left or right, height when docked at the top or bottom (pixels or % of the area) |
+| `DockEdge` | `1` | docked: it also opens when the mouse rests on that edge of the screen |
+| `DockEdgeDelay` | `300` | ms the mouse rests on the edge before it opens |
 
 ### Grid
 
@@ -669,7 +689,7 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Scripts/Options.ps1        Options window with PowerShell, when the program is missing
   Scripts/Options.xaml       look of the Options window
   Generated/Grid.inc         generated meters
-  Generated/Sizes.inc        percentage sizes and #hex colours converted for Rainmeter
+  Generated/Sizes.inc        the launcher's rectangle (LauncherMode), percentage sizes and #hex colours converted for Rainmeter
   Generated/Thumbs/          thumbnails (safe to delete: they are rebuilt)
   Generated/Colors.txt       tile colours taken from logos (AutoTileColor)
   Generated/Area.txt         grid area in pixels, for the framing preview of Options
@@ -680,6 +700,7 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Generated/Playtime.txt     play time of the Steam games
   Generated/DashOn.txt       present while a Dashboard is on screen: the helper collects its data
   Generated/DashData.txt     the data of the Dashboard widgets (written by the helper)
+  Generated/DockEdge.txt     docked with DockEdge=1: the edge the helper watches to open it
 ```
 
 The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your data is](#where-your-data-is).

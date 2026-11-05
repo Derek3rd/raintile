@@ -1,6 +1,6 @@
 # Raintile
 
-**Raintile** is a full-screen tile launcher for [Rainmeter](https://www.rainmeter.net/), meant to replace the icons on your Windows desktop.
+**Raintile** is a tile launcher for [Rainmeter](https://www.rainmeter.net/), full screen, in a window or docked on a side, meant to replace the icons on your Windows desktop.
 
 Your games, apps, links and system tools become large tiles with background art and logos, organised in categories you switch between from a menu at the top. Open it with a shortcut, pick a tile with the mouse, the keyboard or a gamepad, and it gets out of the way.
 
@@ -17,6 +17,7 @@ Your games, apps, links and system tools become large tiles with background art 
 - **Tile menu**: right click a tile to edit it, add it to Favorites, open its file location, run it as administrator or remove it.
 - **Mouse, keyboard and gamepad**: WASD/arrows, Space/Enter, Xbox-compatible controllers (open the launcher with Back + Start), with an on-screen keyboard to search from the couch.
 - **Dashboard**: widgets for CPU, GPU, memory, disks, network, processes and temperatures (with [HWiNFO](https://www.hwinfo.com/)), your Rainmeter skins in a tile, custom widgets, and a widget gallery to install new ones from Options.
+- **Full screen, window or docked**: the launcher can cover the screen, be a window you move around, or sit on a side of the screen and slide in when the mouse touches that edge. When the menu gets narrow, the categories scroll and the rest goes into a ☰ list.
 - **Power button**: lock, sleep, restart or shut down the PC from the launcher.
 - **Hot keys for tiles**: give a game a key combination and start it from anywhere, even with the launcher closed.
 - **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.

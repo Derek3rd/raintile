@@ -302,7 +302,7 @@ $schema = @(
                     (Num 'MenuFontSize' 'Menu font size' 6 40 1 'pt'),
                     (Num 'LabelFontSize' 'Label font size' 6 40 1 'pt'),
                     (S 'bool' 'ShowLabels' 'Show tile labels'),
-                    (S 'choice' 'TileInfo' 'Play time and last launch' 'A line at the top left of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.' @{ Choices = @(
+                    (S 'choice' 'TileInfo' 'Play time and last launch' 'A line on the tile, at the top left unless moved in the preview of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.' @{ Choices = @(
                                 @('Hover', 'On the highlighted tile'), @('Always', 'Always'), @('Never', 'Never')) }),
                     (Num 'InfoFontSize' 'Play time font size' 6 30 1 'pt'),
                     (S 'bool' 'TrackPlaytime' 'Measure play time outside Steam' 'The background helper looks for the game a tile starts and counts how long it runs.')

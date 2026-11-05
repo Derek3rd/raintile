@@ -409,6 +409,16 @@ local function logoCentre(t, size)
 	return place(t.logoX, vw, V.TileW), place(t.logoY, vh, V.TileH)
 end
 
+-- Placement of the play time line (TileInfo): InfoPos=X,Y is where it goes in
+-- the room the line leaves in the tile, in %: 0,0 top left (the default),
+-- 100,0 top right, 50,50 centre, 100,100 bottom right. Its width changes with
+-- the text, so this keeps it inside the tile whatever it says.
+local function infoPlacement(t, pos)
+	local x, y = trim(pos or ''):match('^([%d%.]+)%s*,%s*([%d%.]+)$')
+	t.infoX = math.min(100, math.max(0, tonumber(x) or 0)) / 100
+	t.infoY = math.min(100, math.max(0, tonumber(y) or 0)) / 100
+end
+
 -- Automatic tile colour (AutoTileColor=1): a tile without a background image
 -- and without Color= gets a dark colour taken from its logo. Thumbs.ps1
 -- computes it in the background and keeps the results in
@@ -564,6 +574,7 @@ local function loadCategory(file)
 	local function own(v) v = trim(v or '') if v ~= '' then return v end end
 	c.bgFocus, c.bgZoom = own(catKeys.bgfocus), own(catKeys.bgzoom)
 	c.logoPos, c.logoScale = own(catKeys.logopos), own(catKeys.logoscale)
+	c.infoPos = own(catKeys.infopos)
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -602,6 +613,7 @@ local function loadCategory(file)
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
 				pw, ph, V.BgThumbMode, t.frame)
 			logoPlacement(t, own(k.logopos) or c.logoPos, own(k.logoscale) or c.logoScale)
+			infoPlacement(t, own(k.infopos) or c.infoPos)
 			-- logo thumbnails are made at the largest size (zoom included)
 			local logoMax = math.floor(c.iconSize * t.logoScale * V.HoverLogoScale + 0.5)
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
@@ -1170,6 +1182,23 @@ local function show(meter, visible)
 		cache[key] = visible
 		SKIN:Bang(visible and '!ShowMeter' or '!HideMeter', meter)
 	end
+end
+
+-- Size of the play time line (with its padding) for a text: the meter is
+-- updated and measured once per text, as the clock is; the font does not
+-- change until a refresh, which starts over. Shown first: a hidden meter
+-- measures 0 (nothing is drawn before the end of the frame anyway).
+local infoSizes = {}
+local function infoSize(meter, text)
+	local s = infoSizes[text]
+	if not s then
+		show(meter, true)
+		SKIN:Bang('!UpdateMeter', meter)
+		local m = SKIN:GetMeter(meter)
+		s = { m and m:GetW() or 0, m and m:GetH() or 0 }
+		if s[1] > 0 then infoSizes[text] = s end
+	end
+	return s[1], s[2]
 end
 
 -- Text in the middle of an empty grid: no search results, no favorites yet,
@@ -2305,8 +2334,15 @@ local function placeSlots()
 			end
 			if infoText and infoAlpha > 0.01 then
 				set(infoMeter, 'Text', infoText)
-				set(infoMeter, 'X', tostring(x + V.LabelPad))
-				set(infoMeter, 'Y', tostring(y + V.LabelPad))
+				-- InfoPos: in the room the line leaves inside the margins
+				local ix, iy = x + V.LabelPad, y + V.LabelPad
+				if (t.infoX > 0 or t.infoY > 0) and not t.widget then
+					local iw, ih = infoSize(infoMeter, infoText)
+					ix = ix + math.floor(t.infoX * math.max(0, V.TileW - 2 * V.LabelPad - iw) + 0.5)
+					iy = iy + math.floor(t.infoY * math.max(0, V.TileH - 2 * V.LabelPad - ih) + 0.5)
+				end
+				set(infoMeter, 'X', tostring(ix))
+				set(infoMeter, 'Y', tostring(iy))
 				set(infoMeter, 'FontColor', fade(V.TextColor, infoAlpha))
 				set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
 			end

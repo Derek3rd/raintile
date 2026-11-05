@@ -151,13 +151,14 @@ Settings (Options > Menu > Filter bar): `FilterBar`, `FilterStores`, `FilterH`, 
 
 ## Play time
 
-A small line at the top left of the tile tells how long you played and when you last did: `123 h played - 3 days ago`.
+A small line on the tile (at the top left unless you move it) tells how long you played and when you last did: `123 h played - 3 days ago`.
 
 - **Steam games**: the hours played and the last launch come from Steam itself (`userdata\<account>\config\localconfig.vdf`, every account that logged in on this PC), read in the background (`Scripts\Playtime.ps1`) when the skin loads and, at most once a minute, when the launcher opens. The game is recognised by its `steam://rungameid/<id>` command or by `Source=Steam:<id>`.
 - **Other tiles** (`TrackPlaytime=1`): when a tile starts a game, the background helper (the one of the [gamepad](#gamepad)) looks for its process and measures how long it runs: the program of the command (`.exe`), the one it learned the last time, or the first program coming to the foreground that started after the launch (launchers like Epic, GOG, Ubisoft, EA and Battle.net, and parts of Windows, are left out). The minutes go to `TimePlayed.txt` in the data folder, the program found to `GameExe.txt`. Web links and bangs are not measured.
 - Before any time is measured: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
 - `TileInfo=Hover` (default) shows it only on the highlighted tile (mouse, keyboard or gamepad), `Always` on every tile, `Never` hides it. Size: `InfoFontSize`. Options > Appearance > Text.
 - Tiles of [games no longer installed](#games-no-longer-installed) always show **Not installed**.
+- **Where**: the top left by default. To move it, drag the sample line in the tile's preview (Options > *the category* > *the tile*), or under **All tiles** for the whole category; the **x** on the **Play time** row gives it back the place of All tiles. It is saved as `InfoPos=X,Y`: where the line goes in the room it leaves inside the margins (`LabelPad`), in %: `0,0` top left, `100,0` top right, `50,50` centre, `100,100` bottom right. The line changes width with what it says, so it stays inside the tile whatever the text.
 
 ## Launching a tile
 
@@ -251,6 +252,7 @@ TileColor=         ; colour of its tiles without a Color= of their own
 TileOpacity=       ; opacity of their background, 0-100 (tiles without Opacity=)
 LogoPos=           ; logo placement of its tiles without their own (e.g. 85,50: on the right)
 LogoScale=
+InfoPos=           ; place of the play time line of its tiles without their own (e.g. 100,0: top right)
 BgFocus=           ; background framing of its tiles without their own
 BgZoom=
 
@@ -277,6 +279,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `BgZoom` | framing of the background: enlargement beyond filling the tile, `1` to `4` (default: the category's `BgZoom`, or `1`) |
 | `LogoPos` | where the centre of the logo goes, `X,Y` in % of the tile's width and height (default: the category's `LogoPos`, or `50,50`); see [Placing the logo](#placing-the-logo) |
 | `LogoScale` | size of the logo, times the category's `IconSize`, `0.25` to `3` (default: the category's `LogoScale`, or `1`) |
+| `InfoPos` | where the [play time](#play-time) line goes, `X,Y` in % of the room it leaves in the tile: `0,0` top left, `100,100` bottom right (default: the category's `InfoPos`, or `0,0`) |
 | `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
 | `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
 | `HotKey` | key combination that starts the tile, also while the launcher is hidden: HotKey plugin names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
@@ -331,11 +334,11 @@ The placement is saved in the tile as `LogoPos` (where the centre of the logo go
 
 ### Placement for a whole category
 
-Logo placement and framing can also be set once for all the tiles of a category, e.g. every logo on the right or every background framed on its top part. The page of a category in Options shows its tiles side by side at the top, with **All tiles** first: it holds the settings of the whole category.
+Logo placement, framing and the place of the [play time](#play-time) line can also be set once for all the tiles of a category, e.g. every logo on the right, every background framed on its top part or the play time at the top right. The page of a category in Options shows its tiles side by side at the top, with **All tiles** first: it holds the settings of the whole category.
 
-- **All tiles**: the large preview shows the category's framing and logo placement on placeholder images, or on the images of a tile chosen in **Preview on**; drag and zoom them as on a tile. They are saved in `[Category]` with the same keys (`BgFocus`, `BgZoom`, `LogoPos`, `LogoScale`), and every tile without its own follows them, the tiles added later too. The framing is relative to each image, so on other backgrounds it frames the same relative part. On the right: the grid, the logo size, the tile colour and background of the category.
-- On a tile, a chip next to **Framing** and **Logo** says **From All tiles** or **Own**; a dot on the small tile in the strip marks the tiles with something of their own instead of the one of All tiles (colour, background opacity, framing or logo). Moving a tile's logo or background gives it its own; the **x** next to the slider gives it back the one of All tiles. To change every tile at once, use All tiles.
-- **Reset logos** / **Reset framing** (All tiles > **Every tile**): every tile of the category back to the centre at the normal size, the category's placement included. The row also says how many tiles have a placement of their own.
+- **All tiles**: the large preview shows the category's framing, logo placement and play time line (a sample text) on placeholder images, or on the images of a tile chosen in **Preview on**; drag and zoom them as on a tile. They are saved in `[Category]` with the same keys (`BgFocus`, `BgZoom`, `LogoPos`, `LogoScale`, `InfoPos`), and every tile without its own follows them, the tiles added later too. The framing is relative to each image, so on other backgrounds it frames the same relative part. On the right: the grid, the logo size, the tile colour and background of the category.
+- On a tile, a chip next to **Framing**, **Logo** and **Play time** says **From All tiles** or **Own**; a dot on the small tile in the strip marks the tiles with something of their own instead of the one of All tiles (colour, background opacity, framing, logo or play time line). Moving a tile's logo, background or play time line gives it its own; the **x** on the row gives it back the one of All tiles. To change every tile at once, use All tiles.
+- **Reset logos** / **Reset framing** / **Reset play time** (All tiles > **Every tile**): every tile of the category back to the centre at the normal size (the play time line to the top left), the category's placement included. The row also says how many tiles have a placement of their own.
 
 ## Adding games and apps
 

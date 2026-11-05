@@ -271,9 +271,10 @@ DebugLog=0
 ; --- Appearance -----------------------------------------------------------------
 ; 1 = show the tile label (Label= in the category file), 0 = hide it
 ShowLabels=1
-; Line at the top left of the tiles with the play time (Steam games) and the
-; last launch: Hover (only on the highlighted tile), Always or Never. Tiles
-; of games no longer installed always say so.
+; Line on the tiles with the play time (Steam games) and the last launch, at
+; the top left unless moved (InfoPos= of the tile or the category): Hover
+; (only on the highlighted tile), Always or Never. Tiles of games no longer
+; installed always say so.
 TileInfo=Hover
 InfoFontSize=10
 ; 1 = measure the play time of the tiles that are not Steam games: the

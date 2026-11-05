@@ -338,7 +338,7 @@ Logo placement, framing and the place of the [play time](#play-time) line can al
 
 - **All tiles**: the large preview shows the category's framing, logo placement and play time line (a sample text) on placeholder images, or on the images of a tile chosen in **Preview on**; drag and zoom them as on a tile. They are saved in `[Category]` with the same keys (`BgFocus`, `BgZoom`, `LogoPos`, `LogoScale`, `InfoPos`), and every tile without its own follows them, the tiles added later too. The framing is relative to each image, so on other backgrounds it frames the same relative part. On the right: the grid, the logo size, the tile colour and background of the category.
 - On a tile, a chip next to **Framing**, **Logo** and **Play time** says **From All tiles** or **Own**; a dot on the small tile in the strip marks the tiles with something of their own instead of the one of All tiles (colour, background opacity, framing, logo or play time line). Moving a tile's logo, background or play time line gives it its own; the **x** on the row gives it back the one of All tiles. To change every tile at once, use All tiles.
-- **Reset logos** / **Reset framing** / **Reset play time** (All tiles > **Every tile**): every tile of the category back to the centre at the normal size (the play time line to the top left), the category's placement included. The row also says how many tiles have a placement of their own.
+- **Logo** / **Framing** / **Play time** (All tiles > **Reset**): every tile of the category back to the centre at the normal size (the play time line to the top left), the category's placement included. The row also says how many tiles have a placement of their own.
 
 ## Adding games and apps
 

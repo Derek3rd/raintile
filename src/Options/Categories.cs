@@ -2128,13 +2128,13 @@ namespace RaintileOptions
             // framing, logo and play time line of every tile back to their default place,
             // the ones with their own too; the buttons share the column
             var placeButtons = NewGrid("*", "8", "*", "8", "*");
-            var btnResetLogos = NewButton("Reset logos");
-            var btnResetFraming = NewButton("Reset framing");
-            var btnResetInfo = NewButton("Reset play time");
+            var btnResetLogos = NewButton("Logo");
+            var btnResetFraming = NewButton("Framing");
+            var btnResetInfo = NewButton("Play time");
             SetCol(btnResetFraming, 2);
             SetCol(btnResetInfo, 4);
             placeButtons.Children.Add(btnResetLogos); placeButtons.Children.Add(btnResetFraming); placeButtons.Children.Add(btnResetInfo);
-            var placeFormRow = NewFormRow("Every tile", placeButtons);
+            var placeFormRow = NewFormRow("Reset", placeButtons);
             placementHint = (TextBlock)placeFormRow.Children[0];   // its label: the summary is its tooltip
             placementRow = placeFormRow;
             AddTo(af, placementRow);

@@ -918,6 +918,17 @@ local function loadCategories(files)
 					widgets[#widgets + 1] = t
 					t.widget.idx = #widgets
 					t.widget.cat = c
+					-- a custom widget gets its container only with a file that has meters
+					t.widget.boxed = false
+					if t.widget.kind == 'custom' then
+						local path = D.customWidgetFile(t.widget.param)
+						local f = path and io.open(path, 'rb')
+						if f then
+							local text = f:read('*a')
+							f:close()
+							t.widget.boxed = ('\n' .. text):lower():find('\n%s*meter%s*=') ~= nil
+						end
+					end
 				end
 			end
 		end
@@ -1127,15 +1138,19 @@ local function writeGrid(path, sig, files)
 			w('')
 		end
 		-- a custom widget: its sections, in a container over the tile
-		if t.widget.kind == 'custom' then
-			w('[CW' .. i .. 'Box]')
-			w('Meter=Shape')
-			w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
-			w('Hidden=1')
-			w('')
+		-- (only when its file is there: a container without meters would be
+		-- drawn as it is, a white box)
+		if t.widget.boxed then
 			local cc = t.widget.cat
 			local text = D.customWidgetText(t, i, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
-			if text then w(text) end
+			if text and text:find('Container=CW' .. i .. 'Box', 1, true) then
+				w('[CW' .. i .. 'Box]')
+				w('Meter=Shape')
+				w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
+				w('Hidden=1')
+				w('')
+				w(text)
+			end
 		end
 	end
 
@@ -1942,7 +1957,7 @@ function D.placeWidget(t, x, y, alpha)
 			dash.skinsWanted[config] = { file = file, x = math.floor(SKIN:GetX() + V.PadX + x + V.LabelPad),
 				y = math.floor(SKIN:GetY() + V.GridY + y + V.LabelPad) }
 		end
-	elseif w.kind == 'custom' then
+	elseif w.kind == 'custom' and w.boxed then
 		set('CW' .. i .. 'Box', 'X', tostring(math.floor(V.PadX + x)))
 		set('CW' .. i .. 'Box', 'Y', tostring(math.floor(V.GridY + y)))
 		set('CW' .. i .. 'Box', 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 255,255,255,255 | StrokeWidth 0', V.TileW, V.TileH,
@@ -2037,6 +2052,13 @@ function D.fillWidget(t)
 	text(m .. 'Title', title:upper())
 	w.parts = { Title = true }
 	-- a skin or a custom widget draws itself: only its title, if it has one
+	if w.kind == 'custom' and not w.boxed then
+		-- its file is missing (or has no meters): say where it goes
+		text(m .. 'Value', 'Widget not found')
+		text(m .. 'Sub', 'Widgets\\' .. w.param .. '\\' .. w.param .. '.ini in the data folder')
+		w.parts.Value, w.parts.Sub = true, true
+		return
+	end
 	if w.kind == 'skin' or w.kind == 'custom' then
 		w.parts.Title = w.title ~= nil
 		return
@@ -2325,7 +2347,7 @@ local function placeSlots()
 		if not dash.shown[n] then
 			for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List', 'Bar', 'Graph' }) do show('W' .. n .. part, false) end
 		end
-		if t.widget.kind == 'custom' and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
+		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
 end
 

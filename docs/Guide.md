@@ -24,6 +24,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Categories and tiles](#categories-and-tiles)
   - [Category files](#category-files)
   - [Tile keys](#tile-keys)
+  - [Tiles of more cells](#tiles-of-more-cells)
   - [Commands](#commands)
   - [Images](#images)
 - [Adding games and apps](#adding-games-and-apps)
@@ -182,7 +183,7 @@ A **Dashboard** is a category whose tiles are widgets that watch the PC: process
 
 ### Widgets
 
-A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options pick **Widget** and **Widget option** in the tile editor. `Name=` is the title shown on the widget (by default the name of the kind).
+A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options pick **Widget** and **Widget option** in the tile editor. `Label=` is the title shown on the widget (by default the name of the kind), `Size=2x1` makes it larger (see [Tiles of more cells](#tiles-of-more-cells)).
 
 | `Widget=` | Shows | `Param=` |
 | --- | --- | --- |
@@ -256,6 +257,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `Command` | what to run on launch (see below) |
 | `Label` | text at the bottom left; a tile without images shows its name |
 | `Color` | background colour (`R,G,B,A` or `#RRGGBBAA`, see [Colours](#colours)) when there is no background image (empty: taken from the logo with `AutoTileColor=1`, otherwise `TileColor`) |
+| `Size` | cells the tile takes in the grid, `<columns>x<rows>` (`Size=2x2`, default `1x1`, at most `NX` x `NY`): see [Tiles of more cells](#tiles-of-more-cells) |
 | `Image` | another name for both images: `Image=diablo4` looks for `background\diablo4.*` and `logo\diablo4.*` |
 | `Background` | specific background file (relative to `background\` or absolute; extension optional) |
 | `Logo` | specific logo file (relative to `logo\` or absolute) |
@@ -267,6 +269,16 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
 | `HotKey` | key combination that starts the tile, also while the launcher is hidden: HotKey plugin names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
 | `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
+
+### Tiles of more cells
+
+A tile with `Size=` takes more cells: `Size=2x1` is two columns wide, `Size=2x2` twice as wide and tall (Options > Categories > the tile > **Size**). It works for every tile, games and widgets alike: a featured game, a bigger CPU graph.
+
+- The tiles are placed in order, each one in the first free spot where it fits (row by row; column by column with `Horizontal=1`), so the smaller ones after it fill the space around it.
+- A size larger than the grid is reduced to it (`NX` columns, `NY` rows).
+- The background thumbnail is made at the tile's size; framing and logo placement work on the whole tile.
+- In search results, Favorites, Recent and Not played yet every tile takes one cell.
+- Keyboard and gamepad move to the tile next to the highlighted one; up and down keep the column you came from.
 
 ### Commands
 

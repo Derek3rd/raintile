@@ -51,7 +51,7 @@ namespace RaintileOptions
         ComboBox moveTo;
         Button tileKeyButton;
         CheckBox catDashboard;
-        ComboBox widgetKind;
+        ComboBox widgetKind, sizeCols, sizeRows;
         TextBox widgetParam;
         TextBlock widgetHint;
         FrameworkElement widgetRow, widgetParamRow;
@@ -748,6 +748,12 @@ namespace RaintileOptions
             if (bg == null) bgFrame.Bitmap = null;
             ReadFraming(s);
             var size = currentFile != null ? GetTileSize(currentFile) : new double[] { 16, 9 };
+            // a tile of more cells (Size=): its own proportions (gaps left out)
+            var span = Regex.Match(s != null ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
+            if (span.Success)
+            {
+                size = new[] { size[0] * Math.Max(1, int.Parse(span.Groups[1].Value)), size[1] * Math.Max(1, int.Parse(span.Groups[2].Value)) };
+            }
             bgFrame.TW = size[0]; bgFrame.TH = size[1];
             previewLogo.Source = GetBitmap(logo, 384);
             ReadLogoPlace(s);
@@ -835,6 +841,11 @@ namespace RaintileOptions
             widgetParam.Text = s != null ? Core.GetKey(s, "Param") : "";
             UpdateWidgetHint();
             if (!dashboard) widgetParamRow.Visibility = Visibility.Collapsed;
+            var size = Regex.Match(s != null ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
+            int sc = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[1].Value))) : 1;
+            int sr = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[2].Value))) : 1;
+            sizeCols.SelectedItem = sc.ToString();
+            sizeRows.SelectedItem = sr.ToString();
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
             tileNote.Visibility = tileNote.Text != "" ? Visibility.Visible : Visibility.Collapsed;
@@ -1380,6 +1391,28 @@ namespace RaintileOptions
             tileFields["Color"].Margin = T(10, 0, 0, 0);
             AddTo(colorRow, colorSwatch); AddTo(colorRow, tileFields["Color"]);
             AddTo(f, NewFormRow("Colour", colorRow, "Used when there is no background image. Empty = from the logo, or the default tile colour."));
+            // cells taken in the grid (Size=<columns>x<rows>)
+            var sizeRow = NewPanel(Orientation.Horizontal);
+            sizeCols = new ComboBox { Width = 70 };
+            sizeRows = new ComboBox { Width = 70 };
+            for (int n = 1; n <= 8; n++) { sizeCols.Items.Add(n.ToString()); sizeRows.Items.Add(n.ToString()); }
+            var by = NewText("\u00D7", 13, ResBrush("DimBrush"));
+            by.VerticalAlignment = VerticalAlignment.Center;
+            by.Margin = T(10, 0, 10, 0);
+            AddTo(sizeRow, sizeCols); AddTo(sizeRow, by); AddTo(sizeRow, sizeRows);
+            AddTo(f, NewFormRow("Size", sizeRow, "Cells the tile takes in the grid: columns \u00D7 rows (at most the grid of the category). The other tiles fill the space around it. Search, Favorites and Recent show it in one cell."));
+            SelectionChangedEventHandler sizeChanged = (s, e) =>
+            {
+                if (loading) return;
+                var t = GetCurrentTile();
+                if (t == null) return;
+                string c = (string)sizeCols.SelectedItem ?? "1", r = (string)sizeRows.SelectedItem ?? "1";
+                Core.SetKey(t, "Size", c == "1" && r == "1" ? "" : c + "x" + r);
+                SetChanged(currentFile);
+                UpdateTilePreview();
+            };
+            sizeCols.SelectionChanged += sizeChanged;
+            sizeRows.SelectionChanged += sizeChanged;
             var tagHint = NewPanel();
             AddTo(tagHint, NewText("Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", 11.5, ResBrush("DimBrush"), false, true));
             tagSuggestions = new WrapPanel { Margin = T(0, 4, 0, 0) };

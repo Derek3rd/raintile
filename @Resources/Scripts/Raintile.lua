@@ -23,7 +23,7 @@ local laidOut = false -- menu already measured and centred
 local appear = nil    -- steps since the tiles started appearing (nil = none)
 -- Highlight of the tile under the mouse, in grid units (column, row) so it
 -- follows the tiles while scrolling; a = opacity 0-1.
-local hover = { idx = 0, on = false, gx = 0, gy = 0, tx = 0, ty = 0, a = 0 }
+local hover = { idx = 0, on = false, gx = 0, gy = 0, tx = 0, ty = 0, a = 0, w = 0, h = 0, tw = 0, th = 0, anchor = 0 }
 local pillPos = nil   -- { x, w } of the active category pill
 -- Tiles whose logo is (or is going back from being) lit by hover: [tile] = true.
 -- tile.zoom (0-1) is the progress, used for the logo's zoom and colour.
@@ -492,6 +492,48 @@ local function tileStore(command, store, source)
 	return name, steamId
 end
 
+-- Tiles bigger than one cell (Size=<columns>x<rows>) -----------------------
+-- In a category with such tiles each tile gets its place by packing: in
+-- order, in the first free spot (row by row; column by column when the grid
+-- scrolls horizontally) where it fits, so the smaller ones fill the holes.
+-- Positions are in "lines" (the rows, or the columns, along the scroll) and
+-- "cross" cells: c.pack = { at = { [index] = { line, cross, lines, cells } },
+-- cell = { [line] = { [cross] = index } }, lines = <lines used> }. Search
+-- results, Favorites and Recent stay one cell per tile.
+local function packTiles(c)
+	local P = V.Horizontal and c.ny or c.nx
+	local cell, count, at, lines, first = {}, {}, {}, 0, 0
+	local function free(l, x, ls, cs)
+		for a = l, l + ls - 1 do
+			local row = cell[a]
+			if row then
+				for b = x, x + cs - 1 do if row[b] then return false end end
+			end
+		end
+		return true
+	end
+	for idx, t in ipairs(c.tiles) do
+		local ls = V.Horizontal and t.cols or t.rows
+		local cs = V.Horizontal and t.rows or t.cols
+		local l, placed = first, nil
+		while not placed do
+			for x = 0, P - cs do
+				if free(l, x, ls, cs) then placed = x break end
+			end
+			if not placed then l = l + 1 end
+		end
+		for a = l, l + ls - 1 do
+			cell[a] = cell[a] or {}
+			for b = placed, placed + cs - 1 do cell[a][b] = idx end
+			count[a] = (count[a] or 0) + cs
+		end
+		at[idx] = { l, placed, ls, cs }
+		lines = math.max(lines, l + ls)
+		while (count[first] or 0) >= P do first = first + 1 end
+	end
+	c.pack = { at = at, cell = cell, lines = lines }
+end
+
 -- Reads a category file (Categories\<file>.ini).
 local function loadCategory(file)
 	local ini = parseIni(data .. 'Categories\\' .. file)
@@ -536,9 +578,15 @@ local function loadCategory(file)
 			end
 			-- originals, used full screen by the launch animation
 			t.backgroundFull, t.logoFull = t.background, t.logo
-			t.frame = frameRect(t.background, k.bgfocus, k.bgzoom, c.tw, c.th)
+			-- cells taken (Size=2x1: two columns, one row), at most the grid
+			local sw, sh = trim(k.size or ''):match('^(%d+)%s*[xX*]%s*(%d+)$')
+			t.cols = math.max(1, math.min(c.nx, tonumber(sw) or 1))
+			t.rows = math.max(1, math.min(c.ny, tonumber(sh) or 1))
+			if t.cols > 1 or t.rows > 1 then c.spans = true end
+			local pw, ph = t.cols * (c.tw + V.Gap) - V.Gap, t.rows * (c.th + V.Gap) - V.Gap
+			t.frame = frameRect(t.background, k.bgfocus, k.bgzoom, pw, ph)
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
-				c.tw, c.th, V.BgThumbMode, t.frame)
+				pw, ph, V.BgThumbMode, t.frame)
 			logoPlacement(t, k.logopos, k.logoscale)
 			-- logo thumbnails are made at the largest size (zoom included)
 			local logoMax = math.floor(c.iconSize * t.logoScale * V.HoverLogoScale + 0.5)
@@ -574,6 +622,7 @@ local function loadCategory(file)
 			c.tiles[#c.tiles + 1] = t
 		end
 	end
+	if c.spans then packTiles(c) end
 
 	c.icon = findImage(iconValue, images, 'icon', base)
 	if not c.icon and V.MenuMode ~= 'text' and trim(iconValue or '') == '' then
@@ -911,7 +960,7 @@ local function signature()
 	for _, chip in ipairs(filter.chips) do s[#s + 1] = 'chip:' .. chip.label end
 	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
 	for _, t in ipairs(widgets) do
-		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param
+		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param .. ':' .. t.cols .. 'x' .. t.rows
 		-- a changed custom widget file writes Grid.inc again
 		if t.widget.kind == 'custom' then
 			local path = D.customWidgetFile(t.widget.param)
@@ -1076,7 +1125,8 @@ local function writeGrid(path, sig, files)
 			w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
 			w('Hidden=1')
 			w('')
-			local text = D.customWidgetText(t, i, t.widget.cat.tw, t.widget.cat.th)
+			local cc = t.widget.cat
+			local text = D.customWidgetText(t, i, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
 			if text then w(text) end
 		end
 	end
@@ -1225,7 +1275,9 @@ end
 -- Rows (V) or columns (H) of tiles of the active category, and how many fit
 -- on screen.
 local function lineCount()
-	return math.ceil(#cur().tiles / (V.Horizontal and V.NY or V.NX))
+	local c = cur()
+	if c.pack then return c.pack.lines end
+	return math.ceil(#c.tiles / (V.Horizontal and V.NY or V.NX))
 end
 
 local function visibleLines()
@@ -1266,8 +1318,40 @@ local function saveScroll()
 	end
 end
 
+-- With tiles of more cells (c.pack): what the slots show for the 'base'
+-- line, one slot per tile that is (also only in part) in the visible lines
+-- plus the extra one: { idx, line (not wrapped, with infinite scroll), cross,
+-- lines, cells }. Never more than the slots: each takes at least one cell.
+local view = {}
+local function buildView()
+	view = {}
+	local c = cur()
+	if not c.pack then return end
+	local p, L, seen = c.pack, c.pack.lines, {}
+	if L == 0 then return end
+	for dl = base, base + visibleLines() do
+		local a = infinite() and dl % L or dl
+		local row = p.cell[a]
+		if row then
+			for x = 0, (V.Horizontal and V.NY or V.NX) - 1 do
+				local idx = row[x]
+				if idx then
+					local e = p.at[idx]
+					local start = dl - (a - e[1])
+					local key = idx .. ':' .. start
+					if not seen[key] then
+						seen[key] = true
+						view[#view + 1] = { idx = idx, line = start, cross = e[2], ls = e[3], cs = e[4] }
+					end
+				end
+			end
+		end
+	end
+end
+
 -- Index (in cur().tiles) of the tile in the slot, with the current contents.
 local function indexAt(slot)
+	if cur().pack then return view[slot] and view[slot].idx end
 	local r, c = slotRC(slot)
 	local line = base + (V.Horizontal and c or r)
 	if infinite() then line = line % lineCount() end
@@ -1286,9 +1370,21 @@ local function gridToPx(gx, gy)
 	return gx * V.StepX, gy * V.StepY
 end
 
+-- Size in pixels of tile t in the grid shown (search results: one cell)
+local function tileSize(t)
+	local cw, ch = V.StepX - V.Gap, V.StepY - V.Gap
+	if not (t and cur().pack and t.cols) then return cw, ch end
+	return t.cols * V.StepX - V.Gap, t.rows * V.StepY - V.Gap
+end
+
 -- Grid coordinates (column, row) of the slot with the current contents; with
 -- infinite scroll the row (or column) is not wrapped back.
 local function slotToGrid(slot)
+	local e = cur().pack and view[slot]
+	if e then
+		if V.Horizontal then return e.line, e.cross end
+		return e.cross, e.line
+	end
 	local r, c = slotRC(slot)
 	if V.Horizontal then return base + c, r end
 	return c, base + r
@@ -1561,6 +1657,7 @@ end
 
 -- Slot contents (images, texts) for the 'base' row/column.
 local function fillSlots()
+	buildView()
 	for slot = 1, V.Slots do
 		local t = tileAt(slot)
 		if t then
@@ -2089,13 +2186,18 @@ local function placeSlots()
 		local t = inUse and tileAt(slot)
 		local r, c = slotRC(slot)
 		local extra = r >= V.NY or c >= V.NX -- extra row/column
+		local e = cur().pack and view[slot]
+		if e then extra = e.line >= base + visibleLines() end
 		local visible = t and (not extra or frac > 0)
 		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
 		local infoMeter = 'TileInfo' .. slot
 
 		if visible then
-			local x, y = c * V.StepX, r * V.StepY
-			if V.Horizontal then x = x - frac * V.StepX else y = y - frac * V.StepY end
+			local x, y = gridToPx(slotToGrid(slot))
+			-- the code below works with the size of this tile (more cells
+			-- with Size=), put back at the end
+			local catW, catH = V.TileW, V.TileH
+			V.TileW, V.TileH = tileSize(t)
 
 			local f = 1
 			if appear then
@@ -2167,6 +2269,7 @@ local function placeSlots()
 			show(label, hasLabel and not t.widget)
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
 			if t.widget then D.placeWidget(t, x, y, f) end
+			V.TileW, V.TileH = catW, catH
 		else
 			show(tile, false)
 			show(icon, false)
@@ -2194,7 +2297,7 @@ local function placeHover()
 	set('TileHover', 'Y', tostring(math.floor(y + 0.5)))
 	set('TileHover', 'Shape', string.format(
 		'Rectangle 1,1,%d,%d | Fill Color %s | StrokeWidth 2 | Stroke Color %s',
-		V.TileW - 2, V.TileH - 2, fade(V.HoverColor, hover.a), fade(V.AccentColor, hover.a)))
+		math.floor(hover.w + 0.5) - 2, math.floor(hover.h + 0.5) - 2, fade(V.HoverColor, hover.a), fade(V.AccentColor, hover.a)))
 	show('TileHover', true)
 end
 
@@ -2248,9 +2351,14 @@ function DashTick()
 	D.pushHistory(dash.hist.up, d['net.up'])
 	local ramUsed, ramTotal = tonumber(d['ram.used'] or ''), tonumber(d['ram.total'] or '')
 	if ramUsed and ramTotal and ramTotal > 0 then D.pushHistory(dash.hist.ram, 100 * ramUsed / ramTotal) end
+	local catW, catH = V.TileW, V.TileH
 	for _, t in ipairs(cats[active].tiles) do
-		if t.widget then D.fillWidget(t) end
+		if t.widget then
+			V.TileW, V.TileH = tileSize(t)
+			D.fillWidget(t)
+		end
 	end
+	V.TileW, V.TileH = catW, catH
 	frame()
 	-- skins over their tiles, custom widgets updated
 	D.syncSkins()
@@ -2357,6 +2465,10 @@ local function advance()
 		hover.gx, moving = approach(hover.gx, hover.tx, 0.002, V.AnimHoverSmooth)
 		busy = busy or moving
 		hover.gy, moving = approach(hover.gy, hover.ty, 0.002, V.AnimHoverSmooth)
+		busy = busy or moving
+		hover.w, moving = approach(hover.w, hover.tw, 0.5, V.AnimHoverSmooth)
+		busy = busy or moving
+		hover.h, moving = approach(hover.h, hover.th, 0.5, V.AnimHoverSmooth)
 		busy = busy or moving
 		hover.a, moving = approach(hover.a, hover.on and 1 or 0, 0.02, V.AnimHoverSmooth)
 		busy = busy or moving
@@ -3245,9 +3357,11 @@ end
 local function focus(t, idx, tx, ty)
 	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty then return end
 	hover.tx, hover.ty = tx, ty
+	hover.tw, hover.th = tileSize(t)
 	if hover.a < 0.05 or not V.AnimHover then
 		-- it was off: appear directly on the new tile
 		hover.gx, hover.gy = hover.tx, hover.ty
+		hover.w, hover.h = hover.tw, hover.th
 	end
 	hover.idx, hover.on = idx, true
 
@@ -3268,6 +3382,7 @@ function HoverTile(slot)
 	if not t then return end
 	setPointed(t)
 	local tx, ty = slotToGrid(slot)
+	hover.anchor = V.Horizontal and ty or tx
 	focus(t, indexAt(slot), tx, ty)
 end
 
@@ -3384,7 +3499,7 @@ local function drawSplash(p)
 	local e = 1 - (1 - p) ^ 3 -- cubic ease-out
 	local function lerp(from, to) return math.floor(from + (to - from) * e + 0.5) end
 	local x, y = lerp(a.x, 0), lerp(a.y, 0)
-	local w, h = lerp(V.TileW, V.ScreenW), lerp(V.TileH, V.ScreenH)
+	local w, h = lerp(a.w, V.ScreenW), lerp(a.h, V.ScreenH)
 
 	set('SplashBg', 'X', tostring(x))
 	set('SplashBg', 'Y', tostring(y))
@@ -3395,9 +3510,12 @@ local function drawSplash(p)
 		local t = a.tile
 		local size = lerp(V.IconSize * t.logoScale, V.LaunchLogoSize)
 		-- the logo starts where it sits in the tile and ends at the centre
+		local catW, catH = V.TileW, V.TileH
+		V.TileW, V.TileH = a.w, a.h
 		local lx, ly = logoCentre(t, V.IconSize * t.logoScale)
-		local fx = lx / V.TileW + (0.5 - lx / V.TileW) * e
-		local fy = ly / V.TileH + (0.5 - ly / V.TileH) * e
+		V.TileW, V.TileH = catW, catH
+		local fx = lx / a.w + (0.5 - lx / a.w) * e
+		local fy = ly / a.h + (0.5 - ly / a.h) * e
 		set('SplashLogo', 'X', tostring(x + math.floor(w * fx - size / 2)))
 		set('SplashLogo', 'Y', tostring(y + math.floor(h * fy - size / 2)))
 		set('SplashLogo', 'W', tostring(size))
@@ -3470,7 +3588,8 @@ local function launchTile(t, x, y)
 	end
 
 	stopTicker()
-	launching = { tile = t, x = V.PadX + math.floor(x), y = V.GridY + math.floor(y), frame = 0 }
+	local tw, th = tileSize(t)
+	launching = { tile = t, x = V.PadX + math.floor(x), y = V.GridY + math.floor(y), w = tw, h = th, frame = 0 }
 	hover.on, hover.a = false, 0
 	show('TileHover', false)
 
@@ -3511,9 +3630,7 @@ end
 
 function Launch(slot)
 	if not ready or launching then return end
-	local r, c = slotRC(slot)
-	local x, y = c * V.StepX, r * V.StepY
-	if V.Horizontal then x = x - (pos - base) * V.StepX else y = y - (pos - base) * V.StepY end
+	local x, y = gridToPx(slotToGrid(slot))
 	launchTile(tileAt(slot), x, y)
 end
 
@@ -3522,6 +3639,87 @@ end
 -- launch the highlighted tile, Q/E switch category. The keys are registered by
 -- the Raintile\Navigation mini-skin, only active while the launcher is visible.
 
+-- Nav() in a grid with tiles of more cells (c.pack): to the next tile in
+-- that direction. Up and down keep the column the highlight came from
+-- (hover.anchor; the row, when the grid scrolls horizontally).
+local function navPacked(dx, dy, p)
+	local L, P, vis = p.lines, (V.Horizontal and V.NY or V.NX), visibleLines()
+	if L == 0 then return end
+	local tiles = cur().tiles
+	local dl = V.Horizontal and dx or dy
+	local dc = V.Horizontal and dy or dx
+	local inf = infinite()
+	local function wrap(l) return inf and l % L or l end
+	local function inRange(l) return inf or (l >= 0 and l < L) end
+	-- the tile of line l (on screen, not wrapped) nearest to the cross cell x
+	local function nearest(l, x)
+		local row = p.cell[wrap(l)]
+		if not row then return nil end
+		local best, bd
+		for c = 0, P - 1 do
+			if row[c] and (not bd or math.abs(c - x) < bd) then best, bd = c, math.abs(c - x) end
+		end
+		if not best then return nil end
+		local id = row[best]
+		return id, l - (wrap(l) - p.at[id][1])
+	end
+	local idx, line
+	local e = hover.idx ~= 0 and p.at[hover.idx]
+	if e then
+		local start = V.Horizontal and hover.tx or hover.ty
+		local anchor = math.min(math.max(hover.anchor or e[2], e[2]), e[2] + e[4] - 1)
+		if dl ~= 0 then
+			local l = dl > 0 and start + e[3] or start - 1
+			for _ = 1, L do
+				if not inRange(l) then break end
+				idx, line = nearest(l, anchor)
+				if idx then break end
+				l = l + dl
+			end
+			hover.anchor = anchor
+		elseif dc ~= 0 then
+			local x = dc > 0 and e[2] + e[4] or e[2] - 1
+			while x >= 0 and x < P do
+				local id = p.cell[e[1]] and p.cell[e[1]][x]
+				if id then
+					idx, line = id, start + (p.at[id][1] - e[1])
+					hover.anchor = p.at[id][2]
+					break
+				end
+				x = x + dc
+			end
+		else
+			idx, line = hover.idx, start
+		end
+	else
+		-- no highlighted tile: the first visible one
+		local l = offset
+		for _ = 1, L do
+			if not inRange(l) then break end
+			idx, line = nearest(l, 0)
+			if idx then break end
+			l = l + 1
+		end
+		hover.anchor = idx and p.at[idx][2] or 0
+	end
+	if not idx then return end -- at the edge: the highlight stays
+	local at = p.at[idx]
+	if line < offset then
+		offset = line
+	elseif line + at[3] - 1 > offset + vis - 1 then
+		offset = line + at[3] - vis
+	end
+	if not inf then offset = math.min(math.max(0, offset), maxOffset()) end
+	if pos ~= offset then
+		if V.AnimScroll then startTicker() else pos = offset end
+	end
+	if V.Horizontal then
+		focus(tiles[idx], idx, line, at[2])
+	else
+		focus(tiles[idx], idx, at[2], line)
+	end
+end
+
 -- Moves the highlight by dx columns and dy rows, scrolling the grid just
 -- enough to keep it visible.
 function Nav(dx, dy)
@@ -3529,6 +3727,7 @@ function Nav(dx, dy)
 	if osk.open then oskMove(dx, dy) return end
 	local tiles = cur().tiles
 	if #tiles == 0 then return end
+	if cur().pack then return navPacked(dx, dy, cur().pack) end
 	local L, per, vis = lineCount(), (V.Horizontal and V.NY or V.NX), visibleLines()
 
 	-- line = row (or column, when horizontal) along the scroll direction

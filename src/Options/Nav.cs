@@ -339,7 +339,7 @@ namespace RaintileOptions
                         nav.Items.Add(NewNavItem("categories", page.Title, page.Icon, 0, new NavTag { Type = "page", Group = "categories", Page = page }, "", open));
                         if (open)
                         {
-                            var entries = GetCategoryMenuEntries();
+                            var entries = GetCategoryMenuEntries().Where(x => !x.Dashboard).ToList();
                             if (!firstShown) AddStartStep("  menu: categories read (" + entries.Count + ")");
                             foreach (var e in entries)
                                 nav.Items.Add(NewNavItem("cat:" + e.File, e.Name, 0, 1, new NavTag { Type = "category", File = e.File }, e.Icon));
@@ -350,6 +350,13 @@ namespace RaintileOptions
                     {
                         var page = Schema.ById(node.Page);
                         nav.Items.Add(NewNavItem("page:" + node.Page, page.Title, page.Icon, 0, new NavTag { Type = "page", Page = page }));
+                        // the Dashboard: its widgets under its page
+                        if (node.Page == "dashboard")
+                        {
+                            var dashes = GetCategoryMenuEntries().Where(x => x.Dashboard).ToList();
+                            foreach (var d in dashes)
+                                nav.Items.Add(NewNavItem("cat:" + d.File, dashes.Count > 1 ? d.Name : "Widgets", 0, 1, new NavTag { Type = "category", File = d.File }, d.Icon));
+                        }
                     }
                 }
                 foreach (ListBoxItem it in nav.Items) if (((NavTag)it.Tag).Id == selectId) nav.SelectedItem = it;
@@ -405,7 +412,7 @@ namespace RaintileOptions
 
         void ShowPage(Page page)
         {
-            if (page.Id == "info") pages.Remove("info");   // the counts may have changed
+            if (page.Id == "info" || page.Id == "dashboard") pages.Remove(page.Id);   // counts and Dashboard file may have changed
             if (!pages.ContainsKey(page.Id))
             {
                 updating = true;
@@ -434,7 +441,9 @@ namespace RaintileOptions
             var c = Core.GetCategorySection(GetModel(file));
             string name = Core.GetKey(c, "Name");
             pageTitle.Text = name != "" ? name : System.IO.Path.GetFileNameWithoutExtension(file);
-            pageDesc.Text = "Categories\\" + file + ": its tiles. Name, icon and grid of the category are on the Categories page.";
+            pageDesc.Text = IsDashboard(file)
+                ? "Categories\\" + file + ": its widgets. Name and grid of the Dashboard are on the Dashboard page."
+                : "Categories\\" + file + ": its tiles. Name, icon and grid of the category are on the Categories page.";
         }
 
         void ShowNavTarget(NavTag tag)

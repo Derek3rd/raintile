@@ -103,6 +103,7 @@ namespace RaintileOptions
                 new Group { Title = "Tiles", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "color", Key = "TileColor", Label = "Default tile colour", Help = "" },
+                    new Item { Kind = "int", Key = "TileRadius", Label = "Rounded corners", Help = "Radius of the corners of the tiles and of the highlight. 0 = square.", Min = 0.0, Max = 60.0, Step = 1.0, Unit = "px" },
                     new Item { Kind = "bool", Key = "AutoTileColor", Label = "Colour from the logo", Help = "Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo." },
                     new Item { Kind = "bool", Key = "LogoGreyscale", Label = "Greyscale logos", Help = "They turn to colour under the mouse." },
                 } },
@@ -203,6 +204,21 @@ namespace RaintileOptions
                     new Item { Kind = "info", Key = "", Label = "LT / RT", Help = "Filter chips of the search results" },
                 } },
             } },
+            new Page { Id = "dashboard", Title = "Dashboard", Icon = 0xE9D2, Desc = "Categories of widgets: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>
+            {
+                new Group { Title = null, Help = null, Dash = true, Items = new List<Item>
+                {
+                } },
+                new Group { Title = "Widgets", Help = "The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.", Items = new List<Item>
+                {
+                    new Item { Kind = "int", Key = "DashInterval", Label = "Update every", Help = "Only while a Dashboard is on screen.", Min = 250.0, Max = 5000.0, Step = 250.0, Unit = "ms" },
+                    new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From HWiNFO (free, hwinfo.com): keep it running with Settings > Shared Memory Support on." },
+                    new Item { Kind = "info", Key = "", Label = "Custom widgets", Help = "Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>." },
+                } },
+                new Group { Title = null, Help = null, Market = true, Items = new List<Item>
+                {
+                } },
+            } },
             new Page { Id = "search", Title = "Search", Icon = 0xE721, Desc = "The search bar at the top left searches the tiles of every category.", Groups = new List<Group>
             {
                 new Group { Title = "Search bar", Help = null, Items = new List<Item>
@@ -262,6 +278,7 @@ namespace RaintileOptions
             new NavNode { Page = "animations" },
             new NavNode { Page = "backgrounds" },
             new NavNode { Id = "keybindings", Title = "Keybindings", Icon = 0xE765, Children = new[] { "keys", "gamepad" } },
+            new NavNode { Page = "dashboard" },
             new NavNode { Page = "search" },
             new NavNode { Page = "import" },
             new NavNode { Page = "advanced" },
@@ -300,6 +317,7 @@ namespace RaintileOptions
             { "CloseHotKey", "ESCAPE" },
             { "CloseOnLaunch", "1" },
             { "CloseSize", "14" },
+            { "DashInterval", "1000" },
             { "DateFormat", "%A %#d %B" },
             { "DebugLog", "0" },
             { "FadeDuration", "0" },
@@ -392,6 +410,7 @@ namespace RaintileOptions
             { "TileColor", "36,36,44,255" },
             { "TileHover", "1" },
             { "TileInfo", "Hover" },
+            { "TileRadius", "0" },
             { "TrackPlaytime", "1" },
             { "UnplayedCount", "24" },
         };

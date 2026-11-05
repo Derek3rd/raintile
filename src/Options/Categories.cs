@@ -20,6 +20,7 @@ namespace RaintileOptions
     {
         public string File, Base, Name, Icon;
         public int Order, Tiles, Imported;
+        public bool Dashboard;
     }
 
     // What an entry of the lists holds
@@ -50,6 +51,44 @@ namespace RaintileOptions
         Slider zoomSlider, logoSlider;
         ComboBox moveTo;
         Button tileKeyButton;
+        TextBox catTileColor;
+        ComboBox catOpacity, tileOpacity;
+        Button catColorSwatch;
+        ComboBox widgetKind, sizeCols, sizeRows;
+        TextBox widgetParam;
+        TextBlock widgetHint;
+        FrameworkElement widgetRow, widgetParamRow;
+
+        // Widgets of a Dashboard: kind, label in the list, what Param= means
+        static readonly string[][] WIDGET_KINDS =
+        {
+            new[] { "", "(none: a normal tile)", "" },
+            new[] { "cpu", "CPU", "" },
+            new[] { "gpu", "GPU", "" },
+            new[] { "ram", "Memory", "" },
+            new[] { "disk", "Disks", "A drive (C), or empty for all of them." },
+            new[] { "network", "Network", "" },
+            new[] { "processes", "Processes", "cpu or ram: what they are sorted by." },
+            new[] { "system", "System", "" },
+            new[] { "temps", "Temperatures (HWiNFO)", "HWiNFO readings separated by ; (e.g. CPU Package; GPU Temperature; Total CPU Usage), =Name to rename one (GPU Hot Spot=GPU hot). Temperatures first, then any reading with that label. Empty: CPU, GPU and drives." },
+            new[] { "fans", "Fans (HWiNFO)", "Like Temperatures, for fans. Empty: the first fans." },
+            new[] { "skin", "An installed skin", "<config>\\<file>.ini of a skin in Rainmeter's Skins folder, e.g. illustro\\Clock\\Clock.ini. It is loaded over the tile while the Dashboard is shown." },
+            new[] { "custom", "Custom widget", "The name of a widget in the Widgets folder of your data (Widgets\\<name>.ini or Widgets\\<name>\\<name>.ini)." },
+        };
+
+        bool IsDashboard(string file)
+        {
+            return file != null && string.Equals(Core.GetKey(Core.GetCategorySection(GetModel(file)), "Type").Trim(), "Dashboard", StringComparison.OrdinalIgnoreCase);
+        }
+
+        void UpdateWidgetHint()
+        {
+            var item = widgetKind.SelectedItem as ComboBoxItem;
+            string kind = item != null ? (string)item.Tag : "";
+            string hint = WIDGET_KINDS.Where(k => k[0] == kind).Select(k => k[2]).FirstOrDefault() ?? "";
+            widgetHint.Text = hint;
+            widgetParamRow.Visibility = hint != "" ? Visibility.Visible : Visibility.Collapsed;
+        }
         Button colorSwatch;
         WrapPanel tagSuggestions;
         readonly Dictionary<string, TextBox> catFields = new Dictionary<string, TextBox>();
@@ -251,12 +290,12 @@ namespace RaintileOptions
             var list = new List<CategoryEntry>();
             foreach (var f in Core.GetCategoryFiles())
             {
-                string name = "", orderText = "", iconText = "";
+                string name = "", orderText = "", iconText = "", typeText = "";
                 CategoryModel model;
                 if (models.TryGetValue(f.Name, out model))
                 {
                     var c = Core.GetCategorySection(model);
-                    name = Core.GetKey(c, "Name"); orderText = Core.GetKey(c, "Order"); iconText = Core.GetKey(c, "Icon");
+                    name = Core.GetKey(c, "Name"); orderText = Core.GetKey(c, "Order"); iconText = Core.GetKey(c, "Icon"); typeText = Core.GetKey(c, "Type");
                 }
                 else
                 {
@@ -265,7 +304,7 @@ namespace RaintileOptions
                     var m = Regex.Match(text, @"(?ims)^[ \t]*\[Category\][ \t]*\r?$(.*?)(?=^[ \t]*\[|\z)");
                     if (m.Success)
                     {
-                        foreach (Match kv in Regex.Matches(m.Groups[1].Value, @"(?im)^[ \t]*(Name|Order|Icon)[ \t]*=(.*?)\r?$"))
+                        foreach (Match kv in Regex.Matches(m.Groups[1].Value, @"(?im)^[ \t]*(Name|Order|Icon|Type)[ \t]*=(.*?)\r?$"))
                         {
                             string v = kv.Groups[2].Value.Trim();
                             switch (kv.Groups[1].Value.ToLowerInvariant())
@@ -273,6 +312,7 @@ namespace RaintileOptions
                                 case "name": if (name == "") name = v; break;
                                 case "order": if (orderText == "") orderText = v; break;
                                 case "icon": if (iconText == "") iconText = v; break;
+                                case "type": if (typeText == "") typeText = v; break;
                             }
                         }
                     }
@@ -282,17 +322,20 @@ namespace RaintileOptions
                 {
                     File = f.Name, Base = b, Order = ParseOrder(orderText), Name = name != "" ? name : b,
                     Icon = Core.FindImage(Path.Combine(Core.ImagesRoot, b), iconText != "" ? iconText : "icon"),
+                    Dashboard = string.Equals(typeText.Trim(), "Dashboard", StringComparison.OrdinalIgnoreCase),
                 });
             }
             return list.OrderBy(e => e.Order).ThenBy(e => e.File, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
         // Categories in menu order, with their counts
-        List<CategoryEntry> GetCategoryEntries()
+        // (the Dashboards have a page of their own: left out unless asked)
+        List<CategoryEntry> GetCategoryEntries(bool withDashboards = false)
         {
             var list = new List<CategoryEntry>();
             foreach (var f in Core.GetCategoryFiles())
             {
+                if (!withDashboards && IsDashboard(f.Name)) continue;
                 var m = GetModel(f.Name);
                 var c = Core.GetCategorySection(m);
                 string b = Path.GetFileNameWithoutExtension(f.Name);
@@ -421,7 +464,25 @@ namespace RaintileOptions
             catIconHint.Text = file != null ? "Default: Images\\" + GetListBase() + "\\icon.png" : "";
             gridHint.Text = "Empty = default (" + V("NX") + " \u00D7 " + V("NY") + ", from Layout)";
             sizeHint.Text = "Pixels or %. Empty = default (" + V("IconSize") + ")";
+            catTileColor.Text = c != null ? Core.GetKey(c, "TileColor") : "";
+            SelectOpacity(catOpacity, c != null ? Core.GetKey(c, "TileOpacity") : "");
             loading = false;
+        }
+
+        // Opacity of the tile background (colour and image): "" = the default, then 100% to 0%
+        static ComboBox NewOpacityBox(string defaultLabel)
+        {
+            var box = new ComboBox { Width = 170 };
+            box.Items.Add(new ComboBoxItem { Content = defaultLabel, Tag = "" });
+            for (int n = 100; n >= 0; n -= 10) box.Items.Add(new ComboBoxItem { Content = n + "%" + (n == 0 ? " (none)" : ""), Tag = n.ToString() });
+            return box;
+        }
+
+        static void SelectOpacity(ComboBox box, string value)
+        {
+            int v;
+            string tag = int.TryParse((value ?? "").Trim(), out v) ? (Math.Max(0, Math.Min(100, (int)Math.Round(v / 10.0) * 10))).ToString() : "";
+            box.SelectedItem = box.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == tag) ?? box.Items[0];
         }
 
         // A new category file and its image folders
@@ -711,6 +772,12 @@ namespace RaintileOptions
             if (bg == null) bgFrame.Bitmap = null;
             ReadFraming(s);
             var size = currentFile != null ? GetTileSize(currentFile) : new double[] { 16, 9 };
+            // a tile of more cells (Size=): its own proportions (gaps left out)
+            var span = Regex.Match(s != null ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
+            if (span.Success)
+            {
+                size = new[] { size[0] * Math.Max(1, int.Parse(span.Groups[1].Value)), size[1] * Math.Max(1, int.Parse(span.Groups[2].Value)) };
+            }
             bgFrame.TW = size[0]; bgFrame.TH = size[1];
             previewLogo.Source = GetBitmap(logo, 384);
             ReadLogoPlace(s);
@@ -791,6 +858,19 @@ namespace RaintileOptions
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" }) tileFields[k].Text = s != null ? Core.GetKey(s, k) : "";
             UpdateTagSuggestions();
             tileKeyButton.Content = Schema.FormatHotKey(s != null ? Core.GetKey(s, "HotKey") : "");
+            bool dashboard = IsDashboard(currentFile);
+            widgetRow.Visibility = dashboard ? Visibility.Visible : Visibility.Collapsed;
+            string kind = s != null ? Core.GetKey(s, "Widget").Trim().ToLowerInvariant() : "";
+            widgetKind.SelectedItem = widgetKind.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == kind) ?? widgetKind.Items[0];
+            widgetParam.Text = s != null ? Core.GetKey(s, "Param") : "";
+            UpdateWidgetHint();
+            if (!dashboard) widgetParamRow.Visibility = Visibility.Collapsed;
+            var size = Regex.Match(s != null ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
+            int sc = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[1].Value))) : 1;
+            int sr = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[2].Value))) : 1;
+            sizeCols.SelectedItem = sc.ToString();
+            SelectOpacity(tileOpacity, s != null ? Core.GetKey(s, "Opacity") : "");
+            sizeRows.SelectedItem = sr.ToString();
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
             tileNote.Visibility = tileNote.Text != "" ? Visibility.Visible : Visibility.Collapsed;
@@ -969,6 +1049,37 @@ namespace RaintileOptions
             AddTo(f, NewFormRow("Grid", gridRow, "", gridHint));
             sizeHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
             AddTo(f, NewFormRow("Logo size", catFields["IconSize"], "", sizeHint));
+            // background of the tiles of the category
+            var catColorRow = NewPanel(Orientation.Horizontal);
+            catColorSwatch = NewButton("", "Swatch", "Pick a colour");
+            catTileColor = new TextBox { Width = 170, Margin = T(10, 0, 0, 0) };
+            AddTo(catColorRow, catColorSwatch); AddTo(catColorRow, catTileColor);
+            AddTo(f, NewFormRow("Tile colour", catColorRow, "For the tiles without a colour of their own. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent."));
+            catColorSwatch.Click += (s, e) =>
+            {
+                if (GetListFile() == null) return;
+                string n = SelectColor(catTileColor.Text);
+                if (n != null) catTileColor.Text = n;
+            };
+            catTileColor.TextChanged += (s, e) =>
+            {
+                if (loading) return;
+                string file = GetListFile();
+                if (file == null) return;
+                Core.SetKey(Core.GetCategorySection(GetModel(file)), "TileColor", catTileColor.Text.Trim());
+                SetChanged(file);
+            };
+            catOpacity = NewOpacityBox("100% (default)");
+            AddTo(f, NewFormRow("Tile background", catOpacity, "Opacity of the colour and the image of its tiles, e.g. lower for a Dashboard with skins over the tiles. Logos, texts and widgets stay as they are."));
+            catOpacity.SelectionChanged += (s, e) =>
+            {
+                if (loading) return;
+                string file = GetListFile();
+                var item = catOpacity.SelectedItem as ComboBoxItem;
+                if (file == null || item == null) return;
+                Core.SetKey(Core.GetCategorySection(GetModel(file)), "TileOpacity", (string)item.Tag);
+                SetChanged(file);
+            };
 
             catsList.SelectionChanged += (s, e) => ShowCategoryDetails();
             // drag a category to change the order of the menu
@@ -1293,6 +1404,33 @@ namespace RaintileOptions
             SetCol(btnCmd, 1);
             cmdRow.Children.Add(btnCmd);
             AddTo(f, NewFormRow("Command", cmdRow, "A program, a .lnk/.url shortcut, a URL (also steam://...), a folder or a Rainmeter bang."));
+            // widgets: only in a Dashboard
+            widgetKind = new ComboBox { Width = 260 };
+            foreach (var k in WIDGET_KINDS) widgetKind.Items.Add(new ComboBoxItem { Content = k[1], Tag = k[0] });
+            widgetRow = NewFormRow("Widget", widgetKind, "What the tile shows in the Dashboard. A click opens its Command, or the tool that fits.");
+            AddTo(f, widgetRow);
+            widgetParam = new TextBox();
+            widgetHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
+            widgetParamRow = NewFormRow("Widget option", widgetParam, "", widgetHint);
+            AddTo(f, widgetParamRow);
+            widgetKind.SelectionChanged += (s, e) =>
+            {
+                UpdateWidgetHint();
+                if (loading) return;
+                var t = GetCurrentTile();
+                var item = widgetKind.SelectedItem as ComboBoxItem;
+                if (t == null || item == null) return;
+                Core.SetKey(t, "Widget", (string)item.Tag);
+                SetChanged(currentFile);
+            };
+            widgetParam.TextChanged += (s, e) =>
+            {
+                if (loading) return;
+                var t = GetCurrentTile();
+                if (t == null) return;
+                Core.SetKey(t, "Param", widgetParam.Text.Trim());
+                SetChanged(currentFile);
+            };
             AddTo(f, NewFormRow("Label", tileFields["Label"], "Text at the bottom left. Empty = none (tiles without images show their name)."));
             var colorRow = NewPanel(Orientation.Horizontal);
             colorSwatch = NewButton("", "Swatch", "Pick a colour");
@@ -1300,6 +1438,39 @@ namespace RaintileOptions
             tileFields["Color"].Margin = T(10, 0, 0, 0);
             AddTo(colorRow, colorSwatch); AddTo(colorRow, tileFields["Color"]);
             AddTo(f, NewFormRow("Colour", colorRow, "Used when there is no background image. Empty = from the logo, or the default tile colour."));
+            tileOpacity = NewOpacityBox("From the category");
+            AddTo(f, NewFormRow("Background", tileOpacity, "Opacity of the colour and the image of the tile: 0% leaves only the logo, the label or the widget (a skin over the tile, without a box behind it)."));
+            tileOpacity.SelectionChanged += (s, e) =>
+            {
+                if (loading) return;
+                var t = GetCurrentTile();
+                var item = tileOpacity.SelectedItem as ComboBoxItem;
+                if (t == null || item == null) return;
+                Core.SetKey(t, "Opacity", (string)item.Tag);
+                SetChanged(currentFile);
+            };
+            // cells taken in the grid (Size=<columns>x<rows>)
+            var sizeRow = NewPanel(Orientation.Horizontal);
+            sizeCols = new ComboBox { Width = 70 };
+            sizeRows = new ComboBox { Width = 70 };
+            for (int n = 1; n <= 8; n++) { sizeCols.Items.Add(n.ToString()); sizeRows.Items.Add(n.ToString()); }
+            var by = NewText("\u00D7", 13, ResBrush("DimBrush"));
+            by.VerticalAlignment = VerticalAlignment.Center;
+            by.Margin = T(10, 0, 10, 0);
+            AddTo(sizeRow, sizeCols); AddTo(sizeRow, by); AddTo(sizeRow, sizeRows);
+            AddTo(f, NewFormRow("Size", sizeRow, "Cells the tile takes in the grid: columns \u00D7 rows (at most the grid of the category). The other tiles fill the space around it. Search, Favorites and Recent show it in one cell."));
+            SelectionChangedEventHandler sizeChanged = (s, e) =>
+            {
+                if (loading) return;
+                var t = GetCurrentTile();
+                if (t == null) return;
+                string c = (string)sizeCols.SelectedItem ?? "1", r = (string)sizeRows.SelectedItem ?? "1";
+                Core.SetKey(t, "Size", c == "1" && r == "1" ? "" : c + "x" + r);
+                SetChanged(currentFile);
+                UpdateTilePreview();
+            };
+            sizeCols.SelectionChanged += sizeChanged;
+            sizeRows.SelectionChanged += sizeChanged;
             var tagHint = NewPanel();
             AddTo(tagHint, NewText("Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", 11.5, ResBrush("DimBrush"), false, true));
             tagSuggestions = new WrapPanel { Margin = T(0, 4, 0, 0) };

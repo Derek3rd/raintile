@@ -218,6 +218,14 @@ SearchPlaceholder=Search
 ; type and while a search is shown), 0 = always open
 SearchHover=1
 
+; --- Dashboard ------------------------------------------------------------------
+; A category with Type=Dashboard holds widgets (CPU, GPU, memory, disks,
+; network, processes, system, temperatures, skins, custom ones): see
+; Categories\Dashboard.ini. They update every DashInterval ms, only while the
+; Dashboard is on screen. Temperatures and fans: HWiNFO running with "Shared
+; Memory Support" on.
+DashInterval=1000
+
 ; --- Clock ----------------------------------------------------------------------
 ; Time and date at the top left, updated every minute while the launcher is
 ; visible. Formats: %H:%M = 14:05, %#I:%M %p = 2:05 PM; %A %#d %B = Monday
@@ -279,6 +287,8 @@ LabelFontSize=14
 ; optional). The same formats work for Color= in the category files.
 BgColor=8,8,12,200
 TileColor=36,36,44,255
+; Rounded corners of the tiles, in pixels (0 = square)
+TileRadius=0
 ; 1 = tiles with a logo but no background image (and no Color= in their
 ; category file) get a dark colour taken from the logo, computed once in the
 ; background; 0 = they use TileColor

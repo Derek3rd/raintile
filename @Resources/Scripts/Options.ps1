@@ -309,6 +309,7 @@ $schema = @(
                 ) }
             @{ Title = 'Tiles'; Items = @(
                     (S 'color' 'TileColor' 'Default tile colour'),
+                    (Num 'TileRadius' 'Rounded corners' 0 60 1 'px' 'Radius of the corners of the tiles and of the highlight. 0 = square.'),
                     (S 'bool' 'AutoTileColor' 'Colour from the logo' 'Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo.'),
                     (S 'bool' 'LogoGreyscale' 'Greyscale logos' 'They turn to colour under the mouse.')
                 ) }
@@ -409,6 +410,18 @@ $schema = @(
                 ) }
         )
     }
+    @{ Id = 'dashboard'; Title = 'Dashboard'; Icon = 0xE9D2
+        Desc = 'Categories of widgets: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.'
+        Groups = @(
+            @{ Dash = $true; Items = @() }
+            @{ Title = 'Widgets'; Help = 'The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.'; Items = @(
+                    (Num 'DashInterval' 'Update every' 250 5000 250 'ms' 'Only while a Dashboard is on screen.'),
+                    (S 'info' '' 'Temperatures and fans' 'From HWiNFO (free, hwinfo.com): keep it running with Settings > Shared Memory Support on.'),
+                    (S 'info' '' 'Custom widgets' 'Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>.')
+                ) }
+            @{ Market = $true; Items = @() }
+        )
+    }
     @{ Id = 'search'; Title = 'Search'; Icon = 0xE721
         Desc = 'The search bar at the top left searches the tiles of every category.'
         Groups = @(
@@ -464,7 +477,7 @@ $navTree = @(
     @{ Page = 'general' }, @{ Page = 'layout' }, @{ Page = 'menu' }, @{ Page = 'appearance' },
     @{ Page = 'animations' }, @{ Page = 'backgrounds' },
     @{ Id = 'keybindings'; Title = 'Keybindings'; Icon = 0xE765; Children = @('keys', 'gamepad') },
-    @{ Page = 'search' }, @{ Page = 'import' }, @{ Page = 'advanced' },
+    @{ Page = 'dashboard' }, @{ Page = 'search' }, @{ Page = 'import' }, @{ Page = 'advanced' },
     @{ Page = 'categories'; Categories = $true }
 )
 
@@ -476,7 +489,7 @@ $defaults = @{
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'; ShowUnplayed = '1'; UnplayedCount = '24'
-    ShowPower = '1'; TrackPlaytime = '1'; GamepadSearch = 'Y'
+    ShowPower = '1'; TrackPlaytime = '1'; GamepadSearch = 'Y'; DashInterval = '1000'
     FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
     TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'
@@ -497,7 +510,7 @@ $defaults = @{
     ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps'
     ScanOnStart = '1'; SteamGridDBKey = ''
     CheckUpdates = '1'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
-    BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
+    BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
     AccentColor = '0,210,180,255'; ActiveCategoryColor = '0,210,180,70'; HoverCategoryColor = '255,255,255,20'
     TextColor = '240,240,245,255'; TextDimColor = '150,150,160,255'
     ScrollTrackColor = '255,255,255,25'; ScrollThumbColor = '0,210,180,200'

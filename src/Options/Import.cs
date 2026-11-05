@@ -593,7 +593,7 @@ namespace RaintileOptions
             var tiles = GetMissingList();
             missingCard.Visibility = tiles.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             missingList.Children.Clear();
-            var names = GetCategoryEntries().ToDictionary(e => e.File, e => e.Name);
+            var names = GetCategoryEntries(true).ToDictionary(e => e.File, e => e.Name);
             foreach (var t in tiles)
             {
                 var row = NewGrid("*", "Auto", "Auto");

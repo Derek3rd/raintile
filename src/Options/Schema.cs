@@ -24,7 +24,7 @@ namespace RaintileOptions
     public class Group
     {
         public string Title, Help;
-        public bool Found, Other;
+        public bool Found, Other, Market, Dash;
         public List<Item> Items = new List<Item>();
     }
 

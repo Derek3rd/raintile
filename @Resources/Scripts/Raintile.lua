@@ -23,7 +23,7 @@ local laidOut = false -- menu already measured and centred
 local appear = nil    -- steps since the tiles started appearing (nil = none)
 -- Highlight of the tile under the mouse, in grid units (column, row) so it
 -- follows the tiles while scrolling; a = opacity 0-1.
-local hover = { idx = 0, on = false, gx = 0, gy = 0, tx = 0, ty = 0, a = 0 }
+local hover = { idx = 0, on = false, gx = 0, gy = 0, tx = 0, ty = 0, a = 0, w = 0, h = 0, tw = 0, th = 0, anchor = 0 }
 local pillPos = nil   -- { x, w } of the active category pill
 -- Tiles whose logo is (or is going back from being) lit by hover: [tile] = true.
 -- tile.zoom (0-1) is the progress, used for the logo's zoom and colour.
@@ -70,6 +70,9 @@ do
 end
 local osk = { open = false, sel = 1 }
 local tileKeys = {}  -- tile hot keys: { { key, id } }, in the order of their measures
+local widgets = {}   -- Dashboard widget tiles, in the order of their meters (t.widget.idx)
+local updateDashState -- defined with the Dashboard widgets
+local D = {}          -- functions and tables of the Dashboard widgets
 local renderOsk, oskMove -- defined with the keyboard (Search section)
 
 local function matchesFilter(t)
@@ -489,6 +492,48 @@ local function tileStore(command, store, source)
 	return name, steamId
 end
 
+-- Tiles bigger than one cell (Size=<columns>x<rows>) -----------------------
+-- In a category with such tiles each tile gets its place by packing: in
+-- order, in the first free spot (row by row; column by column when the grid
+-- scrolls horizontally) where it fits, so the smaller ones fill the holes.
+-- Positions are in "lines" (the rows, or the columns, along the scroll) and
+-- "cross" cells: c.pack = { at = { [index] = { line, cross, lines, cells } },
+-- cell = { [line] = { [cross] = index } }, lines = <lines used> }. Search
+-- results, Favorites and Recent stay one cell per tile.
+local function packTiles(c)
+	local P = V.Horizontal and c.ny or c.nx
+	local cell, count, at, lines, first = {}, {}, {}, 0, 0
+	local function free(l, x, ls, cs)
+		for a = l, l + ls - 1 do
+			local row = cell[a]
+			if row then
+				for b = x, x + cs - 1 do if row[b] then return false end end
+			end
+		end
+		return true
+	end
+	for idx, t in ipairs(c.tiles) do
+		local ls = V.Horizontal and t.cols or t.rows
+		local cs = V.Horizontal and t.rows or t.cols
+		local l, placed = first, nil
+		while not placed do
+			for x = 0, P - cs do
+				if free(l, x, ls, cs) then placed = x break end
+			end
+			if not placed then l = l + 1 end
+		end
+		for a = l, l + ls - 1 do
+			cell[a] = cell[a] or {}
+			for b = placed, placed + cs - 1 do cell[a][b] = idx end
+			count[a] = (count[a] or 0) + cs
+		end
+		at[idx] = { l, placed, ls, cs }
+		lines = math.max(lines, l + ls)
+		while (count[first] or 0) >= P do first = first + 1 end
+	end
+	c.pack = { at = at, cell = cell, lines = lines }
+end
+
 -- Reads a category file (Categories\<file>.ini).
 local function loadCategory(file)
 	local ini = parseIni(data .. 'Categories\\' .. file)
@@ -506,6 +551,13 @@ local function loadCategory(file)
 	local catLabel = trim(catKeys.name or '')
 	if catLabel ~= '' then c.label = catLabel end
 	c.order = tonumber(catKeys.order or '') or math.huge
+	c.dashboard = trim(catKeys.type or ''):lower() == 'dashboard'
+	-- Hidden=1: kept in the file but not in the menu (e.g. the Dashboard turned off)
+	c.hidden = trim(catKeys.hidden or '') == '1'
+	-- background of its tiles: TileColor= and TileOpacity= (0-100, % of the
+	-- colour and image), when a tile has no Color= / Opacity= of its own
+	c.tileColor = parseColor(catKeys.tilecolor)
+	c.tileOpacity = tonumber(trim(catKeys.tileopacity or ''))
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -524,17 +576,25 @@ local function loadCategory(file)
 			local t = {
 				background = findImage(k.background, images .. 'background\\', image, s.name),
 				logo = findImage(k.logo, images .. 'logo\\', image, s.name),
-				color = color or V.TileColor,
+				color = color or c.tileColor or V.TileColor,
 				command = command ~= '' and command or nil,
 			}
-			if V.AutoTileColor and not color and t.logo and not t.background then
+			local opacity = tonumber(trim(k.opacity or '')) or c.tileOpacity or 100
+			t.opacity = math.max(0, math.min(100, opacity)) / 100
+			if V.AutoTileColor and not color and not c.tileColor and t.logo and not t.background then
 				autoColor(t, t.logo)
 			end
 			-- originals, used full screen by the launch animation
 			t.backgroundFull, t.logoFull = t.background, t.logo
-			t.frame = frameRect(t.background, k.bgfocus, k.bgzoom, c.tw, c.th)
+			-- cells taken (Size=2x1: two columns, one row), at most the grid
+			local sw, sh = trim(k.size or ''):match('^(%d+)%s*[xX*]%s*(%d+)$')
+			t.cols = math.max(1, math.min(c.nx, tonumber(sw) or 1))
+			t.rows = math.max(1, math.min(c.ny, tonumber(sh) or 1))
+			if t.cols > 1 or t.rows > 1 then c.spans = true end
+			local pw, ph = t.cols * (c.tw + V.Gap) - V.Gap, t.rows * (c.th + V.Gap) - V.Gap
+			t.frame = frameRect(t.background, k.bgfocus, k.bgzoom, pw, ph)
 			t.background = thumbnail(t.background, t, 'background', base .. '\\background', s.name,
-				c.tw, c.th, V.BgThumbMode, t.frame)
+				pw, ph, V.BgThumbMode, t.frame)
 			logoPlacement(t, k.logopos, k.logoscale)
 			-- logo thumbnails are made at the largest size (zoom included)
 			local logoMax = math.floor(c.iconSize * t.logoScale * V.HoverLogoScale + 0.5)
@@ -550,6 +610,15 @@ local function loadCategory(file)
 			t.store, t.steamId = tileStore(command, trim(k.store or ''), trim(k.source or ''))
 			t.added = trim(k.added or '') -- YYYY-MM-DD, for Not played yet
 			t.hotkey = trim(k.hotkey or '') -- e.g. CTRL ALT 1
+			if c.dashboard and trim(k.widget or '') ~= '' then
+				local param = trim(k.param or '')
+				t.widget = { kind = trim(k.widget):lower(), param = param, parts = { Title = true, Value = true },
+					title = label ~= '' and label or nil }
+				-- a drive written as C, C: or C:\
+				local letter = param:match('^(%a):?\\?$')
+				t.widget.drive = letter and (letter:upper() .. ':') or param:upper()
+				t.label = nil -- the widget shows its own title
+			end
 			t.tags, t.tagSet = {}, {}
 			for tag in (k.tags or ''):gmatch('[^,;]+') do
 				tag = trim(tag)
@@ -561,6 +630,7 @@ local function loadCategory(file)
 			c.tiles[#c.tiles + 1] = t
 		end
 	end
+	if c.spans then packTiles(c) end
 
 	c.icon = findImage(iconValue, images, 'icon', base)
 	if not c.icon and V.MenuMode ~= 'text' and trim(iconValue or '') == '' then
@@ -728,7 +798,7 @@ end
 local function fillVirtual()
 	local byId, all = {}, {}
 	for _, c in ipairs(cats) do
-		if not c.virtual then
+		if not c.virtual and not c.dashboard then
 			for _, t in ipairs(c.tiles) do
 				byId[tileId(t)] = t
 				all[#all + 1] = t
@@ -779,7 +849,7 @@ local function loadCategories(files)
 	readLogoColors()
 	for _, file in ipairs(files) do
 		local c = loadCategory(file)
-		if c then cats[#cats + 1] = c end
+		if c and not c.hidden then cats[#cats + 1] = c end
 	end
 	table.sort(cats, function(a, b)
 		if a.order ~= b.order then return a.order < b.order end
@@ -806,7 +876,7 @@ local function loadCategories(files)
 	if V.FilterBar then
 		local stores, tags, storeList, tagList = {}, {}, {}, {}
 		for _, c in ipairs(cats) do
-			for _, t in ipairs(c.virtual and {} or c.tiles) do
+			for _, t in ipairs((c.virtual or c.dashboard) and {} or c.tiles) do
 				if t.store and not stores[t.store] then
 					stores[t.store] = true
 					storeList[#storeList + 1] = t.store
@@ -836,6 +906,19 @@ local function loadCategories(files)
 			if key ~= '' and not usedKeys[key] then
 				usedKeys[key] = true
 				tileKeys[#tileKeys + 1] = { key = key, id = tileId(t) }
+			end
+		end
+	end
+	-- Dashboard widgets: their meters are numbered in this order
+	widgets = {}
+	for _, c in ipairs(cats) do
+		if c.dashboard then
+			for _, t in ipairs(c.tiles) do
+				if t.widget then
+					widgets[#widgets + 1] = t
+					t.widget.idx = #widgets
+					t.widget.cat = c
+				end
 			end
 		end
 	end
@@ -872,7 +955,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 9
+local GRID_VERSION = 10
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -884,6 +967,21 @@ local function signature()
 	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
 	for _, chip in ipairs(filter.chips) do s[#s + 1] = 'chip:' .. chip.label end
 	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
+	for _, t in ipairs(widgets) do
+		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param .. ':' .. t.cols .. 'x' .. t.rows
+		-- a changed custom widget file writes Grid.inc again
+		if t.widget.kind == 'custom' then
+			local path = D.customWidgetFile(t.widget.param)
+			local f = path and io.open(path, 'rb')
+			if f then
+				local text = f:read('*a')
+				f:close()
+				local sum = 0
+				for k = 1, #text, 7 do sum = (sum * 31 + text:byte(k)) % 1000000007 end
+				s[#s + 1] = '#' .. #text .. '.' .. sum
+			end
+		end
+	end
 	for _, c in ipairs(cats) do
 		s[#s + 1] = c.name .. ':' .. c.label .. ':' .. (c.icon or '')
 	end
@@ -1010,6 +1108,35 @@ local function writeGrid(path, sig, files)
 		w('Meter=String')
 		w('MeterStyle=StyleTileInfo')
 		w('')
+	end
+
+	-- Dashboard widgets: graph and bars below, then the texts (placed by the
+	-- script over the tile of the widget)
+	for i, t in ipairs(widgets) do
+		for _, part in ipairs({ 'Graph', 'Bar' }) do
+			w('[W' .. i .. part .. ']')
+			w('Meter=Shape')
+			w('MeterStyle=StyleWidgetShape')
+			w('')
+		end
+		for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List' }) do
+			w('[W' .. i .. part .. ']')
+			w('Meter=String')
+			w('MeterStyle=StyleWidgetText')
+			if part == 'Value' then w('FontWeight=600') end
+			w('')
+		end
+		-- a custom widget: its sections, in a container over the tile
+		if t.widget.kind == 'custom' then
+			w('[CW' .. i .. 'Box]')
+			w('Meter=Shape')
+			w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
+			w('Hidden=1')
+			w('')
+			local cc = t.widget.cat
+			local text = D.customWidgetText(t, i, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
+			if text then w(text) end
+		end
 	end
 
 	local f = io.open(path, 'w')
@@ -1156,7 +1283,9 @@ end
 -- Rows (V) or columns (H) of tiles of the active category, and how many fit
 -- on screen.
 local function lineCount()
-	return math.ceil(#cur().tiles / (V.Horizontal and V.NY or V.NX))
+	local c = cur()
+	if c.pack then return c.pack.lines end
+	return math.ceil(#c.tiles / (V.Horizontal and V.NY or V.NX))
 end
 
 local function visibleLines()
@@ -1197,8 +1326,40 @@ local function saveScroll()
 	end
 end
 
+-- With tiles of more cells (c.pack): what the slots show for the 'base'
+-- line, one slot per tile that is (also only in part) in the visible lines
+-- plus the extra one: { idx, line (not wrapped, with infinite scroll), cross,
+-- lines, cells }. Never more than the slots: each takes at least one cell.
+local view = {}
+local function buildView()
+	view = {}
+	local c = cur()
+	if not c.pack then return end
+	local p, L, seen = c.pack, c.pack.lines, {}
+	if L == 0 then return end
+	for dl = base, base + visibleLines() do
+		local a = infinite() and dl % L or dl
+		local row = p.cell[a]
+		if row then
+			for x = 0, (V.Horizontal and V.NY or V.NX) - 1 do
+				local idx = row[x]
+				if idx then
+					local e = p.at[idx]
+					local start = dl - (a - e[1])
+					local key = idx .. ':' .. start
+					if not seen[key] then
+						seen[key] = true
+						view[#view + 1] = { idx = idx, line = start, cross = e[2], ls = e[3], cs = e[4] }
+					end
+				end
+			end
+		end
+	end
+end
+
 -- Index (in cur().tiles) of the tile in the slot, with the current contents.
 local function indexAt(slot)
+	if cur().pack then return view[slot] and view[slot].idx end
 	local r, c = slotRC(slot)
 	local line = base + (V.Horizontal and c or r)
 	if infinite() then line = line % lineCount() end
@@ -1217,9 +1378,21 @@ local function gridToPx(gx, gy)
 	return gx * V.StepX, gy * V.StepY
 end
 
+-- Size in pixels of tile t in the grid shown (search results: one cell)
+local function tileSize(t)
+	local cw, ch = V.StepX - V.Gap, V.StepY - V.Gap
+	if not (t and cur().pack and t.cols) then return cw, ch end
+	return t.cols * V.StepX - V.Gap, t.rows * V.StepY - V.Gap
+end
+
 -- Grid coordinates (column, row) of the slot with the current contents; with
 -- infinite scroll the row (or column) is not wrapped back.
 local function slotToGrid(slot)
+	local e = cur().pack and view[slot]
+	if e then
+		if V.Horizontal then return e.line, e.cross end
+		return e.cross, e.line
+	end
 	local r, c = slotRC(slot)
 	if V.Horizontal then return base + c, r end
 	return c, base + r
@@ -1492,6 +1665,7 @@ end
 
 -- Slot contents (images, texts) for the 'base' row/column.
 local function fillSlots()
+	buildView()
 	for slot = 1, V.Slots do
 		local t = tileAt(slot)
 		if t then
@@ -1502,25 +1676,562 @@ local function fillSlots()
 	end
 end
 
+-- Dashboard widgets -------------------------------------------------------------
+-- A category with Type=Dashboard holds widgets: tiles with Widget= (cpu, gpu,
+-- ram, disk, network, processes, system, temps, fans) and Param=. Their
+-- meters (W<i>Title, Value, Sub, Bar, Graph, List) are written in Grid.inc and
+-- placed over the tile's slot. The data comes from the helper (Helper.ps1),
+-- only while a Dashboard is shown: Generated\DashOn.txt asks for it, and
+-- DashTick() reads Generated\DashData.txt.
+local dash = { data = nil, hist = { cpu = {}, gpu = {}, ram = {}, down = {}, up = {} }, on = false, shown = {}, barCount = {},
+	skinsWanted = {}, skinsActive = {}, customShown = {} }
+D.DASH_HISTORY = 60 -- samples kept for the graphs
+
+D.WIDGET_TITLES = {
+	cpu = 'CPU', gpu = 'GPU', ram = 'Memory', disk = 'Disks', network = 'Network',
+	processes = 'Processes', system = 'System', temps = 'Temperatures', fans = 'Fans',
+}
+-- What a click on a widget opens, when the tile has no Command of its own
+D.WIDGET_COMMANDS = {
+	cpu = '["taskmgr.exe"]', gpu = '["taskmgr.exe"]', ram = '["taskmgr.exe"]', processes = '["taskmgr.exe"]',
+	disk = '["explorer.exe" "shell:MyComputerFolder"]', network = '["ms-settings:network-status"]',
+	system = '["ms-settings:about"]',
+}
+
+function D.fmtBytes(b)
+	b = tonumber(b) or 0
+	local units = { 'B', 'KB', 'MB', 'GB', 'TB' }
+	local i = 1
+	while b >= 1024 and i < #units do b = b / 1024 i = i + 1 end
+	return (b >= 100 or i == 1) and string.format('%d %s', math.floor(b + 0.5), units[i]) or string.format('%.1f %s', b, units[i])
+end
+
+function D.fmtRate(b) return D.fmtBytes(b) .. '/s' end
+
+function D.fmtUptime(sec)
+	sec = tonumber(sec) or 0
+	local d, h, m = math.floor(sec / 86400), math.floor(sec % 86400 / 3600), math.floor(sec % 3600 / 60)
+	if d > 0 then return d .. ' d ' .. h .. ' h' end
+	if h > 0 then return h .. ' h ' .. m .. ' min' end
+	return m .. ' min'
+end
+
+-- DashData.txt -> { key = value, lists: key = { values } }
+D.LIST_KEYS = { core = true, disk = true, ['proc.cpu'] = true, ['proc.ram'] = true, hw = true }
+function D.readDashData()
+	local d = { core = {}, disk = {}, ['proc.cpu'] = {}, ['proc.ram'] = {}, hw = {} }
+	for _, line in ipairs(readLines(resources .. 'Generated\\DashData.txt')) do
+		local k, v = line:match('^([%w%.]+)=(.*)$')
+		if k then
+			if D.LIST_KEYS[k] then d[k][#d[k] + 1] = v else d[k] = v end
+		end
+	end
+	-- HWiNFO readings: { type, sensor, label, value, unit }
+	local hw = {}
+	for _, v in ipairs(d.hw) do
+		local ty, sensor, label, value, unit = v:match('^(%d+)|(.-)|(.-)|([^|]*)|(.*)$')
+		if ty then hw[#hw + 1] = { type = tonumber(ty), sensor = sensor, label = label, value = tonumber(value) or 0, unit = unit } end
+	end
+	d.readings = hw
+	d.hwOn = #hw > 0
+	return d
+end
+
+function D.pushHistory(list, v)
+	list[#list + 1] = tonumber(v) or 0
+	while #list > D.DASH_HISTORY do table.remove(list, 1) end
+end
+
+-- A sensor by the words of its label (and sensor name), e.g. "CPU Package"
+function D.findReading(d, pattern, ty)
+	local p = pattern:lower()
+	for _, r in ipairs(d.readings or {}) do
+		if (not ty or r.type == ty) and ((r.label:lower()):find(p, 1, true) or (r.sensor .. ' ' .. r.label):lower():find(p, 1, true)) then
+			return r
+		end
+	end
+	return nil
+end
+
+function D.fmtReading(r)
+	if not r then return '-' end
+	local v = r.value
+	local unit = r.unit -- UTF-8, as written by the helper (e.g. \194\176C)
+	return (math.abs(v) >= 100 and string.format('%d', math.floor(v + 0.5)) or string.format('%.0f', v)) .. ' ' .. unit
+end
+
+-- The temperatures shown: Param= labels separated by ";", or the usual ones
+D.DEFAULT_TEMPS = { 'CPU Package', 'Tctl/Tdie', 'CPU (Tctl/Tdie)', 'CPU Die', 'GPU Temperature', 'GPU Hot Spot', 'Drive Temperature' }
+-- Param= is "label;label=Name;..." (a part of the HWiNFO label, then the name
+-- to show); without it the usual temperatures, or the first fans
+function D.tempRows(d, param, ty)
+	local rows, seen = {}, {}
+	local wanted = {}
+	if param ~= '' then
+		for p in param:gmatch('[^;]+') do
+			local label, name = p:match('^(.-)=(.*)$')
+			label = trim(label or p)
+			if label ~= '' then wanted[#wanted + 1] = { label, name and trim(name) ~= '' and trim(name) or nil } end
+		end
+	elseif ty == 1 then
+		for _, l in ipairs(D.DEFAULT_TEMPS) do wanted[#wanted + 1] = { l } end
+	else
+		for _, r in ipairs(d.readings or {}) do
+			if r.type == ty and r.value > 0 and #rows < 6 then rows[#rows + 1] = { label = r.label, text = D.fmtReading(r), value = r.value } end
+		end
+		return rows
+	end
+	for _, w in ipairs(wanted) do
+		-- readings of the kind first (temperatures, fans), then any other
+		-- (usage, clocks, power...) with that label
+		local r = D.findReading(d, w[1], ty) or (param ~= '' and D.findReading(d, w[1], nil))
+		if r and not seen[r] then
+			seen[r] = true
+			rows[#rows + 1] = { label = w[2] or r.label, text = D.fmtReading(r), value = r.value }
+		end
+	end
+	return rows
+end
+
+-- Custom widgets (Widget=custom, Param=<name>): Widgets\<name>.ini, or
+-- Widgets\<name>\<name>.ini with its images, in the data folder. Its
+-- sections are copied into Grid.inc with the prefix CW<i>_ (and the
+-- references to them in [Section], [Section:...] and MeasureName=); its meters
+-- go in the container CW<i>Box, placed over the tile. In the file, #WIDGETPATH#
+-- is its folder, #WIDGETW# and #WIDGETH# the size of the tile. [Rainmeter]
+-- and [Metadata] are left out; [Variables] is copied as it is.
+function D.customWidgetFile(name)
+	local base = data .. 'Widgets\\'
+	if fileExists(base .. name .. '\\' .. name .. '.ini') then return base .. name .. '\\' .. name .. '.ini', base .. name .. '\\' end
+	if fileExists(base .. name .. '.ini') then return base .. name .. '.ini', base end
+	return nil
+end
+
+function D.customWidgetText(t, i, w, h)
+	local path, dir = D.customWidgetFile(t.widget.param)
+	if not path then return nil end
+	local f = io.open(path, 'rb')
+	if not f then return nil end
+	local text = f:read('*a')
+	f:close()
+	text = text:gsub('^\239\187\191', '')
+	-- section names first, for the references
+	local names = {}
+	for name in text:gmatch('\n%s*%[([^%]\r\n]+)%]') do names[trim(name):lower()] = trim(name) end
+	local first = text:match('^%s*%[([^%]\r\n]+)%]')
+	if first then names[trim(first):lower()] = trim(first) end
+	local prefix = 'CW' .. i .. '_'
+	local function ref(name)
+		local n = names[trim(name):lower()]
+		return n and (prefix .. n) or name
+	end
+	local out, section, kind = {}, nil, nil
+	local lines = {}
+	for line in (text .. '\n'):gmatch('([^\n]*)\n') do lines[#lines + 1] = (line:gsub('\r$', '')) end
+	local skip = false
+	local pending = {}
+	local function flush()
+		if section and not skip then
+			if kind == 'meter' then
+				pending[#pending + 1] = 'Container=CW' .. i .. 'Box'
+			end
+			for _, l in ipairs(pending) do out[#out + 1] = l end
+			out[#out + 1] = ''
+		end
+		pending = {}
+	end
+	for _, line in ipairs(lines) do
+		local sec = line:match('^%s*%[([^%]]+)%]%s*$')
+		if sec then
+			flush()
+			sec = trim(sec)
+			local low = sec:lower()
+			skip = low == 'rainmeter' or low == 'metadata'
+			kind = nil
+			section = sec
+			if low == 'variables' then
+				pending[#pending + 1] = '[Variables]'
+			else
+				pending[#pending + 1] = '[' .. prefix .. sec .. ']'
+			end
+		elseif section and not skip then
+			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
+			if k and k ~= '' then
+				local key = trim(k):lower()
+				v = v:gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
+				-- [Section] and [Section:...] references
+				v = v:gsub('%[([^%]%[:]+)(:?[^%]%[]*)%]', function(n, rest) return '[' .. ref(n) .. rest .. ']' end)
+				if key:match('^measurename%d*$') then v = ref(trim(v)) end
+				if key == 'meter' then kind = 'meter' end
+				if key == 'container' then line = nil end
+				if line then
+					if key == 'group' then
+						pending[#pending + 1] = trim(k) .. '=' .. v .. ' | CW' .. i
+					else
+						pending[#pending + 1] = trim(k) .. '=' .. v
+					end
+				end
+				if key == 'meter' or key == 'measure' then
+					pending[#pending + 1] = 'Group=CW' .. i
+				end
+			elseif line:match('^%s*;') then
+				-- comments are left out
+			end
+		end
+	end
+	flush()
+	return table.concat(out, '\n')
+end
+
+-- Skin tiles (Widget=skin, Param=<config>\<file>.ini): the skin is loaded
+-- over the tile while the Dashboard is shown, and unloaded when it is left
+function D.syncSkins()
+	local wanted = dash.on and dash.skinsWanted or {}
+	for config, p in pairs(wanted) do
+		local a = dash.skinsActive[config]
+		if not a then
+			SKIN:Bang('!ActivateConfig', config, p.file)
+			SKIN:Bang('!ZPos', '2', config)
+		end
+		if not a or a.x ~= p.x or a.y ~= p.y then SKIN:Bang('!Move', tostring(p.x), tostring(p.y), config) end
+		dash.skinsActive[config] = { x = p.x, y = p.y }
+	end
+	for config in pairs(dash.skinsActive) do
+		if not wanted[config] then
+			SKIN:Bang('!DeactivateConfig', config)
+			dash.skinsActive[config] = nil
+		end
+	end
+end
+
+-- Placement of a widget's meters in its tile (x, y: the slot in the grid)
+-- Rainmeter takes the strings of the script as ANSI: the characters past
+-- ASCII (UTF-8: from the helper, the INI files, and the dots and arrows of
+-- the widgets) go as character references, [\xHHHH]
+function D.text(s)
+	return (s:gsub('[\194-\244][\128-\191]*', function(c)
+		local b1, n = c:byte(1), #c
+		local cp
+		if n == 2 and b1 < 224 then cp = (b1 - 192) * 64 + c:byte(2) - 128
+		elseif n == 3 and b1 >= 224 and b1 < 240 then cp = ((b1 - 224) * 64 + c:byte(2) - 128) * 64 + c:byte(3) - 128
+		elseif n == 4 and b1 >= 240 then cp = (((b1 - 240) * 64 + c:byte(2) - 128) * 64 + c:byte(3) - 128) * 64 + c:byte(4) - 128
+		end
+		return cp and string.format('[\\x%X]', cp) or '?'
+	end))
+end
+
+-- Font sizes of a widget, growing with the tile: title and small texts, the
+-- big value, and the height of a line of small text (Segoe UI: 1.33 em, at
+-- 96 dpi a point is 1.33 px)
+function D.sizes()
+	local W, H = V.TileW, V.TileH
+	local k = math.max(1, math.min(2.6, math.min(W / 300, H / 220)))
+	local small = math.max(8, math.floor((V.InfoFontSize or 10) * k + 0.5))
+	local value = math.max(14, math.min(96, math.floor(math.min(H * 0.15, W * 0.13))))
+	return small, value, small * 1.78, k
+end
+
+function D.placeWidget(t, x, y, alpha)
+	local w = t.widget
+	local i = w.idx
+	-- skins and custom widgets: only where the whole tile is in the grid
+	local inside = y >= 0 and x >= 0 and y + V.TileH <= V.AreaH + 1 and x + V.TileW <= V.AreaW + 1
+	if w.kind == 'skin' then
+		local config, file = w.param:match('^(.*)\\([^\\]+%.[iI][nN][iI])$')
+		if config and inside and alpha >= 1 then
+			dash.skinsWanted[config] = { file = file, x = math.floor(SKIN:GetX() + V.PadX + x + V.LabelPad),
+				y = math.floor(SKIN:GetY() + V.GridY + y + V.LabelPad) }
+		end
+	elseif w.kind == 'custom' then
+		set('CW' .. i .. 'Box', 'X', tostring(math.floor(V.PadX + x)))
+		set('CW' .. i .. 'Box', 'Y', tostring(math.floor(V.GridY + y)))
+		set('CW' .. i .. 'Box', 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 255,255,255,255 | StrokeWidth 0', V.TileW, V.TileH,
+			math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))))
+		show('CW' .. i .. 'Box', inside)
+		dash.customShown[i] = inside or nil
+	end
+	local W, H, pad = V.TileW, V.TileH, V.LabelPad
+	local a = math.floor(255 * alpha + 0.5)
+	local function txt(m, mx, my, size, color, width)
+		set(m, 'X', tostring(x + mx))
+		set(m, 'Y', tostring(y + my))
+		set(m, 'FontSize', tostring(size))
+		set(m, 'FontColor', fade(color, alpha))
+		set(m, 'W', tostring(math.max(1, width or (W - 2 * pad))))
+	end
+	local small, valueSize, line = D.sizes()
+	local L = D.layout(small, valueSize, line)
+	txt('W' .. i .. 'Title', pad, pad, small, V.TextDimColor)
+	txt('W' .. i .. 'Value', pad, L.value, valueSize, V.TextColor)
+	txt('W' .. i .. 'Sub', pad, L.sub, small, V.TextDimColor)
+	txt('W' .. i .. 'List', pad, w.list and L.top or L.list, small, V.TextColor)
+	set('W' .. i .. 'Bar', 'X', tostring(x))
+	set('W' .. i .. 'Bar', 'Y', tostring(y))
+	set('W' .. i .. 'Graph', 'X', tostring(x))
+	set('W' .. i .. 'Graph', 'Y', tostring(y))
+	set('W' .. i .. 'Graph', 'ImageAlpha', tostring(a))
+	for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List', 'Bar', 'Graph' }) do
+		show('W' .. i .. part, w.parts[part] == true)
+	end
+	dash.shown[i] = true
+end
+
+-- Where the parts of a widget go (from the top of the tile): the value, the
+-- line under it, the list (after them, or 'top' when it is alone), the graph
+function D.layout(small, valueSize, line)
+	local pad = V.LabelPad
+	local top = pad + math.floor(line * 1.6)
+	local value = top - math.floor(valueSize * 0.15)
+	local sub = value + math.floor(valueSize * 1.78 * 0.92)
+	local list = sub + math.floor(line * 1.5)
+	return { top = top, value = value, sub = sub, list = list, graph = sub + math.floor(line * 1.6) }
+end
+
+-- Graph of 'list' (0-'max') as a filled line along the bottom of the tile
+function D.graphPath(list, max, top)
+	local W, H, pad = V.TileW, V.TileH, V.LabelPad
+	local x0, x1, y1 = pad, W - pad, H - pad
+	local y0 = math.min(math.max(top, y1 - (H - pad) * 0.6), y1 - 10)
+	local n = #list
+	if n < 2 or max <= 0 then return nil end
+	local parts = {}
+	for k, v in ipairs(list) do
+		local px = x0 + (x1 - x0) * (k - 1) / (D.DASH_HISTORY - 1) + (x1 - x0) * (D.DASH_HISTORY - n) / (D.DASH_HISTORY - 1)
+		local py = y1 - (y1 - y0) * math.min(1, math.max(0, v / max))
+		parts[#parts + 1] = (k == 1 and '' or 'LineTo ') .. string.format('%.1f,%.1f', px, py)
+	end
+	local first = x0 + (x1 - x0) * (D.DASH_HISTORY - n) / (D.DASH_HISTORY - 1)
+	return table.concat(parts, ' | ') .. string.format(' | LineTo %.1f,%d | LineTo %.1f,%d | ClosePath 1', x1, y1, first, y1)
+end
+
+-- Bars (value 0-1) stacked from 'top', one per entry
+function D.barShapes(meter, values, top, step, color, height)
+	local W, pad = V.TileW, V.LabelPad
+	local bh = height or 6
+	local width = W - 2 * pad
+	local k = 1
+	for n, v in ipairs(values) do
+		local y = top + (n - 1) * step
+		set(meter, k == 1 and 'Shape' or ('Shape' .. k), string.format('Rectangle %d,%d,%d,%d,%d | Fill Color %s | StrokeWidth 0', pad, y, width, bh, math.floor(bh / 2), V.ScrollTrackColor))
+		set(meter, 'Shape' .. (k + 1), string.format('Rectangle %d,%d,%d,%d,%d | Fill Color %s | StrokeWidth 0', pad, y,
+			math.max(bh, math.floor(width * math.min(1, math.max(0, v)))), bh, math.floor(bh / 2), color or V.AccentColor))
+		k = k + 2
+	end
+	-- the ones left from a longer list
+	for n = k, (dash.barCount[meter] or 0) do set(meter, 'Shape' .. n, '') end
+	dash.barCount[meter] = k - 1
+end
+
+-- Texts, bars and graph of a widget from the data
+function D.fillWidget(t)
+	local w, d = t.widget, dash.data
+	local i = w.idx
+	local m = 'W' .. i
+	local W, H, pad = V.TileW, V.TileH, V.LabelPad
+	local small, valueSize, line, k = D.sizes()
+	local L = D.layout(small, valueSize, line)
+	local barH = math.floor(6 * k + 0.5)
+	local maxLines = math.max(1, math.floor((H - pad - L.top) / line))
+	local function text(meter, s) set(meter, 'Text', D.text(s)) end
+	local title = w.title or D.WIDGET_TITLES[w.kind] or t.name
+	text(m .. 'Title', title:upper())
+	w.parts = { Title = true }
+	-- a skin or a custom widget draws itself: only its title, if it has one
+	if w.kind == 'skin' or w.kind == 'custom' then
+		w.parts.Title = w.title ~= nil
+		return
+	end
+	if not d then
+		text(m .. 'Value', '...')
+		w.parts.Value = true
+		return
+	end
+	local function value(v, sub)
+		text(m .. 'Value', v)
+		w.parts.Value = true
+		if sub and sub ~= '' then text(m .. 'Sub', sub) w.parts.Sub = true end
+	end
+	local function list(lines)
+		text(m .. 'List', table.concat(lines, '\n'))
+		w.parts.List = #lines > 0
+	end
+	local function graph(series, max)
+		local p = D.graphPath(series, max, L.graph)
+		if p then
+			set(m .. 'Graph', 'Shape', 'Path P1 | Fill Color ' .. fade(V.AccentColor, 0.18) .. ' | StrokeWidth 2 | Stroke Color ' .. V.AccentColor)
+			set(m .. 'Graph', 'P1', p)
+			w.parts.Graph = true
+		end
+	end
+	local kind = w.kind
+	if kind == 'cpu' then
+		local mhz = tonumber(d['cpu.mhz'] or '')
+		value(string.format('%d%%', math.floor((tonumber(d.cpu) or 0) + 0.5)),
+			(d['cpu.name'] or '') .. (mhz and mhz > 0 and string.format('  \194\183  %.2f GHz', mhz / 1000) or ''))
+		graph(dash.hist.cpu, 100)
+	elseif kind == 'gpu' then
+		local used, total = tonumber(d['gpu.vram'] or ''), tonumber(d['gpu.vramtotal'] or '')
+		local sub = d['gpu.name'] or ''
+		if used then sub = sub .. '  \194\183  ' .. D.fmtBytes(used) .. (total and total > 0 and (' / ' .. D.fmtBytes(total)) or '') end
+		local temp = d.hwOn and D.findReading(d, 'GPU Temperature', 1)
+		if temp then sub = sub .. '  \194\183  ' .. D.fmtReading(temp) end
+		value(d.gpu and string.format('%d%%', math.floor(tonumber(d.gpu) + 0.5)) or '-', sub)
+		graph(dash.hist.gpu, 100)
+	elseif kind == 'ram' then
+		local used, total = tonumber(d['ram.used'] or '') or 0, tonumber(d['ram.total'] or '') or 0
+		local frac = total > 0 and used / total or 0
+		value(string.format('%d%%', math.floor(frac * 100 + 0.5)), D.fmtBytes(used) .. ' / ' .. D.fmtBytes(total))
+		D.barShapes(m .. 'Bar', { frac }, L.sub + math.floor(line * 1.3), 0, nil, barH)
+		w.parts.Bar = true
+		graph(dash.hist.ram, 100)
+	elseif kind == 'disk' then
+		local disks = {}
+		for _, v in ipairs(d.disk) do
+			local letter, label, total, free = v:match('^(.-)|(.-)|(%d+)|(%d+)$')
+			if letter and (w.param == '' or letter:upper() == w.drive) then
+				disks[#disks + 1] = { letter = letter, label = label, total = tonumber(total), free = tonumber(free) }
+			end
+		end
+		if w.param ~= '' and disks[1] then
+			local k = disks[1]
+			text(m .. 'Title', ((w.title or ('Disk ' .. k.letter)) .. (k.label ~= '' and ('  ' .. k.label) or '')):upper())
+			value(D.fmtBytes(k.free) .. ' free', 'of ' .. D.fmtBytes(k.total))
+			D.barShapes(m .. 'Bar', { 1 - k.free / math.max(1, k.total) }, L.sub + math.floor(line * 1.3), 0, nil, barH)
+			w.parts.Bar = true
+		else
+			-- all the disks: a line and a bar each
+			-- (two lines each: the text, then the bar in the empty one)
+			local lines, fracs = {}, {}
+			for _, dk in ipairs(disks) do
+				if #lines + 2 > maxLines then break end
+				lines[#lines + 1] = dk.letter .. (dk.label ~= '' and ('  ' .. dk.label) or '') .. '   ' .. D.fmtBytes(dk.free) .. ' free of ' .. D.fmtBytes(dk.total)
+				lines[#lines + 1] = ' '
+				fracs[#fracs + 1] = 1 - dk.free / math.max(1, dk.total)
+			end
+			w.list = true
+			list(lines)
+			D.barShapes(m .. 'Bar', fracs, L.top + math.floor(line * 1.25), math.floor(line * 2 + 0.5), nil, barH)
+			w.parts.Bar = #fracs > 0
+		end
+	elseif kind == 'network' then
+		value('\226\134\147 ' .. D.fmtRate(d['net.down'] or 0), '\226\134\145 ' .. D.fmtRate(d['net.up'] or 0))
+		local max = 1024
+		for _, v in ipairs(dash.hist.down) do max = math.max(max, v) end
+		graph(dash.hist.down, max * 1.1)
+	elseif kind == 'processes' then
+		local byRam = w.param:lower() == 'ram'
+		text(m .. 'Title', ((w.title or 'Processes') .. (byRam and '  \194\183  memory' or '  \194\183  CPU')):upper())
+		local lines = {}
+		for n, v in ipairs(d[byRam and 'proc.ram' or 'proc.cpu']) do
+			local name, val = v:match('^(.-)|(.*)$')
+			if name and n <= math.min(8, maxLines) then
+				lines[#lines + 1] = byRam and (D.fmtBytes(val) .. '   ' .. name) or (string.format('%4.1f%%', tonumber(val) or 0) .. '   ' .. name)
+			end
+		end
+		w.list = true
+		list(lines)
+	elseif kind == 'system' then
+		text(m .. 'Title', (w.title or d['sys.name'] or 'System'):upper())
+		local lines = { d['sys.os'] or '', 'Up for ' .. D.fmtUptime(d['sys.uptime']) }
+		local pct, plugged = (d['sys.battery'] or ''):match('^(%d+)|(%d)$')
+		if pct then lines[#lines + 1] = 'Battery ' .. pct .. '%' .. (plugged == '1' and ' (charging)' or '') end
+		w.list = true
+		list(lines)
+	elseif kind == 'temps' or kind == 'fans' then
+		if not d.hwOn then
+			value('-', 'Start HWiNFO with Shared Memory Support on')
+			return
+		end
+		local rows = D.tempRows(d, w.param, kind == 'temps' and 1 or 3)
+		if rows[1] then
+			value(rows[1].text, rows[1].label)
+			local lines = {}
+			for n = 2, math.min(#rows, 6) do lines[#lines + 1] = rows[n].text .. '   ' .. rows[n].label end
+			list(lines)
+		else
+			value('-', 'No sensors found')
+		end
+	end
+end
+
+-- The active category is a Dashboard on screen: the helper is asked for the
+-- data (Generated\DashOn.txt: "<interval>|<processes>|<sensors>")
+function D.dashActive()
+	return ready and visible and not searchCat and cats[active] ~= nil and cats[active].dashboard == true
+end
+
+updateDashState = function()
+	local on = D.dashActive()
+	if on == dash.on then return end
+	dash.on = on
+	D.syncSkins()
+	local flag = resources .. 'Generated\\DashOn.txt'
+	if not on then os.remove(flag) return end
+	local procs, sensors = false, false
+	for _, t in ipairs(cats[active].tiles) do
+		if t.widget then
+			local k = t.widget.kind
+			if k == 'processes' then procs = true end
+			if k == 'temps' or k == 'fans' or k == 'gpu' then sensors = true end
+		end
+	end
+	local f = io.open(flag, 'wb')
+	if f then
+		f:write(string.format('%d|%d|%d', V.DashInterval, procs and 1 or 0, sensors and 1 or 0))
+		f:close()
+	end
+end
+
 -- Colour matrices (rows 1-3) of a normal image and of a greyed-out one
 local IDENTITY_ROWS = { '1;0;0;0;0', '0;1;0;0;0', '0;0;1;0;0' }
 local GREY_ROWS = { '0.3;0.3;0.3;0;0', '0.59;0.59;0.59;0;0', '0.11;0.11;0.11;0;0' }
 
 -- Position, opacity and visibility of the slots (also on every animation step).
+-- Rounded corners (TileRadius > 0): the grid container (GridClip) takes the
+-- shape of the visible tiles, rounded rectangles, within the grid area: what
+-- is in it (images, logos, texts, highlight, widgets) is cut to them.
+local clipShapes = 0
+local function roundClip(rects)
+	if V.TileRadius <= 0 then return end
+	local n = 0
+	for _, r in ipairs(rects) do
+		n = n + 1
+		set('GridClip', 'Shape' .. (n + 1), string.format('Rectangle %d,%d,%d,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
+			r[1], r[2], r[3], r[4], math.min(V.TileRadius, math.floor(math.min(r[3], r[4]) / 2))))
+	end
+	if n > 0 then
+		local parts = { 'Combine Shape2' }
+		for k = 3, n + 1 do parts[#parts + 1] = 'Union Shape' .. k end
+		parts[#parts + 1] = 'Intersect Shape'
+		set('GridClip', 'Shape' .. (n + 2), table.concat(parts, ' | '))
+	end
+	for k = (n > 0 and n + 3 or 2), clipShapes do set('GridClip', 'Shape' .. k, '') end
+	clipShapes = n > 0 and n + 2 or 0
+end
+
 local function placeSlots()
 	local frac = pos - base
+	local rects = {}
+	dash.shown = {}
+	dash.skinsWanted = {}
+	dash.customShown = {}
 	for slot = 1, slots do
 		local inUse = slot <= V.Slots -- slots beyond the category grid: hidden
 		local t = inUse and tileAt(slot)
 		local r, c = slotRC(slot)
 		local extra = r >= V.NY or c >= V.NX -- extra row/column
+		local e = cur().pack and view[slot]
+		if e then extra = e.line >= base + visibleLines() end
 		local visible = t and (not extra or frac > 0)
 		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
 		local infoMeter = 'TileInfo' .. slot
 
 		if visible then
-			local x, y = c * V.StepX, r * V.StepY
-			if V.Horizontal then x = x - frac * V.StepX else y = y - frac * V.StepY end
+			local x, y = gridToPx(slotToGrid(slot))
+			-- the code below works with the size of this tile (more cells
+			-- with Size=), put back at the end
+			local catW, catH = V.TileW, V.TileH
+			V.TileW, V.TileH = tileSize(t)
 
 			local f = 1
 			if appear then
@@ -1537,8 +2248,14 @@ local function placeSlots()
 			set(tile, 'H', tostring(V.TileH))
 			-- a game no longer installed: greyed out and dimmed
 			local dim = t.missing and 0.45 or 1
-			set(tile, 'ImageAlpha', tostring(math.floor(255 * f * dim + 0.5)))
-			set(tile, 'SolidColor', fade(t.color, f * dim))
+			local op = t.opacity or 1
+			set(tile, 'ImageAlpha', tostring(math.floor(255 * f * dim * op + 0.5)))
+			-- never fully transparent: Rainmeter gives the mouse only to
+			-- pixels that are not
+			local solid = fade(t.color, f * dim * op)
+			local sr, sg, sb, sa = solid:match('^(%d+),(%d+),(%d+),(%d+)$')
+			if sa and tonumber(sa) < 1 then solid = sr .. ',' .. sg .. ',' .. sb .. ',1' end
+			set(tile, 'SolidColor', solid)
 			local tileRows = t.missing and GREY_ROWS or IDENTITY_ROWS
 			set(tile, 'ColorMatrix1', tileRows[1])
 			set(tile, 'ColorMatrix2', tileRows[2])
@@ -1588,15 +2305,27 @@ local function placeSlots()
 				set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
 			end
 			show(tile, true)
-			show(icon, t.logo ~= nil)
-			show(label, hasLabel)
-			show(infoMeter, infoText ~= nil and infoAlpha > 0.01)
+			show(icon, t.logo ~= nil and not t.widget)
+			show(label, hasLabel and not t.widget)
+			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
+			if t.widget then D.placeWidget(t, x, y, f) end
+			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
+			V.TileW, V.TileH = catW, catH
 		else
 			show(tile, false)
 			show(icon, false)
 			show(label, false)
 			show(infoMeter, false)
 		end
+	end
+	roundClip(rects)
+	-- widgets not on screen (another category, scrolled away)
+	for _, t in ipairs(widgets) do
+		local n = t.widget.idx
+		if not dash.shown[n] then
+			for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List', 'Bar', 'Graph' }) do show('W' .. n .. part, false) end
+		end
+		if t.widget.kind == 'custom' and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
 end
 
@@ -1609,8 +2338,9 @@ local function placeHover()
 	set('TileHover', 'X', tostring(math.floor(x + 0.5)))
 	set('TileHover', 'Y', tostring(math.floor(y + 0.5)))
 	set('TileHover', 'Shape', string.format(
-		'Rectangle 1,1,%d,%d | Fill Color %s | StrokeWidth 2 | Stroke Color %s',
-		V.TileW - 2, V.TileH - 2, fade(V.HoverColor, hover.a), fade(V.AccentColor, hover.a)))
+		'Rectangle 1,1,%d,%d,%d | Fill Color %s | StrokeWidth 2 | Stroke Color %s',
+		math.floor(hover.w + 0.5) - 2, math.floor(hover.h + 0.5) - 2, math.max(0, V.TileRadius - 1),
+		fade(V.HoverColor, hover.a), fade(V.AccentColor, hover.a)))
 	show('TileHover', true)
 end
 
@@ -1649,6 +2379,41 @@ end
 
 -- Click on a chip: All clears the filter, the others turn on and off. The
 -- grid starts again from the top, with the appear animation.
+-- New data from the helper: the history of the graphs, then the widgets of
+-- the Dashboard on screen
+function DashTick()
+	if not D.dashActive() then
+		updateDashState()
+		return
+	end
+	local d = D.readDashData()
+	dash.data = d
+	D.pushHistory(dash.hist.cpu, d.cpu)
+	D.pushHistory(dash.hist.gpu, d.gpu)
+	D.pushHistory(dash.hist.down, d['net.down'])
+	D.pushHistory(dash.hist.up, d['net.up'])
+	local ramUsed, ramTotal = tonumber(d['ram.used'] or ''), tonumber(d['ram.total'] or '')
+	if ramUsed and ramTotal and ramTotal > 0 then D.pushHistory(dash.hist.ram, 100 * ramUsed / ramTotal) end
+	local catW, catH = V.TileW, V.TileH
+	for _, t in ipairs(cats[active].tiles) do
+		if t.widget then
+			V.TileW, V.TileH = tileSize(t)
+			D.fillWidget(t)
+		end
+	end
+	V.TileW, V.TileH = catW, catH
+	frame()
+	-- skins over their tiles, custom widgets updated
+	D.syncSkins()
+	local custom = false
+	for i in pairs(dash.customShown) do
+		SKIN:Bang('!UpdateMeasureGroup', 'CW' .. i)
+		SKIN:Bang('!UpdateMeterGroup', 'CW' .. i)
+		custom = true
+	end
+	if custom then SKIN:Bang('!Redraw') end
+end
+
 local applyFilter
 function ToggleFilter(i)
 	local chip = filter.chips[i]
@@ -1743,6 +2508,10 @@ local function advance()
 		hover.gx, moving = approach(hover.gx, hover.tx, 0.002, V.AnimHoverSmooth)
 		busy = busy or moving
 		hover.gy, moving = approach(hover.gy, hover.ty, 0.002, V.AnimHoverSmooth)
+		busy = busy or moving
+		hover.w, moving = approach(hover.w, hover.tw, 0.5, V.AnimHoverSmooth)
+		busy = busy or moving
+		hover.h, moving = approach(hover.h, hover.th, 0.5, V.AnimHoverSmooth)
 		busy = busy or moving
 		hover.a, moving = approach(hover.a, hover.on and 1 or 0, 0.02, V.AnimHoverSmooth)
 		busy = busy or moving
@@ -1896,6 +2665,8 @@ end
 
 function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
+	-- a Dashboard left open by the previous load: the helper stops until shown
+	os.remove(resources .. 'Generated\\DashOn.txt')
 	local userData = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Raintile\\'
 	data = fileExists(userData .. 'Settings.inc') and userData or resources
 	V.NeedsSetup = data ~= userData or settingsOutdated(userData .. 'Settings.inc')
@@ -1948,6 +2719,7 @@ function Initialize()
 	V.ShowClock = num('ShowClock', 1) ~= 0
 	V.ShowPower = num('ShowPower', 1) ~= 0
 	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
+	V.DashInterval = math.max(250, math.floor(num('DashInterval', 1000)))
 	V.ShowDate = num('ShowDate', 1) ~= 0
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
@@ -1960,6 +2732,7 @@ function Initialize()
 	V.GridY = V.PadY + V.MenuH + V.Gap
 	V.GridTop = V.GridY -- without the filter bar (see setGridArea)
 	V.LabelPad = num('LabelPad', 14)
+	V.TileRadius = math.max(0, math.floor(num('TileRadius', 0)))
 	V.AnimOpen = num('AnimOpen', 1) ~= 0
 	V.AnimCategory = num('AnimCategory', 1) ~= 0
 	V.AnimHover = num('AnimHover', 1) ~= 0
@@ -2063,6 +2836,7 @@ function Update()
 		render(true)
 		if notice.missing > 0 then showNotice() end
 		show('MeterPower', V.ShowPower)
+		updateDashState()
 		if showNow then
 			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
 			SKIN:Bang('!Show')
@@ -2240,6 +3014,7 @@ function Show()
 	if appear then startTicker() end
 	ReadPlaytime(60)
 	ClockTick(0)
+	updateDashState()
 end
 
 function Hide()
@@ -2259,6 +3034,7 @@ function Hide()
 	hotKey(false)
 	stopClock()
 	closePower()
+	updateDashState()
 end
 
 function Toggle()
@@ -2625,9 +3401,11 @@ end
 local function focus(t, idx, tx, ty)
 	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty then return end
 	hover.tx, hover.ty = tx, ty
+	hover.tw, hover.th = tileSize(t)
 	if hover.a < 0.05 or not V.AnimHover then
 		-- it was off: appear directly on the new tile
 		hover.gx, hover.gy = hover.tx, hover.ty
+		hover.w, hover.h = hover.tw, hover.th
 	end
 	hover.idx, hover.on = idx, true
 
@@ -2648,6 +3426,7 @@ function HoverTile(slot)
 	if not t then return end
 	setPointed(t)
 	local tx, ty = slotToGrid(slot)
+	hover.anchor = V.Horizontal and ty or tx
 	focus(t, indexAt(slot), tx, ty)
 end
 
@@ -2715,6 +3494,7 @@ function SetCategory(i)
 		startTicker()
 	end
 	render(true)
+	updateDashState()
 end
 
 function SideCategory(kind)
@@ -2763,7 +3543,7 @@ local function drawSplash(p)
 	local e = 1 - (1 - p) ^ 3 -- cubic ease-out
 	local function lerp(from, to) return math.floor(from + (to - from) * e + 0.5) end
 	local x, y = lerp(a.x, 0), lerp(a.y, 0)
-	local w, h = lerp(V.TileW, V.ScreenW), lerp(V.TileH, V.ScreenH)
+	local w, h = lerp(a.w, V.ScreenW), lerp(a.h, V.ScreenH)
 
 	set('SplashBg', 'X', tostring(x))
 	set('SplashBg', 'Y', tostring(y))
@@ -2774,9 +3554,12 @@ local function drawSplash(p)
 		local t = a.tile
 		local size = lerp(V.IconSize * t.logoScale, V.LaunchLogoSize)
 		-- the logo starts where it sits in the tile and ends at the centre
+		local catW, catH = V.TileW, V.TileH
+		V.TileW, V.TileH = a.w, a.h
 		local lx, ly = logoCentre(t, V.IconSize * t.logoScale)
-		local fx = lx / V.TileW + (0.5 - lx / V.TileW) * e
-		local fy = ly / V.TileH + (0.5 - ly / V.TileH) * e
+		V.TileW, V.TileH = catW, catH
+		local fx = lx / a.w + (0.5 - lx / a.w) * e
+		local fy = ly / a.h + (0.5 - ly / a.h) * e
 		set('SplashLogo', 'X', tostring(x + math.floor(w * fx - size / 2)))
 		set('SplashLogo', 'Y', tostring(y + math.floor(h * fy - size / 2)))
 		set('SplashLogo', 'W', tostring(size))
@@ -2821,6 +3604,15 @@ local function startTile(t)
 end
 
 local function launchTile(t, x, y)
+	if t and t.widget then
+		-- a widget opens its own command, or the tool that goes with it
+		local cmd = t.command or D.WIDGET_COMMANDS[t.widget.kind]
+		if cmd then
+			SKIN:Bang(cmd)
+			if V.CloseOnLaunch then Hide() end
+		end
+		return
+	end
 	if not t or not t.command then
 		dbg('launch ignored: tile without Command')
 		return
@@ -2840,7 +3632,8 @@ local function launchTile(t, x, y)
 	end
 
 	stopTicker()
-	launching = { tile = t, x = V.PadX + math.floor(x), y = V.GridY + math.floor(y), frame = 0 }
+	local tw, th = tileSize(t)
+	launching = { tile = t, x = V.PadX + math.floor(x), y = V.GridY + math.floor(y), w = tw, h = th, frame = 0 }
 	hover.on, hover.a = false, 0
 	show('TileHover', false)
 
@@ -2881,9 +3674,7 @@ end
 
 function Launch(slot)
 	if not ready or launching then return end
-	local r, c = slotRC(slot)
-	local x, y = c * V.StepX, r * V.StepY
-	if V.Horizontal then x = x - (pos - base) * V.StepX else y = y - (pos - base) * V.StepY end
+	local x, y = gridToPx(slotToGrid(slot))
 	launchTile(tileAt(slot), x, y)
 end
 
@@ -2892,6 +3683,87 @@ end
 -- launch the highlighted tile, Q/E switch category. The keys are registered by
 -- the Raintile\Navigation mini-skin, only active while the launcher is visible.
 
+-- Nav() in a grid with tiles of more cells (c.pack): to the next tile in
+-- that direction. Up and down keep the column the highlight came from
+-- (hover.anchor; the row, when the grid scrolls horizontally).
+local function navPacked(dx, dy, p)
+	local L, P, vis = p.lines, (V.Horizontal and V.NY or V.NX), visibleLines()
+	if L == 0 then return end
+	local tiles = cur().tiles
+	local dl = V.Horizontal and dx or dy
+	local dc = V.Horizontal and dy or dx
+	local inf = infinite()
+	local function wrap(l) return inf and l % L or l end
+	local function inRange(l) return inf or (l >= 0 and l < L) end
+	-- the tile of line l (on screen, not wrapped) nearest to the cross cell x
+	local function nearest(l, x)
+		local row = p.cell[wrap(l)]
+		if not row then return nil end
+		local best, bd
+		for c = 0, P - 1 do
+			if row[c] and (not bd or math.abs(c - x) < bd) then best, bd = c, math.abs(c - x) end
+		end
+		if not best then return nil end
+		local id = row[best]
+		return id, l - (wrap(l) - p.at[id][1])
+	end
+	local idx, line
+	local e = hover.idx ~= 0 and p.at[hover.idx]
+	if e then
+		local start = V.Horizontal and hover.tx or hover.ty
+		local anchor = math.min(math.max(hover.anchor or e[2], e[2]), e[2] + e[4] - 1)
+		if dl ~= 0 then
+			local l = dl > 0 and start + e[3] or start - 1
+			for _ = 1, L do
+				if not inRange(l) then break end
+				idx, line = nearest(l, anchor)
+				if idx then break end
+				l = l + dl
+			end
+			hover.anchor = anchor
+		elseif dc ~= 0 then
+			local x = dc > 0 and e[2] + e[4] or e[2] - 1
+			while x >= 0 and x < P do
+				local id = p.cell[e[1]] and p.cell[e[1]][x]
+				if id then
+					idx, line = id, start + (p.at[id][1] - e[1])
+					hover.anchor = p.at[id][2]
+					break
+				end
+				x = x + dc
+			end
+		else
+			idx, line = hover.idx, start
+		end
+	else
+		-- no highlighted tile: the first visible one
+		local l = offset
+		for _ = 1, L do
+			if not inRange(l) then break end
+			idx, line = nearest(l, 0)
+			if idx then break end
+			l = l + 1
+		end
+		hover.anchor = idx and p.at[idx][2] or 0
+	end
+	if not idx then return end -- at the edge: the highlight stays
+	local at = p.at[idx]
+	if line < offset then
+		offset = line
+	elseif line + at[3] - 1 > offset + vis - 1 then
+		offset = line + at[3] - vis
+	end
+	if not inf then offset = math.min(math.max(0, offset), maxOffset()) end
+	if pos ~= offset then
+		if V.AnimScroll then startTicker() else pos = offset end
+	end
+	if V.Horizontal then
+		focus(tiles[idx], idx, line, at[2])
+	else
+		focus(tiles[idx], idx, at[2], line)
+	end
+end
+
 -- Moves the highlight by dx columns and dy rows, scrolling the grid just
 -- enough to keep it visible.
 function Nav(dx, dy)
@@ -2899,6 +3771,7 @@ function Nav(dx, dy)
 	if osk.open then oskMove(dx, dy) return end
 	local tiles = cur().tiles
 	if #tiles == 0 then return end
+	if cur().pack then return navPacked(dx, dy, cur().pack) end
 	local L, per, vis = lineCount(), (V.Horizontal and V.NY or V.NX), visibleLines()
 
 	-- line = row (or column, when horizontal) along the scroll direction
@@ -3009,6 +3882,7 @@ leaveSearch = function()
 	zooming = {}
 	updateSearchBar()
 	updateEmptyHint()
+	updateDashState()
 	return true
 end
 
@@ -3026,7 +3900,7 @@ local function runSearch(text)
 
 	local results = {}
 	for _, c in ipairs(cats) do
-		for _, t in ipairs(c.virtual and {} or c.tiles) do
+		for _, t in ipairs((c.virtual or c.dashboard) and {} or c.tiles) do
 			local hay = (t.name .. ' ' .. (t.label or '') .. ' ' .. t.catLabel .. ' ' .. (t.store or '')
 				.. ' #' .. table.concat(t.tags or {}, ' #')):lower()
 			local ok = true
@@ -3069,6 +3943,7 @@ local function runSearch(text)
 		startTicker()
 	end
 	render(true)
+	updateDashState()
 	-- the first result is already highlighted: Enter/Space launches it
 	if #results > 0 then Nav(0, 0) end
 end

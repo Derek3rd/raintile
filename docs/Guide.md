@@ -423,7 +423,7 @@ When an update adds settings, they are added to your `Settings.inc` with their d
 
 ### Updates
 
-> **Experimental**: installing updates from the Options window is still being tested and could cause problems. Before installing, keep a copy of your data folder (Options > Info > *Your data*); if something goes wrong, install the package from the [releases page](https://github.com/Derek3rd/raintile/releases) by hand.
+If something goes wrong with an update, install the package from the [releases page](https://github.com/Derek3rd/raintile/releases) by hand: your data is in its own folder and stays as it is.
 
 With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps) and on **Info** in the menu of the Options window; a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
 

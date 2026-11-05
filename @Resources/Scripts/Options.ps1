@@ -3916,8 +3916,7 @@ function Install-Update {
     if (-not (Test-ReleaseUrl $info.Asset)) { Open-ReleasePage $info; return }
     $r = Show-Dialog 'Update Raintile' ("Download Raintile $($info.Latest) and open the Rainmeter installer?`r`n`r`n" +
         "Your settings, categories and images stay: they are in $Data, which the installer does not touch. " +
-        "In the installer keep the default options and press Install.`r`n`r`n" +
-        "This is still experimental: keep a copy of your data folder first.") @('Download and install', 'Cancel')
+        "In the installer keep the default options and press Install.") @('Download and install', 'Cancel')
     if ($r.Button -ne 'Download and install') { return }
     # a new folder of its own, and a name made here: nothing else can be
     # put in its place before it is opened
@@ -3951,10 +3950,6 @@ function Install-Update {
 function New-UpdateCard {
     $card = New-Card 'Updates' ''
     $f = $card.Child
-    $beta = New-Text ('Experimental: installing updates from here is still being tested and could cause problems. ' +
-        'Before installing, keep a copy of your data folder; if something goes wrong, the release page has the package to install by hand.') 12.5 (Res 'AccentBrush') -Wrap
-    $beta.Margin = T 0 0 0 6
-    [void](Add-To $f $beta)
     foreach ($row in @(@('Installed', 'Installed'), @('Latest', 'Latest version'))) {
         $v = New-Text '' 13 -Wrap
         $v.MaxWidth = 460

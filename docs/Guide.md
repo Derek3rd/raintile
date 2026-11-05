@@ -175,7 +175,7 @@ A small line at the top left of the tile tells how long you played and when you 
 
 ## Launching a tile
 
-**Hot keys**: a tile with `HotKey=` (e.g. `CTRL ALT 1`) starts with that combination wherever you are, also while the launcher is hidden: right away, without the animation (an open launcher hides with `CloseOnLaunch=1`). One tile per combination: if two tiles have the same one, the first wins, and the open/close key (`OpenHotKey`) cannot be used. The Options window warns about a combination already used.
+**Hot keys**: a tile with `HotKey=` (e.g. `CTRL ALT 1`) starts with that combination wherever you are, also while the launcher is hidden (`TileKeysWhen=Always`, the default; with `Open` only while it is open, and the keys stay free for other programs the rest of the time): right away, without the animation (an open launcher hides with `CloseOnLaunch=1`). One tile per combination: if two tiles have the same one, the first wins, and the open/close key (`OpenHotKey`) cannot be used. The Options window warns about a combination already used.
 
 On click the tile expands to full screen (with background and logo at full resolution), stays visible for `LaunchHold` ms, then the launcher hides. The command starts right away, at the beginning of the animation.
 
@@ -521,6 +521,7 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `CloseAction` | `[!CommandMeasure MeasureScript "Hide()"]` | action of the X; `[!DeactivateConfig]` unloads the skin |
 | `CloseSize` | `14` | size of the X and gear buttons |
 | `CloseHotKey` | `ESCAPE` | close key, registered only while visible; empty = none |
+| `TileKeysWhen` | `Always` | hot keys of the tiles: `Always` (also with the launcher closed) or `Open` (only while it is open) |
 | `KeyboardNav` | `1` | keyboard navigation |
 | `NavUp`, `NavUp2`, `NavDown`, `NavDown2`, `NavLeft`, `NavLeft2`, `NavRight`, `NavRight2` | `W`/`UP`, `S`/`DOWN`, `A`/`LEFT`, `D`/`RIGHT` | movement keys |
 | `NavConfirm`, `NavConfirm2` | `SPACE`, `ENTER` | launch the highlighted tile (on release) |
@@ -671,6 +672,7 @@ Raintile.ini                 main skin (styles, measures, fixed meters)
 Hotkey/Hotkey.ini            Esc mini-skin (activated by the launcher)
 Navigation/Navigation.ini    navigation keys mini-skin (activated by the launcher)
 Typing/Typing.ini            keys typed in the search bar (activated while typing)
+TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated while the launcher is open)
 @Resources/
   Settings.inc               default settings (yours are in the data folder)
   State.inc                  default positions
@@ -701,6 +703,8 @@ Typing/Typing.ini            keys typed in the search bar (activated while typin
   Generated/DashOn.txt       present while a Dashboard is on screen: the helper collects its data
   Generated/DashData.txt     the data of the Dashboard widgets (written by the helper)
   Generated/DockEdge.txt     docked with DockEdge=1: the edge the helper watches to open it
+  Generated/LauncherSize.txt size of the launcher, for the helper to find its window
+  Generated/TileKeys.inc     the measures of the TileKeys mini-skin
 ```
 
 The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your data is](#where-your-data-is).

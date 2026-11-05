@@ -178,6 +178,7 @@ namespace RaintileOptions
                 {
                     new Item { Kind = "combo", Key = "OpenHotKey", Label = "Open / close the launcher", Help = "Works everywhere, also while the launcher is hidden. Hold the modifiers, then press the key." },
                     new Item { Kind = "key", Key = "CloseHotKey", Label = "Close", Help = "Closes the search first, if it is open." },
+                    new Item { Kind = "choice", Key = "TileKeysWhen", Label = "Tile hot keys", Help = "When the key combinations of the tiles (tile editor > Hot key) start them. Only with the launcher open, the keys stay free for other programs the rest of the time.", Choices = new List<string[]> { new[] { "Always", "Always, also with the launcher closed" }, new[] { "Open", "Only with the launcher open" } } },
                 } },
                 new Group { Title = "Navigation", Help = null, Items = new List<Item>
                 {
@@ -424,6 +425,7 @@ namespace RaintileOptions
             { "TileColor", "36,36,44,255" },
             { "TileHover", "1" },
             { "TileInfo", "Hover" },
+            { "TileKeysWhen", "Always" },
             { "TileRadius", "0" },
             { "TrackPlaytime", "1" },
             { "UnplayedCount", "24" },

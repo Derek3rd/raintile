@@ -107,6 +107,10 @@ ShowPower=1
 ; Key that closes the launcher (HotKey plugin), registered only while the
 ; launcher is visible. Empty = no key.
 CloseHotKey=ESCAPE
+; Hot keys of the tiles (HotKey= in the category files): Always = they start
+; their tile also while the launcher is closed; Open = only while it is open
+; (the keys stay free for other programs the rest of the time)
+TileKeysWhen=Always
 ; Keyboard navigation, only active while the launcher is visible (HotKey
 ; plugin): 1 = on, 0 = off. Each action has two keys (HotKey plugin names:
 ; letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)

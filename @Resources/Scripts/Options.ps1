@@ -385,7 +385,9 @@ $schema = @(
         Groups = @(
             @{ Title = 'Open and close'; Items = @(
                     (S 'combo' 'OpenHotKey' 'Open / close the launcher' 'Works everywhere, also while the launcher is hidden. Hold the modifiers, then press the key.'),
-                    (S 'key' 'CloseHotKey' 'Close' 'Closes the search first, if it is open.')
+                    (S 'key' 'CloseHotKey' 'Close' 'Closes the search first, if it is open.'),
+                    (S 'choice' 'TileKeysWhen' 'Tile hot keys' 'When the key combinations of the tiles (tile editor > Hot key) start them. Only with the launcher open, the keys stay free for other programs the rest of the time.' @{ Choices = @(
+                                @('Always', 'Always, also with the launcher closed'), @('Open', 'Only with the launcher open')) })
                 ) }
             @{ Title = 'Navigation'; Items = @(
                     (S 'bool' 'KeyboardNav' 'Keyboard navigation'),
@@ -494,7 +496,7 @@ $navTree = @(
 # Default values (as shipped), for "Restore default"
 $defaults = @{
     ScreenX = '#SCREENAREAX#'; ScreenY = '#SCREENAREAY#'; ScreenW = '#SCREENAREAWIDTH#'; ScreenH = '#SCREENAREAHEIGHT#'
-    LauncherMode = 'Fullscreen'; WindowW = '60%'; WindowH = '70%'; DockSide = 'Left'; DockSize = '30%'; DockEdge = '1'; DockEdgeDelay = '300'
+    TileKeysWhen = 'Always'; LauncherMode = 'Fullscreen'; WindowW = '60%'; WindowH = '70%'; DockSide = 'Left'; DockSize = '30%'; DockEdge = '1'; DockEdgeDelay = '300'
     NX = '4'; NY = '2'; ScrollDir = 'V'; ScrollStep = '1'; InfiniteScroll = '1'
     Gap = '18'; PadX = '40'; PadY = '24'; IconSize = '96'; LabelPad = '14'; ScrollBarSize = '4'
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'

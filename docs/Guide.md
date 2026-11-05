@@ -596,7 +596,7 @@ Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Contai
 
 **Large screens.** Rainmeter draws the whole window again on every step of an animation, so the work grows with the pixels: a launcher covering a 3440x1440 screen has 2.4 times those of 1920x1080. What helps, most first:
 
-- Rainmeter's **hardware acceleration** (Rainmeter > Manage > Settings > *Use hardware acceleration*, then restart Rainmeter): the drawing moves to the graphics card.
+- Rainmeter's **hardware acceleration** (Rainmeter > Manage > Settings > *Use hardware acceleration*, then restart Rainmeter): the drawing moves to the graphics card. When it is off and the launcher is that large, the dot on the gear suggests it once; a click opens those settings.
 - `FrameRate=Auto` (or `30`): half the steps, each moving twice as much. While the only thing moving is a background slowly panning (`BgStyle=Pan`), steps drop to 20 per second by themselves.
 - `BgStyle=Crop`: no background moving under the mouse at all; `TileRadius=0` and `EdgeFade=0` take away the shapes drawn over the grid on every step.
 - The window mode (`LauncherMode=Window`) or a smaller area: fewer pixels to draw.

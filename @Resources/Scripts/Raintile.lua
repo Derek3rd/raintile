@@ -3353,7 +3353,8 @@ function Update()
 		if V.AnimOpen and not startHidden then appear = 0 end
 		updateEmptyHint()
 		render(true)
-		if notice.missing > 0 then showNotice() end
+		M.checkHwAccel()
+		if notice.missing > 0 or notice.hwaccel then showNotice() end
 		show('MeterPower', V.ShowPower and not M.compact)
 		updateDashState()
 		if showNow then
@@ -3785,6 +3786,8 @@ showNotice = function()
 	elseif notice.missing > 0 then
 		tip = notice.missing == 1 and '1 game is no longer installed: click to remove or keep its tile'
 			or (notice.missing .. ' games are no longer installed: click to remove or keep their tiles')
+	elseif notice.hwaccel then
+		tip = 'Large screen: turn on hardware acceleration in Rainmeter for smooth animations (click to open its settings)'
 	end
 	if tip then SKIN:Bang('!SetOption', 'MeterNotice', 'ToolTipText', tip) end
 	M.noticeTip = tip -- also an entry of the "more" list (compact menu)
@@ -3794,7 +3797,32 @@ showNotice = function()
 end
 
 function OpenNotice()
+	if not notice.update and notice.found == 0 and notice.missing == 0 and notice.hwaccel then
+		-- Rainmeter > Manage > Settings, where the box is; asked only once
+		notice.hwaccel = false
+		SKIN:Bang('!WriteKeyValue', 'Variables', 'HwAccelHint', '1', data .. 'State.inc')
+		showNotice()
+		Hide()
+		SKIN:Bang('!Manage', 'Settings')
+		return
+	end
 	SKIN:Bang(SKIN:GetVariable(notice.update and 'OptionsInfoAction' or 'OptionsImportAction'))
+end
+
+-- Rainmeter draws the whole window on every animation step: on a large
+-- screen without its hardware acceleration ([Rainmeter]
+-- HardwareAcceleration=1 in Rainmeter.ini, Manage > Settings) the
+-- animations stutter. The dot suggests it once (HwAccelHint in State.inc).
+function M.checkHwAccel()
+	if num('HwAccelHint', 0) ~= 0 or V.ScreenW * V.ScreenH < 3000000 then return end
+	local ini = parseIni(SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Rainmeter.ini')
+	if not ini then return end
+	for _, sec in ipairs(ini) do
+		if sec.name:lower() == 'rainmeter' then
+			notice.hwaccel = trim(sec.keys.hardwareacceleration or '0') ~= '1'
+			return
+		end
+	end
 end
 
 -- Options window: the native program (@Resources\Bin\RaintileOptions.exe,

@@ -237,13 +237,16 @@ end
 local function lookupImage(dir, name)
 	local path = unquote(trim(SKIN:ReplaceVariables(name)))
 	if not isAbsolute(path) then path = dir .. path end
-	if path:match('%.%w+$') then
-		return fileExists(path) and path or nil
+	-- a file named in full; otherwise the name plus an image extension (a dot
+	-- in the name is not an extension: Battle.net -> Battle.net.png)
+	local ext = (path:match('(%.%w+)$') or ''):lower()
+	for _, e in ipairs(IMAGE_EXTS) do
+		if e == ext and fileExists(path) then return path end
 	end
-	for _, ext in ipairs(IMAGE_EXTS) do
-		if fileExists(path .. ext) then return path .. ext end
+	for _, e in ipairs(IMAGE_EXTS) do
+		if fileExists(path .. e) then return path .. e end
 	end
-	return nil
+	return fileExists(path) and path or nil
 end
 
 -- Image of a tile/category: 'value' if given (logged if missing), otherwise

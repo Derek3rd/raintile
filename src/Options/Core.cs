@@ -390,8 +390,11 @@ namespace RaintileOptions
             try
             {
                 if (!Path.IsPathRooted(p)) p = Path.Combine(dir, p);
-                if (Regex.IsMatch(p, @"\.\w+$")) return File.Exists(p) ? p : null;
+                // a file named in full; otherwise the name plus an image extension
+                // (a dot in the name is not an extension: Battle.net -> Battle.net.png)
+                if (IMAGE_EXTS.Contains(Path.GetExtension(p).ToLowerInvariant()) && File.Exists(p)) return p;
                 foreach (var e in IMAGE_EXTS) if (File.Exists(p + e)) return p + e;
+                if (File.Exists(p)) return p;
             }
             catch { }
             return null;

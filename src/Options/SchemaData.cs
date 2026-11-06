@@ -106,7 +106,15 @@ namespace RaintileOptions
                     new Item { Kind = "choice", Key = "TileInfo", Label = "Play time and last launch", Help = "A line on the tile, at the top left unless moved in the preview of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.", Choices = new List<string[]> { new[] { "Hover", "On the highlighted tile" }, new[] { "Always", "Always" }, new[] { "Never", "Never" } } },
                     new Item { Kind = "int", Key = "InfoFontSize", Label = "Play time font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "bool", Key = "TrackPlaytime", Label = "Measure play time outside Steam", Help = "The background helper looks for the game a tile starts and counts how long it runs." },
-                    new Item { Kind = "bool", Key = "GameUpdates", Label = "Steam updates waiting", Help = "Steam games with an update to download say so on the play time line, with its size and when Steam scheduled it." },
+                    new Item { Kind = "bool", Key = "GameUpdates", Label = "Steam updates waiting", Help = "Steam games with an update to download say so on a line above the play time, always shown, and their tile gets a border. While it downloads the line follows it live." },
+                } },
+                new Group { Title = "Steam updates", Help = null, Items = new List<Item>
+                {
+                    new Item { Kind = "text", Key = "DownloadInfo", Label = "What the update line says", Help = "Any of: percent, size (downloaded / total), speed, eta (time left), schedule (when Steam will download it), separated by spaces." },
+                    new Item { Kind = "choice", Key = "DownloadStyle", Label = "Download on the tile", Help = "How the progress of a download shows on its tile.", Choices = new List<string[]> { new[] { "Bar", "A bar along the bottom" }, new[] { "Greyscale", "Background in greyscale, coloured again as it goes" }, new[] { "Both", "Both" } } },
+                    new Item { Kind = "color", Key = "DownloadColor1", Label = "Colour 1", Help = "Border of a tile with an update (a gradient from 1 to 2) and the bar." },
+                    new Item { Kind = "color", Key = "DownloadColor2", Label = "Colour 2", Help = "Other end of the border gradient." },
+                    new Item { Kind = "int", Key = "UpdateGlowTime", Label = "Border turning", Help = "Seconds the border turns when the launcher opens. 0 = it stays still.", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "s" },
                 } },
                 new Group { Title = "Tiles", Help = null, Items = new List<Item>
                 {
@@ -339,6 +347,10 @@ namespace RaintileOptions
             { "DockEdgeDelay", "300" },
             { "DockSide", "Left" },
             { "DockSize", "30%" },
+            { "DownloadColor1", "0,210,180,255" },
+            { "DownloadColor2", "120,90,255,255" },
+            { "DownloadInfo", "percent speed eta size schedule" },
+            { "DownloadStyle", "Bar" },
             { "EdgeFade", "1" },
             { "FadeDuration", "0" },
             { "FilterBar", "1" },
@@ -441,6 +453,7 @@ namespace RaintileOptions
             { "TrackPlaytime", "1" },
             { "UnplayedCount", "24" },
             { "UpdateChannel", "Release" },
+            { "UpdateGlowTime", "3" },
             { "WindowH", "70%" },
             { "WindowW", "60%" },
         };

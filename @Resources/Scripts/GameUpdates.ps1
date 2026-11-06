@@ -11,7 +11,9 @@
 # while it runs: what is read is what Steam knew last.
 #
 # Output: Generated\GameUpdates.txt, one game per line:
-#   <appid>|<bytes to download>|<bytes downloaded>|<scheduled, unix time>
+#   <appid>|<bytes to download>|<bytes downloaded>|<scheduled, unix time>|<appmanifest>
+# (the appmanifest path: while the launcher is open the helper follows the
+# download from it and from Steam's log, see DownloadStep in Helper.ps1)
 # rewritten only when it changes. Last output line, read by the skin:
 # RESULT:UPDATES=<number of games>.
 
@@ -72,7 +74,7 @@ foreach ($lib in $libraries.Values) {
         $build = Get-Field $text 'buildid'
         $target = Get-Field $text 'TargetBuildID'
         if (($flags -band 2) -eq 0 -and ($target -eq '0' -or $target -eq $build)) { continue }
-        $games[$appid] = '{0}|{1}|{2}|{3}' -f $appid, (Get-Field $text 'BytesToDownload'), (Get-Field $text 'BytesDownloaded'), (Get-Field $text 'ScheduledAutoUpdate')
+        $games[$appid] = '{0}|{1}|{2}|{3}|{4}' -f $appid, (Get-Field $text 'BytesToDownload'), (Get-Field $text 'BytesDownloaded'), (Get-Field $text 'ScheduledAutoUpdate'), $acf.FullName
     }
 }
 

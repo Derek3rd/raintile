@@ -173,7 +173,12 @@ A small line on the tile (at the top left unless you move it) tells how long you
 - Before any time is measured: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
 - `TileInfo=Hover` (default) shows it only on the highlighted tile (mouse, keyboard or gamepad), `Always` on every tile, `Never` hides it. Size: `InfoFontSize`. Options > Appearance > Text.
 - Tiles of [games no longer installed](#games-no-longer-installed) always show **Not installed**.
-- **Steam updates** (`GameUpdates=1`): a Steam game with an update to download shows it on the same line, in place of the play time (shown as `TileInfo` says, like the play time): `Update 5.4 GB - Sat 06:27` (its size and when Steam scheduled it; `today` / `tomorrow` when close), `Updating 40%` while it downloads. It is read from Steam's `steamapps\appmanifest_<id>.acf` of every library (`Scripts\GameUpdates.ps1`) at the same moments as the play time, so it is what Steam knew last: Steam finds new updates only while it runs. `GameUpdates=0` turns it off (Options > Appearance > Text).
+- **Steam updates** (`GameUpdates=1`): a Steam game with an update to download says so on a line of its own above the play time, always shown (whatever `TileInfo` says), and its tile gets a border in `DownloadColor1` and `DownloadColor2` that turns for `UpdateGlowTime` seconds when the launcher opens (`0`: it stays still), under the highlight of the mouse.
+  - Waiting: `Update 5.4 GB - Sat 06:27` (its size and when Steam scheduled it; `today` / `tomorrow` when close).
+  - Downloading: `Downloading 40% - 540 MB / 1.3 GB - 25.3 MB/s - 3 min left`, then `Installing update`; `Paused 40%` when paused in Steam. `DownloadInfo` chooses the parts, in any order: `percent`, `size`, `speed`, `eta` (time left), `schedule`.
+  - The progress shows on the tile as `DownloadStyle` says: `Bar` (a bar along the bottom in `DownloadColor1`), `Greyscale` (the background in greyscale, coloured again from the left as far as it got; tiles without a background image show nothing) or `Both`. It fills up when the launcher opens.
+  - Where it comes from: Steam's `steamapps\appmanifest_<id>.acf` of every library (`Scripts\GameUpdates.ps1`), read at the same moments as the play time, so it is what Steam knew last (Steam finds new updates only while it runs). While the launcher is open the background helper follows the downloads every second: Steam's log (`logs\content_log.txt`: its state at once, the speed every few seconds) and the appmanifest when Steam rewrites it; between the two the bytes downloaded are worked out from the speed. Nothing is followed while the launcher is hidden.
+  - `GameUpdates=0` turns it all off (Options > Appearance > Text; the rest under Appearance > Steam updates).
 - **Where**: the top left by default. To move it, drag the sample line in the tile's preview (Options > *the category* > *the tile*), or under **All tiles** for the whole category; the **x** on the **Play time** row gives it back the place of All tiles. It is saved as `InfoPos=X,Y`: where the line goes in the room it leaves inside the margins (`LabelPad`), in %: `0,0` top left, `100,0` top right, `50,50` centre, `100,100` bottom right. The line changes width with what it says, so it stays inside the tile whatever the text.
 
 ## Launching a tile
@@ -680,7 +685,11 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFold
 | `ShowLabels` | `1` | show tile labels |
 | `TileInfo` | `Hover` | [play time](#play-time) line on the tiles: `Hover` (highlighted tile), `Always` or `Never` |
 | `InfoFontSize` | `10` | its font size (points) |
-| `GameUpdates` | `1` | Steam games with an [update waiting](#play-time) say so on that line; `0` turns it off |
+| `GameUpdates` | `1` | Steam games with an [update waiting](#play-time) say so on a line above the play time, with a border on their tile; `0` turns it off |
+| `DownloadInfo` | `percent speed eta size schedule` | parts of the update line: `percent`, `size`, `speed`, `eta`, `schedule` |
+| `DownloadStyle` | `Bar` | progress of a download on its tile: `Bar`, `Greyscale` or `Both` |
+| `DownloadColor1` / `DownloadColor2` | `0,210,180,255` / `120,90,255,255` | the border of a tile with an update (gradient from 1 to 2) and the bar (1) |
+| `UpdateGlowTime` | `3` | seconds the border turns when the launcher opens; `0` = still |
 | `FontFace` | `Segoe UI` | font |
 | `MenuFontSize`, `LabelFontSize` | `12`, `14` | font sizes (points) |
 | `BgColor` | `8,8,12,200` | launcher background |
@@ -752,6 +761,8 @@ TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated whi
   Generated/Missing.txt      tiles of games no longer installed (last search)
   Generated/Playtime.txt     play time of the Steam games
   Generated/GameUpdates.txt  Steam games with an update waiting
+  Generated/DownloadOn.txt   while the launcher is open: the downloads for the helper to follow
+  Generated/Downloads.txt    their progress, speed and time left (Helper.ps1)
   Generated/DashOn.txt       present while a Dashboard is on screen: the helper collects its data
   Generated/DashData.txt     the data of the Dashboard widgets (written by the helper)
   Generated/DockEdge.txt     docked with DockEdge=1: the edge the helper watches to open it

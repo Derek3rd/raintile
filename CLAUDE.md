@@ -32,6 +32,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - PowerShell 5.1 syntax only: no `&&`/`||`, `??`, `?.`, ternary or other PowerShell 7 features. C# compiled by `Add-Type` (in `Helper.ps1`) is C# 5; the Options program is C# 7.3.
 - Lua 5.1 allows at most 200 locals per function, the main chunk included: put new functions in the existing tables (`D` for the Dashboard, `M` for the rest) instead of new top-level locals.
 - No update cycle (`Update=-1`): the skin redraws only on events, and animations run on ActionTimer only while something moves. Never add polling or a timer that runs at rest. Animations are time-based (`M.animScale`), so they last the same at every frame rate.
+- The helper (`Helper.ps1`) may push live data to the skin (Dashboard, Steam downloads) only while it is shown, and only when the data changes: the skin asks for it with a flag file in `Generated/` written on show and removed on hide.
 - Fixed number of meters: the grid is generated into `Generated/Grid.inc` and tiles are shown or hidden. Never one meter per tile.
 - LinearGradient angles in Rainmeter run the other way round (0 = right to left).
 - Image names: with or without extension; a dot in a tile name is not an extension (`Battle.net` -> `Battle.net.png`).

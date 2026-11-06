@@ -26,6 +26,9 @@
 # adds it to TimePlayed.txt in the data folder ("<tile id>|<minutes>|<last>").
 # The exe found is kept in GameExe.txt for the next time.
 #
+# Steam downloads: while the launcher is open, the progress, speed and time
+# left of the Steam games downloading an update (see DownloadStep).
+#
 # Only one copy runs: a new one (e.g. after "Refresh skin") closes the
 # previous one; it exits by itself when Rainmeter is no longer running.
 
@@ -1272,6 +1275,209 @@ public class RaintilePad
         finally { Marshal.FreeHGlobal(text); }
     }
 
+    // --- Steam downloads -----------------------------------------------------------
+    // While the launcher is open and Steam games have an update, the skin keeps
+    // Generated\DownloadOn.txt ("<appid>|<appmanifest path>" per line). Every
+    // second the helper reads what Steam wrote since the last time: the new
+    // lines of logs\content_log.txt (state changes right away, "update started
+    // : download <done>/<total>", "Current download rate: <n> Mbps" every few
+    // seconds) and the appmanifest when it changes (BytesDownloaded, written
+    // only now and then). Between two of them the bytes downloaded are
+    // estimated from the rate. Written to Generated\Downloads.txt, one
+    // "<appid>|<phase>|<done>|<total>|<bytes per second>|<seconds left>" per
+    // line (phase: download, install, paused, idle); OnDownloads() tells the
+    // skin, only when it changes. Nothing happens while the launcher is hidden.
+    public string DownloadFlag, DownloadFile;
+    long nextDownload;
+    bool downloadOn;
+    string steamLog, downloadsText;
+    long logPos = -1;
+    string downloadingApp;
+    double downloadRate; // bytes per second, of the game downloading
+    class Dl
+    {
+        public string Manifest, Phase = "idle";
+        public DateTime ManifestTime;
+        public double Done, Total, At; // At: ms of the clock when Done was right
+        public double Rate;
+    }
+    Dictionary<string, Dl> downloads = new Dictionary<string, Dl>();
+
+    static string AcfField(string text, string name)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text, "\"" + name + "\"\\s+\"(\\d+)\"", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return m.Success ? m.Groups[1].Value : null;
+    }
+
+    static string PhaseOf(string state)
+    {
+        if (state.IndexOf("Downloading", StringComparison.OrdinalIgnoreCase) >= 0) return "download";
+        if (state.IndexOf("Suspended", StringComparison.OrdinalIgnoreCase) >= 0 || state.IndexOf("Paused", StringComparison.OrdinalIgnoreCase) >= 0) return "paused";
+        if (state.Trim().Trim(',').Length == 0 || state.Trim().StartsWith("None", StringComparison.OrdinalIgnoreCase)) return "idle";
+        return "install";
+    }
+
+    // What the game has done by now: the last value read, plus the rate since then
+    static double DoneNow(Dl d, long now)
+    {
+        if (d.Phase != "download" || d.Rate <= 0 || d.Total <= 0) return d.Done;
+        return Math.Min(d.Total, d.Done + d.Rate * (now - d.At) / 1000.0);
+    }
+
+    void ReadSteamLog(long now)
+    {
+        if (steamLog == null)
+        {
+            try
+            {
+                using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Valve\Steam"))
+                {
+                    string root = k != null ? k.GetValue("SteamPath") as string : null;
+                    if (root != null) steamLog = System.IO.Path.Combine(root.Replace('/', '\\'), @"logs\content_log.txt");
+                }
+            }
+            catch { }
+            if (steamLog == null) steamLog = "";
+        }
+        if (steamLog == "" || !System.IO.File.Exists(steamLog)) return;
+        string text;
+        using (var f = new System.IO.FileStream(steamLog, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete))
+        {
+            // the first time only the end of it (what is going on now); a
+            // shorter file is a new one
+            if (logPos < 0 || logPos > f.Length) logPos = Math.Max(0, f.Length - 262144);
+            if (f.Length == logPos) return;
+            f.Position = logPos;
+            var buffer = new byte[f.Length - logPos];
+            int read = 0;
+            while (read < buffer.Length)
+            {
+                int n = f.Read(buffer, read, buffer.Length - read);
+                if (n <= 0) break;
+                read += n;
+            }
+            // up to the last complete line: the rest is read next time
+            int end = Array.LastIndexOf(buffer, (byte)'\n', read - 1);
+            if (end < 0) return;
+            logPos += end + 1;
+            text = System.Text.Encoding.UTF8.GetString(buffer, 0, end + 1);
+        }
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        foreach (string raw in text.Split('\n'))
+        {
+            string line = raw.TrimEnd('\r');
+            var m = System.Text.RegularExpressions.Regex.Match(line, @"AppID (\d+) update started : download (\d+)/(\d+)");
+            Dl d;
+            if (m.Success)
+            {
+                if (downloads.TryGetValue(m.Groups[1].Value, out d))
+                {
+                    d.Done = double.Parse(m.Groups[2].Value, inv);
+                    d.Total = double.Parse(m.Groups[3].Value, inv);
+                    d.At = now;
+                }
+                continue;
+            }
+            m = System.Text.RegularExpressions.Regex.Match(line, @"AppID (\d+) App update changed : (.*)$");
+            if (m.Success)
+            {
+                string phase = PhaseOf(m.Groups[2].Value);
+                if (phase == "download") downloadingApp = m.Groups[1].Value;
+                else if (downloadingApp == m.Groups[1].Value) downloadingApp = null;
+                if (downloads.TryGetValue(m.Groups[1].Value, out d))
+                {
+                    d.Done = DoneNow(d, now);
+                    d.At = now;
+                    d.Phase = phase;
+                    if (phase != "download") d.Rate = 0;
+                }
+                continue;
+            }
+            m = System.Text.RegularExpressions.Regex.Match(line, @"Current download rate: ([\d.]+) Mbps");
+            if (m.Success)
+            {
+                downloadRate = double.Parse(m.Groups[1].Value, inv) * 1000000.0 / 8.0;
+                if (downloadingApp != null && downloads.TryGetValue(downloadingApp, out d))
+                {
+                    d.Done = DoneNow(d, now);
+                    d.At = now;
+                    d.Rate = downloadRate;
+                }
+            }
+        }
+    }
+
+    void DownloadStep(IntPtr window, long now)
+    {
+        if (now < nextDownload) return;
+        nextDownload = now + 1000;
+        bool on = System.IO.File.Exists(DownloadFlag);
+        if (!on)
+        {
+            // hidden: start again from the files next time
+            if (downloadOn) { downloads.Clear(); logPos = -1; downloadingApp = null; downloadsText = null; }
+            downloadOn = false;
+            return;
+        }
+        var wanted = new Dictionary<string, string>();
+        foreach (string line in System.IO.File.ReadAllLines(DownloadFlag))
+        {
+            string[] p = line.Split(new[] { '|' }, 2);
+            if (p.Length == 2 && p[0].Trim().Length > 0) wanted[p[0].Trim()] = p[1].Trim();
+        }
+        foreach (var id in new List<string>(downloads.Keys)) if (!wanted.ContainsKey(id)) downloads.Remove(id);
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        foreach (var kv in wanted)
+        {
+            Dl d;
+            if (!downloads.TryGetValue(kv.Key, out d)) { d = new Dl(); downloads[kv.Key] = d; }
+            d.Manifest = kv.Value;
+            // the appmanifest: right when Steam rewrites it
+            try
+            {
+                if (!d.Manifest.EndsWith(".acf", StringComparison.OrdinalIgnoreCase) || !System.IO.File.Exists(d.Manifest)) continue;
+                DateTime time = System.IO.File.GetLastWriteTimeUtc(d.Manifest);
+                if (time == d.ManifestTime) continue;
+                d.ManifestTime = time;
+                string acf = System.IO.File.ReadAllText(d.Manifest);
+                string done = AcfField(acf, "BytesDownloaded"), total = AcfField(acf, "BytesToDownload"), flags = AcfField(acf, "StateFlags");
+                if (done != null && total != null)
+                {
+                    double dn = double.Parse(done, inv);
+                    // never back: the estimate may already be past it
+                    if (d.Phase != "download" || dn > DoneNow(d, now)) { d.Done = dn; d.At = now; }
+                    d.Total = double.Parse(total, inv);
+                }
+                long f;
+                // before the log says anything: UpdatePaused (512), UpdateStarted (1024)
+                if (flags != null && long.TryParse(flags, out f) && d.Phase == "idle")
+                    d.Phase = (f & 512) != 0 ? "paused" : (f & 1024) != 0 ? "download" : "idle";
+            }
+            catch { }
+        }
+        bool first = !downloadOn;
+        downloadOn = true;
+        try { ReadSteamLog(now); } catch { }
+        var sb = new System.Text.StringBuilder();
+        foreach (var kv in downloads)
+        {
+            Dl d = kv.Value;
+            double done = DoneNow(d, now);
+            double left = d.Phase == "download" && d.Rate > 0 ? Math.Max(0, d.Total - done) / d.Rate : -1;
+            sb.Append(kv.Key).Append('|').Append(d.Phase).Append('|')
+              .Append(Math.Floor(done).ToString(inv)).Append('|').Append(Math.Floor(d.Total).ToString(inv)).Append('|')
+              .Append(Math.Floor(d.Rate).ToString(inv)).Append('|').Append(Math.Ceiling(left).ToString(inv)).Append("\r\n");
+        }
+        string text = sb.ToString();
+        if (text == downloadsText && !first) return;
+        downloadsText = text;
+        string tmp = DownloadFile + ".tmp";
+        System.IO.File.WriteAllText(tmp, text, new System.Text.UTF8Encoding(false));
+        if (System.IO.File.Exists(DownloadFile)) System.IO.File.Delete(DownloadFile);
+        System.IO.File.Move(tmp, DownloadFile);
+        Send(window, Call("OnDownloads()"));
+    }
+
     // Main loop: ends when 'quit' is signalled (a new copy started) or when
     // Rainmeter is gone.
     public void Run(WaitHandle quit)
@@ -1290,6 +1496,7 @@ public class RaintilePad
             if (TrackEnabled) { try { TrackStep(now); } catch { } }
             if (DashFlag != null && window != IntPtr.Zero) { try { DashStep(window, now); } catch { } }
             if (EdgeFile != null && window != IntPtr.Zero) { try { EdgeStep(window, now); } catch { } }
+            if (DownloadFlag != null && window != IntPtr.Zero) { try { DownloadStep(window, now); } catch { } }
             if (!PadEnabled) continue;
 
             // disconnected controllers are checked again every 2 s (the call
@@ -1342,6 +1549,8 @@ if ($Generated) {
     $pad.EdgeFile = Join-Path $Generated 'DockEdge.txt'
     if ($Dash) { $pad.PrepareDash() }
     $pad.SizeFile = Join-Path $Generated 'LauncherSize.txt'
+    $pad.DownloadFlag = Join-Path $Generated 'DownloadOn.txt'
+    $pad.DownloadFile = Join-Path $Generated 'Downloads.txt'
 }
 if ($pad.TrackEnabled) {
     $pad.LaunchFile = Join-Path $Generated 'Launch.txt'

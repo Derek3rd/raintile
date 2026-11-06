@@ -315,7 +315,15 @@ $schema = @(
                                 @('Hover', 'On the highlighted tile'), @('Always', 'Always'), @('Never', 'Never')) }),
                     (Num 'InfoFontSize' 'Play time font size' 6 30 1 'pt'),
                     (S 'bool' 'TrackPlaytime' 'Measure play time outside Steam' 'The background helper looks for the game a tile starts and counts how long it runs.'),
-                    (S 'bool' 'GameUpdates' 'Steam updates waiting' 'Steam games with an update to download say so on the play time line, with its size and when Steam scheduled it.')
+                    (S 'bool' 'GameUpdates' 'Steam updates waiting' 'Steam games with an update to download say so on a line above the play time, always shown, and their tile gets a border. While it downloads the line follows it live.')
+                ) }
+            @{ Title = 'Steam updates'; Items = @(
+                    (S 'text' 'DownloadInfo' 'What the update line says' 'Any of: percent, size (downloaded / total), speed, eta (time left), schedule (when Steam will download it), separated by spaces.'),
+                    (S 'choice' 'DownloadStyle' 'Download on the tile' 'How the progress of a download shows on its tile.' @{ Choices = @(
+                                @('Bar', 'A bar along the bottom'), @('Greyscale', 'Background in greyscale, coloured again as it goes'), @('Both', 'Both')) }),
+                    (S 'color' 'DownloadColor1' 'Colour 1' 'Border of a tile with an update (a gradient from 1 to 2) and the bar.'),
+                    (S 'color' 'DownloadColor2' 'Colour 2' 'Other end of the border gradient.'),
+                    (Num 'UpdateGlowTime' 'Border turning' 0 10 1 's' 'Seconds the border turns when the launcher opens. 0 = it stays still.')
                 ) }
             @{ Title = 'Tiles'; Items = @(
                     (S 'color' 'TileColor' 'Default tile colour'),
@@ -511,7 +519,7 @@ $defaults = @{
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'; ShowUnplayed = '1'; UnplayedCount = '24'
-    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; GamepadSearch = 'Y'; DashInterval = '1000'; SensorPort = '8085'
+    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; DownloadInfo = 'percent speed eta size schedule'; DownloadStyle = 'Bar'; DownloadColor1 = '0,210,180,255'; DownloadColor2 = '120,90,255,255'; UpdateGlowTime = '3'; GamepadSearch = 'Y'; DashInterval = '1000'; SensorPort = '8085'
     FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
     TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'

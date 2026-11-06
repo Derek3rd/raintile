@@ -764,47 +764,125 @@ end
 
 -- Steam games with an update waiting: GameUpdates.ps1 lists them in
 -- Generated\GameUpdates.txt ("<appid>|<bytes to download>|<bytes downloaded>|
--- <scheduled, unix time or 0>")
-local gameUpdates = {} -- steam app id -> { size, done, when }
+-- <scheduled, unix time or 0>|<appmanifest>")
+local gameUpdates = {} -- steam app id -> { size, done, when, manifest }
 
 local function readGameUpdates()
 	gameUpdates = {}
 	for _, line in ipairs(readLines(resources .. 'Generated\\GameUpdates.txt')) do
-		local id, size, done, when = line:match('^(%d+)|(%d+)|(%d+)|(%d+)$')
-		if id then gameUpdates[id] = { size = tonumber(size), done = tonumber(done), when = tonumber(when) } end
+		local id, size, done, when, rest = line:match('^(%d+)|(%d+)|(%d+)|(%d+)(.*)$')
+		if id then
+			gameUpdates[id] = { size = tonumber(size), done = tonumber(done), when = tonumber(when),
+				manifest = rest:match('^|(.+)$') }
+		end
 	end
 end
 
--- Line of a Steam tile with an update waiting (GameUpdates), as Steam's
--- downloads page: "Update 5.4 GB - Sat 06:27" (GB of 1024 MB, like Steam),
--- "Updating 40%" while it downloads
-local function updateInfo(t)
+-- Downloads followed live (Helper.ps1, DownloadStep): while the launcher is
+-- open, Generated\DownloadOn.txt lists the games with an update and the
+-- helper writes their progress to Generated\Downloads.txt ("<appid>|<phase>|
+-- <done>|<total>|<bytes per second>|<seconds left>"), calling OnDownloads().
+-- M.dl.f counts the frames since the launcher opened: the progress fills up
+-- and the border of the tiles with an update turns, for a few seconds.
+M.dl = { live = {}, f = 0, anim = false }
+M.FILL_FRAMES = 30 -- about half a second
+
+function M.writeDownloadFlag()
+	local lines = {}
+	if V.GameUpdates then
+		for id, u in pairs(gameUpdates) do
+			if u.manifest then lines[#lines + 1] = id .. '|' .. u.manifest end
+		end
+	end
+	local flag = resources .. 'Generated\\DownloadOn.txt'
+	if #lines == 0 then os.remove(flag) return end
+	table.sort(lines)
+	writeLines(flag, lines)
+end
+
+function M.readDownloads()
+	M.dl.live = {}
+	for _, line in ipairs(readLines(resources .. 'Generated\\Downloads.txt')) do
+		local id, phase, done, total, rate, left = line:match('^(%d+)|(%a+)|(%d+)|(%d+)|(%d+)|(%-?%d+)$')
+		if id then
+			M.dl.live[id] = { phase = phase, done = tonumber(done), total = tonumber(total),
+				rate = tonumber(rate), left = tonumber(left) }
+		end
+	end
+end
+
+-- 5.4 GB (GB of 1024 MB, like Steam), 540 MB
+function M.bytes(n)
+	if n >= 1024 ^ 3 then return (string.format('%.1f GB', n / 1024 ^ 3):gsub('%.0 GB$', ' GB')) end
+	return math.max(1, math.floor(n / 1024 ^ 2 + 0.5)) .. ' MB'
+end
+
+-- State of the update of tile t: nil without one, otherwise { phase
+-- (download, paused, install, waiting), part (0-1, nil if not known), and
+-- the data for the line }
+function M.updateState(t)
 	local u = V.GameUpdates and t.steamId and gameUpdates[t.steamId]
 	if not u then return nil end
-	if u.done > 0 and u.done < u.size then
-		return 'Updating ' .. math.floor(u.done * 100 / u.size) .. '%'
+	local l = M.dl.live[t.steamId]
+	if l and l.total > 0 then
+		-- finished while the launcher was open
+		if l.phase == 'idle' and l.done >= l.total then return nil end
+		return { phase = l.phase == 'idle' and 'waiting' or l.phase, part = l.done / l.total, done = l.done,
+			total = l.total, rate = l.rate, left = l.left, when = u.when }
 	end
-	local text = 'Update'
-	if u.size >= 1024 ^ 3 then
-		text = text .. string.format(' %.1f GB', u.size / 1024 ^ 3):gsub('%.0 GB$', ' GB')
-	elseif u.size > 0 then
-		text = text .. ' ' .. math.max(1, math.floor(u.size / 1024 ^ 2 + 0.5)) .. ' MB'
-	end
+	local part = u.size > 0 and u.done > 0 and math.min(1, u.done / u.size) or nil
+	return { phase = part and part < 1 and 'download' or 'waiting', part = part, done = u.done, total = u.size,
+		rate = 0, left = -1, when = u.when }
+end
+
+-- When Steam will download it: "Sat 06:27", "today 06:27"
+function M.scheduled(when)
 	local now = os.time()
-	if u.when > now then
-		-- days between the two midnights (rounded: a day can last 23 or 25 h)
-		local today, that = os.date('*t', now), os.date('*t', u.when)
-		today.hour, today.min, today.sec = 0, 0, 0
-		that.hour, that.min, that.sec = 0, 0, 0
-		local days = math.floor((os.time(that) - os.time(today)) / 86400 + 0.5)
-		local day
-		if days == 0 then day = 'today'
-		elseif days == 1 then day = 'tomorrow'
-		elseif days < 7 then day = os.date('%a', u.when)
-		else day = os.date('%d %b', u.when) end
-		text = text .. ' - ' .. day .. ' ' .. os.date('%H:%M', u.when)
+	if when <= now then return nil end
+	-- days between the two midnights (rounded: a day can last 23 or 25 h)
+	local today, that = os.date('*t', now), os.date('*t', when)
+	today.hour, today.min, today.sec = 0, 0, 0
+	that.hour, that.min, that.sec = 0, 0, 0
+	local days = math.floor((os.time(that) - os.time(today)) / 86400 + 0.5)
+	local day
+	if days == 0 then day = 'today'
+	elseif days == 1 then day = 'tomorrow'
+	elseif days < 7 then day = os.date('%a', when)
+	else day = os.date('%d %b', when) end
+	return day .. ' ' .. os.date('%H:%M', when)
+end
+
+function M.timeLeft(s)
+	if s < 60 then return s .. ' s left' end
+	if s < 3600 then return math.ceil(s / 60) .. ' min left' end
+	local h, m = math.floor(s / 3600), math.floor((s % 3600) / 60)
+	return h .. ' h' .. (m > 0 and (' ' .. m .. ' min') or '') .. ' left'
+end
+
+-- First line of a Steam tile with an update (above the play time), with the
+-- parts of DownloadInfo: "Downloading 40% - 540 MB / 1.3 GB - 25.3 MB/s -
+-- 2 min left", "Update 5.4 GB - Sat 06:27" while it waits
+function M.updateInfo(t)
+	local st = M.updateState(t)
+	if not st then return nil end
+	local show = V.DownloadInfo
+	local parts = {}
+	local function add(s) if s then parts[#parts + 1] = s end end
+	if st.phase == 'install' then return 'Installing update' end
+	if st.phase == 'waiting' then
+		add('Update' .. (show.size and st.total > 0 and (' ' .. M.bytes(st.total)) or ''))
+		if show.schedule then add(M.scheduled(st.when)) end
+		return table.concat(parts, ' - ')
 	end
-	return text
+	local head = st.phase == 'paused' and 'Paused' or 'Downloading'
+	if show.percent and st.part then head = head .. ' ' .. math.floor(st.part * 100) .. '%' end
+	add(head)
+	if show.size and st.total > 0 then add(M.bytes(st.done) .. ' / ' .. M.bytes(st.total)) end
+	if st.phase == 'download' then
+		if show.speed and st.rate > 0 then add(string.format('%.1f MB/s', st.rate / 1024 ^ 2)) end
+		if show.eta and st.left >= 0 and st.rate > 0 then add(M.timeLeft(st.left)) end
+	end
+	return table.concat(parts, ' - ')
 end
 
 -- Play time of the other tiles (not Steam), measured by the helper while the
@@ -918,13 +996,11 @@ local function ago(time)
 	return os.date('%d %b %Y', time)
 end
 
--- Line shown on the tile (TileInfo): play time and last launch, or a Steam
--- update waiting. The second value is true for the line shown whatever
--- TileInfo says: "Not installed".
+-- Line shown on the tile (TileInfo): play time and last launch (a Steam
+-- update goes on a line of its own above it, M.updateInfo). The second value
+-- is true for the line shown whatever TileInfo says: "Not installed".
 local function tileInfo(t)
 	if t.missing then return 'Not installed', true end
-	local update = updateInfo(t)
-	if update then return update end
 	-- Steam's own play time, otherwise the one measured by the helper
 	local p = t.steamId and playtime[t.steamId] or timePlayed[tileId(t)]
 	local u = usage[tileId(t)]
@@ -1280,6 +1356,20 @@ local function writeGrid(path, sig, files)
 		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ')"]')
 		w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(' .. slot .. ')"]')
 		w('')
+		-- Steam update: the coloured part of a greyscale background, the
+		-- border and the progress bar (M.placeUpdate)
+		w('[TileReveal' .. slot .. ']')
+		w('Meter=Image')
+		w('MeterStyle=StyleTileReveal')
+		w('')
+		w('[TileGlow' .. slot .. ']')
+		w('Meter=Shape')
+		w('MeterStyle=StyleTileGlow')
+		w('')
+		w('[TileBar' .. slot .. ']')
+		w('Meter=Shape')
+		w('MeterStyle=StyleTileGlow')
+		w('')
 		w('[TileIcon' .. slot .. ']')
 		w('Meter=Image')
 		w('MeterStyle=StyleTileIcon')
@@ -1287,6 +1377,10 @@ local function writeGrid(path, sig, files)
 		w('[TileLabel' .. slot .. ']')
 		w('Meter=String')
 		w('MeterStyle=StyleTileLabel')
+		w('')
+		w('[TileUpd' .. slot .. ']')
+		w('Meter=String')
+		w('MeterStyle=StyleTileInfo')
 		w('')
 		w('[TileInfo' .. slot .. ']')
 		w('Meter=String')
@@ -2574,6 +2668,93 @@ end
 local IDENTITY_ROWS = { '1;0;0;0;0', '0;1;0;0;0', '0;0;1;0;0' }
 local GREY_ROWS = { '0.3;0.3;0.3;0;0', '0.59;0.59;0.59;0;0', '0.11;0.11;0.11;0;0' }
 
+-- Size of a line whose text changes often (the download line): only its last
+-- text is kept, not one size per text like infoSize
+M.lineSizes = {}
+function M.lineSize(meter, text)
+	local s = M.lineSizes[meter]
+	if not s or s.text ~= text then
+		show(meter, true)
+		SKIN:Bang('!UpdateMeter', meter)
+		local m = SKIN:GetMeter(meter)
+		s = { text = text, w = m and m:GetW() or 0, h = m and m:GetH() or 0 }
+		M.lineSizes[meter] = s
+	end
+	return s.w, s.h
+end
+
+-- A Steam tile with an update (st, M.updateState), in the slot at x,y (the
+-- size of the tile in V.TileW/H), f its appear fade, op its opacity:
+--   - a border in DownloadColor1 and 2 that turns for UpdateGlowTime seconds
+--     when the launcher opens (the gradient's angle), then stays still;
+--   - while downloading (DownloadStyle): a bar along the bottom in
+--     DownloadColor1 and/or the background in greyscale, coloured again from
+--     the left as far as it got; both fill up when the launcher opens.
+-- st nil: nothing (the slot shows another tile, or none).
+M.GLOW_TURN = 90 -- frames of 16 ms for a full turn
+
+-- The background of a downloading tile shown in greyscale (DownloadStyle):
+-- the tile's window on its image, or nil
+function M.greyWindow(t, st, x, y)
+	if not (st and st.part and V.DownloadGrey and t.background) then return nil end
+	if st.phase ~= 'download' and st.phase ~= 'paused' and st.phase ~= 'install' then return nil end
+	return bgWindow(t, x, y)
+end
+function M.placeUpdate(slot, t, st, x, y, f, op)
+	local glow, bar, reveal = 'TileGlow' .. slot, 'TileBar' .. slot, 'TileReveal' .. slot
+	if not st then
+		show(glow, false) show(bar, false) show(reveal, false)
+		return
+	end
+	local w, h = V.TileW, V.TileH
+	local sw = 3
+	local turn = math.min(M.dl.f, M.dl.glowFrames or 0)
+	local angle = math.floor(360 * turn / M.GLOW_TURN) % 360
+	set(glow, 'X', tostring(x))
+	set(glow, 'Y', tostring(y))
+	set(glow, 'Glow', angle .. ' | ' .. fade(V.DownloadColor1, f) .. ' ; 0.0 | ' .. fade(V.DownloadColor2, f) .. ' ; 1.0')
+	set(glow, 'Shape', string.format('Rectangle %g,%g,%d,%d,%d | Fill Color 0,0,0,0 | StrokeWidth %d | Stroke LinearGradient Glow',
+		sw / 2, sw / 2, w - sw, h - sw, math.max(0, V.TileRadius - sw / 2), sw))
+	set(glow, 'Shape2', '')
+	show(glow, true)
+	-- how far it got, filling up when the launcher opens
+	local active = st.part and (st.phase == 'download' or st.phase == 'paused' or st.phase == 'install')
+	local part = active and math.min(1, st.part) * easeOut(math.min(1, M.dl.f / M.FILL_FRAMES)) or 0
+	if active and V.DownloadBar then
+		local bh = math.max(3, math.floor(h / 40 + 0.5))
+		set(bar, 'X', tostring(x))
+		set(bar, 'Y', tostring(y + h - bh))
+		set(bar, 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color %s | StrokeWidth 0', w, bh, fade('0,0,0,140', f)))
+		set(bar, 'Shape2', string.format('Rectangle 0,0,%d,%d | Fill Color %s | StrokeWidth 0',
+			math.max(1, math.floor(w * part + 0.5)), bh, fade(V.DownloadColor1, f)))
+		show(bar, true)
+	else
+		show(bar, false)
+	end
+	-- greyscale background, coloured up to 'part' from the left: the tile in
+	-- grey, its coloured copy cut to that width over it (the same part of
+	-- the image: the left of the tile's window on it)
+	local win = M.greyWindow(t, st, x, y)
+	if win then
+		local cx, cy, cw, ch = win:match('^(%-?%d+),(%-?%d+),(%d+),(%d+)$')
+		local rw = math.floor(w * part + 0.5)
+		if cx and rw > 0 then
+			set(reveal, 'ImageName', t.background)
+			set(reveal, 'X', tostring(x))
+			set(reveal, 'Y', tostring(y))
+			set(reveal, 'W', tostring(rw))
+			set(reveal, 'H', tostring(h))
+			set(reveal, 'ImageCrop', string.format('%s,%s,%d,%s', cx, cy, math.max(1, math.floor(tonumber(cw) * rw / w + 0.5)), ch))
+			set(reveal, 'ImageAlpha', tostring(math.floor(255 * f * (op or 1) + 0.5)))
+			show(reveal, true)
+		else
+			show(reveal, false)
+		end
+	else
+		show(reveal, false)
+	end
+end
+
 -- Position, opacity and visibility of the slots (also on every animation step).
 -- Rounded corners (TileRadius > 0): the grid container (GridClip) takes the
 -- shape of the visible tiles, rounded rectangles, within the grid area: what
@@ -2672,7 +2853,10 @@ local function placeSlots()
 			local sr, sg, sb, sa = solid:match('^(%d+),(%d+),(%d+),(%d+)$')
 			if sa and tonumber(sa) < 1 then solid = sr .. ',' .. sg .. ',' .. sb .. ',1' end
 			set(tile, 'SolidColor', solid)
-			local tileRows = t.missing and GREY_ROWS or IDENTITY_ROWS
+			-- Steam update: the border, the progress, the first line (always
+			-- shown), the background in greyscale while it downloads
+			local st = not t.missing and not t.widget and M.updateState(t)
+			local tileRows = (t.missing or M.greyWindow(t, st, x, y)) and GREY_ROWS or IDENTITY_ROWS
 			set(tile, 'ColorMatrix1', tileRows[1])
 			set(tile, 'ColorMatrix2', tileRows[2])
 			set(tile, 'ColorMatrix3', tileRows[3])
@@ -2701,6 +2885,8 @@ local function placeSlots()
 				set(label, 'FontColor', fade(V.TextColor, f))
 				set(label, 'FontEffectColor', fade('0,0,0,200', f))
 			end
+			local updText = st and M.updateInfo(t)
+			M.placeUpdate(slot, t, st, x, y, f, op)
 			-- play time / last launch: always, only on the highlighted tile
 			-- (fading with the highlight) or never; "Not installed" always
 			local infoAlpha = f
@@ -2714,20 +2900,38 @@ local function placeSlots()
 					infoText = nil
 				end
 			end
-			if infoText and infoAlpha > 0.01 then
-				set(infoMeter, 'Text', infoText)
-				-- InfoPos: in the room the line leaves inside the margins
-				local ix, iy = x + V.LabelPad, y + V.LabelPad
-				if (t.infoX > 0 or t.infoY > 0) and not t.widget then
-					local iw, ih = infoSize(infoMeter, infoText)
-					ix = ix + math.floor(t.infoX * math.max(0, V.TileW - 2 * V.LabelPad - iw) + 0.5)
-					iy = iy + math.floor(t.infoY * math.max(0, V.TileH - 2 * V.LabelPad - ih) + 0.5)
+			local hasInfo = infoText ~= nil and infoAlpha > 0.01
+			if hasInfo or updText then
+				-- the lines as a block: the update above, the play time below;
+				-- InfoPos places the block in the room it leaves inside the
+				-- margins, and each line inside it (on the right with 100,y)
+				local updMeter = 'TileUpd' .. slot
+				if hasInfo then set(infoMeter, 'Text', infoText) end
+				if updText then set(updMeter, 'Text', updText) end
+				local uw, uh, iw, ih = 0, 0, 0, 0
+				local placed = (t.infoX > 0 or t.infoY > 0) and not t.widget
+				if updText then uw, uh = M.lineSize(updMeter, updText) end
+				if hasInfo and (placed or updText) then iw, ih = infoSize(infoMeter, infoText) end
+				local bw, bh = math.max(uw, iw), uh + ih
+				local bx, by = x + V.LabelPad, y + V.LabelPad
+				if placed then
+					bx = bx + math.floor(t.infoX * math.max(0, V.TileW - 2 * V.LabelPad - bw) + 0.5)
+					by = by + math.floor(t.infoY * math.max(0, V.TileH - 2 * V.LabelPad - bh) + 0.5)
 				end
-				set(infoMeter, 'X', tostring(ix))
-				set(infoMeter, 'Y', tostring(iy))
-				set(infoMeter, 'FontColor', fade(V.TextColor, infoAlpha))
-				set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
+				if updText then
+					set(updMeter, 'X', tostring(bx + math.floor(t.infoX * (bw - uw) + 0.5)))
+					set(updMeter, 'Y', tostring(by))
+					set(updMeter, 'FontColor', fade(V.TextColor, f))
+					set(updMeter, 'SolidColor', fade('0,0,0,150', f))
+				end
+				if hasInfo then
+					set(infoMeter, 'X', tostring(bx + math.floor(t.infoX * (bw - iw) + 0.5)))
+					set(infoMeter, 'Y', tostring(by + uh))
+					set(infoMeter, 'FontColor', fade(V.TextColor, infoAlpha))
+					set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
+				end
 			end
+			show('TileUpd' .. slot, updText ~= nil and updText ~= false)
 			show(tile, true)
 			show(icon, t.logo ~= nil and not t.widget)
 			show(label, hasLabel and not t.widget)
@@ -2763,6 +2967,8 @@ local function placeSlots()
 			show(icon, false)
 			show(label, false)
 			show(infoMeter, false)
+			show('TileUpd' .. slot, false)
+			M.placeUpdate(slot, nil)
 		end
 	end
 	roundClip(rects)
@@ -3024,6 +3230,14 @@ local function advance()
 	pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth)
 	busy = busy or moving or fadeMoving
 
+	-- Steam updates, when the launcher opens: progress filling up, borders turning
+	if M.dl.anim then
+		M.dl.f = M.dl.f + M.animScale
+		M.animFast = true
+		if M.dl.f >= math.max(M.FILL_FRAMES, M.dl.glowFrames or 0) then M.dl.anim = false end
+		busy = true
+	end
+
 	if appear then
 		appear = appear + M.animScale
 		M.animFast = true
@@ -3253,6 +3467,8 @@ function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
 	-- a Dashboard left open by the previous load: the helper stops until shown
 	os.remove(resources .. 'Generated\\DashOn.txt')
+	-- and the Steam downloads, followed only while it is open
+	os.remove(resources .. 'Generated\\DownloadOn.txt')
 	local userData = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Raintile\\'
 	data = fileExists(userData .. 'Settings.inc') and userData or resources
 	V.NeedsSetup = data ~= userData or settingsOutdated(userData .. 'Settings.inc')
@@ -3313,6 +3529,16 @@ function Initialize()
 	V.ShowPower = num('ShowPower', 1) ~= 0
 	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
 	V.GameUpdates = num('GameUpdates', 1) ~= 0
+	-- Steam downloads: what the update line says, the colours of the border
+	-- and the bar, how the progress shows, how long the border turns
+	V.DownloadInfo = {}
+	for word in SKIN:GetVariable('DownloadInfo', 'percent speed eta size schedule'):lower():gmatch('%a+') do V.DownloadInfo[word] = true end
+	V.DownloadColor1 = parseColor(SKIN:GetVariable('DownloadColor1', '')) or '0,210,180,255'
+	V.DownloadColor2 = parseColor(SKIN:GetVariable('DownloadColor2', '')) or '120,90,255,255'
+	local dstyle = SKIN:GetVariable('DownloadStyle', 'Bar'):lower()
+	V.DownloadBar = dstyle ~= 'greyscale'
+	V.DownloadGrey = dstyle == 'greyscale' or dstyle == 'both'
+	M.dl.glowFrames = math.max(0, num('UpdateGlowTime', 3)) * 1000 / 16
 	V.DashInterval = math.max(250, math.floor(num('DashInterval', 1000)))
 	-- port of LibreHardwareMonitor's web server (its Options > Remote Web Server)
 	V.SensorPort = math.floor(num('SensorPort', 8085))
@@ -3747,6 +3973,11 @@ function Show()
 	end
 	updateEmptyHint()
 	if V.AnimOpen then appear = 0 end
+	-- Steam updates: the progress fills up and the borders turn (M.placeUpdate),
+	-- and the helper follows the downloads while the launcher is open
+	M.dl.f = 0
+	M.dl.anim = V.GameUpdates and next(gameUpdates) ~= nil
+	M.writeDownloadFlag()
 	frame() -- first frame drawn before showing the window
 	if M.dockAnimated() then
 		-- from where it is (it may be still going out)
@@ -3757,7 +3988,7 @@ function Show()
 	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
 	SKIN:Bang('!Show')
 	hotKey(true)
-	if appear or M.dock.dir ~= 0 then startTicker() end
+	if appear or M.dock.dir ~= 0 or M.dl.anim then startTicker() end
 	ReadPlaytime(60)
 	ClockTick(0)
 	updateDashState()
@@ -3784,6 +4015,9 @@ function Hide()
 	closePower()
 	M.closeMore()
 	updateDashState()
+	-- the downloads are followed only while it is open
+	os.remove(resources .. 'Generated\\DownloadOn.txt')
+	M.dl.live = {}
 	if M.dockAnimated() then
 		-- goes out first; M.finishHide() hides the window at the end
 		M.dock.dir = -1
@@ -4233,13 +4467,14 @@ end
 -- waiting (GameUpdates.ps1) are read at the same moments.
 local playtimeRead = nil -- os.time() of the last reading
 function ReadPlaytime(minAge)
-	if not ready or V.TileInfo == 'never' then return end
+	-- (the Steam updates are shown whatever TileInfo says)
+	if not ready or (V.TileInfo == 'never' and not V.GameUpdates) then return end
 	if minAge and playtimeRead and os.time() - playtimeRead < minAge then return end
 	playtimeRead = os.time()
 	for _, c in ipairs(cats) do
 		for _, t in ipairs(c.tiles) do
 			if t.steamId then
-				SKIN:Bang('!CommandMeasure', 'MeasurePlaytime', 'Run')
+				if V.TileInfo ~= 'never' then SKIN:Bang('!CommandMeasure', 'MeasurePlaytime', 'Run') end
 				if V.GameUpdates then SKIN:Bang('!CommandMeasure', 'MeasureGameUpdates', 'Run') end
 				return
 			end
@@ -4255,6 +4490,15 @@ end
 
 function OnGameUpdates()
 	readGameUpdates()
+	if visible then M.writeDownloadFlag() end
+	base = -1
+	render(false)
+end
+
+-- New progress of the Steam downloads (Helper.ps1, while the launcher is open)
+function OnDownloads()
+	if not ready or not visible then return end
+	M.readDownloads()
 	base = -1
 	render(false)
 end

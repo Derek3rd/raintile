@@ -321,10 +321,25 @@ InfoFontSize=10
 ; background helper looks for the game started by the tile and counts how
 ; long it runs (TimePlayed.txt in the data folder)
 TrackPlaytime=1
-; 1 = Steam games with an update waiting say so on the TileInfo line, in place
-; of the play time: "Update 5.4 GB - Sat 06:27" (size and time Steam
-; scheduled it), read from Steam's appmanifest files
+; 1 = Steam games with an update waiting say so on a line above the play
+; time, always shown: "Update 5.4 GB - Sat 06:27" (size and time Steam
+; scheduled it), "Downloading 40% - 25.3 MB/s - 2 min left" while it
+; downloads (followed live while the launcher is open). Their tile gets a
+; border in DownloadColor1 and DownloadColor2.
 GameUpdates=1
+; What the update line says, in any order: percent, size (downloaded / total),
+; speed, eta (time left), schedule (when Steam will download it)
+DownloadInfo=percent speed eta size schedule
+; How a download shows on its tile: Bar (a bar along the bottom), Greyscale
+; (the background in greyscale, coloured again from the left as it goes) or
+; Both
+DownloadStyle=Bar
+; Colours of the border of a tile with an update (a gradient from 1 to 2) and
+; of the bar (1)
+DownloadColor1=0,210,180,255
+DownloadColor2=120,90,255,255
+; Seconds the border turns when the launcher opens (0 = it stays still)
+UpdateGlowTime=3
 FontFace=Segoe UI
 MenuFontSize=12
 LabelFontSize=14

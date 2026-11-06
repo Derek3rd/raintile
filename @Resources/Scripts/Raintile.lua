@@ -2879,7 +2879,9 @@ local function placeSlots()
 				set(icon, 'W', tostring(size))
 				set(icon, 'H', tostring(size))
 				set(icon, 'ImageAlpha', tostring(math.floor(255 * f * dim + 0.5)))
-				local rows = missing and GREY_ROWS or (V.LogoGreyscale and saturationRows(t.zoom or 0)) or IDENTITY_ROWS
+				-- a game not installed or downloading: always in greyscale
+				local busy = st and (st.phase == 'download' or st.phase == 'paused' or st.phase == 'install')
+				local rows = (t.missing or busy) and GREY_ROWS or (V.LogoGreyscale and saturationRows(t.zoom or 0)) or IDENTITY_ROWS
 				set(icon, 'ColorMatrix1', rows[1])
 				set(icon, 'ColorMatrix2', rows[2])
 				set(icon, 'ColorMatrix3', rows[3])

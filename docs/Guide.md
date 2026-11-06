@@ -137,6 +137,7 @@ Right click on a tile adds, after Raintile's own entries, the ones that apply to
 | --- | --- |
 | **Edit \<tile\>...** | opens the tile in the Options window |
 | **Add to / Remove from Favorites** | see [Favorites and Recent](#favorites-and-recent) |
+| **Pin to the start / Unpin** | keeps the tile at the start of its category, before the others, also when the category is sorted (`Pinned=1`) |
 | **Open file location** | opens the folder of the program, with the file selected (only for commands that are a file on this PC) |
 | **Run as administrator** | starts the program as administrator; Windows asks for confirmation (only for `.exe`, `.lnk`, `.bat`, `.cmd`) |
 | **Remove from \<category\>...** | removes the tile from its category file, after asking; its images stay in `Images\` |
@@ -303,6 +304,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
 | `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
 | `HotKey` | key combination that starts the tile, also while the launcher is hidden: HotKey plugin names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
+| `Pinned` | `1` = at the start of the category, in the order of the file, whatever the category's `Sort=`: see [Sorting the tiles](#options-window) |
 | `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
 
 ### Tiles of more cells
@@ -433,7 +435,8 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 - **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
   - **Sorting the tiles**: under **All tiles**, **Order** picks an order: *Name A–Z*, *Name Z–A*, *Recently added* (the date the tile was added, `Added=`; tiles without one go last), *Recently played* (the last launch: counted by Raintile, Steam's, or measured), *Most launched* (launches counted by Raintile) or *Most play time* (Steam's play time plus the one measured for the other games). Ties keep the order they had.
     - **Sort now** puts the tiles in that order once; you can still drag them afterwards.
-    - **Keep sorted** keeps them in it (`Sort=` in `[Category]`): new and renamed tiles go to their place, and the launcher works the order out again each time it loads and opens, so the orders by play follow what you play. The remembered scroll position follows the tiles: the tile you launched (or had selected) stays in view where it moved. Dragging and the move buttons are off while it is on.
+    - **Keep sorted** keeps them in it (`Sort=` in `[Category]`): new and renamed tiles go to their place, and the launcher works the order out again each time it loads and opens, so the orders by play follow what you play. The remembered scroll position follows the tiles: the tile you launched (or had selected) stays in view where it moved. Dragging and the move buttons are off while it is on, except for pinned tiles.
+    - **Pinned tiles** (the tile's **Pinned** box, or right click on the tile in the launcher > **Pin to the start**) come first, in the order you drag them to, with a pin on their small tile; sorting moves only the others.
   - **Moving a tile to another category**: drag it from the strip onto that category in the menu on the left (the entry is outlined when it can take it). The tile and its images move, and both category files are saved at once. Imported games move only once they are normal tiles.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.

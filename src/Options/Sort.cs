@@ -3,6 +3,8 @@
 // time): once with "Sort now", or always with "Keep sorted" (Sort= in
 // [Category]: the launcher sorts them each time it loads or opens, and here
 // they are sorted again after every change; dragging is off).
+// Pinned tiles (Pinned=1) always come first, in the order you give them
+// (dragging them still works): sorting only moves the others.
 
 using System;
 using System.Collections.Generic;
@@ -32,6 +34,36 @@ namespace RaintileOptions
         CheckBox sortKeep;
         Button sortNow;
         bool sortLoading;
+        CheckBox tilePinned;
+
+        static bool IsPinned(IniSection s) { return s != null && Core.GetKey(s, "Pinned").Trim() == "1"; }
+
+        // "Pinned" in the tile editor
+        FrameworkElement NewPinRow()
+        {
+            tilePinned = new CheckBox { Content = "At the start of the category", VerticalAlignment = VerticalAlignment.Center };
+            tilePinned.Checked += (s, e) => SetPinned(true);
+            tilePinned.Unchecked += (s, e) => SetPinned(false);
+            return NewFormRow("Pinned", tilePinned,
+                "Pinned tiles come first, in the order you drag them to; sorting (All tiles > Order) only moves the others. Also from the tile's menu in the launcher.");
+        }
+
+        void ShowPinned(IniSection s)
+        {
+            sortLoading = true;
+            tilePinned.IsChecked = IsPinned(s);
+            sortLoading = false;
+        }
+
+        void SetPinned(bool on)
+        {
+            if (sortLoading || loading || currentFile == null) return;
+            var t = GetCurrentTile();
+            if (t == null) return;
+            Core.SetKey(t, "Pinned", on ? "1" : "");
+            SetChanged(currentFile);
+            RefreshTiles(Core.GetTiles(GetModel(currentFile)).IndexOf(t));
+        }
 
         FrameworkElement NewSortRow()
         {
@@ -120,6 +152,9 @@ namespace RaintileOptions
                 if (key == "playtime") return (s != null ? s[0] : 0L) + (m != null ? m[0] : 0L);
                 return Math.Max(u != null ? u[1] : 0L, Math.Max(s != null ? s[1] : 0L, m != null ? m[1] : 0L));
             };
+            // pinned ones first, as they are; then the others sorted
+            var pinned = tiles.Where(IsPinned).ToList();
+            tiles = tiles.Where(t => !IsPinned(t)).ToList();
             var values = tiles.ToDictionary(t => t, value);
             var order = tiles.Select((t, i) => new { t, i });
             // names A-Z (ordinal, as the launcher compares them); the rest the largest first
@@ -129,18 +164,27 @@ namespace RaintileOptions
                     ? order.OrderByDescending(o => (string)values[o.t], StringComparer.Ordinal)
                     : order.OrderByDescending(o => (long)values[o.t]))
                 .ThenBy(o => o.i).Select(o => o.t).ToList();
+            sorted.InsertRange(0, pinned);
             for (int n = 0; n < slots.Count; n++) model.Sections[slots[n]] = sorted[n];
         }
 
-        // A kept order applied again after a change (new, renamed, imported tiles);
-        // true if the order changed
+        // The order applied again after a change (new, renamed, pinned, imported
+        // tiles): the kept one, or else only the pinned tiles first; true if it changed
         bool ApplyKeptSort(string file)
         {
+            var model = GetModel(file);
+            var before = Core.GetTiles(model);
             string key = GetKeptSort(file);
-            if (key == null) return false;
-            var before = Core.GetTiles(GetModel(file));
-            SortCategory(file, key);
-            return !before.SequenceEqual(Core.GetTiles(GetModel(file)));
+            if (key != null) SortCategory(file, key);
+            else if (before.Any(IsPinned))
+            {
+                var slots = new List<int>();
+                for (int i = 0; i < model.Sections.Count; i++)
+                    if (!string.Equals(model.Sections[i].Name, "Category", StringComparison.OrdinalIgnoreCase)) slots.Add(i);
+                var order = before.Where(IsPinned).Concat(before.Where(t => !IsPinned(t))).ToList();
+                for (int n = 0; n < slots.Count; n++) model.Sections[slots[n]] = order[n];
+            }
+            return !before.SequenceEqual(Core.GetTiles(model));
         }
 
         class PlayData

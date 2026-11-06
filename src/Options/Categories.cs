@@ -33,6 +33,7 @@ namespace RaintileOptions
         public Border Thumb;
         public TextBlock Title;
         public FrameworkElement Dot;   // a tile with settings of its own
+        public FrameworkElement Pin;   // a pinned tile (Pinned=1)
     }
 
     public partial class OptionsApp
@@ -438,6 +439,15 @@ namespace RaintileOptions
                 Visibility = Visibility.Collapsed, ToolTip = "Its own colour, background, framing, logo or play time placement, not the one of All tiles",
             };
             g.Children.Add(dot);
+            var pin = new Border
+            {
+                Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = ResBrush("CardBg"),
+                Margin = T(4, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                Visibility = Visibility.Collapsed, ToolTip = "Pinned: at the start of the category",
+                Child = NewGlyph(0xE718, 11),
+            };
+            ((TextBlock)pin.Child).HorizontalAlignment = HorizontalAlignment.Center;
+            g.Children.Add(pin);
             AddTo(sp, g);
             var t = NewText(title, 12);
             t.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -445,7 +455,7 @@ namespace RaintileOptions
             t.ToolTip = title;
             AddTo(sp, t);
             item.Content = sp;
-            tag.Thumb = thumb; tag.Title = t; tag.Dot = dot;
+            tag.Thumb = thumb; tag.Title = t; tag.Dot = dot; tag.Pin = pin;
             item.Tag = tag;
             return item;
         }
@@ -472,6 +482,7 @@ namespace RaintileOptions
             tag.Title.ToolTip = s.Name;
             SetStripThumb(tag, GetBitmap(bg, 264), GetBitmap(logo, 160), GetTileBrush(b, s, bg, logo));
             tag.Dot.Visibility = !tag.Imported && HasOwnValues(s) ? Visibility.Visible : Visibility.Collapsed;
+            tag.Pin.Visibility = !tag.Imported && IsPinned(s) ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // Only the dots: placement changes leave the small tiles as they are
@@ -1287,6 +1298,7 @@ namespace RaintileOptions
             if (all) ShowAllTiles();
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" }) tileFields[k].Text = s != null ? Core.GetKey(s, k) : "";
             UpdateTagSuggestions();
+            ShowPinned(s);
             tileKeyButton.Content = Schema.FormatHotKey(s != null ? Core.GetKey(s, "HotKey") : "");
             bool dashboard = IsDashboard(currentFile);
             widgetRow.Visibility = dashboard ? Visibility.Visible : Visibility.Collapsed;
@@ -2240,6 +2252,7 @@ namespace RaintileOptions
             sizeRows.SelectionChanged += sizeChanged;
             tagSuggestions = new WrapPanel();
             AddTo(f, NewFormRow("Tags", tileFields["Tags"], "Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", tagSuggestions));
+            AddTo(f, NewPinRow());
             // hot key: click, then press the combination (with modifiers)
             tileKeyButton = NewButton("None", "KeyButton", "Click, then press the combination");
             var keyClear = NewClearButton("No hot key");
@@ -2351,8 +2364,9 @@ namespace RaintileOptions
             tilesList.SelectionChanged += (s, e) => ShowTile();
             // drag a tile to change its place (hand-written tiles; the imported
             // ones stay at the end)
-            // (not while the category keeps an order: Order > Keep sorted)
-            EnableDragReorder(tilesList, it => !((ListTag)it.Tag).Imported && !((ListTag)it.Tag).All && GetKeptSort(currentFile) == null, (from, to) =>
+            // (while the category keeps an order, Order > Keep sorted, only the pinned ones)
+            EnableDragReorder(tilesList, it => !((ListTag)it.Tag).Imported && !((ListTag)it.Tag).All
+                && (GetKeptSort(currentFile) == null || IsPinned(((ListTag)it.Tag).Section)), (from, to) =>
             {
                 // indices of the strip: All tiles comes first
                 from--; to = Math.Max(0, to - 1);
@@ -2457,9 +2471,9 @@ namespace RaintileOptions
                 {
                     var t = GetCurrentTile();
                     if (t == null) return;
-                    if (GetKeptSort(currentFile) != null)
+                    if (GetKeptSort(currentFile) != null && !IsPinned(t))
                     {
-                        ShowDialog("Raintile", "This category keeps its tiles sorted. To move them yourself, turn off Keep sorted under All tiles > Order.");
+                        ShowDialog("Raintile", "This category keeps its tiles sorted. To move a tile yourself, pin it (it goes to the start), or turn off Keep sorted under All tiles > Order.");
                         return;
                     }
                     var m = GetModel(currentFile);

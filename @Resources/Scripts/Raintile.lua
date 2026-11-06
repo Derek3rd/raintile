@@ -637,6 +637,9 @@ local function loadCategory(file)
 			t.file = file -- for "Edit this tile"
 			t.store, t.steamId = tileStore(command, trim(k.store or ''), trim(k.source or ''))
 			t.added = trim(k.added or '') -- YYYY-MM-DD, for Not played yet
+			-- pinned: at the start of the category, in the order of the file
+			t.pinned = trim(k.pinned or '') == '1' or nil
+			if t.pinned then c.anyPinned = true end
 			t.hotkey = trim(k.hotkey or '') -- e.g. CTRL ALT 1
 			if c.dashboard and trim(k.widget or '') ~= '' then
 				local param = trim(k.param or '')
@@ -875,7 +878,9 @@ function M.sortTiles(c)
 		t.sortValue = M.sortValue(t, key)
 	end
 	table.sort(c.tiles, function(a, b)
-		if a.sortValue ~= b.sortValue then
+		-- pinned tiles first, as you put them; sorting moves only the others
+		if (a.pinned or false) ~= (b.pinned or false) then return a.pinned or false end
+		if key and not a.pinned and a.sortValue ~= b.sortValue then
 			-- names A-Z; everything else the largest (newest, most) first
 			if key == 'name' then return a.sortValue < b.sortValue end
 			return a.sortValue > b.sortValue
@@ -895,7 +900,8 @@ end
 -- dynamicOnly: only the sorts that change while playing (when it opens)
 function M.sortCategories(dynamicOnly)
 	for _, c in ipairs(cats) do
-		if c.sort and not c.virtual and not c.dashboard and (not dynamicOnly or M.DYNAMIC_SORTS[c.sort]) then
+		local wanted = dynamicOnly and M.DYNAMIC_SORTS[c.sort] or not dynamicOnly and (c.sort or c.anyPinned)
+		if wanted and not c.virtual and not c.dashboard then
 			M.sortTiles(c)
 		end
 	end
@@ -4012,7 +4018,7 @@ end
 
 -- Context menu entries for tile t, in the order shown (Rainmeter stops at the
 -- first empty one, so only those that apply are listed)
-local TILE_MENU_SLOTS = 5
+local TILE_MENU_SLOTS = 6
 local function setPointed(t)
 	if pointed == t then return end
 	pointed = t
@@ -4022,6 +4028,10 @@ local function setPointed(t)
 		items[#items + 1] = { 'Edit ' .. t.name:gsub('&', '&&') .. '...', 'edit' }
 		if V.ShowFavorites and t.file and t.file ~= '' then
 			items[#items + 1] = { favorites.set[tileId(t)] and 'Remove from Favorites' or 'Add to Favorites', 'favorite' }
+		end
+		local home = t.file and t.file ~= '' and M.catOf(t)
+		if home and not home.dashboard then
+			items[#items + 1] = { t.pinned and 'Unpin' or 'Pin to the start', 'pin' }
 		end
 		local path, args = commandTarget(t.command)
 		if path and path:match('^%a:[\\/]') and fileExists(path) then items[#items + 1] = { 'Open file location', 'folder' } end
@@ -4050,6 +4060,63 @@ function MouseInSkin(on)
 	-- left the skin in the same moment as a tile: the menu opening on it
 	if not inSkin and not pointed and left and os.time() - left.at <= 1 then setPointed(left.t) end
 	left = nil
+end
+
+-- Pinned=1 written into (or taken out of) the tile's section of its category
+-- file, as it is (UTF-8, the other lines untouched)
+function M.writeTileKey(file, section, key, value)
+	local path = data .. 'Categories\\' .. file
+	local f = io.open(path, 'rb')
+	if not f then return false end
+	local text = f:read('*a')
+	f:close()
+	local nl = text:find('\r\n') and '\r\n' or '\n'
+	local lines, out, inside, last = {}, {}, false, nil
+	for line in (text .. (text:sub(-1) == '\n' and '' or '\n')):gmatch('(.-)\r?\n') do lines[#lines + 1] = line end
+	local want, lkey = section:lower(), key:lower()
+	for _, line in ipairs(lines) do
+		local head = line:match('^%s*%[(.-)%]%s*$')
+		if head then
+			if inside and value ~= '' then table.insert(out, last + 1, key .. '=' .. value) end
+			inside = head:lower() == want
+			if inside then last = #out + 1 end
+			out[#out + 1] = line
+		elseif inside and (line:match('^%s*([^=;]-)%s*=') or ''):lower() == lkey then
+			-- (the old value: left out)
+		else
+			out[#out + 1] = line
+			if inside and line:match('%S') then last = #out end
+		end
+	end
+	if inside and value ~= '' then table.insert(out, last + 1, key .. '=' .. value) end
+	f = io.open(path, 'wb')
+	if not f then return false end
+	f:write(table.concat(out, nl), nl)
+	f:close()
+	return true
+end
+
+-- Pin or unpin a tile: it goes to the start of its category (or back among
+-- the others) at once
+function M.catOf(t)
+	for _, x in ipairs(cats) do
+		if not x.virtual and x.file == t.file then return x end
+	end
+end
+
+function M.togglePin(t)
+	local c = M.catOf(t)
+	if not c or c.dashboard or not M.writeTileKey(t.file, t.name, 'Pinned', t.pinned and '' or '1') then return end
+	t.pinned = not t.pinned or nil
+	c.anyPinned = nil
+	for _, x in ipairs(c.tiles) do if x.pinned then c.anyPinned = true end end
+	M.sortTiles(c)
+	if not searchCat and cats[active] == c then
+		offset = normalizeOffset(c.offset or offset)
+		pos, base = offset, -1
+		hover.idx, hover.on, hover.a = 0, false, 0
+		render(true)
+	end
 end
 
 -- Favorites: add or remove; the category shows the change at once
@@ -4094,6 +4161,8 @@ function TileMenu(kind)
 		if writeTileFile('EditTile.txt', t) then SKIN:Bang(SKIN:GetVariable('OptionsTileAction')) end
 	elseif kind == 'favorite' then
 		toggleFavorite(t)
+	elseif kind == 'pin' then
+		M.togglePin(t)
 	elseif kind == 'folder' then
 		local path = commandTarget(t.command)
 		if path then SKIN:Bang('explorer.exe /select,"' .. path .. '"') end

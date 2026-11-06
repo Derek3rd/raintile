@@ -378,7 +378,7 @@ The search (`Scripts\Scan.ps1`, in the background) looks in:
 | Battle.net | uninstall entries of its games | Battle.net (`--exec="launch <code>"`), or the game's launcher | SteamGridDB |
 | EA app | uninstall entries of Electronic Arts games | the game exe | SteamGridDB |
 | Xbox / Microsoft Store | Store packages with a `MicrosoftGame.config` | `shell:AppsFolder` | SteamGridDB |
-| Your folders | every `.exe` in the folders of `ImportFolders` (separated by `|`) and in their subfolders, named after its file; installers, uninstallers, updaters, redistributables, crash reporters and helpers left out. As games or apps: `ImportFoldersKind` | the program | SteamGridDB (games of that name), the program's own icon |
+| Your folders | every `.exe` in the folders of `ImportFolders` (separated by `\|`, e.g. `D:\Games\|E:\Emulators`) and in their subfolders, named after its file; installers, uninstallers, updaters, redistributables, crash reporters and helpers left out. As games or apps: `ImportFoldersKind` | the program | SteamGridDB (games of that name), the program's own icon |
 | Apps | Start menu: program shortcuts and Store apps, without uninstallers, help files and the games already found | the shortcut / `shell:AppsFolder` | a logo from Dashboard Icons, or SteamGridDB for an app of that very name, else the program's own icon |
 
 - **The list** shows the cover (Steam) or the icon of each item, with its source, and marks the new ones. Filter by type (All, Games, Apps) or by name; *Show added* also lists what is already in the launcher (dimmed, with its category); *Covers* off gives a compact text list.
@@ -642,7 +642,7 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 
 ### Games and apps
 
-See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
+See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFolders`, `ImportFoldersKind`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
 ### Updates
 

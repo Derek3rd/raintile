@@ -475,13 +475,17 @@ With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest r
 
 ### Publishing a release
 
-1. Set the new version in `Version=` in the `[Metadata]` of `Raintile.ini` and merge it.
+The work goes to the branch **`nightly`** (pull requests included); **`main`** only gets what is released:
+
+1. Set the new version in `Version=` in the `[Metadata]` of `Raintile.ini` on `nightly`, then open a pull request **`nightly` → `main`** and merge it.
 2. On GitHub, **Releases > Draft a new release**: tag with the same number, like **`v1.0.3`**, on `main`; write the notes and publish.
 3. The **Release package** workflow (`.github/workflows/release.yml`) builds the `.rmskin` with `tools/build_rmskin.py` and attaches it to the release by itself, within a minute or two. If the tag and `Version=` differ, it stops and attaches nothing.
 
 For the update check the tag must hold the version (if it has no number, the number in the release title is used, e.g. "1.0.1 - ..."), and the `.rmskin` must be attached (otherwise the update buttons open the release page). The package can also be built by hand: `python tools/build_rmskin.py` writes it to `dist\`; *Actions > Release package > Run workflow* builds it as a downloadable artifact.
 
-**Nightly builds.** On every push to `main` the **Nightly** workflow (`.github/workflows/nightly.yml`) builds the Options program and the `.rmskin` and publishes them as the pre-release **`nightly`** (replacing the previous one). Its version is the last release plus the number of commits since it: after `v1.2.1`, `1.2.1.1`, `1.2.1.2`, ... until the next release; it is written into the package's `Raintile.ini` (`tools/build_rmskin.py --nightly-version`). So merging to `main` and publishing a release are separate steps: changes reach the skins on the nightly channel at once, the others with the next release.
+**After a release** the **Sync nightly** workflow (`.github/workflows/sync-nightly.yml`) merges `main` into `nightly` by itself, so `nightly` has the release tag (the nightly builds count from it) and any fix made on `main` for the release. If the merge has conflicts it stops without pushing: merge `main` into `nightly` by hand. (A tag is also called `nightly`, the pre-release below: in git commands write the branch as `refs/heads/nightly` when it matters.)
+
+**Nightly builds.** On every push to the branch `nightly` the **Nightly** workflow (`.github/workflows/nightly.yml`) builds the Options program and the `.rmskin` and publishes them as the pre-release **`nightly`** (replacing the previous one). Its version is the last release plus the number of commits since it: after `v1.2.1`, `1.2.1.1`, `1.2.1.2`, ... until the next release; it is written into the package's `Raintile.ini` (`tools/build_rmskin.py --nightly-version`). So the work merged into `nightly` reaches the skins on the nightly channel at once, the others with the next release.
 
 The package holds the skin only (with the HotKey plugin from `tools/plugins/`): `README.md`, `docs\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
 

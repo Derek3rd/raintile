@@ -336,7 +336,9 @@ Images\Games\
   logo\Diablo.png          logo of the [Diablo] tile, centred
 ```
 
-Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
+Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency.
+
+**Find online...** next to *Background* and *Logo* in the tile editor (Options > the category > the tile) searches the images of that game or app: Steam's own (Steam games), [SteamGridDB](https://www.steamgriddb.com/) (with the key: games of every store and many apps, several of each), [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (logos of apps and services) and, for a link, the icon of its website. Click one and *Use it*: it is downloaded to the tile's folder, like a picked file. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
 
 ### Framing a background
 
@@ -366,18 +368,18 @@ The search (`Scripts\Scan.ps1`, in the background) looks in:
 
 | Source | How | Launched with | Images |
 | --- | --- | --- | --- |
-| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` in every library | `steam://rungameid/<id>` | local library cache (old and 2024+ layout) |
+| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` in every library | `steam://rungameid/<id>` | local library cache (old and 2024+ layout), else Steam's servers, then SteamGridDB |
 | Epic Games | launcher manifests (main games only, no DLC or apps) | Epic launcher link | SteamGridDB |
 | GOG Galaxy | registry | Galaxy, or the game exe | SteamGridDB |
 | Ubisoft Connect | registry | `uplay://launch/<id>` | SteamGridDB |
 | Battle.net | uninstall entries of its games | Battle.net (`--exec="launch <code>"`), or the game's launcher | SteamGridDB |
 | EA app | uninstall entries of Electronic Arts games | the game exe | SteamGridDB |
 | Xbox / Microsoft Store | Store packages with a `MicrosoftGame.config` | `shell:AppsFolder` | SteamGridDB |
-| Apps | Start menu: program shortcuts and Store apps, without uninstallers, help files and the games already found | the shortcut / `shell:AppsFolder` | the program's own icon (as logo) |
+| Apps | Start menu: program shortcuts and Store apps, without uninstallers, help files and the games already found | the shortcut / `shell:AppsFolder` | a logo from Dashboard Icons, or SteamGridDB for an app of that very name, else the program's own icon |
 
 - **The list** shows the cover (Steam) or the icon of each item, with its source, and marks the new ones. Filter by type (All, Games, Apps) or by name; *Show added* also lists what is already in the launcher (dimmed, with its category); *Covers* off gives a compact text list.
 - **Where they go**: by type (games to `ImportCategory`, apps to `AppsCategory`; the category is created if missing) or all to one category.
-- **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. For games without local images, background and logo are downloaded from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Set the key in Options > Import: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
+- **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. Steam games without local images get theirs from Steam's servers (no key needed). Other games, and Steam games without images there, get background and logo from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Apps get a logo from [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (some 3500 apps and services) or, with the key, from SteamGridDB when it has an app of that very name; otherwise the program's icon. Set the key in Options > Import: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
 - Something already in the launcher, in any category (same name or same command), is not listed again.
 - **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear, and on **Import** in the menu of the Options window. A click on it opens the list.
 - **Games no longer installed** are reported by the same search (see below).

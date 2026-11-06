@@ -2288,14 +2288,19 @@ namespace RaintileOptions
             {
                 var thumb = NewThumb(FieldHeight);
                 var choose = NewButton("Choose...");
+                var online = NewButton("Find online...", "", "Images of this game or app from Steam, SteamGridDB, Dashboard Icons or its website");
                 var remove = NewClearButton("Remove the " + kind.ToLowerInvariant());
-                var row = NewFieldRow(thumb, choose, remove);
+                var buttons = NewPanel(Orientation.Horizontal);
+                online.Margin = T(8, 0, 0, 0);
+                AddTo(buttons, choose); AddTo(buttons, online);
+                var row = NewFieldRow(thumb, buttons, remove);
                 // the path of the image is the tooltip of the label (set with the tile)
                 var imageRow = NewFormRow(kind, row);
                 AddTo(f, imageRow);
                 var pathLabel = (TextBlock)imageRow.Children[0];
                 if (kind == "Background") { bgThumb = thumb; bgPath = pathLabel; } else { logoThumb = thumb; logoPath = pathLabel; }
                 string k = kind;
+                online.Click += (s, e) => FindTileArt(k);
                 choose.Click += (s, e) =>
                 {
                     var t = GetCurrentTile();

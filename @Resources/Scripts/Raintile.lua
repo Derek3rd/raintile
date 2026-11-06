@@ -1215,7 +1215,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 11
+local GRID_VERSION = 12
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1360,16 +1360,16 @@ local function writeGrid(path, sig, files)
 		w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(' .. slot .. ')"]')
 		w('')
 		-- Steam update: the coloured part of a greyscale background, the
-		-- border and the progress bar (M.placeUpdate)
+		-- progress bar and the border over it (M.placeUpdate)
 		w('[TileReveal' .. slot .. ']')
 		w('Meter=Image')
 		w('MeterStyle=StyleTileReveal')
 		w('')
-		w('[TileGlow' .. slot .. ']')
+		w('[TileBar' .. slot .. ']')
 		w('Meter=Shape')
 		w('MeterStyle=StyleTileGlow')
 		w('')
-		w('[TileBar' .. slot .. ']')
+		w('[TileGlow' .. slot .. ']')
 		w('Meter=Shape')
 		w('MeterStyle=StyleTileGlow')
 		w('')

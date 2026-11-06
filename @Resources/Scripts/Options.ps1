@@ -743,11 +743,11 @@ function Find-Image([string]$dir, [string]$name) {
     $p = $name.Trim().Trim('"')
     if (-not $p) { return $null }
     if (-not [IO.Path]::IsPathRooted($p)) { $p = Join-Path $dir $p }
-    if ($p -match '\.\w+$') {
-        if (Test-Path -LiteralPath $p -PathType Leaf) { return $p }
-        return $null
-    }
+    # a file named in full; otherwise the name plus an image extension (a dot in
+    # the name is not an extension: Battle.net -> Battle.net.png)
+    if ($IMAGE_EXTS -contains [IO.Path]::GetExtension($p).ToLowerInvariant() -and (Test-Path -LiteralPath $p -PathType Leaf)) { return $p }
     foreach ($e in $IMAGE_EXTS) { if (Test-Path -LiteralPath ($p + $e) -PathType Leaf) { return $p + $e } }
+    if (Test-Path -LiteralPath $p -PathType Leaf) { return $p }
     return $null
 }
 

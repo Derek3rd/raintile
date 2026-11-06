@@ -473,7 +473,7 @@ $schema = @(
                 ) }
             @{ Title = 'Updates'; Items = @(
                     (S 'bool' 'CheckUpdates' 'Check for updates' 'Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info.'),
-                    (S 'choice' 'UpdateChannel' 'Updates' 'Nightly: also the build made on every change (e.g. 1.2.2.5, before the release 1.2.2): the newest features, not tested as much. A copy of the skin is kept in Skins\@Backup before each update.' @{ Choices = @(
+                    (S 'choice' 'UpdateChannel' 'Updates' 'Nightly: also the build made on every change (e.g. 1.2.1.5, the 5th after the release 1.2.1): the newest features, not tested as much. A copy of the skin is kept in Skins\@Backup before each update.' @{ Choices = @(
                                 @('Release', 'Releases'), @('Nightly', 'Nightly builds')) })
                 ) }
             @{ Title = 'Diagnostics'; Items = @(

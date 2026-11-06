@@ -2,9 +2,8 @@
 # once a day, and by "Check now" in the Options window).
 #
 # UpdateChannel=Nightly (Settings.inc) also looks at the pre-release
-# "nightly", built on every change (1.2.2.5: the release after 1.2.1, 5th
-# build): the newer of the two is offered. A release counts as newer than the
-# nightly builds of the same number (1.2.2 > 1.2.2.5).
+# "nightly", built on every change (1.2.1.5: the 5th build after the release
+# 1.2.1, before the next one): the newer of the two is offered.
 #
 # The latest release of the repository (api.github.com, no account needed):
 # its version is read from the tag (v1.0.2) or, failing that, from the title
@@ -53,12 +52,10 @@ function ConvertTo-Version([string]$text) {
     return New-Object Version($parts[0], $parts[1], $parts[2], $parts[3])
 }
 
-# For comparing: a release (three numbers) is newer than the nightly builds
-# of its number (four numbers: 1.2.2.5 < 1.2.2)
+# For comparing: 1.2.1 < 1.2.1.5 (its 5th nightly build) < 1.2.2
 function Get-VersionKey([version]$v) {
     if (-not $v) { return [int64]-1 }
-    $rev = if ($v.Revision -gt 0) { $v.Revision } else { 999999 }
-    return ([int64]$v.Major * 1000 + $v.Minor) * 1000000000000 + [int64]$v.Build * 1000000 + $rev
+    return ([int64]$v.Major * 1000 + $v.Minor) * 1000000000000 + [int64]$v.Build * 1000000 + $v.Revision
 }
 
 function Get-Channel {

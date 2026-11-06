@@ -266,7 +266,7 @@ namespace RaintileOptions
                 new Group { Title = "Updates", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "CheckUpdates", Label = "Check for updates", Help = "Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info." },
-                    new Item { Kind = "choice", Key = "UpdateChannel", Label = "Updates", Help = "Nightly: also the build made on every change (e.g. 1.2.2.5, before the release 1.2.2): the newest features, not tested as much. A copy of the skin is kept in Skins\\@Backup before each update.", Choices = new List<string[]> { new[] { "Release", "Releases" }, new[] { "Nightly", "Nightly builds" } } },
+                    new Item { Kind = "choice", Key = "UpdateChannel", Label = "Updates", Help = "Nightly: also the build made on every change (e.g. 1.2.1.5, the 5th after the release 1.2.1): the newest features, not tested as much. A copy of the skin is kept in Skins\\@Backup before each update.", Choices = new List<string[]> { new[] { "Release", "Releases" }, new[] { "Nightly", "Nightly builds" } } },
                 } },
                 new Group { Title = "Diagnostics", Help = null, Items = new List<Item>
                 {

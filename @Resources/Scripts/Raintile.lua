@@ -780,9 +780,11 @@ local function readGameUpdates()
 end
 
 -- Downloads followed live (Helper.ps1, DownloadStep): while the launcher is
--- open, Generated\DownloadOn.txt lists the games with an update and the
--- helper writes their progress to Generated\Downloads.txt ("<appid>|<phase>|
--- <done>|<total>|<bytes per second>|<seconds left>"), calling OnDownloads().
+-- open, Generated\DownloadOn.txt lists the games with an update (maybe none:
+-- the helper also finds the downloads started meanwhile in Steam's log) and
+-- the helper writes their progress to Generated\Downloads.txt ("<appid>|
+-- <phase>|<done>|<total>|<bytes per second>|<seconds left>|<new install>"),
+-- calling OnDownloads().
 -- M.dl.f counts the frames since the launcher opened: the progress fills up
 -- and the border of the tiles with an update turns, for a few seconds.
 M.dl = { live = {}, f = 0, anim = false }
@@ -796,7 +798,7 @@ function M.writeDownloadFlag()
 		end
 	end
 	local flag = resources .. 'Generated\\DownloadOn.txt'
-	if #lines == 0 then os.remove(flag) return end
+	if not V.GameUpdates then os.remove(flag) return end
 	table.sort(lines)
 	writeLines(flag, lines)
 end
@@ -804,10 +806,10 @@ end
 function M.readDownloads()
 	M.dl.live = {}
 	for _, line in ipairs(readLines(resources .. 'Generated\\Downloads.txt')) do
-		local id, phase, done, total, rate, left = line:match('^(%d+)|(%a+)|(%d+)|(%d+)|(%d+)|(%-?%d+)$')
+		local id, phase, done, total, rate, left, new = line:match('^(%d+)|(%a+)|(%d+)|(%d+)|(%d+)|(%-?%d+)|?([01]?)$')
 		if id then
 			M.dl.live[id] = { phase = phase, done = tonumber(done), total = tonumber(total),
-				rate = tonumber(rate), left = tonumber(left) }
+				rate = tonumber(rate), left = tonumber(left), new = new == '1' }
 		end
 	end
 end
@@ -822,14 +824,18 @@ end
 -- (download, paused, install, waiting), part (0-1, nil if not known), new
 -- (a game being installed, not updated), and the data for the line }
 function M.updateState(t)
-	local u = V.GameUpdates and t.steamId and gameUpdates[t.steamId]
-	if not u then return nil end
-	local l = M.dl.live[t.steamId]
+	if not (V.GameUpdates and t.steamId) then return nil end
+	local u, l = gameUpdates[t.steamId], M.dl.live[t.steamId]
+	-- a download started while the launcher is open: only the helper knows it
+	if not u then
+		if not (l and l.phase ~= 'idle') then return nil end
+		u = { when = 0, new = l.new, size = l.total, done = l.done }
+	end
 	if l and l.total > 0 then
 		-- finished while the launcher was open
 		if l.phase == 'idle' and l.done >= l.total then return nil end
 		return { phase = l.phase == 'idle' and 'waiting' or l.phase, part = l.done / l.total, done = l.done,
-			total = l.total, rate = l.rate, left = l.left, when = u.when, new = u.new }
+			total = l.total, rate = l.rate, left = l.left, when = u.when, new = u.new or l.new }
 	end
 	local part = u.size > 0 and u.done > 0 and math.min(1, u.done / u.size) or nil
 	return { phase = part and part < 1 and 'download' or 'waiting', part = part, done = u.done, total = u.size,

@@ -764,16 +764,17 @@ end
 
 -- Steam games with an update waiting: GameUpdates.ps1 lists them in
 -- Generated\GameUpdates.txt ("<appid>|<bytes to download>|<bytes downloaded>|
--- <scheduled, unix time or 0>|<appmanifest>")
-local gameUpdates = {} -- steam app id -> { size, done, when, manifest }
+-- <scheduled, unix time or 0>|<new install 0/1>|<appmanifest>")
+local gameUpdates = {} -- steam app id -> { size, done, when, new, manifest }
 
 local function readGameUpdates()
 	gameUpdates = {}
 	for _, line in ipairs(readLines(resources .. 'Generated\\GameUpdates.txt')) do
 		local id, size, done, when, rest = line:match('^(%d+)|(%d+)|(%d+)|(%d+)(.*)$')
 		if id then
+			local new, manifest = rest:match('^|([01])|(.+)$')
 			gameUpdates[id] = { size = tonumber(size), done = tonumber(done), when = tonumber(when),
-				manifest = rest:match('^|(.+)$') }
+				new = new == '1', manifest = manifest or rest:match('^|(.+)$') }
 		end
 	end
 end
@@ -818,8 +819,8 @@ function M.bytes(n)
 end
 
 -- State of the update of tile t: nil without one, otherwise { phase
--- (download, paused, install, waiting), part (0-1, nil if not known), and
--- the data for the line }
+-- (download, paused, install, waiting), part (0-1, nil if not known), new
+-- (a game being installed, not updated), and the data for the line }
 function M.updateState(t)
 	local u = V.GameUpdates and t.steamId and gameUpdates[t.steamId]
 	if not u then return nil end
@@ -828,11 +829,11 @@ function M.updateState(t)
 		-- finished while the launcher was open
 		if l.phase == 'idle' and l.done >= l.total then return nil end
 		return { phase = l.phase == 'idle' and 'waiting' or l.phase, part = l.done / l.total, done = l.done,
-			total = l.total, rate = l.rate, left = l.left, when = u.when }
+			total = l.total, rate = l.rate, left = l.left, when = u.when, new = u.new }
 	end
 	local part = u.size > 0 and u.done > 0 and math.min(1, u.done / u.size) or nil
 	return { phase = part and part < 1 and 'download' or 'waiting', part = part, done = u.done, total = u.size,
-		rate = 0, left = -1, when = u.when }
+		rate = 0, left = -1, when = u.when, new = u.new }
 end
 
 -- When Steam will download it: "Sat 06:27", "today 06:27"
@@ -868,13 +869,14 @@ function M.updateInfo(t)
 	local show = V.DownloadInfo
 	local parts = {}
 	local function add(s) if s then parts[#parts + 1] = s end end
-	if st.phase == 'install' then return 'Installing update' end
+	-- a game being installed for the first time says so instead of "update"
+	if st.phase == 'install' then return st.new and 'Installing' or 'Installing update' end
 	if st.phase == 'waiting' then
-		add('Update' .. (show.size and st.total > 0 and (' ' .. M.bytes(st.total)) or ''))
+		add((st.new and 'Install' or 'Update') .. (show.size and st.total > 0 and (' ' .. M.bytes(st.total)) or ''))
 		if show.schedule then add(M.scheduled(st.when)) end
 		return table.concat(parts, ' - ')
 	end
-	local head = st.phase == 'paused' and 'Paused' or 'Downloading'
+	local head = st.phase == 'paused' and 'Paused' or st.new and 'Installing' or 'Downloading'
 	if show.percent and st.part then head = head .. ' ' .. math.floor(st.part * 100) .. '%' end
 	add(head)
 	if show.size and st.total > 0 then add(M.bytes(st.done) .. ' / ' .. M.bytes(st.total)) end
@@ -1000,7 +1002,8 @@ end
 -- update goes on a line of its own above it, M.updateInfo). The second value
 -- is true for the line shown whatever TileInfo says: "Not installed".
 local function tileInfo(t)
-	if t.missing then return 'Not installed', true end
+	-- (being installed again: its download says so instead)
+	if t.missing and not M.updateState(t) then return 'Not installed', true end
 	-- Steam's own play time, otherwise the one measured by the helper
 	local p = t.steamId and playtime[t.steamId] or timePlayed[tileId(t)]
 	local u = usage[tileId(t)]
@@ -2696,7 +2699,7 @@ M.GLOW_TURN = 90 -- frames of 16 ms for a full turn
 -- The background of a downloading tile shown in greyscale (DownloadStyle):
 -- the tile's window on its image, or nil
 function M.greyWindow(t, st, x, y)
-	if not (st and st.part and V.DownloadGrey and t.background) then return nil end
+	if not (st and st.part and (V.DownloadGrey or t.missing) and t.background) then return nil end
 	if st.phase ~= 'download' and st.phase ~= 'paused' and st.phase ~= 'install' then return nil end
 	return bgWindow(t, x, y)
 end
@@ -2844,7 +2847,12 @@ local function placeSlots()
 			set(tile, 'W', tostring(V.TileW))
 			set(tile, 'H', tostring(V.TileH))
 			-- a game no longer installed: greyed out and dimmed
-			local dim = t.missing and 0.45 or 1
+			-- Steam update or install (also of a game no longer installed:
+			-- being installed again, it is not greyed out but coloured again
+			-- as the download goes)
+			local st = not t.widget and M.updateState(t)
+			local missing = t.missing and not (st and st.part)
+			local dim = missing and 0.45 or 1
 			local op = t.opacity or 1
 			set(tile, 'ImageAlpha', tostring(math.floor(255 * f * dim * op + 0.5)))
 			-- never fully transparent: Rainmeter gives the mouse only to
@@ -2855,8 +2863,7 @@ local function placeSlots()
 			set(tile, 'SolidColor', solid)
 			-- Steam update: the border, the progress, the first line (always
 			-- shown), the background in greyscale while it downloads
-			local st = not t.missing and not t.widget and M.updateState(t)
-			local tileRows = (t.missing or M.greyWindow(t, st, x, y)) and GREY_ROWS or IDENTITY_ROWS
+			local tileRows = (missing or M.greyWindow(t, st, x, y)) and GREY_ROWS or IDENTITY_ROWS
 			set(tile, 'ColorMatrix1', tileRows[1])
 			set(tile, 'ColorMatrix2', tileRows[2])
 			set(tile, 'ColorMatrix3', tileRows[3])
@@ -2872,7 +2879,7 @@ local function placeSlots()
 				set(icon, 'W', tostring(size))
 				set(icon, 'H', tostring(size))
 				set(icon, 'ImageAlpha', tostring(math.floor(255 * f * dim + 0.5)))
-				local rows = t.missing and GREY_ROWS or (V.LogoGreyscale and saturationRows(t.zoom or 0)) or IDENTITY_ROWS
+				local rows = missing and GREY_ROWS or (V.LogoGreyscale and saturationRows(t.zoom or 0)) or IDENTITY_ROWS
 				set(icon, 'ColorMatrix1', rows[1])
 				set(icon, 'ColorMatrix2', rows[2])
 				set(icon, 'ColorMatrix3', rows[3])

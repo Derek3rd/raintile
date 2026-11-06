@@ -10,7 +10,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - One branch per change, cut from an up-to-date `nightly` and named after it: `feature/<name>` or `fix/<name>`, with the author's prefix where useful (e.g. `claude/feature-tile-pin`). Never commit straight to `main` or `nightly`.
 - Every change reaches `nightly` as a PR with base `nightly`: every push to `nightly` publishes a nightly build, so only finished, tested work goes there. The `package` check must pass before merging.
 - Merged branches are deleted (GitHub does it automatically after the merge); the next change gets a new branch.
-- Push and open PRs only when asked. Changes the user has not verified live stay on their branch: the user tests the branch, then the PR is merged.
+- Commits on your own branch are always pushed, unless the user says otherwise (so the branch can be tested from any machine). Open PRs only when asked. Changes the user has not verified live stay on their branch: the user tests the branch, then the PR is merged.
 - A tag is also called `nightly` (the pre-release): in git commands that take a revision write the branch as `refs/heads/nightly` or `origin/nightly`.
 - No history rewrites of shared branches (force push, rebase, reset of `main` or `nightly`), no deleting releases or other people's branches.
 - Keep the author's style: do not restructure or reformat code that is not part of the change.
@@ -32,7 +32,8 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - PowerShell 5.1 syntax only: no `&&`/`||`, `??`, `?.`, ternary or other PowerShell 7 features. C# compiled by `Add-Type` (in `Helper.ps1`) is C# 5; the Options program is C# 7.3.
 - Lua 5.1 allows at most 200 locals per function, the main chunk included: put new functions in the existing tables (`D` for the Dashboard, `M` for the rest) instead of new top-level locals.
 - No update cycle (`Update=-1`): the skin redraws only on events, and animations run on ActionTimer only while something moves. Never add polling or a timer that runs at rest. Animations are time-based (`M.animScale`), so they last the same at every frame rate.
-- Fixed number of meters: the grid is generated into `Generated/Grid.inc` and tiles are shown or hidden. Never one meter per tile.
+- The helper (`Helper.ps1`) may push live data to the skin (Dashboard, Steam downloads) only while it is shown, and only when the data changes: the skin asks for it with a flag file in `Generated/` written on show and removed on hide.
+- Fixed number of meters: the grid is generated into `Generated/Grid.inc` and tiles are shown or hidden. Never one meter per tile. When the meters written by `writeGrid()` change, bump `GRID_VERSION` in `Raintile.lua`, or skins with the old `Grid.inc` keep it and the new meters do not exist.
 - LinearGradient angles in Rainmeter run the other way round (0 = right to left).
 - Image names: with or without extension; a dot in a tile name is not an extension (`Battle.net` -> `Battle.net.png`).
 - Dependencies: Rainmeter built-in plugins (ActionTimer, InputText, RunCommand) plus HotKey; .NET Framework 4.8 for the Options program. No new plugins, DLLs or PowerShell modules.

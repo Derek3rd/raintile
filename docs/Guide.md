@@ -227,6 +227,7 @@ Windows does not give temperatures to programs without a driver, so Raintile rea
 
 - Without `Param=`, `temps` shows the CPU and GPU temperatures it finds (package, die, hot spot, ...), `fans` the first fans.
 - `Param=` picks the readings, separated by `;`, each one a part of the label as the sensor program writes it (any case; LibreHardwareMonitor and HWiNFO name some of them differently, e.g. `GPU Core` and `GPU Temperature`): `Param=CPU Package;GPU Core;SSD`. Add `=Name` to rename one: `Param=CPU Package=CPU;GPU Hot Spot=GPU hot`. A label that is not a temperature (or a fan) is looked for among the other readings too, so the widget can show anything the sensor program measures: `Param=CPU Package;CPU Total=CPU use;GPU Package` (LibreHardwareMonitor's names; `Total CPU Usage`, `GPU Power` in HWiNFO). Give it a title of your own with `Label=` (e.g. `Label=HWiNFO`).
+- The same label can be more readings (in LibreHardwareMonitor `GPU Core` is a temperature, a load and a clock): put its kind before it, `temp:`, `load:`, `clock:`, `power:`, `fan:`, `volt:` or `current:`. For example `Param=temp:GPU Core=GPU;load:GPU Core=GPU use;clock:GPU Core=GPU clock;load:CPU Total=CPU use;power:Package=CPU power`. The names are those of the LibreHardwareMonitor window, in the tree under each piece of hardware.
 
 ### Skins in a tile
 

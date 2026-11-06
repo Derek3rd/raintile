@@ -206,10 +206,10 @@ function Size([string]$key, [string]$label, [string]$axis, [string]$help = '') {
 }
 
 $GAMEPAD_BUTTONS = 'A', 'B', 'X', 'Y', 'LB', 'RB', 'BACK', 'START', 'LS', 'RS', 'UP', 'DOWN', 'LEFT', 'RIGHT'
-$SOURCES = 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'Apps'
+$SOURCES = 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'Folders', 'Apps'
 $STORE_LABELS = @{
     Steam = 'Steam'; Epic = 'Epic Games'; GOG = 'GOG'; Ubisoft = 'Ubisoft Connect'; Battlenet = 'Battle.net'
-    'Battle.net' = 'Battle.net'; EA = 'EA app'; Xbox = 'Xbox / Store'; Apps = 'Start menu apps'
+    'Battle.net' = 'Battle.net'; EA = 'EA app'; Xbox = 'Xbox / Store'; Folders = 'Your folders'; Apps = 'Start menu apps'
 }
 
 $schema = @(
@@ -452,6 +452,9 @@ $schema = @(
             @{ Found = $true; Items = @() }
             @{ Title = 'Search'; Items = @(
                     (S 'stores' 'ImportStores' 'Where to look'),
+                    (S 'text' 'ImportFolders' 'Your folders' 'With Your folders on: folders of programs (portable games, emulators...), separated by |, e.g. D:\Games|E:\Emulators. Every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out.'),
+                    (S 'choice' 'ImportFoldersKind' 'They are' 'Where the programs of your folders go when added.' @{ Choices = @(
+                                @('Game', 'Games (Category for games)'), @('App', 'Apps (Category for apps)')) }),
                     (S 'bool' 'ScanOnStart' 'Look for new ones on start' 'In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear.'),
                     (S 'category' 'ImportCategory' 'Category for games'),
                     (S 'category' 'AppsCategory' 'Category for apps'),
@@ -524,7 +527,7 @@ $defaults = @{
     Gamepad = '1'; GamepadToggle = 'BACK START'; GamepadDeadZone = '12000'; GamepadRepeatDelay = '350'; GamepadRepeatRate = '110'
     SearchW = '320'; SearchPlaceholder = 'Search'; SearchHover = '1'
     ShowClock = '1'; ShowDate = '1'; ClockFormat = '%H:%M'; DateFormat = '%A %#d %B'; ClockFontSize = '18'
-    ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps'
+    ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps'; ImportFolders = ''; ImportFoldersKind = 'Game'
     ScanOnStart = '1'; SteamGridDBKey = ''
     CheckUpdates = '1'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
     BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; EdgeFade = '1'; AutoTileColor = '1'; HoverColor = '255,255,255,25'

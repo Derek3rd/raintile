@@ -27,7 +27,11 @@ param(
     [Parameter(Mandatory = $true)][string]$Resources,
     # folder with your data (Categories\, Seen.txt); the skin's own if empty
     [string]$Data = '',
-    [string]$Stores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps',
+    [string]$Stores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps',
+    # Folders: the folders (separated by |) and their kind (game or app); if
+    # empty, ImportFolders / ImportFoldersKind of Settings.inc in the data folder
+    [string]$Folders = '',
+    [string]$FoldersKind = '',
     [switch]$NoRun,
     # tests only: alternative paths instead of the registry and ProgramData
     [string]$SteamPath = '',
@@ -370,6 +374,55 @@ function Read-Apps {
     return "$count found"
 }
 
+# --- Folders -------------------------------------------------------------------------
+# Programs (.exe) in your own folders and their subfolders (ImportFolders,
+# separated by |), e.g. portable games or emulators: one tile per program,
+# named after its file. Installers, uninstallers, redistributables, crash
+# reporters and helpers are left out.
+
+# words of the name (separated by - _ . or a space) and whole names
+$EXE_SKIP = '(?i)(^|[-_ .])(unins\d*|uninstall(er)?|setup|install(er)?|updater?|autoupdate|crash\w*|bugreport\w*|reporter|' +
+    'redist\w*|vc_?redist\w*|dxsetup|dxwebsetup|oalinst|physx\w*|prereq\w*|ue4prereq\w*|helper|service|subprocess|webhelper|' +
+    'cefsharp|patcher|config(urator)?|settings|debug|server|elevate|notification\w*)([-_ .]|$)|' +
+    '^(qtwebengineprocess|unitycrashhandler(32|64)?|7z\w*|dotnet\w*|ndp\d\w*|cli|console)$'
+$DIR_SKIP = '(?i)[\\/](_?commonredist|redist|redistributables?|directx|dotnet|vcredist|__installer|installers?|support|_?install(ers)?|prereq(uisites)?|tools?|engine[\\/]binaries[\\/]thirdparty)[\\/]'
+
+function Get-SettingValue([string]$key) {
+    foreach ($file in (Join-Path $Data 'Settings.inc'), (Join-Path $Resources 'Settings.inc')) {
+        if (-not (Test-Path -LiteralPath $file)) { continue }
+        foreach ($line in [IO.File]::ReadAllLines($file)) {
+            if ($line -match ('^\s*' + [regex]::Escape($key) + '\s*=(.*)$')) { return $Matches[1].Trim() }
+        }
+    }
+    return ''
+}
+
+function Read-Folders {
+    $list = if ($Folders) { $Folders } else { Get-SettingValue 'ImportFolders' }
+    $kind = if ($FoldersKind) { $FoldersKind } else { Get-SettingValue 'ImportFoldersKind' }
+    $kind = if ($kind -match '(?i)^app') { 'app' } else { 'game' }
+    $names = @{}
+    $count = 0; $roots = 0
+    foreach ($root in $list.Split('|')) {
+        $root = [Environment]::ExpandEnvironmentVariables($root.Trim().Trim('"'))
+        if (-not $root -or -not (Test-Path -LiteralPath $root -PathType Container)) { continue }
+        $roots++
+        $root = [IO.Path]::GetFullPath($root).TrimEnd('\')
+        foreach ($exe in Get-ChildItem -LiteralPath $root -Recurse -Filter '*.exe' -File -ErrorAction SilentlyContinue) {
+            if ($exe.BaseName -match $EXE_SKIP) { continue }
+            if ($exe.FullName.Substring($root.Length) -match $DIR_SKIP) { continue }
+            $key = Get-NameKey $exe.BaseName
+            if (-not $key -or $names[$key]) { continue }
+            $names[$key] = $true
+            Add-Item $kind 'Folders' $exe.FullName.ToLowerInvariant() $exe.BaseName ('"{0}"' -f $exe.FullName) '' '' $exe.FullName
+            if ($kind -eq 'game') { [void]$gameDirs.Add($exe.DirectoryName) }
+            $count++
+        }
+    }
+    if (-not $roots) { return 'no folders (ImportFolders)' }
+    return "$count found in $roots folders"
+}
+
 # --- Icons -------------------------------------------------------------------------
 # The shell's own icon of a program, a shortcut or a Store app, as a 256 px
 # PNG with transparency (IShellItemImageFactory).
@@ -586,7 +639,7 @@ foreach ($s in $Stores.Split('|')) { if ($s.Trim()) { $enabled[($s.Trim() -repla
 
 $summary = @()
 # games first: the apps leave out their shortcuts
-foreach ($store in 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'Apps') {
+foreach ($store in 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'Folders', 'Apps') {
     if (-not $enabled[$store.ToLowerInvariant()]) { continue }
     try { $summary += "${store}: " + (& "Read-$store") }
     catch { $summary += "${store}: error ($($_.Exception.Message))" }

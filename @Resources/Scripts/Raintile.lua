@@ -4017,7 +4017,8 @@ function Hide()
 	stopTicker()
 	-- the tile with the focus, for a sorted category (its remembered position
 	-- follows it when the order changes)
-	if not searchCat and hover.on and hover.idx > 0 then cur().focusTile = tileAt(hover.idx) or cur().focusTile end
+	-- (hover.idx is the index of the tile in the category, not a slot)
+	if not searchCat and hover.on and hover.idx > 0 then cur().focusTile = cur().tiles[hover.idx] or cur().focusTile end
 	leaveSearch() -- next time it opens on the category
 	pos = offset -- a half-done scroll restarts already finished
 	saveScroll()

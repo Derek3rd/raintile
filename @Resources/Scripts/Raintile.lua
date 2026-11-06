@@ -859,11 +859,11 @@ function M.scheduled(when)
 	return day .. ' ' .. os.date('%H:%M', when)
 end
 
+-- Time left as Steam shows it: 0:54, 12:05, 1:05:00
 function M.timeLeft(s)
-	if s < 60 then return s .. ' s left' end
-	if s < 3600 then return math.ceil(s / 60) .. ' min left' end
-	local h, m = math.floor(s / 3600), math.floor((s % 3600) / 60)
-	return h .. ' h' .. (m > 0 and (' ' .. m .. ' min') or '') .. ' left'
+	local h, m, sec = math.floor(s / 3600), math.floor((s % 3600) / 60), s % 60
+	if h > 0 then return string.format('%d:%02d:%02d left', h, m, sec) end
+	return string.format('%d:%02d left', m, sec)
 end
 
 -- First line of a Steam tile with an update (above the play time), with the

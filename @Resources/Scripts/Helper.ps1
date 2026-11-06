@@ -1321,11 +1321,15 @@ public class RaintilePad
         return "install";
     }
 
-    // What the game has done by now: the last value read, plus the rate since then
-    static double DoneNow(Dl d, long now)
+    // What the game has done at 'when' (ms of the clock): the last value
+    // read, plus the rate since then. Steam writes the rate every 10-15 s
+    // while it downloads: with none for 30 s it is not going on, and the
+    // estimate stops.
+    static double DoneNow(Dl d, double when)
     {
         if (d.Phase != "download" || d.Rate <= 0 || d.Total <= 0) return d.Done;
-        return Math.Min(d.Total, d.Done + d.Rate * (now - d.At) / 1000.0);
+        double ms = Math.Max(0, Math.Min(30000, when - d.At));
+        return Math.Min(d.Total, d.Done + d.Rate * ms / 1000.0);
     }
 
     // Steam's folder (registry) and its libraries (libraryfolders.vdf), once
@@ -1382,13 +1386,11 @@ public class RaintilePad
         string log = System.IO.Path.Combine(steamRoot, @"logs\content_log.txt");
         if (!System.IO.File.Exists(log)) return;
         string text;
-        bool history;
         using (var f = new System.IO.FileStream(log, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite | System.IO.FileShare.Delete))
         {
             // the first time only the end of it (what is going on now); a
             // shorter file is a new one
-            history = logPos < 0 || logPos > f.Length;
-            if (history) logPos = Math.Max(0, f.Length - 262144);
+            if (logPos < 0 || logPos > f.Length) logPos = Math.Max(0, f.Length - 262144);
             if (f.Length == logPos) return;
             f.Position = logPos;
             var buffer = new byte[f.Length - logPos];
@@ -1406,9 +1408,17 @@ public class RaintilePad
             text = System.Text.Encoding.UTF8.GetString(buffer, 0, end + 1);
         }
         var inv = System.Globalization.CultureInfo.InvariantCulture;
+        DateTime clockNow = DateTime.Now;
         foreach (string raw in text.Split('\n'))
         {
             string line = raw.TrimEnd('\r');
+            // when the line was written ("[2026-11-06 21:47:11] ..."), as ms of
+            // the clock: the end of the log read when the launcher opens tells
+            // what happened before, at its own time
+            double at = now;
+            DateTime written;
+            if (line.Length > 21 && line[0] == '[' && DateTime.TryParseExact(line.Substring(1, 19), "yyyy-MM-dd HH:mm:ss", inv, System.Globalization.DateTimeStyles.None, out written))
+                at = Math.Min(now, now - (clockNow - written).TotalMilliseconds);
             var m = System.Text.RegularExpressions.Regex.Match(line, @"AppID (\d+) update started : download (\d+)/(\d+)");
             Dl d;
             if (m.Success)
@@ -1418,7 +1428,7 @@ public class RaintilePad
                 {
                     d.Done = double.Parse(m.Groups[2].Value, inv);
                     d.Total = double.Parse(m.Groups[3].Value, inv);
-                    d.At = now;
+                    d.At = at;
                 }
                 continue;
             }
@@ -1431,24 +1441,24 @@ public class RaintilePad
                 d = Follow(m.Groups[1].Value, phase != "idle");
                 if (d != null)
                 {
-                    d.Done = DoneNow(d, now);
-                    d.At = now;
+                    d.Done = DoneNow(d, at);
+                    d.At = at;
                     d.Phase = phase;
                     if (phase != "download") d.Rate = 0;
                 }
                 continue;
             }
-            m = System.Text.RegularExpressions.Regex.Match(line, @"Current download rate: ([\d.]+) Mbps");
+            // "Current download rate: 40.025 Mbps", and the first one in
+            // "Increasing target number of download connections to 5 (rate was 0.000, now 40.888)"
+            m = System.Text.RegularExpressions.Regex.Match(line, @"(?:Current download rate: ([\d.]+) Mbps|\(rate was [\d.]+, now ([\d.]+)\))");
             if (m.Success && downloadingApp != null && downloads.TryGetValue(downloadingApp, out d))
             {
-                d.Done = DoneNow(d, now);
-                d.At = now;
-                d.Rate = double.Parse(m.Groups[1].Value, inv) * 1000000.0 / 8.0;
+                d.Done = DoneNow(d, at);
+                d.At = at;
+                string mbps = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
+                d.Rate = double.Parse(mbps, inv) * 1000000.0 / 8.0;
             }
         }
-        // the rates read in the end of the log before the launcher opened are
-        // old: the next ones Steam writes count
-        if (history) foreach (var d in downloads.Values) d.Rate = 0;
     }
 
     // The appmanifest of a game, right when Steam rewrites it

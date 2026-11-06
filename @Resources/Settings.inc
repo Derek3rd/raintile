@@ -323,7 +323,7 @@ InfoFontSize=10
 TrackPlaytime=1
 ; 1 = Steam games with an update waiting say so on a line above the play
 ; time, always shown: "Update 5.4 GB - Sat 06:27" (size and time Steam
-; scheduled it), "Downloading 40% - 25.3 MB/s - 2 min left" while it
+; scheduled it), "Downloading 40% - 25.3 MB/s - 2:35 left" while it
 ; downloads (followed live while the launcher is open). Their tile gets a
 ; border in DownloadColor1 and DownloadColor2.
 GameUpdates=1

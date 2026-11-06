@@ -231,9 +231,36 @@ public class RaintileDash
         try { return c != null ? c.NextValue() : 0f; } catch { return 0f; }
     }
 
+    // Counters made ahead (the helper calls it in the background when it
+    // starts): making them, the GPU ones above all, takes seconds
+    public void Prepare()
+    {
+        lock (this)
+        {
+            if (!started) Start();
+            if (gpuEngines == null) RefreshGpu();
+        }
+    }
+
+    // The GPU engines come and go with the programs: their list is read again
+    // every 5 s, after the data is sent
+    public void RefreshGpuIfDue()
+    {
+        lock (this)
+        {
+            if ((DateTime.Now - gpuRefresh).TotalSeconds >= 5) RefreshGpu();
+        }
+    }
+
     public string Collect(bool processes, bool sensors)
     {
+        lock (this) { return CollectNow(processes, sensors); }
+    }
+
+    string CollectNow(bool processes, bool sensors)
+    {
         if (!started) Start();
+        if (gpuEngines == null) RefreshGpu();
         var sb = new System.Text.StringBuilder();
         var now = DateTime.Now;
 
@@ -252,7 +279,6 @@ public class RaintileDash
         }
 
         // GPU
-        if ((now - gpuRefresh).TotalSeconds >= 5) RefreshGpu();
         if (gpuEngines != null)
         {
             double g = 0;
@@ -992,11 +1018,25 @@ public class RaintilePad
     int dashInterval = 1000;
     bool dashOn, dashProcs = true, dashSensors = true;
 
+    // The data is collected on a thread of its own: it takes some time (the
+    // processes, the GPU) and the gamepad must not wait for it. The counters
+    // are made when the helper starts (PrepareDash).
+    volatile bool collecting;
+
+    public void PrepareDash()
+    {
+        // only for who uses a Dashboard (its data was written before)
+        if (DashFlag == null || DashFile == null || !System.IO.File.Exists(DashFile)) return;
+        dash = new RaintileDash();
+        var d = dash;
+        ThreadPool.QueueUserWorkItem(delegate { try { d.Prepare(); } catch { } });
+    }
+
     void DashStep(IntPtr window, long now)
     {
         if (now >= nextDashCheck)
         {
-            nextDashCheck = now + 250;
+            nextDashCheck = now + 100;
             bool on = System.IO.File.Exists(DashFlag);
             if (on && !dashOn)
             {
@@ -1010,23 +1050,37 @@ public class RaintilePad
                 }
                 catch { }
                 nextDash = now; // right away
+                dashFirst = true;
             }
             dashOn = on;
         }
-        if (!dashOn || now < nextDash) return;
-        nextDash = now + dashInterval;
+        if (!dashOn || now < nextDash || collecting) return;
+        // the second time soon after the first: CPU use of the processes and
+        // network speed need two readings
+        nextDash = now + (dashFirst ? Math.Min(300, dashInterval) : dashInterval);
+        dashFirst = false;
         if (dash == null) dash = new RaintileDash();
-        string data = dash.Collect(dashProcs, dashSensors);
-        try
+        var d = dash;
+        bool procs = dashProcs, sensors = dashSensors;
+        string bang = Call("DashTick()");
+        collecting = true;
+        ThreadPool.QueueUserWorkItem(delegate
         {
-            string tmp = DashFile + ".tmp";
-            System.IO.File.WriteAllText(tmp, data, new System.Text.UTF8Encoding(false));
-            if (System.IO.File.Exists(DashFile)) System.IO.File.Delete(DashFile);
-            System.IO.File.Move(tmp, DashFile);
-        }
-        catch { return; }
-        Send(window, Call("DashTick()"));
+            try
+            {
+                string data = d.Collect(procs, sensors);
+                string tmp = DashFile + ".tmp";
+                System.IO.File.WriteAllText(tmp, data, new System.Text.UTF8Encoding(false));
+                if (System.IO.File.Exists(DashFile)) System.IO.File.Delete(DashFile);
+                System.IO.File.Move(tmp, DashFile);
+                Send(window, bang);
+                d.RefreshGpuIfDue();
+            }
+            catch { }
+            finally { collecting = false; }
+        });
     }
+    bool dashFirst;
 
     static void Send(IntPtr window, string bang)
     {
@@ -1102,6 +1156,7 @@ if ($Generated) {
     $pad.DashFlag = Join-Path $Generated 'DashOn.txt'
     $pad.DashFile = Join-Path $Generated 'DashData.txt'
     $pad.EdgeFile = Join-Path $Generated 'DockEdge.txt'
+    if ($Dash) { $pad.PrepareDash() }
     $pad.SizeFile = Join-Path $Generated 'LauncherSize.txt'
 }
 if ($pad.TrackEnabled) {

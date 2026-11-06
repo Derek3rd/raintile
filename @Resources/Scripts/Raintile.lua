@@ -2418,6 +2418,18 @@ function D.dashActive()
 	return ready and visible and not searchCat and cats[active] ~= nil and cats[active].dashboard == true
 end
 
+-- The widgets of the Dashboard on screen, from dash.data
+function D.fillShown()
+	local catW, catH = V.TileW, V.TileH
+	for _, t in ipairs(cats[active].tiles) do
+		if t.widget then
+			V.TileW, V.TileH = tileSize(t)
+			D.fillWidget(t)
+		end
+	end
+	V.TileW, V.TileH = catW, catH
+end
+
 updateDashState = function()
 	local on = D.dashActive()
 	if on == dash.on then return end
@@ -2425,6 +2437,11 @@ updateDashState = function()
 	D.syncSkins()
 	local flag = resources .. 'Generated\\DashOn.txt'
 	if not on then os.remove(flag) return end
+	-- not empty while the first data comes: the last values (of this session,
+	-- or the file of the last time), "..." without any
+	if not dash.data and fileExists(resources .. 'Generated\\DashData.txt') then dash.data = D.readDashData() end
+	D.fillShown()
+	if M.frame then M.frame() end
 	local procs, sensors = false, false
 	for _, t in ipairs(cats[active].tiles) do
 		if t.widget then
@@ -2718,6 +2735,7 @@ local function frame()
 	dirty = {}
 	SKIN:Bang('!Redraw')
 end
+M.frame = frame -- for the functions defined above it
 
 -- Redraws everything. 'menu' = update the menu too (category change).
 local function render(menu)
@@ -2754,14 +2772,7 @@ function DashTick()
 	D.pushHistory(dash.hist.up, d['net.up'])
 	local ramUsed, ramTotal = tonumber(d['ram.used'] or ''), tonumber(d['ram.total'] or '')
 	if ramUsed and ramTotal and ramTotal > 0 then D.pushHistory(dash.hist.ram, 100 * ramUsed / ramTotal) end
-	local catW, catH = V.TileW, V.TileH
-	for _, t in ipairs(cats[active].tiles) do
-		if t.widget then
-			V.TileW, V.TileH = tileSize(t)
-			D.fillWidget(t)
-		end
-	end
-	V.TileW, V.TileH = catW, catH
+	D.fillShown()
 	frame()
 	-- skins over their tiles, custom widgets updated
 	D.syncSkins()

@@ -452,7 +452,7 @@ $schema = @(
             @{ Found = $true; Items = @() }
             @{ Title = 'Search'; Items = @(
                     (S 'stores' 'ImportStores' 'Where to look'),
-                    (S 'text' 'ImportFolders' 'Your folders' 'With Your folders on: folders of programs (portable games, emulators...), separated by |, e.g. D:\Games|E:\Emulators. Every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out.'),
+                    (S 'text' 'ImportFolders' 'Your folders' 'With Your folders on: folders of programs (portable games, emulators...). Every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out. (In Settings.inc: separated by |, e.g. D:\Games|E:\Emulators.)'),
                     (S 'choice' 'ImportFoldersKind' 'They are' 'Where the programs of your folders go when added.' @{ Choices = @(
                                 @('Game', 'Games (Category for games)'), @('App', 'Apps (Category for apps)')) }),
                     (S 'bool' 'ScanOnStart' 'Look for new ones on start' 'In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear.'),

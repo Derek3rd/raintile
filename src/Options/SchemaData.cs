@@ -247,7 +247,7 @@ namespace RaintileOptions
                 new Group { Title = "Search", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "stores", Key = "ImportStores", Label = "Where to look", Help = "" },
-                    new Item { Kind = "text", Key = "ImportFolders", Label = "Your folders", Help = "With Your folders on: folders of programs (portable games, emulators...), separated by |, e.g. D:\\Games|E:\\Emulators. Every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out." },
+                    new Item { Kind = "text", Key = "ImportFolders", Label = "Your folders", Help = "With Your folders on: folders of programs (portable games, emulators...). Every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out. (In Settings.inc: separated by |, e.g. D:\\Games|E:\\Emulators.)" },
                     new Item { Kind = "choice", Key = "ImportFoldersKind", Label = "They are", Help = "Where the programs of your folders go when added.", Choices = new List<string[]> { new[] { "Game", "Games (Category for games)" }, new[] { "App", "Apps (Category for apps)" } } },
                     new Item { Kind = "bool", Key = "ScanOnStart", Label = "Look for new ones on start", Help = "In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear." },
                     new Item { Kind = "category", Key = "ImportCategory", Label = "Category for games", Help = "" },

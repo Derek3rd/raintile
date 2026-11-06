@@ -338,7 +338,9 @@ Images\Games\
 
 Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency.
 
-**Find online...** next to *Background* and *Logo* in the tile editor (Options > the category > the tile) searches the images of that game or app: Steam's own (Steam games), [SteamGridDB](https://www.steamgriddb.com/) (with the key: games of every store and many apps, several of each), [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (logos of apps and services) and, for a link, the icon of its website. Click one and *Use it*: it is downloaded to the tile's folder, like a picked file. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
+**Find online...** next to *Background* and *Logo* in the tile editor (Options > the category > the tile) searches the images of that game or app: Steam's own (Steam games), [SteamGridDB](https://www.steamgriddb.com/) (with the key: games of every store and many apps, several of each), [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (logos of apps and services) and, for a link, the icon of its website. Click one and *Use it*: it is downloaded to the tile's folder, like a picked file.
+
+**Auto find images** under *All tiles* (Options > the category) does the same for every tile of the category without a background (**Background**) or without a logo (**Logo**), taking the first image found, one tile after the other, with a progress bar and a **Stop** button. To avoid wrong pictures, from SteamGridDB it only takes a game or app of the same name as the tile (or the Steam id of a Steam game). Widgets are left out. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
 
 ### Framing a background
 

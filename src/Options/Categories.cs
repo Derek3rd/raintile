@@ -875,6 +875,12 @@ namespace RaintileOptions
             string file = currentFile;
             if (placementHint == null) return;
             placementRow.Visibility = file != null && !IsDashboard(file) ? Visibility.Visible : Visibility.Collapsed;
+            if (autoArtRow != null)
+            {
+                autoArtRow.Visibility = placementRow.Visibility;
+                // a run of another category is still going: its bar and text stay there
+                if (!autoArtBusy) { autoArtStatus.Visibility = Visibility.Collapsed; autoArtTrack.Visibility = Visibility.Collapsed; }
+            }
             if (file == null) { SetLabelHint(placementHint, ""); return; }
             var model = GetModel(file);
             var tiles = Core.GetTiles(model);
@@ -2138,6 +2144,8 @@ namespace RaintileOptions
             placementHint = (TextBlock)placeFormRow.Children[0];   // its label: the summary is its tooltip
             placementRow = placeFormRow;
             AddTo(af, placementRow);
+            autoArtRow = NewAutoArtRow();
+            AddTo(af, autoArtRow);
             btnResetLogos.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "logo placement", new[] { "LogoPos", "LogoScale" }); };
             btnResetFraming.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "background framing", new[] { "BgFocus", "BgZoom" }); };
             btnResetInfo.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "play time placement", new[] { "InfoPos" }, "the top left"); };

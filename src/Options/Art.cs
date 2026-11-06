@@ -112,7 +112,8 @@ namespace RaintileOptions
             {
                 var g = o as Dictionary<string, object>;
                 if (g == null) continue;
-                if (!exact || string.Equals(Json.Str(g, "name").Trim(), (name ?? "").Trim(), StringComparison.OrdinalIgnoreCase)) return g;
+                // (the same name apart from case, spaces and signs like (TM))
+                if (!exact || Slug(Json.Str(g, "name")) == Slug(name)) return g;
             }
             return null;
         }
@@ -228,7 +229,7 @@ namespace RaintileOptions
 
         // The choices for one kind of image of a tile (slow: call it off the
         // window's thread)
-        public static List<ArtChoice> Find(string kind, string name, string command, string source, string sgdbKey)
+        public static List<ArtChoice> Find(string kind, string name, string command, string source, string sgdbKey, bool exactName = false)
         {
             var list = new List<ArtChoice>();
             string steamId = SteamId(command, source);
@@ -240,7 +241,7 @@ namespace RaintileOptions
             catch { }
             try
             {
-                var game = SgdbGame(sgdbKey, name, steamId, false);
+                var game = SgdbGame(sgdbKey, name, steamId, exactName);
                 string id = Json.Str(game, "id");
                 if (id != "") list.AddRange(SgdbImages(sgdbKey, id, kind, 18));
             }

@@ -1381,9 +1381,19 @@ end
 
 -- Moves cur towards target by a fraction per step (k, default AnimSmooth);
 -- returns the new value and true if it has not arrived yet.
+-- Animations follow the time, not the steps: a step of M.animScale x 16 ms
+-- moves as much as that many 16 ms steps would (fewer, longer steps on very
+-- large screens, see FrameRate). M.animFast: something besides a slow
+-- background pan moved in this step.
+M.animScale, M.animFast = 1, false
+function M.smooth(k)
+	return 1 - (1 - k) ^ M.animScale
+end
+
 local function approach(cur, target, eps, k)
 	if math.abs(target - cur) <= eps then return target, false end
-	return cur + (target - cur) * (k or V.AnimSmooth), true
+	M.animFast = true
+	return cur + (target - cur) * M.smooth(k or V.AnimSmooth), true
 end
 
 -- Rows (V) or columns (H) of tiles of the active category, and how many fit
@@ -1812,6 +1822,9 @@ local function setGridArea(withFilter)
 	-- visible part of the grid (also the edge of the fades)
 	V.ClipW, V.ClipH = math.floor(V.AreaW), math.floor(V.AreaH - fs)
 	set('GridClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', V.ClipW, V.ClipH))
+	-- the container of the highlight and the edge fades: the same area
+	set('HoverClip', 'Y', tostring(math.floor(V.GridY)))
+	set('HoverClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', V.ClipW, V.ClipH))
 	for i = 1, #filter.chips do show('FilterText' .. i, withFilter) end
 	if fs == 0 then
 		for i = 1, #filter.chips do show('FilterPill' .. i, false) end
@@ -1967,7 +1980,7 @@ function D.readDashData()
 			if D.LIST_KEYS[k] then d[k][#d[k] + 1] = v else d[k] = v end
 		end
 	end
-	-- HWiNFO readings: { type, sensor, label, value, unit }
+	-- sensor readings (LibreHardwareMonitor or HWiNFO): { type, sensor, label, value, unit }
 	local hw = {}
 	for _, v in ipairs(d.hw) do
 		local ty, sensor, label, value, unit = v:match('^(%d+)|(.-)|(.-)|([^|]*)|(.*)$')
@@ -2002,8 +2015,9 @@ function D.fmtReading(r)
 end
 
 -- The temperatures shown: Param= labels separated by ";", or the usual ones
-D.DEFAULT_TEMPS = { 'CPU Package', 'Tctl/Tdie', 'CPU (Tctl/Tdie)', 'CPU Die', 'GPU Temperature', 'GPU Hot Spot', 'Drive Temperature' }
--- Param= is "label;label=Name;..." (a part of the HWiNFO label, then the name
+-- (labels of LibreHardwareMonitor and of HWiNFO)
+D.DEFAULT_TEMPS = { 'CPU Package', 'Tctl/Tdie', 'CPU (Tctl/Tdie)', 'CPU Die', 'GPU Temperature', 'GPU Core', 'GPU Hot Spot', 'Drive Temperature' }
+-- Param= is "label;label=Name;..." (a part of the sensor's label, then the name
 -- to show); without it the usual temperatures, or the first fans
 function D.tempRows(d, param, ty)
 	local rows, seen = {}, {}
@@ -2321,7 +2335,7 @@ function D.fillWidget(t)
 		local used, total = tonumber(d['gpu.vram'] or ''), tonumber(d['gpu.vramtotal'] or '')
 		local sub = d['gpu.name'] or ''
 		if used then sub = sub .. '  \194\183  ' .. D.fmtBytes(used) .. (total and total > 0 and (' / ' .. D.fmtBytes(total)) or '') end
-		local temp = d.hwOn and D.findReading(d, 'GPU Temperature', 1)
+		local temp = d.hwOn and (D.findReading(d, 'GPU Temperature', 1) or D.findReading(d, 'GPU Core', 1))
 		if temp then sub = sub .. '  \194\183  ' .. D.fmtReading(temp) end
 		value(d.gpu and string.format('%d%%', math.floor(tonumber(d.gpu) + 0.5)) or '-', sub)
 		graph(dash.hist.gpu, 100)
@@ -2387,7 +2401,7 @@ function D.fillWidget(t)
 		list(lines)
 	elseif kind == 'temps' or kind == 'fans' then
 		if not d.hwOn then
-			value('-', 'Start HWiNFO with Shared Memory Support on')
+			value('-', 'Start LibreHardwareMonitor (or HWiNFO with Shared Memory)')
 			return
 		end
 		local rows = D.tempRows(d, w.param, kind == 'temps' and 1 or 3)
@@ -2408,6 +2422,18 @@ function D.dashActive()
 	return ready and visible and not searchCat and cats[active] ~= nil and cats[active].dashboard == true
 end
 
+-- The widgets of the Dashboard on screen, from dash.data
+function D.fillShown()
+	local catW, catH = V.TileW, V.TileH
+	for _, t in ipairs(cats[active].tiles) do
+		if t.widget then
+			V.TileW, V.TileH = tileSize(t)
+			D.fillWidget(t)
+		end
+	end
+	V.TileW, V.TileH = catW, catH
+end
+
 updateDashState = function()
 	local on = D.dashActive()
 	if on == dash.on then return end
@@ -2415,6 +2441,11 @@ updateDashState = function()
 	D.syncSkins()
 	local flag = resources .. 'Generated\\DashOn.txt'
 	if not on then os.remove(flag) return end
+	-- not empty while the first data comes: the last values (of this session,
+	-- or the file of the last time), "..." without any
+	if not dash.data and fileExists(resources .. 'Generated\\DashData.txt') then dash.data = D.readDashData() end
+	D.fillShown()
+	if M.frame then M.frame() end
 	local procs, sensors = false, false
 	for _, t in ipairs(cats[active].tiles) do
 		if t.widget then
@@ -2645,7 +2676,7 @@ local function placeSlots()
 				-- fades in and out: a step towards the strength wanted
 				local key = side .. ' ' .. line
 				local shown = fadeShown[key] or { 0, 0 }
-				local k = shown[1] + (want - shown[1]) * V.AnimSmooth
+				local k = shown[1] + (want - shown[1]) * M.smooth(V.AnimSmooth)
 				if math.abs(want - k) < 0.02 then k = want else fadeMoving = true end
 				if cut then shown[2] = cut[2] end
 				fadeShown[key] = k > 0 and { k, shown[2] } or nil
@@ -2708,6 +2739,7 @@ local function frame()
 	dirty = {}
 	SKIN:Bang('!Redraw')
 end
+M.frame = frame -- for the functions defined above it
 
 -- Redraws everything. 'menu' = update the menu too (category change).
 local function render(menu)
@@ -2744,14 +2776,7 @@ function DashTick()
 	D.pushHistory(dash.hist.up, d['net.up'])
 	local ramUsed, ramTotal = tonumber(d['ram.used'] or ''), tonumber(d['ram.total'] or '')
 	if ramUsed and ramTotal and ramTotal > 0 then D.pushHistory(dash.hist.ram, 100 * ramUsed / ramTotal) end
-	local catW, catH = V.TileW, V.TileH
-	for _, t in ipairs(cats[active].tiles) do
-		if t.widget then
-			V.TileW, V.TileH = tileSize(t)
-			D.fillWidget(t)
-		end
-	end
-	V.TileW, V.TileH = catW, catH
+	D.fillShown()
 	frame()
 	-- skins over their tiles, custom widgets updated
 	D.syncSkins()
@@ -2827,11 +2852,22 @@ end
 -- last action.
 local tickList = 1
 
+-- Steps of V.FrameMs (16, or 33 on very large screens); 50 ms while the
+-- only thing moving is a background slowly panning. Each length has its two
+-- lists of MeasureAnim (1-2, 3-4, 5-6), alternated.
+M.TICK_LISTS = { [16] = 1, [33] = 3, [50] = 5 }
+local function tickListFor(ms)
+	local first = M.TICK_LISTS[ms] or 1
+	if tickList == first then return first + 1 end
+	return first
+end
+
 startTicker = function()
 	if ticking then return end
 	ticking = true
-	tickList = 1
-	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Execute 1')
+	M.tickMs = V.FrameMs or 16
+	tickList = M.TICK_LISTS[M.tickMs] or 1
+	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Execute ' .. tickList)
 end
 
 local function stopTicker()
@@ -2864,7 +2900,8 @@ local function advance()
 	local busy, moving = false, false
 
 	if M.dock.dir ~= 0 then
-		M.dock.p = math.min(1, math.max(0, M.dock.p + M.dock.dir / M.DOCK_FRAMES))
+		M.dock.p = math.min(1, math.max(0, M.dock.p + M.dock.dir * M.animScale / M.DOCK_FRAMES))
+		M.animFast = true
 		M.dockPlace(M.dock.p)
 		if (M.dock.dir > 0 and M.dock.p >= 1) or (M.dock.dir < 0 and M.dock.p <= 0) then
 			local closing = M.dock.dir < 0
@@ -2879,7 +2916,8 @@ local function advance()
 	busy = busy or moving or fadeMoving
 
 	if appear then
-		appear = appear + 1
+		appear = appear + M.animScale
+		M.animFast = true
 		if appear >= (V.Slots - 1) * V.AnimStagger + V.AnimAppearFrames then appear = nil end
 		busy = busy or appear ~= nil
 	end
@@ -2906,7 +2944,7 @@ local function advance()
 		if V.BgStyle == 'pan' then
 			-- constant speed: slow on the way out, three times faster on the way back
 			local p = t.pan or 0
-			local step = target == 1 and 1 / V.BgPanFrames or 3 / V.BgPanFrames
+			local step = (target == 1 and 1 / V.BgPanFrames or 3 / V.BgPanFrames) * M.animScale
 			p = target == 1 and math.min(1, p + step) or math.max(0, p - step)
 			t.pan = p
 			busy = busy or p ~= target
@@ -2934,10 +2972,13 @@ function Tick(list)
 		stopTicker()
 		return
 	end
+	M.animScale = (M.tickMs or 16) / 16
+	M.animFast = false
 	local busy = advance()
 	frame()
 	if busy then
-		tickList = 3 - tickList
+		M.tickMs = (M.animFast or fadeMoving) and (V.FrameMs or 16) or 50
+		tickList = tickListFor(M.tickMs)
 		SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Execute ' .. tickList)
 	else
 		ticking = false
@@ -3192,6 +3233,18 @@ function Initialize()
 	V.AnimStagger = math.max(0, num('AnimStagger', 2))
 	V.AnimSlide = num('AnimSlide', 30)
 	V.AnimSmooth = math.min(1, math.max(0.05, num('AnimSmooth', 0.3)))
+	-- Steps of the animations: Rainmeter draws the whole window on every
+	-- step, so on very large screens (Auto: from about 3 million pixels, e.g.
+	-- 3440x1440) 30 per second instead of 60, each moving twice as much
+	local rate = SKIN:GetVariable('FrameRate', 'Auto'):lower()
+	if rate == '30' then V.FrameMs = 33
+	elseif rate == '60' then V.FrameMs = 16
+	else V.FrameMs = (V.ScreenW * V.ScreenH >= 3000000) and 33 or 16 end
+	-- the launch animation: as long, in steps of the same length
+	V.LaunchStepMs = V.FrameMs
+	V.LaunchSteps = math.max(1, math.floor(num('LaunchAnimFrames', 15) * 16 / V.FrameMs + 0.5))
+	SKIN:Bang('!SetOption', 'MeasureLaunchAnim', 'ActionList1', 'Repeat Step, ' .. V.LaunchStepMs .. ', ' .. V.LaunchSteps
+		.. ' | Wait ' .. math.floor(num('LaunchHold', 1500)) .. ' | Finish')
 	V.InfiniteScroll = num('InfiniteScroll', 1) ~= 0
 	-- Smoothing of each animation; AnimSmooth if empty
 	local function smooth(name)
@@ -3315,7 +3368,8 @@ function Update()
 		if V.AnimOpen and not startHidden then appear = 0 end
 		updateEmptyHint()
 		render(true)
-		if notice.missing > 0 then showNotice() end
+		M.checkHwAccel()
+		if notice.missing > 0 or notice.hwaccel then showNotice() end
 		show('MeterPower', V.ShowPower and not M.compact)
 		updateDashState()
 		if showNow then
@@ -3747,6 +3801,8 @@ showNotice = function()
 	elseif notice.missing > 0 then
 		tip = notice.missing == 1 and '1 game is no longer installed: click to remove or keep its tile'
 			or (notice.missing .. ' games are no longer installed: click to remove or keep their tiles')
+	elseif notice.hwaccel then
+		tip = 'Large screen: turn on hardware acceleration in Rainmeter for smooth animations (click to open its settings)'
 	end
 	if tip then SKIN:Bang('!SetOption', 'MeterNotice', 'ToolTipText', tip) end
 	M.noticeTip = tip -- also an entry of the "more" list (compact menu)
@@ -3756,7 +3812,32 @@ showNotice = function()
 end
 
 function OpenNotice()
+	if not notice.update and notice.found == 0 and notice.missing == 0 and notice.hwaccel then
+		-- Rainmeter > Manage > Settings, where the box is; asked only once
+		notice.hwaccel = false
+		SKIN:Bang('!WriteKeyValue', 'Variables', 'HwAccelHint', '1', data .. 'State.inc')
+		showNotice()
+		Hide()
+		SKIN:Bang('!Manage', 'Settings')
+		return
+	end
 	SKIN:Bang(SKIN:GetVariable(notice.update and 'OptionsInfoAction' or 'OptionsImportAction'))
+end
+
+-- Rainmeter draws the whole window on every animation step: on a large
+-- screen without its hardware acceleration ([Rainmeter]
+-- HardwareAcceleration=1 in Rainmeter.ini, Manage > Settings) the
+-- animations stutter. The dot suggests it once (HwAccelHint in State.inc).
+function M.checkHwAccel()
+	if num('HwAccelHint', 0) ~= 0 or V.ScreenW * V.ScreenH < 3000000 then return end
+	local ini = parseIni(SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Rainmeter.ini')
+	if not ini then return end
+	for _, sec in ipairs(ini) do
+		if sec.name:lower() == 'rainmeter' then
+			notice.hwaccel = trim(sec.keys.hardwareacceleration or '0') ~= '1'
+			return
+		end
+	end
 end
 
 -- Options window: the native program (@Resources\Bin\RaintileOptions.exe,
@@ -4808,7 +4889,7 @@ end
 function LaunchStep()
 	if not launching then return end
 	launching.frame = launching.frame + 1
-	drawSplash(math.min(1, launching.frame / math.max(1, V.LaunchAnimFrames)))
+	drawSplash(math.min(1, launching.frame / math.max(1, V.LaunchSteps or V.LaunchAnimFrames)))
 end
 
 function LaunchFinish()

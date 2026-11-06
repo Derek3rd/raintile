@@ -18,7 +18,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Launching a tile](#launching-a-tile)
 - [Dashboard](#dashboard)
   - [Widgets](#widgets)
-  - [Temperatures and fans (HWiNFO)](#temperatures-and-fans-hwinfo)
+  - [Temperatures and fans](#temperatures-and-fans)
   - [Skins in a tile](#skins-in-a-tile)
   - [Custom widgets](#custom-widgets)
   - [Widget gallery](#widget-gallery)
@@ -213,17 +213,20 @@ A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Optio
 | `network` | download and upload speed, and a graph | |
 | `processes` | the programs using the most CPU | `ram` = sorted by memory |
 | `system` | Windows version, PC name, uptime, battery | |
-| `temps` | temperatures (from HWiNFO) | sensors to show, see below |
-| `fans` | fan speeds (from HWiNFO) | sensors to show |
+| `temps` | temperatures (from LibreHardwareMonitor or HWiNFO) | sensors to show, see below |
+| `fans` | fan speeds (from LibreHardwareMonitor or HWiNFO) | sensors to show |
 | `skin` | a Rainmeter skin placed over the tile | its config and file: `illustro\Clock\Clock.ini` |
 | `custom` | a custom widget drawn in the tile | its name in the `Widgets` folder |
 
-### Temperatures and fans (HWiNFO)
+### Temperatures and fans
 
-Windows does not give temperatures to programs without a driver, so Raintile reads them from [HWiNFO](https://www.hwinfo.com/) (free): start it (sensors only is enough), open **Settings** and turn on **Shared Memory Support**. With the free version the shared memory turns off after 12 hours: start HWiNFO again, or keep it running at login.
+Windows does not give temperatures to programs without a driver, so Raintile reads them from a sensor program that runs beside it:
+
+- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (free, open source; looked at first): download it, start it (it asks to run as administrator, to read the sensors) and keep it running: in its menu *Options* turn on *Start Minimized*, *Minimize To Tray* and *Run On Windows Startup*. Raintile reads its sensors through WMI while it runs; nothing to set up.
+- **[HWiNFO](https://www.hwinfo.com/)** (free), when LibreHardwareMonitor is not running: start it (sensors only is enough), open **Settings** and turn on **Shared Memory Support**. Its free version turns the shared memory off after 12 hours: start it again then.
 
 - Without `Param=`, `temps` shows the CPU and GPU temperatures it finds (package, die, hot spot, ...), `fans` the first fans.
-- `Param=` picks the readings, separated by `;`, each one a part of the label as HWiNFO writes it (any case): `Param=CPU Package;GPU Temperature;SSD`. Add `=Name` to rename one: `Param=CPU Package=CPU;GPU Hot Spot=GPU hot`. A label that is not a temperature (or a fan) is looked for among the other readings too, so the widget can show anything HWiNFO measures: `Param=CPU Package;Total CPU Usage=CPU use;GPU Power`. Give it a title of your own with `Label=` (e.g. `Label=HWiNFO`).
+- `Param=` picks the readings, separated by `;`, each one a part of the label as the sensor program writes it (any case; LibreHardwareMonitor and HWiNFO name some of them differently, e.g. `GPU Core` and `GPU Temperature`): `Param=CPU Package;GPU Core;SSD`. Add `=Name` to rename one: `Param=CPU Package=CPU;GPU Hot Spot=GPU hot`. A label that is not a temperature (or a fan) is looked for among the other readings too, so the widget can show anything the sensor program measures: `Param=CPU Package;CPU Total=CPU use;GPU Package` (LibreHardwareMonitor's names; `Total CPU Usage`, `GPU Power` in HWiNFO). Give it a title of your own with `Label=` (e.g. `Label=HWiNFO`).
 
 ### Skins in a tile
 
@@ -333,7 +336,11 @@ Images\Games\
   logo\Diablo.png          logo of the [Diablo] tile, centred
 ```
 
-Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
+Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency.
+
+**Find online...** next to *Background* and *Logo* in the tile editor (Options > the category > the tile) searches the images of that game or app: Steam's own (Steam games), [SteamGridDB](https://www.steamgriddb.com/) (with the key: games of every store and many apps, several of each), [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (logos of apps and services) and, for a link, the icon of its website. Click one and *Use it*: it is downloaded to the tile's folder, like a picked file.
+
+**Auto find images** under *All tiles* (Options > the category) does the same for every tile of the category without a background (**Background**), without a logo (**Logo**) or both (**All**: what each tile is missing), taking the first image found, one tile after the other, with a progress bar and a **Stop** button. To avoid wrong pictures, from SteamGridDB it only takes a game or app of the same name as the tile (or the Steam id of a Steam game). Widgets are left out. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
 
 ### Framing a background
 
@@ -363,18 +370,18 @@ The search (`Scripts\Scan.ps1`, in the background) looks in:
 
 | Source | How | Launched with | Images |
 | --- | --- | --- | --- |
-| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` in every library | `steam://rungameid/<id>` | local library cache (old and 2024+ layout) |
+| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` in every library | `steam://rungameid/<id>` | local library cache (old and 2024+ layout), else Steam's servers, then SteamGridDB |
 | Epic Games | launcher manifests (main games only, no DLC or apps) | Epic launcher link | SteamGridDB |
 | GOG Galaxy | registry | Galaxy, or the game exe | SteamGridDB |
 | Ubisoft Connect | registry | `uplay://launch/<id>` | SteamGridDB |
 | Battle.net | uninstall entries of its games | Battle.net (`--exec="launch <code>"`), or the game's launcher | SteamGridDB |
 | EA app | uninstall entries of Electronic Arts games | the game exe | SteamGridDB |
 | Xbox / Microsoft Store | Store packages with a `MicrosoftGame.config` | `shell:AppsFolder` | SteamGridDB |
-| Apps | Start menu: program shortcuts and Store apps, without uninstallers, help files and the games already found | the shortcut / `shell:AppsFolder` | the program's own icon (as logo) |
+| Apps | Start menu: program shortcuts and Store apps, without uninstallers, help files and the games already found | the shortcut / `shell:AppsFolder` | a logo from Dashboard Icons, or SteamGridDB for an app of that very name, else the program's own icon |
 
 - **The list** shows the cover (Steam) or the icon of each item, with its source, and marks the new ones. Filter by type (All, Games, Apps) or by name; *Show added* also lists what is already in the launcher (dimmed, with its category); *Covers* off gives a compact text list.
 - **Where they go**: by type (games to `ImportCategory`, apps to `AppsCategory`; the category is created if missing) or all to one category.
-- **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. For games without local images, background and logo are downloaded from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Set the key in Options > Import: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
+- **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. Steam games without local images get theirs from Steam's servers (no key needed). Other games, and Steam games without images there, get background and logo from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Apps get a logo from [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (some 3500 apps and services) or, with the key, from SteamGridDB when it has an app of that very name; otherwise the program's icon. Set the key in Options > Import: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
 - Something already in the launcher, in any category (same name or same command), is not listed again.
 - **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear, and on **Import** in the menu of the Options window. A click on it opens the list.
 - **Games no longer installed** are reported by the same search (see below).
@@ -592,6 +599,14 @@ Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Contai
 | `Thumbnails` | `1` | use thumbnails at the exact displayed size (`0` = original images) |
 | `TileHover` | `1` | highlight the tile under the mouse |
 | `FadeDuration` | `0` | open/close fade in ms; copied to `Rainmeter.ini`, applies from the next load |
+| `FrameRate` | `Auto` | steps per second of the animations: `Auto` = 30 from about 3 million pixels (e.g. 3440x1440), 60 below; `60` or `30` to choose. Animations last the same either way |
+
+**Large screens.** Rainmeter draws the whole window again on every step of an animation, so the work grows with the pixels: a launcher covering a 3440x1440 screen has 2.4 times those of 1920x1080. What helps, most first:
+
+- Rainmeter's **hardware acceleration** (Rainmeter > Manage > Settings > *Use hardware acceleration*, then restart Rainmeter): the drawing moves to the graphics card. When it is off and the launcher is that large, the dot on the gear suggests it once; a click opens those settings.
+- `FrameRate=Auto` (or `30`): half the steps, each moving twice as much. While the only thing moving is a background slowly panning (`BgStyle=Pan`), steps drop to 20 per second by themselves.
+- `BgStyle=Crop`: no background moving under the mouse at all; `TileRadius=0` and `EdgeFade=0` take away the shapes drawn over the grid on every step.
+- The window mode (`LauncherMode=Window`) or a smaller area: fewer pixels to draw.
 
 ### Gamepad
 

@@ -208,6 +208,11 @@ BgHoverZoom=1.08
 Thumbnails=1
 ; 1 = highlight the tile under the mouse (one redraw per tile change)
 TileHover=1
+; Steps per second of the animations: Rainmeter draws the whole window on
+; each one, so on very large screens fewer steps keep them smooth. Auto = 30
+; from about 3 million pixels (e.g. 3440x1440, 2560x1440 is 3.7), 60 below;
+; 60 or 30 to choose. Animations last the same either way.
+FrameRate=Auto
 ; Open/close fade duration in ms (0 = instant).
 ; It is copied to Rainmeter.ini and applies from the next load.
 FadeDuration=0

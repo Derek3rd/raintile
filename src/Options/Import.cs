@@ -349,6 +349,37 @@ namespace RaintileOptions
             return destBase + ext;
         }
 
+        // An image from an address into the tile's folder; false if it failed
+        static bool DownloadTileImage(string url, string category, string kind, string tile)
+        {
+            if (string.IsNullOrEmpty(url)) return false;
+            string file = null;
+            try
+            {
+                file = Art.Download(url);
+                Core.CopyTileImage(category, kind, tile, file);
+                return true;
+            }
+            catch { return false; }
+            finally { if (file != null) try { Directory.Delete(Path.GetDirectoryName(file), true); } catch { } }
+        }
+
+        // SteamGridDB for an app: only a game/app of that very name (a search
+        // could find an unrelated game)
+        static void AppSgdbImage(string key, string kind, string appName, string category, string tile)
+        {
+            try
+            {
+                var game = Art.SgdbGame(key, appName, null, true);
+                string id = Json.Str(game, "id");
+                if (id == "") return;
+                var data = SgdbGet(key, (kind == "background" ? "heroes" : "logos") + "/game/" + id) as object[];
+                var first = data != null && data.Length > 0 ? data[0] as Dictionary<string, object> : null;
+                DownloadTileImage(Json.Str(first, "url"), category, kind, tile);
+            }
+            catch { }
+        }
+
         void AddSelectedFound()
         {
             var sel = foundItems.Where(i => foundSelected.Contains(i.Id)).ToList();
@@ -380,18 +411,32 @@ namespace RaintileOptions
                     Core.SetKey(s, "Command", it.Command);
                     Core.SetKey(s, "Source", it.Id);
                     Core.SetKey(s, "Added", DateTime.Now.ToString("yyyy-MM-dd"));   // for Not played yet
-                    // images in the default folders, named after the tile
+                    // images in the default folders, named after the tile: the
+                    // local ones; for games Steam's servers, then SteamGridDB;
+                    // for apps a logo of Dashboard Icons, or SteamGridDB for
+                    // a game/app of that very name; last the program's icon
                     try
                     {
-                        if (it.Hero != "" && File.Exists(it.Hero)) Core.CopyTileImage(b, "background", name, it.Hero);
-                        else if (it.Kind == "game" && key != "")
+                        foreach (var kind in new[] { "background", "logo" })
                         {
-                            try { GetSGDBImage(key, "heroes", name, it.SteamAppId, Path.Combine(Core.ImagesRoot, b, "background", name)); } catch { }
-                        }
-                        if (it.Logo != "" && File.Exists(it.Logo)) Core.CopyTileImage(b, "logo", name, it.Logo);
-                        else if (it.Kind == "game" && key != "")
-                        {
-                            try { GetSGDBImage(key, "logos", name, it.SteamAppId, Path.Combine(Core.ImagesRoot, b, "logo", name)); } catch { }
+                            string local = kind == "background" ? it.Hero : it.Logo;
+                            if (local != "" && File.Exists(local)) { Core.CopyTileImage(b, kind, name, local); continue; }
+                            if (it.Kind == "game")
+                            {
+                                if (DownloadTileImage(Art.SteamImage(it.SteamAppId, kind), b, kind, name)) continue;
+                                if (key != "")
+                                {
+                                    try { GetSGDBImage(key, kind == "background" ? "heroes" : "logos", name, it.SteamAppId, Path.Combine(Core.ImagesRoot, b, kind, name)); } catch { }
+                                }
+                                continue;
+                            }
+                            if (kind == "logo")
+                            {
+                                string icon = null;
+                                try { icon = Art.DashboardIconNames(it.Name).FirstOrDefault(); } catch { }
+                                if (icon != null && DownloadTileImage(Art.DashboardIconUrl(icon), b, kind, name)) continue;
+                            }
+                            if (key != "") AppSgdbImage(key, kind, it.Name, b, name);
                         }
                         if (Core.FindImage(Path.Combine(Core.ImagesRoot, b, "logo"), name) == null && it.Icon != "" && File.Exists(it.Icon))
                             Core.CopyTileImage(b, "logo", name, it.Icon);

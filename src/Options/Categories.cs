@@ -85,8 +85,8 @@ namespace RaintileOptions
             new[] { "network", "Network", "" },
             new[] { "processes", "Processes", "cpu or ram: what they are sorted by." },
             new[] { "system", "System", "" },
-            new[] { "temps", "Temperatures (HWiNFO)", "HWiNFO readings separated by ; (e.g. CPU Package; GPU Temperature; Total CPU Usage), =Name to rename one (GPU Hot Spot=GPU hot). Temperatures first, then any reading with that label. Empty: CPU, GPU and drives." },
-            new[] { "fans", "Fans (HWiNFO)", "Like Temperatures, for fans. Empty: the first fans." },
+            new[] { "temps", "Temperatures (sensors)", "Sensor readings (LibreHardwareMonitor or HWiNFO) separated by ; (e.g. CPU Package; GPU Temperature; Total CPU Usage), =Name to rename one (GPU Hot Spot=GPU hot). Temperatures first, then any reading with that label. Empty: CPU, GPU and drives." },
+            new[] { "fans", "Fans (sensors)", "Like Temperatures, for fans. Empty: the first fans." },
             new[] { "skin", "An installed skin", "<config>\\<file>.ini of a skin in Rainmeter's Skins folder, e.g. illustro\\Clock\\Clock.ini. It is loaded over the tile while the Dashboard is shown." },
             new[] { "custom", "Custom widget", "The name of a widget in the Widgets folder of your data (Widgets\\<name>.ini or Widgets\\<name>\\<name>.ini)." },
         };
@@ -875,6 +875,12 @@ namespace RaintileOptions
             string file = currentFile;
             if (placementHint == null) return;
             placementRow.Visibility = file != null && !IsDashboard(file) ? Visibility.Visible : Visibility.Collapsed;
+            if (autoArtRow != null)
+            {
+                autoArtRow.Visibility = placementRow.Visibility;
+                // a run of another category is still going: its bar and text stay there
+                if (!autoArtBusy) { autoArtStatus.Visibility = Visibility.Collapsed; autoArtTrack.Visibility = Visibility.Collapsed; }
+            }
             if (file == null) { SetLabelHint(placementHint, ""); return; }
             var model = GetModel(file);
             var tiles = Core.GetTiles(model);
@@ -2138,6 +2144,8 @@ namespace RaintileOptions
             placementHint = (TextBlock)placeFormRow.Children[0];   // its label: the summary is its tooltip
             placementRow = placeFormRow;
             AddTo(af, placementRow);
+            autoArtRow = NewAutoArtRow();
+            AddTo(af, autoArtRow);
             btnResetLogos.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "logo placement", new[] { "LogoPos", "LogoScale" }); };
             btnResetFraming.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "background framing", new[] { "BgFocus", "BgZoom" }); };
             btnResetInfo.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "play time placement", new[] { "InfoPos" }, "the top left"); };
@@ -2288,14 +2296,19 @@ namespace RaintileOptions
             {
                 var thumb = NewThumb(FieldHeight);
                 var choose = NewButton("Choose...");
+                var online = NewButton("Find online...", "", "Images of this game or app from Steam, SteamGridDB, Dashboard Icons or its website");
                 var remove = NewClearButton("Remove the " + kind.ToLowerInvariant());
-                var row = NewFieldRow(thumb, choose, remove);
+                var buttons = NewPanel(Orientation.Horizontal);
+                online.Margin = T(8, 0, 0, 0);
+                AddTo(buttons, choose); AddTo(buttons, online);
+                var row = NewFieldRow(thumb, buttons, remove);
                 // the path of the image is the tooltip of the label (set with the tile)
                 var imageRow = NewFormRow(kind, row);
                 AddTo(f, imageRow);
                 var pathLabel = (TextBlock)imageRow.Children[0];
                 if (kind == "Background") { bgThumb = thumb; bgPath = pathLabel; } else { logoThumb = thumb; logoPath = pathLabel; }
                 string k = kind;
+                online.Click += (s, e) => FindTileArt(k);
                 choose.Click += (s, e) =>
                 {
                     var t = GetCurrentTile();

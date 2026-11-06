@@ -231,9 +231,36 @@ public class RaintileDash
         try { return c != null ? c.NextValue() : 0f; } catch { return 0f; }
     }
 
+    // Counters made ahead (the helper calls it in the background when it
+    // starts): making them, the GPU ones above all, takes seconds
+    public void Prepare()
+    {
+        lock (this)
+        {
+            if (!started) Start();
+            if (gpuEngines == null) RefreshGpu();
+        }
+    }
+
+    // The GPU engines come and go with the programs: their list is read again
+    // every 5 s, after the data is sent
+    public void RefreshGpuIfDue()
+    {
+        lock (this)
+        {
+            if ((DateTime.Now - gpuRefresh).TotalSeconds >= 5) RefreshGpu();
+        }
+    }
+
     public string Collect(bool processes, bool sensors)
     {
+        lock (this) { return CollectNow(processes, sensors); }
+    }
+
+    string CollectNow(bool processes, bool sensors)
+    {
         if (!started) Start();
+        if (gpuEngines == null) RefreshGpu();
         var sb = new System.Text.StringBuilder();
         var now = DateTime.Now;
 
@@ -252,7 +279,6 @@ public class RaintileDash
         }
 
         // GPU
-        if ((now - gpuRefresh).TotalSeconds >= 5) RefreshGpu();
         if (gpuEngines != null)
         {
             double g = 0;
@@ -349,13 +375,92 @@ public class RaintileDash
             sb.Append("sys.battery=").Append(ps.BatteryLifePercent).Append('|').Append(ps.ACLineStatus == 1 ? 1 : 0).Append('\n');
 
         // HWiNFO sensors (shared memory, when HWiNFO runs with it on)
-        if (sensors) ReadHwinfo(sb);
+        if (sensors && !ReadLhm(sb)) ReadHwinfo(sb);
         return sb.ToString();
     }
 
     // HWiNFO_SENSORS_SHARED_MEM2: a header, then the sensors and the readings
     // (type|sensor|label|value|unit). Types: 1 temperature, 2 voltage, 3 fan,
     // 4 current, 5 power, 6 clock, 7 usage, 8 other.
+    // Sensors: LibreHardwareMonitor first (open source, no time limit), which
+    // publishes them through WMI (root\LibreHardwareMonitor) while it runs;
+    // HWiNFO's shared memory otherwise (its free version turns it off after
+    // 12 hours). Both give "hw=on", then "hw=<type>|<hardware>|<label>|
+    // <value>|<unit>" with HWiNFO's types: 1 temperature, 2 voltage, 3 fan,
+    // 4 current, 5 power, 6 clock, 7 usage, 8 other.
+    System.Management.ManagementScope lhmScope;
+    Dictionary<string, string> lhmHardware;
+    DateTime lhmHardwareTime, lhmRetry = DateTime.MinValue;
+
+    static void LhmType(string kind, out int type, out string unit)
+    {
+        switch (kind)
+        {
+            case "Temperature": type = 1; unit = "\u00B0C"; break;
+            case "Voltage": type = 2; unit = "V"; break;
+            case "Fan": type = 3; unit = "RPM"; break;
+            case "Current": type = 4; unit = "A"; break;
+            case "Power": type = 5; unit = "W"; break;
+            case "Clock": type = 6; unit = "MHz"; break;
+            case "Load": type = 7; unit = "%"; break;
+            case "Control": case "Level": type = 8; unit = "%"; break;
+            case "Data": type = 8; unit = "GB"; break;
+            case "SmallData": type = 8; unit = "MB"; break;
+            case "Throughput": type = 8; unit = "B/s"; break;
+            case "Frequency": type = 8; unit = "Hz"; break;
+            default: type = 8; unit = ""; break;
+        }
+    }
+
+    bool ReadLhm(System.Text.StringBuilder sb)
+    {
+        // not running: asked again every 10 s, not on every reading
+        if (DateTime.Now < lhmRetry) return false;
+        try
+        {
+            if (lhmScope == null || !lhmScope.IsConnected)
+            {
+                lhmScope = new System.Management.ManagementScope(@"\\.\root\LibreHardwareMonitor");
+                lhmScope.Connect();
+            }
+            if (lhmHardware == null || (DateTime.Now - lhmHardwareTime).TotalSeconds >= 30)
+            {
+                var hw = new Dictionary<string, string>();
+                using (var q = new System.Management.ManagementObjectSearcher(lhmScope, new System.Management.ObjectQuery("SELECT Identifier, Name FROM Hardware")))
+                    foreach (System.Management.ManagementObject o in q.Get())
+                        using (o) hw[Convert.ToString(o["Identifier"])] = Clean(Convert.ToString(o["Name"]));
+                lhmHardware = hw;
+                lhmHardwareTime = DateTime.Now;
+            }
+            var lines = new System.Text.StringBuilder();
+            int count = 0;
+            using (var q = new System.Management.ManagementObjectSearcher(lhmScope, new System.Management.ObjectQuery("SELECT Name, SensorType, Value, Parent FROM Sensor")))
+                foreach (System.Management.ManagementObject o in q.Get())
+                    using (o)
+                    {
+                        object v = o["Value"];
+                        if (v == null) continue;
+                        int type; string unit;
+                        LhmType(Convert.ToString(o["SensorType"]), out type, out unit);
+                        string hwName;
+                        if (!lhmHardware.TryGetValue(Convert.ToString(o["Parent"]), out hwName)) hwName = "";
+                        lines.Append("hw=").Append(type).Append('|').Append(hwName).Append('|').Append(Clean(Convert.ToString(o["Name"]))).Append('|')
+                             .Append(N(Convert.ToDouble(v))).Append('|').Append(unit).Append('\n');
+                        count++;
+                    }
+            if (count == 0) { lhmRetry = DateTime.Now.AddSeconds(10); return false; }
+            sb.Append("hw=on\n").Append(lines.ToString());
+            return true;
+        }
+        catch
+        {
+            lhmScope = null;
+            lhmHardware = null;
+            lhmRetry = DateTime.Now.AddSeconds(10);
+            return false;
+        }
+    }
+
     static void ReadHwinfo(System.Text.StringBuilder sb)
     {
         IntPtr map = OpenFileMapping(4 /* FILE_MAP_READ */, false, @"Global\HWiNFO_SENS_SM2");
@@ -992,11 +1097,25 @@ public class RaintilePad
     int dashInterval = 1000;
     bool dashOn, dashProcs = true, dashSensors = true;
 
+    // The data is collected on a thread of its own: it takes some time (the
+    // processes, the GPU) and the gamepad must not wait for it. The counters
+    // are made when the helper starts (PrepareDash).
+    volatile bool collecting;
+
+    public void PrepareDash()
+    {
+        // only for who uses a Dashboard (its data was written before)
+        if (DashFlag == null || DashFile == null || !System.IO.File.Exists(DashFile)) return;
+        dash = new RaintileDash();
+        var d = dash;
+        ThreadPool.QueueUserWorkItem(delegate { try { d.Prepare(); } catch { } });
+    }
+
     void DashStep(IntPtr window, long now)
     {
         if (now >= nextDashCheck)
         {
-            nextDashCheck = now + 250;
+            nextDashCheck = now + 100;
             bool on = System.IO.File.Exists(DashFlag);
             if (on && !dashOn)
             {
@@ -1010,23 +1129,37 @@ public class RaintilePad
                 }
                 catch { }
                 nextDash = now; // right away
+                dashFirst = true;
             }
             dashOn = on;
         }
-        if (!dashOn || now < nextDash) return;
-        nextDash = now + dashInterval;
+        if (!dashOn || now < nextDash || collecting) return;
+        // the second time soon after the first: CPU use of the processes and
+        // network speed need two readings
+        nextDash = now + (dashFirst ? Math.Min(300, dashInterval) : dashInterval);
+        dashFirst = false;
         if (dash == null) dash = new RaintileDash();
-        string data = dash.Collect(dashProcs, dashSensors);
-        try
+        var d = dash;
+        bool procs = dashProcs, sensors = dashSensors;
+        string bang = Call("DashTick()");
+        collecting = true;
+        ThreadPool.QueueUserWorkItem(delegate
         {
-            string tmp = DashFile + ".tmp";
-            System.IO.File.WriteAllText(tmp, data, new System.Text.UTF8Encoding(false));
-            if (System.IO.File.Exists(DashFile)) System.IO.File.Delete(DashFile);
-            System.IO.File.Move(tmp, DashFile);
-        }
-        catch { return; }
-        Send(window, Call("DashTick()"));
+            try
+            {
+                string data = d.Collect(procs, sensors);
+                string tmp = DashFile + ".tmp";
+                System.IO.File.WriteAllText(tmp, data, new System.Text.UTF8Encoding(false));
+                if (System.IO.File.Exists(DashFile)) System.IO.File.Delete(DashFile);
+                System.IO.File.Move(tmp, DashFile);
+                Send(window, bang);
+                d.RefreshGpuIfDue();
+            }
+            catch { }
+            finally { collecting = false; }
+        });
     }
+    bool dashFirst;
 
     static void Send(IntPtr window, string bang)
     {
@@ -1083,7 +1216,7 @@ public class RaintilePad
 }
 '@
 
-Add-Type -TypeDefinition $source -Language CSharp
+Add-Type -TypeDefinition $source -Language CSharp -ReferencedAssemblies System.Management
 
 # Single copy: ask the previous one to quit and take its place
 $quit = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\Raintile.Gamepad.Quit')
@@ -1102,6 +1235,7 @@ if ($Generated) {
     $pad.DashFlag = Join-Path $Generated 'DashOn.txt'
     $pad.DashFile = Join-Path $Generated 'DashData.txt'
     $pad.EdgeFile = Join-Path $Generated 'DockEdge.txt'
+    if ($Dash) { $pad.PrepareDash() }
     $pad.SizeFile = Join-Path $Generated 'LauncherSize.txt'
 }
 if ($pad.TrackEnabled) {

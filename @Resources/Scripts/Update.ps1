@@ -1,6 +1,11 @@
 # Raintile: checks GitHub for a newer release (started by the skin, at most
 # once a day, and by "Check now" in the Options window).
 #
+# UpdateChannel=Nightly (Settings.inc) also looks at the pre-release
+# "nightly", built on every change (1.2.2.5: the release after 1.2.1, 5th
+# build): the newer of the two is offered. A release counts as newer than the
+# nightly builds of the same number (1.2.2 > 1.2.2.5).
+#
 # The latest release of the repository (api.github.com, no account needed):
 # its version is read from the tag (v1.0.2) or, failing that, from the title
 # ("1.0.1 - ..."), and compared with Version= in Raintile.ini. The result is
@@ -16,6 +21,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Resources,
     [Parameter(Mandatory = $true)][string]$Data,
     [string]$Repository = 'Derek3rd/raintile',
+    # Release or Nightly; if empty, UpdateChannel of Settings.inc
+    [string]$Channel = '',
     # check even if the last check is less than a day old
     [switch]$Force,
     [switch]$NoRun,
@@ -44,6 +51,24 @@ function ConvertTo-Version([string]$text) {
     if (-not $m.Success) { return $null }
     $parts = @(1..4 | ForEach-Object { if ($m.Groups[$_].Success) { [int]$m.Groups[$_].Value } else { 0 } })
     return New-Object Version($parts[0], $parts[1], $parts[2], $parts[3])
+}
+
+# For comparing: a release (three numbers) is newer than the nightly builds
+# of its number (four numbers: 1.2.2.5 < 1.2.2)
+function Get-VersionKey([version]$v) {
+    if (-not $v) { return [int64]-1 }
+    $rev = if ($v.Revision -gt 0) { $v.Revision } else { 999999 }
+    return ([int64]$v.Major * 1000 + $v.Minor) * 1000000000000 + [int64]$v.Build * 1000000 + $rev
+}
+
+function Get-Channel {
+    if ($Channel) { return $Channel }
+    foreach ($file in (Join-Path $Data 'Settings.inc'), (Join-Path $Resources 'Settings.inc')) {
+        if (-not (Test-Path -LiteralPath $file)) { continue }
+        $m = [regex]::Match([IO.File]::ReadAllText($file), '(?m)^\s*UpdateChannel\s*=\s*(\S+)')
+        if ($m.Success) { return $m.Groups[1].Value }
+    }
+    return 'Release'
 }
 
 function Format-Version([version]$v) {
@@ -89,24 +114,36 @@ function Read-UpdateInfo {
 function Invoke-UpdateCheck {
     $current = Get-InstalledVersion
     $info = [ordered]@{
-        Checked = (Get-Date).ToString('s'); Current = $current; Latest = ''; Newer = $false
+        Checked = (Get-Date).ToString('s'); Current = $current; Channel = (Get-Channel); Latest = ''; Newer = $false
         Title = ''; Notes = ''; Page = "https://github.com/$Repository/releases"; Asset = ''; Error = ''
     }
     try {
+        $releases = @()
         if ($ResponseFile) {
-            $release = [IO.File]::ReadAllText($ResponseFile) | ConvertFrom-Json
+            $releases += [IO.File]::ReadAllText($ResponseFile) | ConvertFrom-Json
         } else {
             # GitHub wants TLS 1.2 and a User-Agent
             [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases/latest" -TimeoutSec 20 `
-                -Headers @{ 'User-Agent' = 'Raintile'; Accept = 'application/vnd.github+json' }
+            $headers = @{ 'User-Agent' = 'Raintile'; Accept = 'application/vnd.github+json' }
+            try { $releases += Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases/latest" -TimeoutSec 20 -Headers $headers }
+            catch { if ((Get-Channel) -notmatch '(?i)^nightly') { throw } }
+            if ((Get-Channel) -match '(?i)^nightly') {
+                try { $releases += Invoke-RestMethod -Uri "https://api.github.com/repos/$Repository/releases/tags/nightly" -TimeoutSec 20 -Headers $headers }
+                catch { if (-not $releases.Count) { throw } }
+            }
         }
-        $latest = ConvertTo-Version $release.tag_name
-        if (-not $latest) { $latest = ConvertTo-Version $release.name }
+        # the newest of them (a release beats the nightly builds of its number)
+        $release = $null; $latest = $null
+        foreach ($r in $releases) {
+            $v = ConvertTo-Version $r.tag_name
+            if (-not $v) { $v = ConvertTo-Version $r.name }
+            if (-not $release -or (Get-VersionKey $v) -gt (Get-VersionKey $latest)) { $release = $r; $latest = $v }
+        }
+        if (-not $release) { throw 'no release found' }
         $installed = ConvertTo-Version $current
         if ($latest) {
             $info.Latest = Format-Version $latest
-            $info.Newer = [bool]($installed -and $latest -gt $installed)
+            $info.Newer = [bool]($installed -and (Get-VersionKey $latest) -gt (Get-VersionKey $installed))
         }
         $info.Title = "$($release.name)"
         $info.Notes = "$($release.body)"
@@ -129,6 +166,8 @@ if ($info -and -not $Force) {
     try { $fresh = ((Get-Date) - [DateTime]::Parse($info.Checked)).TotalHours -lt 24 } catch { }
     # an update installed since the last check: check again
     if ($info.Current -ne (Get-InstalledVersion)) { $fresh = $false }
+    # another channel chosen since
+    if ("$($info.Channel)" -ne (Get-Channel)) { $fresh = $false }
 }
 if (-not $fresh) { $info = Invoke-UpdateCheck }
 

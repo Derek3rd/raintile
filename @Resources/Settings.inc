@@ -298,6 +298,9 @@ SteamGridDBKey=
 ; 1 = check GitHub for a new version (at most once a day): a dot on the gear
 ; and Options > Info show it, and install it with one click
 CheckUpdates=1
+; Release = only the releases; Nightly = also the build made on every change
+; (pre-release "nightly", e.g. 1.2.2.5): newer, but not tested as much
+UpdateChannel=Release
 
 ; --- Diagnostics ----------------------------------------------------------------
 ; 1 = write to the Rainmeter log (Manage > Log) what happens on confirm, on

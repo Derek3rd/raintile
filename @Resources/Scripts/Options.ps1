@@ -472,7 +472,9 @@ $schema = @(
                     (S 'bool' 'TileHover' 'Highlight the tile under the mouse')
                 ) }
             @{ Title = 'Updates'; Items = @(
-                    (S 'bool' 'CheckUpdates' 'Check for updates' 'Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info.')
+                    (S 'bool' 'CheckUpdates' 'Check for updates' 'Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info.'),
+                    (S 'choice' 'UpdateChannel' 'Updates' 'Nightly: also the build made on every change (e.g. 1.2.2.5, before the release 1.2.2): the newest features, not tested as much. A copy of the skin is kept in Skins\@Backup before each update.' @{ Choices = @(
+                                @('Release', 'Releases'), @('Nightly', 'Nightly builds')) })
                 ) }
             @{ Title = 'Diagnostics'; Items = @(
                     (S 'bool' 'DebugLog' 'Debug log' 'Writes details to the Rainmeter log (Manage > Log).')
@@ -529,7 +531,7 @@ $defaults = @{
     ShowClock = '1'; ShowDate = '1'; ClockFormat = '%H:%M'; DateFormat = '%A %#d %B'; ClockFontSize = '18'
     ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps'; ImportFolders = ''; ImportFoldersKind = 'Game'
     ScanOnStart = '1'; SteamGridDBKey = ''
-    CheckUpdates = '1'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
+    CheckUpdates = '1'; UpdateChannel = 'Release'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
     BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; EdgeFade = '1'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
     AccentColor = '0,210,180,255'; ActiveCategoryColor = '0,210,180,70'; HoverCategoryColor = '255,255,255,20'
     TextColor = '240,240,245,255'; TextDimColor = '150,150,160,255'

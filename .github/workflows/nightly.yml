@@ -1,0 +1,79 @@
+# Nightly builds: on every push to main, the Options program and the .rmskin
+# are built and published as the pre-release "nightly" (the previous one is
+# replaced). Its version is the next one after the last release plus the
+# number of commits since it: after v1.2.1, 1.2.2.1, 1.2.2.2, ... (if
+# Raintile.ini already says a version not released yet, e.g. 1.3.0, that one:
+# 1.3.0.N). Skins with UpdateChannel=Nightly are offered these builds; the
+# others only see the releases ("latest" leaves pre-releases out).
+
+name: Nightly
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# one at a time: the newest push wins
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the tags and the commits since the last release
+
+      - name: Nightly version
+        id: version
+        run: |
+          base=$(python3 -c "import re;print(re.search(r'(?m)^\s*Version\s*=\s*([0-9.]+)', open('Raintile.ini', encoding='utf-8').read()).group(1))")
+          last=$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)
+          # the version of Raintile.ini is released already: the next one
+          if git rev-parse -q --verify "refs/tags/v$base" >/dev/null; then
+            IFS=. read -r major minor patch <<< "$base"
+            base="$major.$minor.$((patch + 1))"
+          fi
+          if [ -n "$last" ]; then count=$(git rev-list --count "$last"..HEAD); else count=$(git rev-list --count HEAD); fi
+          echo "last=$last" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "version=$base.$count" >> "$GITHUB_OUTPUT"
+          echo "Nightly $base.$count (since ${last:-the start}: $count commits)"
+
+      - name: Check the Options schema
+        if: steps.version.outputs.count != '0'
+        run: python3 tools/gen_options_schema.py --check
+
+      - name: Build the Options program
+        if: steps.version.outputs.count != '0'
+        run: |
+          dotnet build src/Options/RaintileOptions.csproj -c Release -o build/options
+          mkdir -p @Resources/Bin
+          cp build/options/RaintileOptions.exe @Resources/Bin/
+
+      - name: Build the .rmskin
+        if: steps.version.outputs.count != '0'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: python3 tools/build_rmskin.py --nightly-version "$VERSION"
+
+      - name: Publish the pre-release "nightly"
+        if: steps.version.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          LAST: ${{ steps.version.outputs.last }}
+        run: |
+          {
+            echo "Nightly build $VERSION of \`${GITHUB_SHA::7}\`: not a release, for testing. Changes since ${LAST:-the start}:"
+            echo
+            if [ -n "$LAST" ]; then git log --no-merges --format='- %s' "$LAST"..HEAD | head -40; else git log --no-merges --format='- %s' -40; fi
+          } > notes.md
+          gh release delete nightly --cleanup-tag --yes --repo "$GITHUB_REPOSITORY" || true
+          gh release create nightly dist/*.rmskin --prerelease --target "$GITHUB_SHA" \
+            --title "Raintile nightly $VERSION" --notes-file notes.md --repo "$GITHUB_REPOSITORY"

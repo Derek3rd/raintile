@@ -67,11 +67,19 @@ def skin_files():
                 yield rel
 
 
-def build(version, out_dir):
+def build(version, out_dir, stamp=None):
+    """stamp: a version written into the packaged Raintile.ini instead of its
+    own (nightly builds: 1.2.2.5)"""
     data = io.BytesIO()
     with zipfile.ZipFile(data, 'w', zipfile.ZIP_DEFLATED) as z:
         z.writestr('RMSKIN.ini', RMSKIN_INI.format(skin=SKIN, version=version))
         for rel in skin_files():
+            if stamp and rel == 'Raintile.ini':
+                with open(os.path.join(ROOT, rel), 'rb') as f:
+                    text = f.read().decode('utf-8')
+                text = re.sub(r'(?m)^(\s*Version\s*=\s*).*?(\r?)$', lambda m: m.group(1) + stamp + m.group(2), text, count=1)
+                z.writestr('Skins/%s/%s' % (SKIN, rel), text.encode('utf-8'))
+                continue
             z.write(os.path.join(ROOT, rel), 'Skins/%s/%s' % (SKIN, rel))
         for bits in ('32bit', '64bit'):
             dll = os.path.join(ROOT, 'tools', 'plugins', bits, 'HotKey.dll')
@@ -109,8 +117,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--version', help='expected version (e.g. the tag without "v")')
     parser.add_argument('--out', default=os.path.join(ROOT, 'dist'))
+    parser.add_argument('--nightly-version', help='nightly build: this version (e.g. 1.2.2.5) in the package and its Raintile.ini')
     args = parser.parse_args()
     version = skin_version()
+    if args.nightly_version:
+        if not re.match(r'^\d+\.\d+\.\d+\.\d+$', args.nightly_version):
+            sys.exit('a nightly version has four numbers: ' + args.nightly_version)
+        out = build(args.nightly_version, args.out, args.nightly_version)
+        size, count = check(out)
+        print('%s: %d bytes, %d files' % (out, size, count))
+        return
     # a tag with a version number (v1.0.3) must match; other tags are not checked
     if args.version and re.match(r'^[vV]?\d+(\.\d+)*$', args.version) and args.version.lstrip('vV') != version:
         sys.exit('Version= in Raintile.ini is %s, the release says %s: update Raintile.ini' % (version, args.version))

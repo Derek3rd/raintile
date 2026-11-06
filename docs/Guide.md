@@ -18,7 +18,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Launching a tile](#launching-a-tile)
 - [Dashboard](#dashboard)
   - [Widgets](#widgets)
-  - [Temperatures and fans (HWiNFO)](#temperatures-and-fans-hwinfo)
+  - [Temperatures and fans](#temperatures-and-fans)
   - [Skins in a tile](#skins-in-a-tile)
   - [Custom widgets](#custom-widgets)
   - [Widget gallery](#widget-gallery)
@@ -213,17 +213,20 @@ A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Optio
 | `network` | download and upload speed, and a graph | |
 | `processes` | the programs using the most CPU | `ram` = sorted by memory |
 | `system` | Windows version, PC name, uptime, battery | |
-| `temps` | temperatures (from HWiNFO) | sensors to show, see below |
-| `fans` | fan speeds (from HWiNFO) | sensors to show |
+| `temps` | temperatures (from LibreHardwareMonitor or HWiNFO) | sensors to show, see below |
+| `fans` | fan speeds (from LibreHardwareMonitor or HWiNFO) | sensors to show |
 | `skin` | a Rainmeter skin placed over the tile | its config and file: `illustro\Clock\Clock.ini` |
 | `custom` | a custom widget drawn in the tile | its name in the `Widgets` folder |
 
-### Temperatures and fans (HWiNFO)
+### Temperatures and fans
 
-Windows does not give temperatures to programs without a driver, so Raintile reads them from [HWiNFO](https://www.hwinfo.com/) (free): start it (sensors only is enough), open **Settings** and turn on **Shared Memory Support**. With the free version the shared memory turns off after 12 hours: start HWiNFO again, or keep it running at login.
+Windows does not give temperatures to programs without a driver, so Raintile reads them from a sensor program that runs beside it:
+
+- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (free, open source; looked at first): download it, start it (it asks to run as administrator, to read the sensors) and keep it running: in its menu *Options* turn on *Start Minimized*, *Minimize To Tray* and *Run On Windows Startup*. Raintile reads its sensors through WMI while it runs; nothing to set up.
+- **[HWiNFO](https://www.hwinfo.com/)** (free), when LibreHardwareMonitor is not running: start it (sensors only is enough), open **Settings** and turn on **Shared Memory Support**. Its free version turns the shared memory off after 12 hours: start it again then.
 
 - Without `Param=`, `temps` shows the CPU and GPU temperatures it finds (package, die, hot spot, ...), `fans` the first fans.
-- `Param=` picks the readings, separated by `;`, each one a part of the label as HWiNFO writes it (any case): `Param=CPU Package;GPU Temperature;SSD`. Add `=Name` to rename one: `Param=CPU Package=CPU;GPU Hot Spot=GPU hot`. A label that is not a temperature (or a fan) is looked for among the other readings too, so the widget can show anything HWiNFO measures: `Param=CPU Package;Total CPU Usage=CPU use;GPU Power`. Give it a title of your own with `Label=` (e.g. `Label=HWiNFO`).
+- `Param=` picks the readings, separated by `;`, each one a part of the label as the sensor program writes it (any case; LibreHardwareMonitor and HWiNFO name some of them differently, e.g. `GPU Core` and `GPU Temperature`): `Param=CPU Package;GPU Core;SSD`. Add `=Name` to rename one: `Param=CPU Package=CPU;GPU Hot Spot=GPU hot`. A label that is not a temperature (or a fan) is looked for among the other readings too, so the widget can show anything the sensor program measures: `Param=CPU Package;CPU Total=CPU use;GPU Package` (LibreHardwareMonitor's names; `Total CPU Usage`, `GPU Power` in HWiNFO). Give it a title of your own with `Label=` (e.g. `Label=HWiNFO`).
 
 ### Skins in a tile
 

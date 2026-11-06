@@ -429,7 +429,7 @@ $schema = @(
             @{ Dash = $true; Items = @() }
             @{ Title = 'Widgets'; Help = 'The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.'; Items = @(
                     (Num 'DashInterval' 'Update every' 250 5000 250 'ms' 'Only while a Dashboard is on screen.'),
-                    (S 'info' '' 'Temperatures and fans' 'From HWiNFO (free, hwinfo.com): keep it running with Settings > Shared Memory Support on.'),
+                    (S 'info' '' 'Temperatures and fans' 'From LibreHardwareMonitor (free, open source: keep it running, e.g. Options > Start at login). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours).'),
                     (S 'info' '' 'Custom widgets' 'Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>.')
                 ) }
             @{ Market = $true; Items = @() }

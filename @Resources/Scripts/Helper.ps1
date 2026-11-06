@@ -375,13 +375,92 @@ public class RaintileDash
             sb.Append("sys.battery=").Append(ps.BatteryLifePercent).Append('|').Append(ps.ACLineStatus == 1 ? 1 : 0).Append('\n');
 
         // HWiNFO sensors (shared memory, when HWiNFO runs with it on)
-        if (sensors) ReadHwinfo(sb);
+        if (sensors && !ReadLhm(sb)) ReadHwinfo(sb);
         return sb.ToString();
     }
 
     // HWiNFO_SENSORS_SHARED_MEM2: a header, then the sensors and the readings
     // (type|sensor|label|value|unit). Types: 1 temperature, 2 voltage, 3 fan,
     // 4 current, 5 power, 6 clock, 7 usage, 8 other.
+    // Sensors: LibreHardwareMonitor first (open source, no time limit), which
+    // publishes them through WMI (root\LibreHardwareMonitor) while it runs;
+    // HWiNFO's shared memory otherwise (its free version turns it off after
+    // 12 hours). Both give "hw=on", then "hw=<type>|<hardware>|<label>|
+    // <value>|<unit>" with HWiNFO's types: 1 temperature, 2 voltage, 3 fan,
+    // 4 current, 5 power, 6 clock, 7 usage, 8 other.
+    System.Management.ManagementScope lhmScope;
+    Dictionary<string, string> lhmHardware;
+    DateTime lhmHardwareTime, lhmRetry = DateTime.MinValue;
+
+    static void LhmType(string kind, out int type, out string unit)
+    {
+        switch (kind)
+        {
+            case "Temperature": type = 1; unit = "\u00B0C"; break;
+            case "Voltage": type = 2; unit = "V"; break;
+            case "Fan": type = 3; unit = "RPM"; break;
+            case "Current": type = 4; unit = "A"; break;
+            case "Power": type = 5; unit = "W"; break;
+            case "Clock": type = 6; unit = "MHz"; break;
+            case "Load": type = 7; unit = "%"; break;
+            case "Control": case "Level": type = 8; unit = "%"; break;
+            case "Data": type = 8; unit = "GB"; break;
+            case "SmallData": type = 8; unit = "MB"; break;
+            case "Throughput": type = 8; unit = "B/s"; break;
+            case "Frequency": type = 8; unit = "Hz"; break;
+            default: type = 8; unit = ""; break;
+        }
+    }
+
+    bool ReadLhm(System.Text.StringBuilder sb)
+    {
+        // not running: asked again every 10 s, not on every reading
+        if (DateTime.Now < lhmRetry) return false;
+        try
+        {
+            if (lhmScope == null || !lhmScope.IsConnected)
+            {
+                lhmScope = new System.Management.ManagementScope(@"\\.\root\LibreHardwareMonitor");
+                lhmScope.Connect();
+            }
+            if (lhmHardware == null || (DateTime.Now - lhmHardwareTime).TotalSeconds >= 30)
+            {
+                var hw = new Dictionary<string, string>();
+                using (var q = new System.Management.ManagementObjectSearcher(lhmScope, new System.Management.ObjectQuery("SELECT Identifier, Name FROM Hardware")))
+                    foreach (System.Management.ManagementObject o in q.Get())
+                        using (o) hw[Convert.ToString(o["Identifier"])] = Clean(Convert.ToString(o["Name"]));
+                lhmHardware = hw;
+                lhmHardwareTime = DateTime.Now;
+            }
+            var lines = new System.Text.StringBuilder();
+            int count = 0;
+            using (var q = new System.Management.ManagementObjectSearcher(lhmScope, new System.Management.ObjectQuery("SELECT Name, SensorType, Value, Parent FROM Sensor")))
+                foreach (System.Management.ManagementObject o in q.Get())
+                    using (o)
+                    {
+                        object v = o["Value"];
+                        if (v == null) continue;
+                        int type; string unit;
+                        LhmType(Convert.ToString(o["SensorType"]), out type, out unit);
+                        string hwName;
+                        if (!lhmHardware.TryGetValue(Convert.ToString(o["Parent"]), out hwName)) hwName = "";
+                        lines.Append("hw=").Append(type).Append('|').Append(hwName).Append('|').Append(Clean(Convert.ToString(o["Name"]))).Append('|')
+                             .Append(N(Convert.ToDouble(v))).Append('|').Append(unit).Append('\n');
+                        count++;
+                    }
+            if (count == 0) { lhmRetry = DateTime.Now.AddSeconds(10); return false; }
+            sb.Append("hw=on\n").Append(lines.ToString());
+            return true;
+        }
+        catch
+        {
+            lhmScope = null;
+            lhmHardware = null;
+            lhmRetry = DateTime.Now.AddSeconds(10);
+            return false;
+        }
+    }
+
     static void ReadHwinfo(System.Text.StringBuilder sb)
     {
         IntPtr map = OpenFileMapping(4 /* FILE_MAP_READ */, false, @"Global\HWiNFO_SENS_SM2");
@@ -1137,7 +1216,7 @@ public class RaintilePad
 }
 '@
 
-Add-Type -TypeDefinition $source -Language CSharp
+Add-Type -TypeDefinition $source -Language CSharp -ReferencedAssemblies System.Management
 
 # Single copy: ask the previous one to quit and take its place
 $quit = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\Raintile.Gamepad.Quit')

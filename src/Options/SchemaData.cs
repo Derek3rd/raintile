@@ -222,7 +222,7 @@ namespace RaintileOptions
                 new Group { Title = "Widgets", Help = "The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.", Items = new List<Item>
                 {
                     new Item { Kind = "int", Key = "DashInterval", Label = "Update every", Help = "Only while a Dashboard is on screen.", Min = 250.0, Max = 5000.0, Step = 250.0, Unit = "ms" },
-                    new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From HWiNFO (free, hwinfo.com): keep it running with Settings > Shared Memory Support on." },
+                    new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From LibreHardwareMonitor (free, open source: keep it running, e.g. Options > Start at login). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours)." },
                     new Item { Kind = "info", Key = "", Label = "Custom widgets", Help = "Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>." },
                 } },
                 new Group { Title = null, Help = null, Market = true, Items = new List<Item>

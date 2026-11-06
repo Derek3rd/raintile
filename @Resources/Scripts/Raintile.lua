@@ -1977,7 +1977,7 @@ function D.readDashData()
 			if D.LIST_KEYS[k] then d[k][#d[k] + 1] = v else d[k] = v end
 		end
 	end
-	-- HWiNFO readings: { type, sensor, label, value, unit }
+	-- sensor readings (LibreHardwareMonitor or HWiNFO): { type, sensor, label, value, unit }
 	local hw = {}
 	for _, v in ipairs(d.hw) do
 		local ty, sensor, label, value, unit = v:match('^(%d+)|(.-)|(.-)|([^|]*)|(.*)$')
@@ -2012,8 +2012,9 @@ function D.fmtReading(r)
 end
 
 -- The temperatures shown: Param= labels separated by ";", or the usual ones
-D.DEFAULT_TEMPS = { 'CPU Package', 'Tctl/Tdie', 'CPU (Tctl/Tdie)', 'CPU Die', 'GPU Temperature', 'GPU Hot Spot', 'Drive Temperature' }
--- Param= is "label;label=Name;..." (a part of the HWiNFO label, then the name
+-- (labels of LibreHardwareMonitor and of HWiNFO)
+D.DEFAULT_TEMPS = { 'CPU Package', 'Tctl/Tdie', 'CPU (Tctl/Tdie)', 'CPU Die', 'GPU Temperature', 'GPU Core', 'GPU Hot Spot', 'Drive Temperature' }
+-- Param= is "label;label=Name;..." (a part of the sensor's label, then the name
 -- to show); without it the usual temperatures, or the first fans
 function D.tempRows(d, param, ty)
 	local rows, seen = {}, {}
@@ -2331,7 +2332,7 @@ function D.fillWidget(t)
 		local used, total = tonumber(d['gpu.vram'] or ''), tonumber(d['gpu.vramtotal'] or '')
 		local sub = d['gpu.name'] or ''
 		if used then sub = sub .. '  \194\183  ' .. D.fmtBytes(used) .. (total and total > 0 and (' / ' .. D.fmtBytes(total)) or '') end
-		local temp = d.hwOn and D.findReading(d, 'GPU Temperature', 1)
+		local temp = d.hwOn and (D.findReading(d, 'GPU Temperature', 1) or D.findReading(d, 'GPU Core', 1))
 		if temp then sub = sub .. '  \194\183  ' .. D.fmtReading(temp) end
 		value(d.gpu and string.format('%d%%', math.floor(tonumber(d.gpu) + 0.5)) or '-', sub)
 		graph(dash.hist.gpu, 100)
@@ -2397,7 +2398,7 @@ function D.fillWidget(t)
 		list(lines)
 	elseif kind == 'temps' or kind == 'fans' then
 		if not d.hwOn then
-			value('-', 'Start HWiNFO with Shared Memory Support on')
+			value('-', 'Start LibreHardwareMonitor (or HWiNFO with Shared Memory)')
 			return
 		end
 		local rows = D.tempRows(d, w.param, kind == 'temps' and 1 or 3)

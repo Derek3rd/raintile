@@ -2019,6 +2019,10 @@ end
 D.DEFAULT_TEMPS = { 'CPU Package', 'Tctl/Tdie', 'CPU (Tctl/Tdie)', 'CPU Die', 'GPU Temperature', 'GPU Core', 'GPU Hot Spot', 'Drive Temperature' }
 -- Param= is "label;label=Name;..." (a part of the sensor's label, then the name
 -- to show); without it the usual temperatures, or the first fans
+-- "load:GPU Core": only readings of that kind (the same label can be a
+-- temperature, a load and a clock)
+D.READING_TYPES = { temp = 1, temperature = 1, volt = 2, voltage = 2, fan = 3, current = 4, power = 5,
+	clock = 6, load = 7, usage = 7, use = 7, data = 8, other = 8 }
 function D.tempRows(d, param, ty)
 	local rows, seen = {}, {}
 	local wanted = {}
@@ -2026,7 +2030,10 @@ function D.tempRows(d, param, ty)
 		for p in param:gmatch('[^;]+') do
 			local label, name = p:match('^(.-)=(.*)$')
 			label = trim(label or p)
-			if label ~= '' then wanted[#wanted + 1] = { label, name and trim(name) ~= '' and trim(name) or nil } end
+			local kind, rest = label:match('^(%a+)%s*:%s*(.+)$')
+			local only = kind and D.READING_TYPES[kind:lower()]
+			if only then label = trim(rest) end
+			if label ~= '' then wanted[#wanted + 1] = { label, name and trim(name) ~= '' and trim(name) or nil, only } end
 		end
 	elseif ty == 1 then
 		for _, l in ipairs(D.DEFAULT_TEMPS) do wanted[#wanted + 1] = { l } end
@@ -2039,7 +2046,9 @@ function D.tempRows(d, param, ty)
 	for _, w in ipairs(wanted) do
 		-- readings of the kind first (temperatures, fans), then any other
 		-- (usage, clocks, power...) with that label
-		local r = D.findReading(d, w[1], ty) or (param ~= '' and D.findReading(d, w[1], nil))
+		local r
+		if w[3] then r = D.findReading(d, w[1], w[3])
+		else r = D.findReading(d, w[1], ty) or (param ~= '' and D.findReading(d, w[1], nil)) end
 		if r and not seen[r] then
 			seen[r] = true
 			rows[#rows + 1] = { label = w[2] or r.label, text = D.fmtReading(r), value = r.value }
@@ -2401,7 +2410,8 @@ function D.fillWidget(t)
 		list(lines)
 	elseif kind == 'temps' or kind == 'fans' then
 		if not d.hwOn then
-			value('-', 'Start LibreHardwareMonitor (or HWiNFO with Shared Memory)')
+			-- the helper says why (hw.err), e.g. the web server did not answer
+			value('-', d['hw.err'] or 'Start LibreHardwareMonitor with its Remote Web Server on (or HWiNFO)')
 			return
 		end
 		local rows = D.tempRows(d, w.param, kind == 'temps' and 1 or 3)
@@ -2456,7 +2466,7 @@ updateDashState = function()
 	end
 	local f = io.open(flag, 'wb')
 	if f then
-		f:write(string.format('%d|%d|%d', V.DashInterval, procs and 1 or 0, sensors and 1 or 0))
+		f:write(string.format('%d|%d|%d|%d', V.DashInterval, procs and 1 or 0, sensors and 1 or 0, V.SensorPort))
 		f:close()
 	end
 end
@@ -3205,6 +3215,8 @@ function Initialize()
 	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
 	V.GameUpdates = num('GameUpdates', 1) ~= 0
 	V.DashInterval = math.max(250, math.floor(num('DashInterval', 1000)))
+	-- port of LibreHardwareMonitor's web server (its Options > Remote Web Server)
+	V.SensorPort = math.floor(num('SensorPort', 8085))
 	V.ShowDate = num('ShowDate', 1) ~= 0
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'

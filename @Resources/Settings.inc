@@ -252,6 +252,9 @@ SearchHover=1
 ; Dashboard is on screen. Temperatures and fans: HWiNFO running with "Shared
 ; Memory Support" on.
 DashInterval=1000
+; Port of LibreHardwareMonitor's web server (in it: Options > Remote Web
+; Server > Run), for temperatures, fans and the other sensors
+SensorPort=8085
 
 ; --- Clock ----------------------------------------------------------------------
 ; Time and date at the top left, updated every minute while the launcher is
@@ -268,8 +271,14 @@ ClockFontSize=18
 ; the games and apps installed on this PC are listed, and the ones you pick
 ; become normal tiles. Nothing is added by itself.
 ; Where to look, separated by |: Steam Epic GOG Ubisoft Battlenet EA Xbox
-; (games) and Apps (the Start menu)
-ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps
+; (games), Folders (the programs in ImportFolders) and Apps (the Start menu)
+ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps
+; Folders of your own (portable games, emulators...), separated by |: every
+; program (.exe) in them and in their subfolders is listed, named after its
+; file (installers, uninstallers, redistributables and helpers left out)
+ImportFolders=
+; What they are: Game (to ImportCategory) or App (to AppsCategory)
+ImportFoldersKind=Game
 ; 1 = look for new games and apps in the background on every skin load: new
 ; ones light a dot on the gear (nothing is added). The same search finds the
 ; tiles of games no longer installed: they are greyed out, light the dot and
@@ -289,6 +298,10 @@ SteamGridDBKey=
 ; 1 = check GitHub for a new version (at most once a day): a dot on the gear
 ; and Options > Info show it, and install it with one click
 CheckUpdates=1
+; Release = only the releases; Nightly = also the build made on every change
+; (pre-release "nightly", e.g. 1.2.1.5: the 5th after the release 1.2.1):
+; newer, but not tested as much
+UpdateChannel=Release
 
 ; --- Diagnostics ----------------------------------------------------------------
 ; 1 = write to the Rainmeter log (Manage > Log) what happens on confirm, on

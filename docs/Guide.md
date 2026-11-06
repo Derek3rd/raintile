@@ -222,11 +222,12 @@ A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Optio
 
 Windows does not give temperatures to programs without a driver, so Raintile reads them from a sensor program that runs beside it:
 
-- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (free, open source; looked at first): download it, start it (it asks to run as administrator, to read the sensors) and keep it running: in its menu *Options* turn on *Start Minimized*, *Minimize To Tray* and *Run On Windows Startup*. Raintile reads its sensors through WMI while it runs; nothing to set up.
+- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (free, open source; looked at first): download it, start it (it asks to run as administrator, to read the sensors) and keep it running: in its menu *Options* turn on *Start Minimized*, *Minimize To Tray*, *Run On Windows Startup* and **Remote Web Server > Run**. Raintile reads its sensors from that web server, on this PC only (`http://localhost:8085/data.json`; another port: `SensorPort`, Options > Dashboard); Windows may ask about the firewall: it is not needed for this. Older versions also publish them through WMI, which Raintile reads too.
 - **[HWiNFO](https://www.hwinfo.com/)** (free), when LibreHardwareMonitor is not running: start it (sensors only is enough), open **Settings** and turn on **Shared Memory Support**. Its free version turns the shared memory off after 12 hours: start it again then.
 
 - Without `Param=`, `temps` shows the CPU and GPU temperatures it finds (package, die, hot spot, ...), `fans` the first fans.
 - `Param=` picks the readings, separated by `;`, each one a part of the label as the sensor program writes it (any case; LibreHardwareMonitor and HWiNFO name some of them differently, e.g. `GPU Core` and `GPU Temperature`): `Param=CPU Package;GPU Core;SSD`. Add `=Name` to rename one: `Param=CPU Package=CPU;GPU Hot Spot=GPU hot`. A label that is not a temperature (or a fan) is looked for among the other readings too, so the widget can show anything the sensor program measures: `Param=CPU Package;CPU Total=CPU use;GPU Package` (LibreHardwareMonitor's names; `Total CPU Usage`, `GPU Power` in HWiNFO). Give it a title of your own with `Label=` (e.g. `Label=HWiNFO`).
+- The same label can be more readings (in LibreHardwareMonitor `GPU Core` is a temperature, a load and a clock): put its kind before it, `temp:`, `load:`, `clock:`, `power:`, `fan:`, `volt:` or `current:`. For example `Param=temp:GPU Core=GPU;load:GPU Core=GPU use;clock:GPU Core=GPU clock;load:CPU Total=CPU use;power:Package=CPU power`. The names are those of the LibreHardwareMonitor window, in the tree under each piece of hardware.
 
 ### Skins in a tile
 
@@ -377,6 +378,7 @@ The search (`Scripts\Scan.ps1`, in the background) looks in:
 | Battle.net | uninstall entries of its games | Battle.net (`--exec="launch <code>"`), or the game's launcher | SteamGridDB |
 | EA app | uninstall entries of Electronic Arts games | the game exe | SteamGridDB |
 | Xbox / Microsoft Store | Store packages with a `MicrosoftGame.config` | `shell:AppsFolder` | SteamGridDB |
+| Your folders | every `.exe` in the folders of `ImportFolders` (separated by `\|`, e.g. `D:\Games\|E:\Emulators`) and in their subfolders, named after its file; installers, uninstallers, updaters, redistributables, crash reporters and helpers left out. As games or apps: `ImportFoldersKind` | the program | SteamGridDB (games of that name), the program's own icon |
 | Apps | Start menu: program shortcuts and Store apps, without uninstallers, help files and the games already found | the shortcut / `shell:AppsFolder` | a logo from Dashboard Icons, or SteamGridDB for an app of that very name, else the program's own icon |
 
 - **The list** shows the cover (Steam) or the icon of each item, with its source, and marks the new ones. Filter by type (All, Games, Apps) or by name; *Show added* also lists what is already in the launcher (dimmed, with its category); *Covers* off gives a compact text list.
@@ -464,6 +466,8 @@ If something goes wrong with an update, install the package from the [releases p
 
 With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps) and on **Info** in the menu of the Options window; a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
 
+**Nightly builds** (`UpdateChannel=Nightly`, Options > Advanced > *Updates*): the check also looks at the pre-release `nightly`, built on every change, and offers the newer of the two. Their versions have four numbers, `1.2.1.5`: the 5th build after the release `1.2.1`; the next release (`1.2.2` or `1.3.0`) gathers them and is newer than all of them. Newer features, not tested as much: a copy of the skin is kept in `Skins\@Backup` before each update. Back to `Release`, the next release brings you back on it.
+
 - **Direct update** downloads the release's `.rmskin` and installs it by itself: a copy of the current skin folder goes to `Skins\@Backup\Raintile-<version>-<date>` (Rainmeter does not load folders starting with @), the package's files replace the ones of the skin folder, then Rainmeter reloads every skin and the launcher opens. `@Resources\Generated` (thumbnails, lists) stays, the plugins are not touched, and a file in use (the Options program itself) is renamed and replaced; the old copy goes at the next start. If something fails, the files of the backup are put back. The package is refused if it does not hold `Skins/Raintile/Raintile.ini` or a path leaves its folder.
 - **Rainmeter Update** downloads the same package and opens it with the Rainmeter installer instead; the Options window closes. Keep the installer's default options.
 - Either way your data is not touched, and only files of this repository's releases on GitHub (https) are downloaded, into a new temporary folder, and checked to be a Rainmeter package before they are used. Without the Options program (a copy of the repository) the PowerShell window only has the installer.
@@ -476,6 +480,8 @@ With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest r
 3. The **Release package** workflow (`.github/workflows/release.yml`) builds the `.rmskin` with `tools/build_rmskin.py` and attaches it to the release by itself, within a minute or two. If the tag and `Version=` differ, it stops and attaches nothing.
 
 For the update check the tag must hold the version (if it has no number, the number in the release title is used, e.g. "1.0.1 - ..."), and the `.rmskin` must be attached (otherwise the update buttons open the release page). The package can also be built by hand: `python tools/build_rmskin.py` writes it to `dist\`; *Actions > Release package > Run workflow* builds it as a downloadable artifact.
+
+**Nightly builds.** On every push to `main` the **Nightly** workflow (`.github/workflows/nightly.yml`) builds the Options program and the `.rmskin` and publishes them as the pre-release **`nightly`** (replacing the previous one). Its version is the last release plus the number of commits since it: after `v1.2.1`, `1.2.1.1`, `1.2.1.2`, ... until the next release; it is written into the package's `Raintile.ini` (`tools/build_rmskin.py --nightly-version`). So merging to `main` and publishing a release are separate steps: changes reach the skins on the nightly channel at once, the others with the next release.
 
 The package holds the skin only (with the HotKey plugin from `tools/plugins/`): `README.md`, `docs\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
 
@@ -625,6 +631,7 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 | Setting | Default | Description |
 | --- | --- | --- |
 | `DashInterval` | `1000` | ms between two updates of the [Dashboard](#dashboard) widgets (250-5000), only while one is on screen |
+| `SensorPort` | `8085` | port of LibreHardwareMonitor's web server (its Options > Remote Web Server), read for the [sensors](#temperatures-and-fans) |
 
 ### Clock
 
@@ -639,7 +646,7 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 
 ### Games and apps
 
-See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
+See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFolders`, `ImportFoldersKind`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
 ### Updates
 

@@ -85,7 +85,7 @@ namespace RaintileOptions
             new[] { "network", "Network", "" },
             new[] { "processes", "Processes", "cpu or ram: what they are sorted by." },
             new[] { "system", "System", "" },
-            new[] { "temps", "Temperatures (sensors)", "Sensor readings (LibreHardwareMonitor or HWiNFO) separated by ; (e.g. CPU Package; GPU Temperature; Total CPU Usage), =Name to rename one (GPU Hot Spot=GPU hot). Temperatures first, then any reading with that label. Empty: CPU, GPU and drives." },
+            new[] { "temps", "Temperatures (sensors)", "Sensor readings (LibreHardwareMonitor or HWiNFO) separated by ;, with temp:, load:, clock:, power:, fan: or volt: before one to pick that kind (load:GPU Core); (e.g. CPU Package; GPU Temperature; Total CPU Usage), =Name to rename one (GPU Hot Spot=GPU hot). Temperatures first, then any reading with that label. Empty: CPU, GPU and drives." },
             new[] { "fans", "Fans (sensors)", "Like Temperatures, for fans. Empty: the first fans." },
             new[] { "skin", "An installed skin", "<config>\\<file>.ini of a skin in Rainmeter's Skins folder, e.g. illustro\\Clock\\Clock.ini. It is loaded over the tile while the Dashboard is shown." },
             new[] { "custom", "Custom widget", "The name of a widget in the Widgets folder of your data (Widgets\\<name>.ini or Widgets\\<name>\\<name>.ini)." },

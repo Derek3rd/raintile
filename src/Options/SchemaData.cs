@@ -222,7 +222,8 @@ namespace RaintileOptions
                 new Group { Title = "Widgets", Help = "The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.", Items = new List<Item>
                 {
                     new Item { Kind = "int", Key = "DashInterval", Label = "Update every", Help = "Only while a Dashboard is on screen.", Min = 250.0, Max = 5000.0, Step = 250.0, Unit = "ms" },
-                    new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From LibreHardwareMonitor (free, open source: keep it running, e.g. Options > Start at login). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours)." },
+                    new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours)." },
+                    new Item { Kind = "int", Key = "SensorPort", Label = "LibreHardwareMonitor port", Help = "The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).", Min = 1.0, Max = 65535.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "info", Key = "", Label = "Custom widgets", Help = "Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>." },
                 } },
                 new Group { Title = null, Help = null, Market = true, Items = new List<Item>
@@ -246,6 +247,8 @@ namespace RaintileOptions
                 new Group { Title = "Search", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "stores", Key = "ImportStores", Label = "Where to look", Help = "" },
+                    new Item { Kind = "text", Key = "ImportFolders", Label = "Your folders", Help = "With Your folders on: folders of programs (portable games, emulators...). Every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out. (In Settings.inc: separated by |, e.g. D:\\Games|E:\\Emulators.)" },
+                    new Item { Kind = "choice", Key = "ImportFoldersKind", Label = "They are", Help = "Where the programs of your folders go when added.", Choices = new List<string[]> { new[] { "Game", "Games (Category for games)" }, new[] { "App", "Apps (Category for apps)" } } },
                     new Item { Kind = "bool", Key = "ScanOnStart", Label = "Look for new ones on start", Help = "In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear." },
                     new Item { Kind = "category", Key = "ImportCategory", Label = "Category for games", Help = "" },
                     new Item { Kind = "category", Key = "AppsCategory", Label = "Category for apps", Help = "" },
@@ -263,6 +266,7 @@ namespace RaintileOptions
                 new Group { Title = "Updates", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "CheckUpdates", Label = "Check for updates", Help = "Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info." },
+                    new Item { Kind = "choice", Key = "UpdateChannel", Label = "Updates", Help = "Nightly: also the build made on every change (e.g. 1.2.1.5, the 5th after the release 1.2.1): the newest features, not tested as much. A copy of the skin is kept in Skins\\@Backup before each update.", Choices = new List<string[]> { new[] { "Release", "Releases" }, new[] { "Nightly", "Nightly builds" } } },
                 } },
                 new Group { Title = "Diagnostics", Help = null, Items = new List<Item>
                 {
@@ -358,7 +362,9 @@ namespace RaintileOptions
             { "HoverLogoScale", "1.25" },
             { "IconSize", "96" },
             { "ImportCategory", "Games" },
-            { "ImportStores", "Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps" },
+            { "ImportFolders", "" },
+            { "ImportFoldersKind", "Game" },
+            { "ImportStores", "Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps" },
             { "InfiniteScroll", "1" },
             { "InfoFontSize", "10" },
             { "KeyboardNav", "1" },
@@ -413,6 +419,7 @@ namespace RaintileOptions
             { "SearchHover", "1" },
             { "SearchPlaceholder", "Search" },
             { "SearchW", "320" },
+            { "SensorPort", "8085" },
             { "ShowClock", "1" },
             { "ShowDate", "1" },
             { "ShowFavorites", "1" },
@@ -433,12 +440,13 @@ namespace RaintileOptions
             { "TileRadius", "0" },
             { "TrackPlaytime", "1" },
             { "UnplayedCount", "24" },
+            { "UpdateChannel", "Release" },
             { "WindowH", "70%" },
             { "WindowW", "60%" },
         };
 
         public static readonly string[] GAMEPAD_BUTTONS = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };
-        public static readonly string[] SOURCES = { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox", "Apps" };
+        public static readonly string[] SOURCES = { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox", "Folders", "Apps" };
         public static readonly Dictionary<string, string> STORE_LABELS = new Dictionary<string, string>
         {
             { "Apps", "Start menu apps" },
@@ -446,6 +454,7 @@ namespace RaintileOptions
             { "Battlenet", "Battle.net" },
             { "EA", "EA app" },
             { "Epic", "Epic Games" },
+            { "Folders", "Your folders" },
             { "GOG", "GOG" },
             { "Steam", "Steam" },
             { "Ubisoft", "Ubisoft Connect" },

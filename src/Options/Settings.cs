@@ -182,6 +182,7 @@ namespace RaintileOptions
                         break;
                     case "color": c.Text.Text = v; c.Swatch.Background = NewColorBrush(v, true); break;
                     case "text": ((TextBox)c.Input).Text = v; break;
+                    case "folders": Action redraw; if (folderLists.TryGetValue(key, out redraw)) redraw(); break;
                     case "font": ((ComboBox)c.Input).Text = v; break;
                     case "secret": ((PasswordBox)c.Input).Password = Core.UnprotectSecret(v); break;
                     case "category": ((ComboBox)c.Input).SelectedItem = v; break;
@@ -653,7 +654,7 @@ namespace RaintileOptions
                 case "float": control = NewNumberControl(item); break;
                 case "size": control = Regex.IsMatch(V(k), @"^\s*-?[\d.]+\s*%?\s*$") ? NewSizeControl(item) : NewTextControl(k); break;
                 case "color": control = NewColorControl(k); break;
-                case "text": control = NewTextControl(k); break;
+                case "text": control = k == "ImportFolders" ? NewFoldersControl(k) : NewTextControl(k); break;
                 case "secret": control = NewSecretControl(k); break;
                 case "font": control = NewFontControl(k); break;
                 case "category": control = NewCategoryControl(k); break;

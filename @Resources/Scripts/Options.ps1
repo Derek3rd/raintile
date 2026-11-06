@@ -206,10 +206,10 @@ function Size([string]$key, [string]$label, [string]$axis, [string]$help = '') {
 }
 
 $GAMEPAD_BUTTONS = 'A', 'B', 'X', 'Y', 'LB', 'RB', 'BACK', 'START', 'LS', 'RS', 'UP', 'DOWN', 'LEFT', 'RIGHT'
-$SOURCES = 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'Apps'
+$SOURCES = 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'Folders', 'Apps'
 $STORE_LABELS = @{
     Steam = 'Steam'; Epic = 'Epic Games'; GOG = 'GOG'; Ubisoft = 'Ubisoft Connect'; Battlenet = 'Battle.net'
-    'Battle.net' = 'Battle.net'; EA = 'EA app'; Xbox = 'Xbox / Store'; Apps = 'Start menu apps'
+    'Battle.net' = 'Battle.net'; EA = 'EA app'; Xbox = 'Xbox / Store'; Folders = 'Your folders'; Apps = 'Start menu apps'
 }
 
 $schema = @(
@@ -429,7 +429,8 @@ $schema = @(
             @{ Dash = $true; Items = @() }
             @{ Title = 'Widgets'; Help = 'The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.'; Items = @(
                     (Num 'DashInterval' 'Update every' 250 5000 250 'ms' 'Only while a Dashboard is on screen.'),
-                    (S 'info' '' 'Temperatures and fans' 'From LibreHardwareMonitor (free, open source: keep it running, e.g. Options > Start at login). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours).'),
+                    (S 'info' '' 'Temperatures and fans' 'From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours).'),
+                    (Num 'SensorPort' 'LibreHardwareMonitor port' 1 65535 1 '' 'The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).'),
                     (S 'info' '' 'Custom widgets' 'Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>.')
                 ) }
             @{ Market = $true; Items = @() }
@@ -451,6 +452,9 @@ $schema = @(
             @{ Found = $true; Items = @() }
             @{ Title = 'Search'; Items = @(
                     (S 'stores' 'ImportStores' 'Where to look'),
+                    (S 'text' 'ImportFolders' 'Your folders' 'With Your folders on: folders of programs (portable games, emulators...). Every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out. (In Settings.inc: separated by |, e.g. D:\Games|E:\Emulators.)'),
+                    (S 'choice' 'ImportFoldersKind' 'They are' 'Where the programs of your folders go when added.' @{ Choices = @(
+                                @('Game', 'Games (Category for games)'), @('App', 'Apps (Category for apps)')) }),
                     (S 'bool' 'ScanOnStart' 'Look for new ones on start' 'In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear.'),
                     (S 'category' 'ImportCategory' 'Category for games'),
                     (S 'category' 'AppsCategory' 'Category for apps'),
@@ -468,7 +472,9 @@ $schema = @(
                     (S 'bool' 'TileHover' 'Highlight the tile under the mouse')
                 ) }
             @{ Title = 'Updates'; Items = @(
-                    (S 'bool' 'CheckUpdates' 'Check for updates' 'Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info.')
+                    (S 'bool' 'CheckUpdates' 'Check for updates' 'Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info.'),
+                    (S 'choice' 'UpdateChannel' 'Updates' 'Nightly: also the build made on every change (e.g. 1.2.1.5, the 5th after the release 1.2.1): the newest features, not tested as much. A copy of the skin is kept in Skins\@Backup before each update.' @{ Choices = @(
+                                @('Release', 'Releases'), @('Nightly', 'Nightly builds')) })
                 ) }
             @{ Title = 'Diagnostics'; Items = @(
                     (S 'bool' 'DebugLog' 'Debug log' 'Writes details to the Rainmeter log (Manage > Log).')
@@ -505,7 +511,7 @@ $defaults = @{
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'; ShowUnplayed = '1'; UnplayedCount = '24'
-    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; GamepadSearch = 'Y'; DashInterval = '1000'
+    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; GamepadSearch = 'Y'; DashInterval = '1000'; SensorPort = '8085'
     FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
     TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'
@@ -523,9 +529,9 @@ $defaults = @{
     Gamepad = '1'; GamepadToggle = 'BACK START'; GamepadDeadZone = '12000'; GamepadRepeatDelay = '350'; GamepadRepeatRate = '110'
     SearchW = '320'; SearchPlaceholder = 'Search'; SearchHover = '1'
     ShowClock = '1'; ShowDate = '1'; ClockFormat = '%H:%M'; DateFormat = '%A %#d %B'; ClockFontSize = '18'
-    ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Apps'
+    ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps'; ImportFolders = ''; ImportFoldersKind = 'Game'
     ScanOnStart = '1'; SteamGridDBKey = ''
-    CheckUpdates = '1'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
+    CheckUpdates = '1'; UpdateChannel = 'Release'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
     BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; EdgeFade = '1'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
     AccentColor = '0,210,180,255'; ActiveCategoryColor = '0,210,180,70'; HoverCategoryColor = '255,255,255,20'
     TextColor = '240,240,245,255'; TextDimColor = '150,150,160,255'

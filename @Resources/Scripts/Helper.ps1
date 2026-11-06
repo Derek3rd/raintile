@@ -375,7 +375,11 @@ public class RaintileDash
             sb.Append("sys.battery=").Append(ps.BatteryLifePercent).Append('|').Append(ps.ACLineStatus == 1 ? 1 : 0).Append('\n');
 
         // HWiNFO sensors (shared memory, when HWiNFO runs with it on)
-        if (sensors && !ReadLhm(sb)) ReadHwinfo(sb);
+        if (sensors && !ReadLhm(sb) && !ReadLhmWeb(sb))
+        {
+            ReadHwinfo(sb);
+            if (sensorError != "") sb.Append("hw.err=").Append(sensorError).Append('\n');
+        }
         return sb.ToString();
     }
 
@@ -450,6 +454,7 @@ public class RaintileDash
                     }
             if (count == 0) { lhmRetry = DateTime.Now.AddSeconds(10); return false; }
             sb.Append("hw=on\n").Append(lines.ToString());
+            sensorError = "";
             return true;
         }
         catch
@@ -457,6 +462,96 @@ public class RaintileDash
             lhmScope = null;
             lhmHardware = null;
             lhmRetry = DateTime.Now.AddSeconds(10);
+            return false;
+        }
+    }
+
+    // LibreHardwareMonitor's own web server (its Options > Remote Web Server >
+    // Run; newer versions publish nothing through WMI): http://localhost:
+    // <port>/data.json, the tree of its window. Values come as text in its
+    // language ("39,0 \u00B0C"); the kind of a reading from its "Type", or
+    // from the group it is in (Temperatures, Load, Clocks...).
+    public int LhmPort = 8085;
+    DateTime lhmWebRetry = DateTime.MinValue;
+    // why the sensors could not be read, shown on the widget (hw.err)
+    string sensorError = "";
+
+    static readonly Dictionary<string, string> LHM_GROUPS = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Temperatures", "Temperature" }, { "Voltages", "Voltage" }, { "Fans", "Fan" }, { "Currents", "Current" },
+        { "Powers", "Power" }, { "Clocks", "Clock" }, { "Load", "Load" }, { "Loads", "Load" }, { "Controls", "Control" },
+        { "Levels", "Level" }, { "Data", "Data" }, { "Throughput", "Throughput" }, { "Factors", "Factor" },
+    };
+
+    // "3953,0 MHz", "1.234,5 W", "-" -> number (NaN without one)
+    static double ParseLhmValue(string text)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text ?? "", @"-?[\d.,]+");
+        if (!m.Success) return double.NaN;
+        string v = m.Value;
+        int dot = v.LastIndexOf('.'), comma = v.LastIndexOf(',');
+        if (dot >= 0 && comma >= 0)
+        {
+            // the last one separates the decimals
+            if (comma > dot) v = v.Replace(".", "").Replace(',', '.'); else v = v.Replace(",", "");
+        }
+        else if (comma >= 0) v = v.Replace(',', '.');
+        double d;
+        return double.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out d) ? d : double.NaN;
+    }
+
+    void LhmWebNode(Dictionary<string, object> node, string hardware, string group, System.Text.StringBuilder lines, ref int count)
+    {
+        string text = Clean(Convert.ToString(node.ContainsKey("Text") ? node["Text"] : ""));
+        object kids;
+        var children = node.TryGetValue("Children", out kids) ? kids as object[] : null;
+        if (children != null && children.Length > 0)
+        {
+            // a group (Temperatures...) or a piece of hardware
+            if (LHM_GROUPS.ContainsKey(text)) { foreach (var c in children) { var d = c as Dictionary<string, object>; if (d != null) LhmWebNode(d, hardware, text, lines, ref count); } }
+            else { foreach (var c in children) { var d = c as Dictionary<string, object>; if (d != null) LhmWebNode(d, text, group, lines, ref count); } }
+            return;
+        }
+        if (group == null) return;
+        object typeValue;
+        string kind = node.TryGetValue("Type", out typeValue) && Convert.ToString(typeValue) != "" ? Convert.ToString(typeValue) : LHM_GROUPS[group];
+        double value = ParseLhmValue(Convert.ToString(node.ContainsKey("Value") ? node["Value"] : ""));
+        if (double.IsNaN(value)) return;
+        int type; string unit;
+        LhmType(kind, out type, out unit);
+        lines.Append("hw=").Append(type).Append('|').Append(hardware).Append('|').Append(text).Append('|')
+             .Append(N(value)).Append('|').Append(unit).Append('\n');
+        count++;
+    }
+
+    bool ReadLhmWeb(System.Text.StringBuilder sb)
+    {
+        if (DateTime.Now < lhmWebRetry) return false;
+        try
+        {
+            var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("http://localhost:" + LhmPort + "/data.json");
+            req.Proxy = null;
+            req.Timeout = 1500;
+            req.ReadWriteTimeout = 1500;
+            req.UserAgent = "Raintile";
+            string json;
+            using (var r = req.GetResponse())
+            using (var reader = new System.IO.StreamReader(r.GetResponseStream(), System.Text.Encoding.UTF8))
+                json = reader.ReadToEnd();
+            var root = new System.Web.Script.Serialization.JavaScriptSerializer { MaxJsonLength = 32 * 1024 * 1024 }.DeserializeObject(json) as Dictionary<string, object>;
+            if (root == null) throw new Exception("no data");
+            var lines = new System.Text.StringBuilder();
+            int count = 0;
+            LhmWebNode(root, "", null, lines, ref count);
+            if (count == 0) throw new Exception("no sensors");
+            sb.Append("hw=on\n").Append(lines.ToString());
+            sensorError = "";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            sensorError = "LibreHardwareMonitor web server (localhost:" + LhmPort + "): " + Clean(ex.Message);
+            lhmWebRetry = DateTime.Now.AddSeconds(10);
             return false;
         }
     }
@@ -1126,6 +1221,9 @@ public class RaintilePad
                     if (p.Length > 0 && int.TryParse(p[0], out ms)) dashInterval = Math.Max(250, ms);
                     dashProcs = p.Length < 2 || p[1] != "0";
                     dashSensors = p.Length < 3 || p[2] != "0";
+                    int port;
+                    if (p.Length > 3 && int.TryParse(p[3], out port) && port > 0 && port < 65536 && dash != null) dash.LhmPort = port;
+                    dashPort = p.Length > 3 && int.TryParse(p[3], out port) && port > 0 && port < 65536 ? port : 8085;
                 }
                 catch { }
                 nextDash = now; // right away
@@ -1140,6 +1238,7 @@ public class RaintilePad
         dashFirst = false;
         if (dash == null) dash = new RaintileDash();
         var d = dash;
+        d.LhmPort = dashPort;
         bool procs = dashProcs, sensors = dashSensors;
         string bang = Call("DashTick()");
         collecting = true;
@@ -1160,6 +1259,7 @@ public class RaintilePad
         });
     }
     bool dashFirst;
+    int dashPort = 8085;
 
     static void Send(IntPtr window, string bang)
     {
@@ -1216,7 +1316,12 @@ public class RaintilePad
 }
 '@
 
-Add-Type -TypeDefinition $source -Language CSharp -ReferencedAssemblies System.Management
+# the libraries for LibreHardwareMonitor (WMI, the JSON of its web server),
+# loaded first and given by their files
+Add-Type -AssemblyName System.Management, System.Web.Extensions
+$refs = @([System.Management.ManagementScope].Assembly.Location,
+    [System.Web.Script.Serialization.JavaScriptSerializer].Assembly.Location)
+Add-Type -TypeDefinition $source -Language CSharp -ReferencedAssemblies $refs
 
 # Single copy: ask the previous one to quit and take its place
 $quit = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\Raintile.Gamepad.Quit')

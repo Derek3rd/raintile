@@ -1822,6 +1822,9 @@ local function setGridArea(withFilter)
 	-- visible part of the grid (also the edge of the fades)
 	V.ClipW, V.ClipH = math.floor(V.AreaW), math.floor(V.AreaH - fs)
 	set('GridClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', V.ClipW, V.ClipH))
+	-- the container of the highlight and the edge fades: the same area
+	set('HoverClip', 'Y', tostring(math.floor(V.GridY)))
+	set('HoverClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', V.ClipW, V.ClipH))
 	for i = 1, #filter.chips do show('FilterText' .. i, withFilter) end
 	if fs == 0 then
 		for i = 1, #filter.chips do show('FilterPill' .. i, false) end

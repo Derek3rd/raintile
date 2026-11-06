@@ -842,8 +842,34 @@ function M.sortValue(t, key)
 	return t.name:lower()
 end
 
+-- Line (row, or column when horizontal) of the i-th tile of category c
+function M.tileLine(c, i)
+	if c.pack then return c.pack.at[i] and c.pack.at[i][1] or 0 end
+	return math.floor((i - 1) / (V.Horizontal and c.ny or c.nx))
+end
+
+local function indexOf(list, item)
+	for i, v in ipairs(list) do if v == item then return i end end
+end
+
 function M.sortTiles(c)
 	local key = c.sort
+	-- the remembered position follows the tiles: the one last launched or
+	-- selected here (otherwise the first of the remembered line) keeps its
+	-- place on screen, as far as the order allows
+	local anchor, before
+	if c.offset then
+		local i = c.focusTile and indexOf(c.tiles, c.focusTile)
+		-- (only while it is on screen at the remembered position)
+		local shown = V.Horizontal and c.nx or c.ny
+		if i and (M.tileLine(c, i) < c.offset or M.tileLine(c, i) >= c.offset + shown) then i = nil end
+		if not i then
+			for j = 1, #c.tiles do
+				if M.tileLine(c, j) >= c.offset then i = j break end
+			end
+		end
+		if i then anchor, before = c.tiles[i], M.tileLine(c, i) end
+	end
 	for i, t in ipairs(c.tiles) do
 		t.fileOrder = t.fileOrder or i
 		t.sortValue = M.sortValue(t, key)
@@ -857,6 +883,13 @@ function M.sortTiles(c)
 		return a.fileOrder < b.fileOrder
 	end)
 	if c.pack then packTiles(c) end -- tiles of more cells: placed again
+	if anchor then
+		local o = math.max(0, c.offset + M.tileLine(c, indexOf(c.tiles, anchor)) - before)
+		if o ~= c.offset then
+			c.offset = o
+			SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(o), data .. 'State.inc')
+		end
+	end
 end
 
 -- dynamicOnly: only the sorts that change while playing (when it opens)
@@ -3691,6 +3724,10 @@ function Show()
 	readTimePlayed()
 	-- categories sorted by play: the order of now
 	M.sortCategories(true)
+	if not cats[active].virtual then
+		offset = normalizeOffset(cats[active].offset)
+		pos = offset
+	end
 	virtualDirty = true
 	base = -1
 	if virtualDirty then
@@ -3726,6 +3763,9 @@ function Hide()
 	visible = false
 	stopTyping()
 	stopTicker()
+	-- the tile with the focus, for a sorted category (its remembered position
+	-- follows it when the order changes)
+	if not searchCat and hover.on and hover.idx > 0 then cur().focusTile = tileAt(hover.idx) or cur().focusTile end
 	leaveSearch() -- next time it opens on the category
 	pos = offset -- a half-done scroll restarts already finished
 	saveScroll()
@@ -4424,6 +4464,12 @@ local function startTile(t)
 end
 
 local function launchTile(t, x, y)
+	-- the tile launched keeps the focus of its category (M.sortTiles)
+	if t then
+		for _, c in ipairs(cats) do
+			if not c.virtual and c.file == t.file then c.focusTile = t end
+		end
+	end
 	if t and t.widget then
 		-- a widget opens its own command, or the tool that goes with it
 		local cmd = t.command or D.WIDGET_COMMANDS[t.widget.kind]

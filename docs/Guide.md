@@ -222,7 +222,7 @@ A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Optio
 
 Windows does not give temperatures to programs without a driver, so Raintile reads them from a sensor program that runs beside it:
 
-- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (free, open source; looked at first): download it, start it (it asks to run as administrator, to read the sensors) and keep it running: in its menu *Options* turn on *Start Minimized*, *Minimize To Tray* and *Run On Windows Startup*. Raintile reads its sensors through WMI while it runs; nothing to set up.
+- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (free, open source; looked at first): download it, start it (it asks to run as administrator, to read the sensors) and keep it running: in its menu *Options* turn on *Start Minimized*, *Minimize To Tray*, *Run On Windows Startup* and **Remote Web Server > Run**. Raintile reads its sensors from that web server, on this PC only (`http://localhost:8085/data.json`; another port: `SensorPort`, Options > Dashboard); Windows may ask about the firewall: it is not needed for this. Older versions also publish them through WMI, which Raintile reads too.
 - **[HWiNFO](https://www.hwinfo.com/)** (free), when LibreHardwareMonitor is not running: start it (sensors only is enough), open **Settings** and turn on **Shared Memory Support**. Its free version turns the shared memory off after 12 hours: start it again then.
 
 - Without `Param=`, `temps` shows the CPU and GPU temperatures it finds (package, die, hot spot, ...), `fans` the first fans.
@@ -626,6 +626,7 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 | Setting | Default | Description |
 | --- | --- | --- |
 | `DashInterval` | `1000` | ms between two updates of the [Dashboard](#dashboard) widgets (250-5000), only while one is on screen |
+| `SensorPort` | `8085` | port of LibreHardwareMonitor's web server (its Options > Remote Web Server), read for the [sensors](#temperatures-and-fans) |
 
 ### Clock
 

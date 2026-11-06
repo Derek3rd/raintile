@@ -252,6 +252,9 @@ SearchHover=1
 ; Dashboard is on screen. Temperatures and fans: HWiNFO running with "Shared
 ; Memory Support" on.
 DashInterval=1000
+; Port of LibreHardwareMonitor's web server (in it: Options > Remote Web
+; Server > Run), for temperatures, fans and the other sensors
+SensorPort=8085
 
 ; --- Clock ----------------------------------------------------------------------
 ; Time and date at the top left, updated every minute while the launcher is

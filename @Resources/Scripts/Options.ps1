@@ -429,7 +429,8 @@ $schema = @(
             @{ Dash = $true; Items = @() }
             @{ Title = 'Widgets'; Help = 'The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.'; Items = @(
                     (Num 'DashInterval' 'Update every' 250 5000 250 'ms' 'Only while a Dashboard is on screen.'),
-                    (S 'info' '' 'Temperatures and fans' 'From LibreHardwareMonitor (free, open source: keep it running, e.g. Options > Start at login). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours).'),
+                    (S 'info' '' 'Temperatures and fans' 'From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours).'),
+                    (Num 'SensorPort' 'LibreHardwareMonitor port' 1 65535 1 '' 'The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).'),
                     (S 'info' '' 'Custom widgets' 'Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>.')
                 ) }
             @{ Market = $true; Items = @() }
@@ -505,7 +506,7 @@ $defaults = @{
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'; ShowUnplayed = '1'; UnplayedCount = '24'
-    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; GamepadSearch = 'Y'; DashInterval = '1000'
+    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; GamepadSearch = 'Y'; DashInterval = '1000'; SensorPort = '8085'
     FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
     TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'

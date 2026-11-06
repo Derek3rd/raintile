@@ -222,7 +222,8 @@ namespace RaintileOptions
                 new Group { Title = "Widgets", Help = "The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.", Items = new List<Item>
                 {
                     new Item { Kind = "int", Key = "DashInterval", Label = "Update every", Help = "Only while a Dashboard is on screen.", Min = 250.0, Max = 5000.0, Step = 250.0, Unit = "ms" },
-                    new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From LibreHardwareMonitor (free, open source: keep it running, e.g. Options > Start at login). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours)." },
+                    new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours)." },
+                    new Item { Kind = "int", Key = "SensorPort", Label = "LibreHardwareMonitor port", Help = "The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).", Min = 1.0, Max = 65535.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "info", Key = "", Label = "Custom widgets", Help = "Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>." },
                 } },
                 new Group { Title = null, Help = null, Market = true, Items = new List<Item>
@@ -413,6 +414,7 @@ namespace RaintileOptions
             { "SearchHover", "1" },
             { "SearchPlaceholder", "Search" },
             { "SearchW", "320" },
+            { "SensorPort", "8085" },
             { "ShowClock", "1" },
             { "ShowDate", "1" },
             { "ShowFavorites", "1" },

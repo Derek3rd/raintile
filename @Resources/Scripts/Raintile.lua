@@ -2410,7 +2410,7 @@ function D.fillWidget(t)
 		list(lines)
 	elseif kind == 'temps' or kind == 'fans' then
 		if not d.hwOn then
-			value('-', 'Start LibreHardwareMonitor (or HWiNFO with Shared Memory)')
+			value('-', 'Start LibreHardwareMonitor with its Remote Web Server on (or HWiNFO)')
 			return
 		end
 		local rows = D.tempRows(d, w.param, kind == 'temps' and 1 or 3)
@@ -2465,7 +2465,7 @@ updateDashState = function()
 	end
 	local f = io.open(flag, 'wb')
 	if f then
-		f:write(string.format('%d|%d|%d', V.DashInterval, procs and 1 or 0, sensors and 1 or 0))
+		f:write(string.format('%d|%d|%d|%d', V.DashInterval, procs and 1 or 0, sensors and 1 or 0, V.SensorPort))
 		f:close()
 	end
 end
@@ -3214,6 +3214,8 @@ function Initialize()
 	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
 	V.GameUpdates = num('GameUpdates', 1) ~= 0
 	V.DashInterval = math.max(250, math.floor(num('DashInterval', 1000)))
+	-- port of LibreHardwareMonitor's web server (its Options > Remote Web Server)
+	V.SensorPort = math.floor(num('SensorPort', 8085))
 	V.ShowDate = num('ShowDate', 1) ~= 0
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
 	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'

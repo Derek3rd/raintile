@@ -15,7 +15,7 @@ namespace RaintileOptions
     public partial class OptionsApp
     {
         FrameworkElement autoArtRow;
-        Button autoArtBg, autoArtLogo, autoArtStop;
+        Button autoArtAll, autoArtBg, autoArtLogo, autoArtStop;
         Border autoArtTrack, autoArtFill;
         TextBlock autoArtStatus;
         bool autoArtBusy, autoArtStopAsked;
@@ -23,14 +23,16 @@ namespace RaintileOptions
         FrameworkElement NewAutoArtRow()
         {
             var panel = NewPanel();
-            var buttons = NewGrid("*", "8", "*", "8", "Auto");
+            var buttons = NewGrid("*", "8", "*", "8", "*", "8", "Auto");
+            autoArtAll = NewButton("All", "", "Search what is missing, background and logo, for every tile of the category");
             autoArtBg = NewButton("Background", "", "Search a background for every tile of the category without one");
             autoArtLogo = NewButton("Logo", "", "Search a logo for every tile of the category without one");
             autoArtStop = NewButton("Stop");
             autoArtStop.Visibility = Visibility.Collapsed;
-            SetCol(autoArtLogo, 2);
-            SetCol(autoArtStop, 4);
-            buttons.Children.Add(autoArtBg); buttons.Children.Add(autoArtLogo); buttons.Children.Add(autoArtStop);
+            SetCol(autoArtBg, 2);
+            SetCol(autoArtLogo, 4);
+            SetCol(autoArtStop, 6);
+            buttons.Children.Add(autoArtAll); buttons.Children.Add(autoArtBg); buttons.Children.Add(autoArtLogo); buttons.Children.Add(autoArtStop);
             AddTo(panel, buttons);
             autoArtFill = new Border { Width = 0, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3), Background = ResBrush("AccentBrush") };
             autoArtTrack = new Border
@@ -43,8 +45,9 @@ namespace RaintileOptions
             autoArtStatus.Margin = T(0, 4, 0, 0);
             autoArtStatus.Visibility = Visibility.Collapsed;
             AddTo(panel, autoArtStatus);
-            autoArtBg.Click += (s, e) => AutoFindArt("Background");
-            autoArtLogo.Click += (s, e) => AutoFindArt("Logo");
+            autoArtAll.Click += (s, e) => AutoFindArt(new[] { "Background", "Logo" });
+            autoArtBg.Click += (s, e) => AutoFindArt(new[] { "Background" });
+            autoArtLogo.Click += (s, e) => AutoFindArt(new[] { "Logo" });
             autoArtStop.Click += (s, e) => { autoArtStopAsked = true; autoArtStop.IsEnabled = false; };
             return NewFormRow("Auto find images", panel,
                 "Every tile of the category without a background (or a logo) gets the first image found online: Steam, SteamGridDB (with the key; only a game or app of the same name), Dashboard Icons, the website of a link.");
@@ -56,30 +59,31 @@ namespace RaintileOptions
             autoArtFill.Width = Math.Max(0, Math.Min(1, part)) * full;
         }
 
-        async void AutoFindArt(string kind)
+        // kinds: "Background", "Logo" or both (All): each tile gets what it is missing
+        async void AutoFindArt(string[] kinds)
         {
             if (currentFile == null || autoArtBusy) return;
             string file = currentFile, b = GetCurrentBase();
             var model = GetModel(file);
             var tiles = Core.GetTiles(model)
-                .Where(t => Core.GetKey(t, "Widget").Trim() == "" && Core.GetTileImage(b, t, kind) == null)
+                .Where(t => Core.GetKey(t, "Widget").Trim() == "" && kinds.Any(k => Core.GetTileImage(b, t, k) == null))
                 .ToList();
             autoArtStatus.Visibility = Visibility.Visible;
+            string what = kinds.Length > 1 ? "background and a logo" : kinds[0].ToLowerInvariant();
             if (tiles.Count == 0)
             {
-                autoArtStatus.Text = "Every tile of this category has a " + kind.ToLowerInvariant() + ".";
+                autoArtStatus.Text = "Every tile of this category has a " + what + ".";
                 return;
             }
             string key = Core.UnprotectSecret(V("SteamGridDBKey"));
-            string lower = kind.ToLowerInvariant();
             autoArtBusy = true;
             autoArtStopAsked = false;
-            autoArtBg.IsEnabled = autoArtLogo.IsEnabled = false;
+            autoArtAll.IsEnabled = autoArtBg.IsEnabled = autoArtLogo.IsEnabled = false;
             autoArtStop.IsEnabled = true;
             autoArtStop.Visibility = Visibility.Visible;
             autoArtTrack.Visibility = Visibility.Visible;
             SetAutoArtProgress(0);
-            int done = 0, found = 0;
+            int done = 0, images = 0, wanted = 0;
             try
             {
                 foreach (var t in tiles)
@@ -87,26 +91,31 @@ namespace RaintileOptions
                     if (autoArtStopAsked) break;
                     string name = t.Name, command = Core.GetKey(t, "Command"), source = Core.GetKey(t, "Source");
                     autoArtStatus.Text = "Searching " + (done + 1) + " of " + tiles.Count + ": " + name + "\u2026";
-                    string got = await Task.Run(() =>
+                    foreach (var kind in kinds)
                     {
-                        try
+                        if (autoArtStopAsked) break;
+                        if (Core.GetTileImage(b, t, kind) != null) continue;
+                        wanted++;
+                        string lower = kind.ToLowerInvariant();
+                        string got = await Task.Run(() =>
                         {
-                            foreach (var c in Art.Find(lower, name, command, source, key, true))
+                            try
                             {
-                                try { return Art.Download(c.Url); } catch { }
+                                foreach (var c in Art.Find(lower, name, command, source, key, true))
+                                {
+                                    try { return Art.Download(c.Url); } catch { }
+                                }
                             }
-                        }
-                        catch { }
-                        return null;
-                    });
-                    if (got != null)
-                    {
+                            catch { }
+                            return null;
+                        });
+                        if (got == null) continue;
                         try
                         {
                             Core.CopyTileImage(b, lower, name, got);
                             Core.SetKey(t, kind, "");   // the default image just copied applies
                             if (kind == "Background") ResetFraming(t);
-                            found++;
+                            images++;
                         }
                         catch { }
                         finally { try { Directory.Delete(Path.GetDirectoryName(got), true); } catch { } }
@@ -118,17 +127,17 @@ namespace RaintileOptions
             finally
             {
                 autoArtBusy = false;
-                autoArtBg.IsEnabled = autoArtLogo.IsEnabled = true;
+                autoArtAll.IsEnabled = autoArtBg.IsEnabled = autoArtLogo.IsEnabled = true;
                 autoArtStop.Visibility = Visibility.Collapsed;
             }
-            if (found > 0)
+            if (images > 0)
             {
                 SetChanged(file);
                 if (currentFile == file) RefreshTiles(Math.Max(0, tilesList.SelectedIndex));
             }
-            autoArtStatus.Text = (autoArtStopAsked ? "Stopped. " : "") + "Found " + found + " of " + done
-                + (found > 0 ? ": save and refresh to see them in the launcher." : ".")
-                + (key == "" && found < done ? " A SteamGridDB key (Options > Import) finds more." : "");
+            autoArtStatus.Text = (autoArtStopAsked ? "Stopped. " : "") + "Found " + images + " of " + wanted + " images (" + done + " tiles)"
+                + (images > 0 ? ": save and refresh to see them in the launcher." : ".")
+                + (key == "" && images < wanted ? " A SteamGridDB key (Options > Import) finds more." : "");
         }
     }
 }

@@ -10,7 +10,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - One branch per change, cut from an up-to-date `nightly` and named after it: `feature/<name>` or `fix/<name>`, with the author's prefix where useful (e.g. `claude/feature-tile-pin`). Never commit straight to `main` or `nightly`.
 - Every change reaches `nightly` as a PR with base `nightly`: every push to `nightly` publishes a nightly build, so only finished, tested work goes there. The `package` check must pass before merging.
 - Merged branches are deleted (GitHub does it automatically after the merge); the next change gets a new branch.
-- Push and open PRs only when asked. Changes the user has not verified live stay on their branch: the user tests the branch, then the PR is merged.
+- Commits on your own branch are always pushed, unless the user says otherwise (so the branch can be tested from any machine). Open PRs only when asked. Changes the user has not verified live stay on their branch: the user tests the branch, then the PR is merged.
 - A tag is also called `nightly` (the pre-release): in git commands that take a revision write the branch as `refs/heads/nightly` or `origin/nightly`.
 - No history rewrites of shared branches (force push, rebase, reset of `main` or `nightly`), no deleting releases or other people's branches.
 - Keep the author's style: do not restructure or reformat code that is not part of the change.

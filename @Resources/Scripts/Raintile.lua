@@ -2410,7 +2410,8 @@ function D.fillWidget(t)
 		list(lines)
 	elseif kind == 'temps' or kind == 'fans' then
 		if not d.hwOn then
-			value('-', 'Start LibreHardwareMonitor with its Remote Web Server on (or HWiNFO)')
+			-- the helper says why (hw.err), e.g. the web server did not answer
+			value('-', d['hw.err'] or 'Start LibreHardwareMonitor with its Remote Web Server on (or HWiNFO)')
 			return
 		end
 		local rows = D.tempRows(d, w.param, kind == 'temps' and 1 or 3)

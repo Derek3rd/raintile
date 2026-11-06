@@ -375,7 +375,11 @@ public class RaintileDash
             sb.Append("sys.battery=").Append(ps.BatteryLifePercent).Append('|').Append(ps.ACLineStatus == 1 ? 1 : 0).Append('\n');
 
         // HWiNFO sensors (shared memory, when HWiNFO runs with it on)
-        if (sensors && !ReadLhm(sb) && !ReadLhmWeb(sb)) ReadHwinfo(sb);
+        if (sensors && !ReadLhm(sb) && !ReadLhmWeb(sb))
+        {
+            ReadHwinfo(sb);
+            if (sensorError != "") sb.Append("hw.err=").Append(sensorError).Append('\n');
+        }
         return sb.ToString();
     }
 
@@ -450,6 +454,7 @@ public class RaintileDash
                     }
             if (count == 0) { lhmRetry = DateTime.Now.AddSeconds(10); return false; }
             sb.Append("hw=on\n").Append(lines.ToString());
+            sensorError = "";
             return true;
         }
         catch
@@ -468,6 +473,8 @@ public class RaintileDash
     // from the group it is in (Temperatures, Load, Clocks...).
     public int LhmPort = 8085;
     DateTime lhmWebRetry = DateTime.MinValue;
+    // why the sensors could not be read, shown on the widget (hw.err)
+    string sensorError = "";
 
     static readonly Dictionary<string, string> LHM_GROUPS = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -522,7 +529,7 @@ public class RaintileDash
         if (DateTime.Now < lhmWebRetry) return false;
         try
         {
-            var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("http://127.0.0.1:" + LhmPort + "/data.json");
+            var req = (System.Net.HttpWebRequest)System.Net.WebRequest.Create("http://localhost:" + LhmPort + "/data.json");
             req.Proxy = null;
             req.Timeout = 1500;
             req.ReadWriteTimeout = 1500;
@@ -538,10 +545,12 @@ public class RaintileDash
             LhmWebNode(root, "", null, lines, ref count);
             if (count == 0) throw new Exception("no sensors");
             sb.Append("hw=on\n").Append(lines.ToString());
+            sensorError = "";
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            sensorError = "LibreHardwareMonitor web server (localhost:" + LhmPort + "): " + Clean(ex.Message);
             lhmWebRetry = DateTime.Now.AddSeconds(10);
             return false;
         }
@@ -1307,7 +1316,12 @@ public class RaintilePad
 }
 '@
 
-Add-Type -TypeDefinition $source -Language CSharp -ReferencedAssemblies System.Management, System.Web.Extensions
+# the libraries for LibreHardwareMonitor (WMI, the JSON of its web server),
+# loaded first and given by their files
+Add-Type -AssemblyName System.Management, System.Web.Extensions
+$refs = @([System.Management.ManagementScope].Assembly.Location,
+    [System.Web.Script.Serialization.JavaScriptSerializer].Assembly.Location)
+Add-Type -TypeDefinition $source -Language CSharp -ReferencedAssemblies $refs
 
 # Single copy: ask the previous one to quit and take its place
 $quit = New-Object System.Threading.EventWaitHandle($false, [System.Threading.EventResetMode]::AutoReset, 'Local\Raintile.Gamepad.Quit')

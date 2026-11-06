@@ -571,6 +571,10 @@ local function loadCategory(file)
 	c.dashboard = trim(catKeys.type or ''):lower() == 'dashboard'
 	-- Hidden=1: kept in the file but not in the menu (e.g. the Dashboard turned off)
 	c.hidden = trim(catKeys.hidden or '') == '1'
+	-- Sort=: the order of its tiles (name, name-desc, added, recent, played,
+	-- playtime), worked out by the launcher; empty = the order of the file
+	local sortKey = trim(catKeys.sort or ''):lower()
+	if M.SORTS[sortKey] then c.sort = sortKey end
 	-- background of its tiles: TileColor= and TileOpacity= (0-100, % of the
 	-- colour and image), when a tile has no Color= / Opacity= of its own
 	c.tileColor = parseColor(catKeys.tilecolor)
@@ -812,6 +816,58 @@ local function readTimePlayed()
 	end
 end
 
+-- Sorted categories (Sort= in [Category]) --------------------------------------
+-- The tiles in the order chosen in Options > the category > All tiles >
+-- Order; ties keep the order of the file. Name and Added are fixed; Recent,
+-- Played and Playtime change while you play, so they are worked out again
+-- each time the launcher opens.
+M.SORTS = { name = true, ['name-desc'] = true, added = true, recent = true, played = true, playtime = true }
+M.DYNAMIC_SORTS = { recent = true, played = true, playtime = true }
+
+function M.sortValue(t, key)
+	local id = tileId(t)
+	if key == 'added' then return t.added or '' end
+	if key == 'played' then return usage[id] and usage[id].count or 0 end
+	if key == 'recent' then
+		local last = usage[id] and usage[id].last or 0
+		local steam = t.steamId and playtime[t.steamId]
+		if steam and steam.last > last then last = steam.last end
+		if timePlayed[id] and timePlayed[id].last > last then last = timePlayed[id].last end
+		return last
+	end
+	if key == 'playtime' then
+		local steam = t.steamId and playtime[t.steamId]
+		return (steam and steam.minutes or 0) + (timePlayed[id] and timePlayed[id].minutes or 0)
+	end
+	return t.name:lower()
+end
+
+function M.sortTiles(c)
+	local key = c.sort
+	for i, t in ipairs(c.tiles) do
+		t.fileOrder = t.fileOrder or i
+		t.sortValue = M.sortValue(t, key)
+	end
+	table.sort(c.tiles, function(a, b)
+		if a.sortValue ~= b.sortValue then
+			-- names A-Z; everything else the largest (newest, most) first
+			if key == 'name' then return a.sortValue < b.sortValue end
+			return a.sortValue > b.sortValue
+		end
+		return a.fileOrder < b.fileOrder
+	end)
+	if c.pack then packTiles(c) end -- tiles of more cells: placed again
+end
+
+-- dynamicOnly: only the sorts that change while playing (when it opens)
+function M.sortCategories(dynamicOnly)
+	for _, c in ipairs(cats) do
+		if c.sort and not c.virtual and not c.dashboard and (not dynamicOnly or M.DYNAMIC_SORTS[c.sort]) then
+			M.sortTiles(c)
+		end
+	end
+end
+
 local function ago(time)
 	local today = os.date('*t')
 	today.hour, today.min, today.sec = 0, 0, 0
@@ -943,6 +999,7 @@ local function loadCategories(files)
 		readPlaytime()
 		readGameUpdates()
 		readTimePlayed()
+		M.sortCategories(false)
 		fillVirtual()
 	end
 	-- Filter bar: stores (when there are at least two) and tags of the tiles
@@ -3632,6 +3689,8 @@ function Show()
 	zooming = {}
 	-- play time measured by the helper while the launcher was hidden
 	readTimePlayed()
+	-- categories sorted by play: the order of now
+	M.sortCategories(true)
 	virtualDirty = true
 	base = -1
 	if virtualDirty then

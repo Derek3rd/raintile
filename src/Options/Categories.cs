@@ -496,6 +496,11 @@ namespace RaintileOptions
             tilesList.Items.Clear();
             if (currentFile != null)
             {
+                // a kept order (Order > Keep sorted): new and changed tiles to their place,
+                // the one to select with them
+                var before = Core.GetTiles(GetModel(currentFile));
+                var wanted = select >= 0 && select < before.Count ? before[select] : null;
+                if (ApplyKeptSort(currentFile) && wanted != null) select = Core.GetTiles(GetModel(currentFile)).IndexOf(wanted);
                 var m = GetModel(currentFile);
                 var all = NewStripEntry("All tiles", new ListTag { All = true });
                 all.ToolTip = "Settings of every tile of this category";
@@ -878,6 +883,8 @@ namespace RaintileOptions
             if (autoArtRow != null)
             {
                 autoArtRow.Visibility = placementRow.Visibility;
+                sortRow.Visibility = placementRow.Visibility;
+                UpdateSortRow();
                 // a run of another category is still going: its bar and text stay there
                 if (!autoArtBusy) { autoArtStatus.Visibility = Visibility.Collapsed; autoArtTrack.Visibility = Visibility.Collapsed; }
             }
@@ -2146,6 +2153,7 @@ namespace RaintileOptions
             AddTo(af, placementRow);
             autoArtRow = NewAutoArtRow();
             AddTo(af, autoArtRow);
+            AddTo(af, NewSortRow());
             btnResetLogos.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "logo placement", new[] { "LogoPos", "LogoScale" }); };
             btnResetFraming.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "background framing", new[] { "BgFocus", "BgZoom" }); };
             btnResetInfo.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "play time placement", new[] { "InfoPos" }, "the top left"); };
@@ -2343,7 +2351,8 @@ namespace RaintileOptions
             tilesList.SelectionChanged += (s, e) => ShowTile();
             // drag a tile to change its place (hand-written tiles; the imported
             // ones stay at the end)
-            EnableDragReorder(tilesList, it => !((ListTag)it.Tag).Imported && !((ListTag)it.Tag).All, (from, to) =>
+            // (not while the category keeps an order: Order > Keep sorted)
+            EnableDragReorder(tilesList, it => !((ListTag)it.Tag).Imported && !((ListTag)it.Tag).All && GetKeptSort(currentFile) == null, (from, to) =>
             {
                 // indices of the strip: All tiles comes first
                 from--; to = Math.Max(0, to - 1);
@@ -2394,6 +2403,14 @@ namespace RaintileOptions
                 t.Name = n;
                 SetChanged(currentFile);
                 UpdateTilePreview();
+                // sorted by name: the tile to its new place, once the click that ended
+                // the editing is done (it may select another tile)
+                if (ApplyKeptSort(currentFile))
+                    tilesList.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        var cur = GetCurrentTile();
+                        RefreshTiles(cur != null ? Core.GetTiles(GetModel(currentFile)).IndexOf(cur) : -1);
+                    }), System.Windows.Threading.DispatcherPriority.Background);
             };
             tileFields["Name"].KeyDown += (s, e) => { if (e.Key == Key.Return) tilesList.Focus(); };
             btnCmd.Click += (s, e) =>
@@ -2440,6 +2457,11 @@ namespace RaintileOptions
                 {
                     var t = GetCurrentTile();
                     if (t == null) return;
+                    if (GetKeptSort(currentFile) != null)
+                    {
+                        ShowDialog("Raintile", "This category keeps its tiles sorted. To move them yourself, turn off Keep sorted under All tiles > Order.");
+                        return;
+                    }
                     var m = GetModel(currentFile);
                     var tiles = Core.GetTiles(m);
                     int i = tiles.IndexOf(t), j = i + delta;

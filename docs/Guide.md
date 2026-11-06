@@ -267,6 +267,7 @@ NY=1
 IconSize=12%       ; logo size in this category's tiles (pixels or %)
 Type=              ; Dashboard = a category of widgets (see Dashboard)
 Hidden=            ; 1 = not in the menu (the file and its tiles stay)
+Sort=              ; keep the tiles in an order (see Sorting the tiles): name, name-desc, added, recent, played, playtime
 TileColor=         ; colour of its tiles without a Color= of their own
 TileOpacity=       ; opacity of their background, 0-100 (tiles without Opacity=)
 LogoPos=           ; logo placement of its tiles without their own (e.g. 85,50: on the right)
@@ -430,6 +431,9 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default, and restores it.
 - **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
+  - **Sorting the tiles**: under **All tiles**, **Order** picks an order: *Name A–Z*, *Name Z–A*, *Recently added* (the date the tile was added, `Added=`; tiles without one go last), *Recently played* (the last launch: counted by Raintile, Steam's, or measured), *Most launched* (launches counted by Raintile) or *Most play time* (Steam's play time plus the one measured for the other games). Ties keep the order they had.
+    - **Sort now** puts the tiles in that order once; you can still drag them afterwards.
+    - **Keep sorted** keeps them in it (`Sort=` in `[Category]`): new and renamed tiles go to their place, and the launcher works the order out again each time it loads and opens, so the orders by play follow what you play. Dragging and the move buttons are off while it is on.
   - **Moving a tile to another category**: drag it from the strip onto that category in the menu on the left (the entry is outlined when it can take it). The tile and its images move, and both category files are saved at once. Imported games move only once they are normal tiles.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.

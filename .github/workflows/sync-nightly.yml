@@ -1,0 +1,38 @@
+# After a release is published (from main), main is merged into the branch
+# "nightly": it gets the release tag, so the next nightly builds count from
+# it (after v1.2.2: 1.2.2.1, ...), and any fix made on main for the release.
+# If the merge has conflicts, the job fails and nothing is pushed: merge main
+# into nightly by hand.
+
+name: Sync nightly
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    # not for the pre-release "nightly" itself
+    if: github.event_name != 'release' || github.event.release.tag_name != 'nightly'
+    runs-on: ubuntu-latest
+    steps:
+      # (the branch: a tag is also called "nightly", the pre-release)
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/heads/nightly
+          fetch-depth: 0   # every branch and tag
+
+      - name: Merge main into nightly
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "nightly already has main"
+            exit 0
+          fi
+          git merge --no-edit -m "Merge main (release) into nightly" origin/main
+          git push origin HEAD:refs/heads/nightly

@@ -1,5 +1,6 @@
-# Nightly builds: on every push to main, the Options program and the .rmskin
-# are built and published as the pre-release "nightly" (the previous one is
+# Nightly builds: on every push to the branch "nightly" (where the work goes;
+# main gets it at the releases), the Options program and the .rmskin are
+# built and published as the pre-release "nightly" (the previous one is
 # replaced). Its version is the last release plus the number of commits
 # since it: after v1.2.1, 1.2.1.1, 1.2.1.2, ... until the next release (1.2.2
 # or 1.3.0) gathers them. Skins with UpdateChannel=Nightly are offered these
@@ -9,7 +10,7 @@ name: Nightly
 
 on:
   push:
-    branches: [main]
+    branches: [nightly]
   workflow_dispatch:
 
 permissions:

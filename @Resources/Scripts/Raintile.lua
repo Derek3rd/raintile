@@ -1237,7 +1237,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 13
+local GRID_VERSION = 14
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -2337,15 +2337,39 @@ function D.customWidgetText(t, i, w, h)
 	end
 	local skip = false
 	local pending = {}
+	-- Part=1 on a meter: a part of the tile with Raintile's own highlight; the
+	-- mouse actions telling the script about it go before the meter's own
+	local part, over, leave = false, nil, nil
+	local px, py -- its X, Y (from the tile's top left corner)
+	-- where the parts are in the tile, by meter name (HoverPart): from their
+	-- X= and Y= (Rainmeter's GetX/GetY of a meter in a container depend on
+	-- where the container is)
+	t.widget.partsAt = {}
+	local function at(v)
+		v = trim(v or '0')
+		if v == '' then return 0 end
+		if v:match('[rR]$') then return nil end -- relative to the meter before
+		return tonumber(v) or tonumber(SKIN:ParseFormula(v:match('^%(') and v or '(' .. v .. ')'))
+	end
 	local function flush()
 		if section and not skip then
 			if kind == 'meter' then
 				pending[#pending + 1] = 'Container=CW' .. i .. 'Box'
+				local name = prefix .. section
+				if part then
+					local ax, ay = at(px), at(py)
+					if ax and ay then t.widget.partsAt[name] = { ax, ay } end
+					over = '[!CommandMeasure MeasureScript "HoverPart(\'' .. name .. '\')"]' .. (over or '')
+					leave = '[!CommandMeasure MeasureScript "LeavePart(\'' .. name .. '\')"]' .. (leave or '')
+				end
 			end
+			if over then pending[#pending + 1] = 'MouseOverAction=' .. over end
+			if leave then pending[#pending + 1] = 'MouseLeaveAction=' .. leave end
 			for _, l in ipairs(pending) do out[#out + 1] = l end
 			out[#out + 1] = ''
 		end
 		pending = {}
+		part, over, leave, px, py = false, nil, nil, nil, nil
 	end
 	for _, line in ipairs(lines) do
 		local sec = line:match('^%s*%[([^%]]+)%]%s*$')
@@ -2371,6 +2395,11 @@ function D.customWidgetText(t, i, w, h)
 				if key:match('^measurename%d*$') then v = ref(trim(v)) end
 				if key == 'meter' then kind = 'meter' end
 				if key == 'container' then line = nil end
+				if key == 'part' then part, line = trim(v) ~= '' and trim(v) ~= '0', nil end
+				if key == 'x' then px = v end
+				if key == 'y' then py = v end
+				if key == 'mouseoveraction' then over, line = v, nil end
+				if key == 'mouseleaveaction' then leave, line = v, nil end
 				if line then
 					if key == 'group' then
 						pending[#pending + 1] = trim(k) .. '=' .. v .. ' | CW' .. i
@@ -4615,10 +4644,12 @@ end
 -- the tile under the mouse grows.
 -- Moves the highlight (mouse or keyboard) to tile t, index idx, at grid
 -- coordinates tx, ty.
-local function focus(t, idx, tx, ty)
-	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty then return end
+-- (w, h: the size of a part of the tile, M.hoverPart; otherwise the tile's)
+local function focus(t, idx, tx, ty, w, h)
+	if not w then w, h = tileSize(t) end
+	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty and hover.tw == w and hover.th == h then return end
 	hover.tx, hover.ty = tx, ty
-	hover.tw, hover.th = tileSize(t)
+	hover.tw, hover.th = w, h
 	if hover.a < 0.05 or not V.AnimHover then
 		-- it was off: appear directly on the new tile
 		hover.gx, hover.gy = hover.tx, hover.ty
@@ -4653,20 +4684,88 @@ function HoverTile(slot)
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
 	setPointed(t)
+	-- a widget with parts: never the whole tile (the mouse is in the gap
+	-- between two parts, or comes back from one): the highlight stays on the
+	-- last part, or waits for one
+	if t.widget and next(M.widgetParts(t)) then
+		hover.part = nil
+		local last = hover.lastPart
+		if last and last.t == t then M.focusPart(t, slot, last.name) end
+		return
+	end
 	local tx, ty = slotToGrid(slot)
 	hover.anchor = V.Horizontal and ty or tx
+	hover.part = nil
 	focus(t, indexAt(slot), tx, ty)
 end
 
 function LeaveTile(slot)
 	if ready then leavePointed(tileAt(slot)) end
 	if not ready or not tileAt(slot) or indexAt(slot) ~= hover.idx or not hover.on then return end
+	-- the mouse went onto a part of it (a meter of its widget with Part=1)
+	if hover.part then return end
 	hover.on = false
 	local animate = next(zooming) ~= nil
 	if V.TileHover then
 		if V.AnimHover then animate = true else hover.a = 0 end
 	end
 	if animate then startTicker() else frame() end
+end
+
+-- Parts of a widget (Part=1 on one of its meters, see D.customWidgetText):
+-- the highlight goes onto the part under the mouse, with the same animation
+-- as between tiles. The meters of a widget are placed in its container, at
+-- the tile: their X, Y are from its top left corner.
+function HoverPart(name)
+	if not ready or launching or M.more.open or power.open then return end
+	local n = tonumber(name:match('^CW(%d+)_') or '')
+	local t = n and widgets[n]
+	local m = t and SKIN:GetMeter(name)
+	if not m then return end
+	local slot
+	for s = 1, V.Slots do
+		if tileAt(s) == t then slot = s break end
+	end
+	if not slot then return end
+	M.picked = nil
+	setPointed(t)
+	hover.part = name
+	hover.lastPart = { t = t, name = name }
+	M.focusPart(t, slot, name)
+end
+
+-- Where the parts of widget tile t are (D.customWidgetText fills it when it
+-- writes Grid.inc; on the other loads it is read from the widget's file now)
+function M.widgetParts(t)
+	local w = t.widget
+	if not w.partsAt then
+		w.partsAt = {}
+		if w.kind == 'custom' and w.boxed and w.cat then
+			local cc = w.cat
+			D.customWidgetText(t, w.idx, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
+		end
+	end
+	return w.partsAt
+end
+
+-- The highlight onto part 'name' of widget tile t, in 'slot'
+function M.focusPart(t, slot, name)
+	local m = SKIN:GetMeter(name)
+	if not m then return end
+	local tx, ty = slotToGrid(slot)
+	hover.anchor = V.Horizontal and ty or tx
+	local p = M.widgetParts(t)[name]
+	local px, py = p and p[1] or m:GetX(), p and p[2] or m:GetY()
+	focus(t, indexAt(slot), tx + px / V.StepX, ty + py / V.StepY, m:GetW(), m:GetH())
+end
+
+function LeavePart(name)
+	-- (back on the tile, or on another part, already: nothing to do)
+	if not ready or hover.part ~= name then return end
+	hover.part = nil
+	if not hover.on then return end
+	hover.on = false
+	if V.TileHover and V.AnimHover then startTicker() else hover.a = 0 frame() end
 end
 
 -- Re-centres the menu (also called by OnRefreshAction, once the skin is drawn).

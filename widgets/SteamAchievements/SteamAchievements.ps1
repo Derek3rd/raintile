@@ -52,16 +52,40 @@ if ($key -notmatch '^[0-9A-Fa-f]{32}$') {
     exit 0
 }
 
-# --- The account: the one that signed in last (config\loginusers.vdf) -----------
+# --- The account: the one signed in now, else the one that signed in last ------
+# While Steam runs, ActiveProcess\ActiveUser is the account id (the low 32
+# bits of the 64-bit Steam id); otherwise config\loginusers.vdf: the account
+# with MostRecent (not written by every Steam version), the latest Timestamp,
+# or the only one.
 $steamId = ''
+$root = ''
 try {
-    $root = (Get-ItemProperty -LiteralPath 'HKCU:\Software\Valve\Steam' -Name SteamPath).SteamPath -replace '/', '\'
-    $vdf = [IO.File]::ReadAllText((Join-Path $root 'config\loginusers.vdf'))
-    foreach ($m in [regex]::Matches($vdf, '"(\d{17})"\s*\{([^}]*)\}')) {
-        if ($m.Groups[2].Value -match '"MostRecent"\s*"1"') { $steamId = $m.Groups[1].Value }
-    }
+    $reg = Get-ItemProperty -LiteralPath 'HKCU:\Software\Valve\Steam' -ErrorAction Stop
+    $root = "$($reg.SteamPath)" -replace '/', '\'
+    $active = Get-ItemProperty -LiteralPath 'HKCU:\Software\Valve\Steam\ActiveProcess' -ErrorAction Stop
+    # (a DWORD: read as a signed number when above 2^31)
+    $user = [uint64]([int64]$active.ActiveUser -band 4294967295)
+    if ($user -gt 0) { $steamId = "$([uint64]76561197960265728 + $user)" }
 }
 catch { }
+if ($steamId -eq '' -and $root -ne '') {
+    try {
+        $vdf = [IO.File]::ReadAllText((Join-Path $root 'config\loginusers.vdf'))
+        $best = ''
+        $bestTime = -1
+        $count = 0
+        foreach ($m in [regex]::Matches($vdf, '"(\d{17})"\s*\{([^}]*)\}')) {
+            $count++
+            $body = $m.Groups[2].Value
+            if ($body -match '"MostRecent"\s*"1"') { $steamId = $m.Groups[1].Value }
+            $time = 0
+            if ($body -match '"Timestamp"\s*"(\d+)"') { $time = [int64]$Matches[1] }
+            if ($time -gt $bestTime) { $bestTime = $time; $best = $m.Groups[1].Value }
+        }
+        if ($steamId -eq '' -and $best -ne '' -and ($bestTime -gt 0 -or $count -eq 1)) { $steamId = $best }
+    }
+    catch { }
+}
 if ($steamId -eq '') {
     Write-List @(Row 'No Steam account found' 'Sign in to Steam on this PC' '' '')
     exit 0

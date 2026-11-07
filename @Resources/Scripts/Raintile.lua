@@ -4130,6 +4130,9 @@ function M.renderMore()
 	local x = m0 and math.floor(m0:GetX()) or math.floor(V.PadX)
 	local y = math.floor(V.PadY + V.MenuH + 6)
 	local header = V.ShowClock and more.open
+	-- shown before being measured: a hidden meter measures 0, and the
+	-- entries of the first opening would all pile up on the first one
+	show('MeterMoreItem0', header)
 	if header then
 		local t = SKIN:GetMeasure('MeasureClockTime')
 		local d = SKIN:GetMeasure('MeasureClockDate')
@@ -4141,10 +4144,10 @@ function M.renderMore()
 		local h = SKIN:GetMeter('MeterMoreItem0')
 		y = y + (h and h:GetH() or 40) + 2
 	end
-	show('MeterMoreItem0', header)
 	for n = 1, 8 do
 		local m = 'MeterMoreItem' .. n
 		local it = more.open and more.items[n]
+		show(m, it and true or false)
 		if it then
 			set(m, 'Text', it.text)
 			set(m, 'X', tostring(x))
@@ -4154,7 +4157,6 @@ function M.renderMore()
 			local h = SKIN:GetMeter(m)
 			y = y + (h and h:GetH() or 40) + 2
 		end
-		show(m, it and true or false)
 	end
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	SKIN:Bang('!Redraw')

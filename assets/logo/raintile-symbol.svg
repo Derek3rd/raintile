@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 410.5 410.5" width="410.5" height="410.5">
+<title>Raintile</title>
+<g transform="translate(37.25,58.5)">
+<defs>
+<linearGradient id="sedge" x1="0" y1="0" x2="336" y2="336" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5fe3f5"/><stop offset="1" stop-color="#2f7fe0"/></linearGradient>
+<linearGradient id="sfill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#173a52"/><stop offset="1" stop-color="#11273a"/></linearGradient>
+<mask id="scut" maskUnits="userSpaceOnUse" x="-50" y="-150" width="436" height="536">
+<rect x="-50" y="-150" width="436" height="536" fill="#fff"/>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(168,72.5)" fill="#000" stroke="#000" stroke-width="14" stroke-linejoin="round"/>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(286,190.5)" fill="#000" stroke="#000" stroke-width="14" stroke-linejoin="round"/>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(50,308.5)" fill="#000" stroke="#000" stroke-width="14" stroke-linejoin="round"/>
+</mask>
+</defs>
+<g mask="url(#scut)">
+<rect x="0" y="0" width="100" height="100" rx="20" fill="url(#sfill)" stroke="url(#sedge)" stroke-width="7"/>
+<rect x="118" y="0" width="100" height="100" rx="20" fill="url(#sfill)" stroke="url(#sedge)" stroke-width="7"/>
+<rect x="236" y="0" width="100" height="100" rx="20" fill="url(#sfill)" stroke="url(#sedge)" stroke-width="7"/>
+<rect x="0" y="118" width="100" height="100" rx="20" fill="url(#sfill)" stroke="url(#sedge)" stroke-width="7"/>
+<rect x="118" y="118" width="100" height="100" rx="20" fill="url(#sfill)" stroke="url(#sedge)" stroke-width="7"/>
+<rect x="236" y="118" width="100" height="100" rx="20" fill="url(#sfill)" stroke="url(#sedge)" stroke-width="7"/>
+<rect x="0" y="236" width="100" height="100" rx="20" fill="url(#sfill)" stroke="url(#sedge)" stroke-width="7"/>
+<rect x="118" y="236" width="100" height="100" rx="20" fill="url(#sfill)" stroke="url(#sedge)" stroke-width="7"/>
+<rect x="236" y="236" width="100" height="100" rx="20" fill="url(#sfill)" stroke="url(#sedge)" stroke-width="7"/>
+</g>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(168,72.5)" fill="#3ab8f0"/>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(286,190.5)" fill="#3ab8f0"/>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(50,308.5)" fill="#3ab8f0"/>
+</g>
+</svg>

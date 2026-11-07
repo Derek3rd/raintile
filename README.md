@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo/raintile-logo.svg" alt="Raintile" width="260"></p>
+
 # Raintile
 
 **Raintile** is a tile launcher for [Rainmeter](https://www.rainmeter.net/), full screen, in a window or docked on a side, meant to replace the icons on your Windows desktop.

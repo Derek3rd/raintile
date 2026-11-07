@@ -18,6 +18,8 @@
     <AssemblyName>RaintileOptions</AssemblyName>
     <RootNamespace>RaintileOptions</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- the Raintile symbol (assets/logo/raintile-symbol.svg), 16 to 256 px: the program, its windows and the taskbar -->
+    <ApplicationIcon>raintile.ico</ApplicationIcon>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Product>Raintile</Product>
     <AssemblyTitle>Raintile Options</AssemblyTitle>

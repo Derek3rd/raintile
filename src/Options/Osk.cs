@@ -11,6 +11,9 @@
 //
 // The keys can be clicked with the mouse too; a click elsewhere in the window
 // or a key on the keyboard closes it and keeps the text.
+//
+// A box for numbers only (NumericOnly) gets a number pad instead: the digits,
+// with - and . dimmed where the box does not take them.
 
 using System;
 using System.Collections.Generic;
@@ -38,31 +41,49 @@ namespace RaintileOptions
         // Rows of 10, 10, 10 and 8 characters (then Delete), as in the launcher
         const string OskLetters = "1234567890qwertyuiopasdfghjkl-zxcvbnm.";
         const string OskSymbols = "1234567890!@#$%^&*()\\/:;_=+'\",[]{}<>|?";
+        // the number pad: 7 8 9 / 4 5 6 - / 1 2 3 . / 0
+        const string OskDigits = "789456123-.0";
 
         Popup osk;
         List<OskKey> oskKeys;
         Run oskBefore, oskAfter;
         FrameworkElement oskTarget;   // the field being written, null when closed
         string oskOriginal = "", oskText = "";
-        int oskCaret, oskRow, oskCol;
+        int oskCaret, oskRow, oskCol, oskCols, oskRows;
         bool oskShift, oskSymbols;
+        string oskNumeric;            // the characters a numeric box takes, null for the letters
 
-        void BuildOsk()
+        void BuildOsk(bool numeric)
         {
             oskKeys = new List<OskKey>();
-            int c = 0;
-            for (int r = 0; r < 4; r++)
-                for (int i = 0; i < (r < 3 ? 10 : 8); i++) oskKeys.Add(new OskKey { Row = r, Col = i, Char = c++ });
-            oskKeys.Add(new OskKey { Row = 3, Col = 8, Span = 2, Value = "BACK" });
-            oskKeys.Add(new OskKey { Row = 4, Col = 0, Span = 2, Value = "SHIFT" });
-            oskKeys.Add(new OskKey { Row = 4, Col = 2, Span = 2, Value = "SYM" });
-            oskKeys.Add(new OskKey { Row = 4, Col = 4, Span = 4, Value = "SPACE" });
-            oskKeys.Add(new OskKey { Row = 4, Col = 8, Span = 2, Value = "DONE" });
+            if (numeric)
+            {
+                oskCols = 4; oskRows = 4;
+                for (int r = 0; r < 3; r++)
+                    for (int i = 0; i < 3; i++) oskKeys.Add(new OskKey { Row = r, Col = i, Char = r * 3 + i });
+                oskKeys.Add(new OskKey { Row = 0, Col = 3, Value = "BACK" });
+                oskKeys.Add(new OskKey { Row = 1, Col = 3, Char = 9 });
+                oskKeys.Add(new OskKey { Row = 2, Col = 3, Char = 10 });
+                oskKeys.Add(new OskKey { Row = 3, Col = 0, Span = 2, Char = 11 });
+                oskKeys.Add(new OskKey { Row = 3, Col = 2, Span = 2, Value = "DONE" });
+            }
+            else
+            {
+                oskCols = 10; oskRows = 5;
+                int c = 0;
+                for (int r = 0; r < 4; r++)
+                    for (int i = 0; i < (r < 3 ? 10 : 8); i++) oskKeys.Add(new OskKey { Row = r, Col = i, Char = c++ });
+                oskKeys.Add(new OskKey { Row = 3, Col = 8, Span = 2, Value = "BACK" });
+                oskKeys.Add(new OskKey { Row = 4, Col = 0, Span = 2, Value = "SHIFT" });
+                oskKeys.Add(new OskKey { Row = 4, Col = 2, Span = 2, Value = "SYM" });
+                oskKeys.Add(new OskKey { Row = 4, Col = 4, Span = 4, Value = "SPACE" });
+                oskKeys.Add(new OskKey { Row = 4, Col = 8, Span = 2, Value = "DONE" });
+            }
 
             const double size = 50;
             var grid = new Grid();
-            for (int i = 0; i < 10; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(size) });
-            for (int i = 0; i < 5; i++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(size - 4) });
+            for (int i = 0; i < oskCols; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(size) });
+            for (int i = 0; i < oskRows; i++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(size - 4) });
             foreach (var k in oskKeys)
             {
                 var key = k;
@@ -88,10 +109,11 @@ namespace RaintileOptions
                 Background = ResBrush("FieldBg"), BorderBrush = ResBrush("AccentBrush"), BorderThickness = T(1),
                 CornerRadius = new CornerRadius(6), Padding = T(10, 7), Margin = T(3, 0, 3, 10), Child = text, MinHeight = 36,   // ui-exempt: on-screen keyboard
             };
-            var hint = NewText("A type   X delete   Y space   LB/RB cursor   LT Shift   RT symbols   Start done   B cancel", Fs.Help, ResBrush("DimBrush"), false, true);
+            var hint = NewText(numeric ? "A type   X delete   LB/RB cursor   Start done   B cancel"
+                : "A type   X delete   Y space   LB/RB cursor   LT Shift   RT symbols   Start done   B cancel", Fs.Help, ResBrush("DimBrush"), false, true);
             hint.Margin = T(3, 10, 3, 0);   // ui-exempt: on-screen keyboard
             var sp = NewPanel();
-            sp.Width = 10 * size;
+            sp.Width = oskCols * size;
             AddTo(sp, field); AddTo(sp, grid); AddTo(sp, hint);
             var card = new Border
             {
@@ -115,14 +137,16 @@ namespace RaintileOptions
             var root = Window.GetWindow(field);
             var target = root != null ? root.Content as FrameworkElement : null;
             if (target == null) return;
-            if (osk == null) BuildOsk();
+            oskNumeric = NumericChars(field);
+            // built again when the other kind is needed (letters or number pad)
+            if (osk == null || (oskCols == 4) != (oskNumeric != null)) BuildOsk(oskNumeric != null);
             oskTarget = field;
             oskOriginal = OskRead(field);
             oskText = oskOriginal;
             oskCaret = oskText.Length;
             oskShift = false;
             oskSymbols = false;
-            oskRow = 1;   // on the first letter
+            oskRow = oskNumeric != null ? 0 : 1;   // on the 7, or on the first letter
             oskCol = 0;
             OskRender();
             var card = (FrameworkElement)osk.Child;
@@ -165,15 +189,17 @@ namespace RaintileOptions
 
         void OskRender()
         {
-            string page = oskSymbols ? OskSymbols : OskLetters;
+            string page = OskPage();
             var sel = OskKeyAt(oskRow, oskCol);
             foreach (var k in oskKeys)
             {
                 string label;
+                k.Box.Opacity = 1;
                 if (k.Char >= 0)
                 {
                     label = page[k.Char].ToString();
                     if (oskShift && !oskSymbols) label = label.ToUpperInvariant();
+                    if (!OskTakes(label)) k.Box.Opacity = 0.35;   // a - or . the box does not take
                 }
                 else if (k.Value == "BACK") label = "Delete";
                 else if (k.Value == "SHIFT") label = "Shift";
@@ -190,8 +216,20 @@ namespace RaintileOptions
             oskAfter.Text = shown.Substring(oskCaret);
         }
 
+        string OskPage()
+        {
+            return oskNumeric != null ? OskDigits : oskSymbols ? OskSymbols : OskLetters;
+        }
+
+        // A numeric box takes only its characters (as typing in it, NumericOnly)
+        bool OskTakes(string s)
+        {
+            return oskNumeric == null || s.All(ch => oskNumeric.IndexOf(ch) >= 0);
+        }
+
         void OskInsert(string s)
         {
+            if (!OskTakes(s)) return;
             oskText = oskText.Insert(oskCaret, s);
             oskCaret += s.Length;
             OskWrite();
@@ -218,7 +256,7 @@ namespace RaintileOptions
             if (oskTarget == null) return;
             if (k.Char >= 0)
             {
-                string ch = (oskSymbols ? OskSymbols : OskLetters)[k.Char].ToString();
+                string ch = OskPage()[k.Char].ToString();
                 OskInsert(oskShift && !oskSymbols ? ch.ToUpperInvariant() : ch);
                 return;
             }
@@ -236,9 +274,9 @@ namespace RaintileOptions
         {
             var k = OskKeyAt(oskRow, oskCol);
             if (dir == PadLeft && k.Col > 0) oskCol = k.Col - 1;
-            else if (dir == PadRight && k.Col + k.Span < 10) oskCol = k.Col + k.Span;
+            else if (dir == PadRight && k.Col + k.Span < oskCols) oskCol = k.Col + k.Span;
             else if (dir == PadUp && oskRow > 0) oskRow--;
-            else if (dir == PadDown && oskRow < 4) oskRow++;
+            else if (dir == PadDown && oskRow < oskRows - 1) oskRow++;
             OskRender();
         }
 
@@ -251,8 +289,8 @@ namespace RaintileOptions
             else if ((fire & PadY) != 0) OskInsert(" ");
             else if ((fire & PadLB) != 0) OskMoveCaret(-1);
             else if ((fire & PadRB) != 0) OskMoveCaret(1);
-            else if ((fire & PadLT) != 0) { oskShift = !oskShift; OskRender(); }
-            else if ((fire & PadRT) != 0) { oskSymbols = !oskSymbols; OskRender(); }
+            else if ((fire & PadLT) != 0 && oskNumeric == null) { oskShift = !oskShift; OskRender(); }
+            else if ((fire & PadRT) != 0 && oskNumeric == null) { oskSymbols = !oskSymbols; OskRender(); }
             else if ((fire & PadB) != 0) CloseOsk(false);
             else if (start) CloseOsk(true);
         }

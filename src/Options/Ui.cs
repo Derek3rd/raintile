@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
@@ -475,17 +477,26 @@ namespace RaintileOptions
             return i != null ? i.Tag as string : null;
         }
 
+        // The characters a box of NumericOnly takes, null for any other field (the
+        // on-screen keyboard shows its number pad with them)
+        static readonly ConditionalWeakTable<TextBox, string> numericChars = new ConditionalWeakTable<TextBox, string>();
+
+        public static string NumericChars(FrameworkElement field)
+        {
+            string chars;
+            var tb = field as TextBox;
+            return tb != null && numericChars.TryGetValue(tb, out chars) ? chars : null;
+        }
+
         // A box for numbers only: typing and pasting let through digits, the decimal
         // point (a comma becomes one) and the minus sign where they can be. What is
         // still not a number (a lone "-", the on-screen keyboard) gets MarkInvalid.
         public static void NumericOnly(TextBox tb, bool negative, bool decimals)
         {
-            Func<string, bool> ok = text =>
-            {
-                foreach (char ch in text)
-                    if (!(ch >= '0' && ch <= '9') && !(decimals && ch == '.') && !(negative && ch == '-')) return false;
-                return true;
-            };
+            string chars = "0123456789" + (decimals ? "." : "") + (negative ? "-" : "");
+            numericChars.Remove(tb);
+            numericChars.Add(tb, chars);
+            Func<string, bool> ok = text => text.All(ch => chars.IndexOf(ch) >= 0);
             InputMethod.SetIsInputMethodEnabled(tb, false);
             tb.PreviewTextInput += (s, e) =>
             {

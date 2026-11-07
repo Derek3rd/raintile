@@ -85,7 +85,8 @@ acts on a whole entry of a list, in the list's header. A field never has a bin.
   the sliders before them take the rest of the row.
 - Number boxes take only numbers (`NumericOnly`, already in `NewNumberField` and
   `NewSizeField`): letters and spaces are not typed or pasted, a comma becomes the
-  decimal point, the minus sign only where the value can be negative.
+  decimal point, the minus sign only where the value can be negative. The on-screen
+  keyboard shows a number pad on them, with the same characters (`NumericChars`).
 - The same kind of value gets the same control on every page (a grid size, an
   opacity, a zoom look the same in Settings and in the category editor).
 - A value that is not valid gets the red border (`MarkInvalid`) and is not saved

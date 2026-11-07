@@ -1240,7 +1240,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 12
+local GRID_VERSION = 13
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -2314,6 +2314,30 @@ function D.customWidgetText(t, i, w, h)
 	local out, section, kind = {}, nil, nil
 	local lines = {}
 	for line in (text .. '\n'):gmatch('([^\n]*)\n') do lines[#lines + 1] = (line:gsub('\r$', '')) end
+	-- its [Variables]: Grid.inc is included in a section of the skin, where a
+	-- [Variables] section does not define variables for the skin, so their
+	-- values are written in place of #Name# (a variable may use another one)
+	local vars, inVars = {}, false
+	for _, line in ipairs(lines) do
+		local sec = line:match('^%s*%[([^%]]+)%]%s*$')
+		if sec then inVars = trim(sec):lower() == 'variables'
+		elseif inVars then
+			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
+			if k and trim(k) ~= '' then vars[trim(k):lower()] = trim(v) end
+		end
+	end
+	local function own(v)
+		for _ = 1, 3 do
+			local changed = false
+			v = v:gsub('#([%w_]+)#', function(n)
+				local r = vars[n:lower()]
+				if r then changed = true end
+				return r
+			end)
+			if not changed then break end
+		end
+		return v
+	end
 	local skip = false
 	local pending = {}
 	local function flush()
@@ -2344,7 +2368,7 @@ function D.customWidgetText(t, i, w, h)
 			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
 			if k and k ~= '' then
 				local key = trim(k):lower()
-				v = v:gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
+				v = own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
 				-- [Section] and [Section:...] references
 				v = v:gsub('%[([^%]%[:]+)(:?[^%]%[]*)%]', function(n, rest) return '[' .. ref(n) .. rest .. ']' end)
 				if key:match('^measurename%d*$') then v = ref(trim(v)) end

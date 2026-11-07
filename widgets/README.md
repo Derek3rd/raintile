@@ -30,6 +30,6 @@ Open a pull request that adds an entry to `index.json` (and, if you want it host
 
 ## Parts of a tile that highlight themselves
 
-A widget can split its tile into parts that are clicked on their own, each with its own highlight: give the meters of the parts their `MouseOverAction`, `MouseLeaveAction` and `LeftMouseUpAction`, and the tile `Highlight=0` (Options: the tile's **Highlight** box), so Raintile's highlight does not cover them. In the actions, `#CURRENTSECTION#` is the meter itself: Raintile renames the sections of a widget, so their own names do not work in bangs.
+A widget can split its tile into parts that are clicked on their own, each with its own highlight: give the meters of the parts their `MouseOverAction`, `MouseLeaveAction` and `LeftMouseUpAction`, and the tile `Highlight=0` (Options: the tile's **Highlight** box), so Raintile's highlight does not cover them. A widget's own `[Variables]` work as usual: Raintile writes their values in place of `#Name#` when it adds the widget to the launcher (so changing one with `!SetVariable` does not change the meters). In the actions, `#CURRENTSECTION#` is the meter itself: Raintile renames the sections of a widget, so their own names do not work in bangs.
 
 `QuadTest` (not in the gallery) is an example: four smaller tiles in a 2 x 2 grid, starting Notepad, Calculator, Explorer and Task Manager. Copy `QuadTest\QuadTest.ini` to `Widgets\QuadTest\` in your data folder and add a tile with `Widget=custom`, `Param=QuadTest`, `Size=2x2`, `Highlight=0`.

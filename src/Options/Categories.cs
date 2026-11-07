@@ -381,7 +381,7 @@ namespace RaintileOptions
             {
                 string count = e.Tiles + " tile" + (e.Tiles != 1 ? "s" : "");
                 if (e.Imported > 0) count += " + " + e.Imported + " imported";
-                var item = NewListEntry(e.Name, e.File + "   \u00B7   " + count, new ListTag { File = e.File }, 36);
+                var item = NewListEntry(e.Name, e.File + "   " + Dot + "   " + count, new ListTag { File = e.File }, 36);
                 SetThumb(((ListTag)item.Tag).Thumb, e.Icon);
                 item.Padding = T(12, 9);
                 catsList.Items.Add(item);
@@ -897,7 +897,7 @@ namespace RaintileOptions
             Func<string, string, string> describe = (pos, size) =>
             {
                 string p = GetCategoryPlace(model, pos), z = size != null ? GetCategoryPlace(model, size) : "1";
-                string text = (p == "50,50" ? "centre" : p == "0,0" ? "top left" : p + "%") + (z == "1" ? "" : ", " + z + "\u00D7");
+                string text = (p == "50,50" ? "centre" : p == "0,0" ? "top left" : p + "%") + (z == "1" ? "" : ", " + z + Times);
                 int own = tiles.Count(t => Core.GetKey(t, pos) != "" || (size != null && Core.GetKey(t, size) != ""));
                 return text + (own > 0 ? " (" + own + (own == 1 ? " tile has its own)" : " tiles have their own)") : "");
             };
@@ -2144,21 +2144,8 @@ namespace RaintileOptions
             };
             // opacity in %, as written to the file; empty = 100
             catOpacityReset = NewResetIcon("Restore default (100%)");
-            catOpacity = NewNumberField(0, 100, 1, "%", t =>
-            {
-                if (loading || currentFile == null) return;
-                Core.SetKey(Core.GetCategorySection(GetModel(currentFile)), "TileOpacity", t);
-                SetChanged(currentFile);
-                SetActionVisible(catOpacityReset, t != "");
-            }, true, 5);
-            catOpacityReset.Click += (s, e) =>
-            {
-                if (currentFile == null) return;
-                Core.SetKey(Core.GetCategorySection(GetModel(currentFile)), "TileOpacity", "");
-                SetChanged(currentFile);
-                catOpacity.Show("", 100);
-                SetActionVisible(catOpacityReset, false);
-            };
+            catOpacity = NewNumberField(0, 100, 1, "%", t => setCatKey("TileOpacity", t, catOpacityReset), true, 5);
+            catOpacityReset.Click += (s, e) => { setCatKey("TileOpacity", "", catOpacityReset); catOpacity.Show("", 100); };
             AddTo(af, NewFormRow("Background", catOpacity.Root, "Opacity of the colour and the image of the tiles without one of their own (their Background), e.g. lower for a Dashboard with skins over the tiles. Logos, texts and widgets stay as they are. Empty = 100%.", null, catOpacityReset));
             // framing, logo and play time line of every tile back to their default place,
             // the ones with their own too; the buttons share the column

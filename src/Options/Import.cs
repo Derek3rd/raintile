@@ -230,7 +230,7 @@ namespace RaintileOptions
             AddTo(texts, title);
             string store;
             if (!Schema.STORE_LABELS.TryGetValue(it.Store ?? "", out store)) store = it.Store;
-            AddTo(texts, NewText(store + "   \u00B7   " + (it.Kind == "game" ? "game" : "app"), Fs.Help, ResBrush("DimBrush")));
+            AddTo(texts, NewText(store + "   " + Dot + "   " +(it.Kind == "game" ? "game" : "app"), Fs.Help, ResBrush("DimBrush")));
             SetCol(texts, 2);
             g.Children.Add(texts);
             if (inCategory != null)
@@ -653,7 +653,7 @@ namespace RaintileOptions
                 string catName;
                 names.TryGetValue(t.File, out catName);
                 // the command can be long: cut, the whole line in the tooltip
-                var sub = NewText("in " + catName + "   \u00B7   " + Core.GetKey(t.Section, "Command"), Fs.Help, ResBrush("DimBrush"));
+                var sub = NewText("in " + catName + "   " + Dot + "   " +Core.GetKey(t.Section, "Command"), Fs.Help, ResBrush("DimBrush"));
                 SetTrimmed(sub);
                 AddTo(texts, sub);
                 row.Children.Add(texts);

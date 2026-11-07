@@ -1001,7 +1001,7 @@ $GLYPH = @{
     Add = 0xE710; Up = 0xE74A; Down = 0xE74B; Left = 0xE72B; Right = 0xE72A
 }
 $FS = @{ Title = 24; Section = 11.5; Label = 13.5; Help = 12; Badge = 11 }
-$GAP = @{ Control = 8; Icon = 6; Card = 16; Row = 11; StackedRow = 8; ActionColumn = 34; ScrollBar = 9 }
+$GAP = @{ Control = 8; Icon = 6; Card = 16; Row = 11; StackedRow = 8; ActionColumn = 34; ScrollBar = 9; Page = 36; CardPadding = 20 }
 $FIELD = @{ S = 120; M = 220; L = 300; Wrap = 470; ControlMin = 300; ControlMax = 440 }
 
 # One width of the control column for every page: half the room inside a card
@@ -1009,7 +1009,7 @@ $FIELD = @{ S = 120; M = 220; L = 300; Wrap = 470; ControlMin = 300; ControlMax 
 # between $FIELD.ControlMin and ControlMax; set again with the window size
 function Update-ControlColumn {
     $page = if ($pageHost -and $pageHost.ActualWidth -gt 0) { $pageHost.ActualWidth } else { 1064 }
-    $room = $page - 72 - $GAP.ScrollBar - 40 - 2
+    $room = $page - 2 * $GAP.Page - $GAP.ScrollBar - 2 * $GAP.CardPadding - 2
     $w = [Math]::Max($FIELD.ControlMin, [Math]::Min($FIELD.ControlMax, [Math]::Round($room * 0.5)))
     $old = $app.Resources['ControlColumn']
     # the GridLength itself, not a PowerShell wrapper (WPF would refuse it)
@@ -1022,7 +1022,7 @@ function Set-ScrollRoom($sv, $panel) {
     $sv.Tag = $panel
     $sv.Add_ScrollChanged({
             param($s, $e)
-            $right = 36 + $(if ($s.ComputedVerticalScrollBarVisibility -eq 'Visible') { 0 } else { $GAP.ScrollBar })
+            $right = $GAP.Page + $(if ($s.ComputedVerticalScrollBarVisibility -eq 'Visible') { 0 } else { $GAP.ScrollBar })
             $m = $s.Tag.Margin
             if ($m.Right -ne $right) { $s.Tag.Margin = T $m.Left $m.Top $right $m.Bottom }
         })
@@ -2246,12 +2246,13 @@ function Show-CategoryDetails {
     $cat.CatCard.IsEnabled = [bool]$file
     $c = if ($file) { Get-CategorySection (Get-Model $file) } else { $null }
     foreach ($k in 'Name', 'NX', 'NY', 'IconSize') { $cat["cat.$k"].Text = if ($c) { Get-Key $c $k } else { '' } }
-    Set-Thumb $cat.CatIcon $(if ($c) { Get-CategoryIcon (Get-ListBase) $c } else { $null })
+    $icon = if ($c) { Get-CategoryIcon (Get-ListBase) $c } else { $null }
+    Set-Thumb $cat.CatIcon $icon
+    Set-ActionVisible $cat.CatIconDel ([bool]$icon)
     $cat.CatIconHint.Text = if ($file) { "Default: Images\$(Get-ListBase)\icon.png" } else { '' }
     $cat.GridHint.Text = "Empty = the default ($($values['NX']), from Layout)."
     $cat.RowsHint.Text = "Empty = the default ($($values['NY']), from Layout)."
     $cat.SizeHint.Text = "Pixels, or % of the screen height (e.g. 12%). Empty = the default ($($values['IconSize']), from Layout)."
-    Set-ActionVisible $cat.CatIconDel ([bool]$(if ($c) { Get-CategoryIcon (Get-ListBase) $c } else { $null }))
     $script:loading = $false
 }
 
@@ -3650,27 +3651,34 @@ function Refresh-MissingList {
         $texts.VerticalAlignment = 'Center'
         $name = New-Text $t.Name $FS.Label
         Set-Trimmed $name
-        $name.TextTrimming = 'CharacterEllipsis'
         [void](Add-To $texts $name)
         $cmd = Get-Key $t.Section 'Command'
-        [void](Add-To $texts (New-Text "in $($names[$t.File])   $([char]0xB7)   $cmd" $FS.Help (Res 'DimBrush')))
-        ($texts.Children[1]).TextTrimming = 'CharacterEllipsis'
+        # the command can be long: cut, the whole line in the tooltip
+        Set-Trimmed (Add-To $texts (New-Text "in $($names[$t.File])   $([char]0xB7)   $cmd" $FS.Help (Res 'DimBrush')))
         [void]$row.Children.Add($texts)
-        $remove = New-Button 'Remove' '' 'Takes the tile out of its category. Its images stay in the Images folder.'
-        $remove.Margin = T 10 0 0 0
+        $remove = New-Button 'Remove'
+        $remove.Margin = T $GAP.Control 0 0 0
         $remove.Tag = $t
-        $remove.Add_Click({ param($s, $e) Remove-MissingTiles @($s.Tag) })
+        $remove.Add_Click({ param($s, $e) if (Confirm-RemoveMissing 1) { Remove-MissingTiles @($s.Tag) } })
         Set-Col $remove 1
         [void]$row.Children.Add($remove)
-        $keepBtn = New-Button 'Keep' '' 'Keeps the tile as it is and stops reporting it.'
-        $keepBtn.Margin = T 6 0 0 0
+        $keepBtn = New-Button 'Keep'
+        $keepBtn.Margin = T $GAP.Control 0 0 0
         $keepBtn.Tag = $t
         $keepBtn.Add_Click({ param($s, $e) Keep-MissingTiles @($s.Tag) })
         Set-Col $keepBtn 2
         [void]$row.Children.Add($keepBtn)
         [void]$missingUi.List.Children.Add($row)
     }
-    $missingUi.Count.Text = "$($tiles.Count) tile$(if ($tiles.Count -ne 1) { 's' }) of games that are no longer installed, or whose program file is gone. In the launcher they are greyed out and do not start."
+    $missingUi.Count.Text = "$($tiles.Count) tile$(if ($tiles.Count -ne 1) { 's' }) of games that are no longer installed, or whose program file is gone. In the launcher they are greyed out and do not start. " +
+        'Remove takes a tile out of its category at once (its images stay in the Images folder); Keep leaves it as it is and stops reporting it.'
+}
+
+# Taking tiles out of their categories is written at once: asked first
+function Confirm-RemoveMissing([int]$count) {
+    $what = if ($count -eq 1) { 'Remove this tile from its category?' } else { "Remove these $count tiles from their categories?" }
+    $r = Show-Dialog 'Remove tiles' "$what Their images stay in the Images folder." @('Remove', 'Cancel') -Danger
+    return ($r.Button -eq 'Remove')
 }
 
 function New-MissingCard {
@@ -3678,17 +3686,17 @@ function New-MissingCard {
     $missingUi.Card = $card
     $f = $card.Child
     $missingUi.Count = New-Help ''
-    $missingUi.Count.Margin = T 0 0 0 8
+    $missingUi.Count.Margin = T 0 0 0 $GAP.Control
     [void](Add-To $f $missingUi.Count)
     $missingUi.List = New-Panel
     [void](Add-To $f $missingUi.List)
     $bottom = New-Panel 'Horizontal'
     $bottom.Margin = T 0 10 0 6
     $all = New-Button 'Remove all'
-    $all.Add_Click({ Remove-MissingTiles @(Get-MissingList) })
+    $all.Add_Click({ $list = @(Get-MissingList); if ($list.Count -and (Confirm-RemoveMissing $list.Count)) { Remove-MissingTiles $list } })
     [void](Add-To $bottom $all)
     $keepAll = New-Button 'Keep all'
-    $keepAll.Margin = T 8 0 0 0
+    $keepAll.Margin = T $GAP.Control 0 0 0
     $keepAll.Add_Click({ Keep-MissingTiles @(Get-MissingList) })
     [void](Add-To $bottom $keepAll)
     [void](Add-To $f $bottom)
@@ -3804,7 +3812,7 @@ function Start-SaveAndRefresh {
 
 # Info > Back up: the data folder to a zip (unsaved changes are saved first)
 function Invoke-Backup {
-    if ($Data -eq $Resources) { [void](Show-Dialog 'Backup' 'Your data folder is not ready yet: refresh the skin once, then try again.'); return }
+    if ($Data -eq $Resources) { [void](Show-Dialog 'Back up' 'Your data folder is not ready yet: refresh the skin once, then try again.'); return }
     if ($script:dirtySettings) { Save-All -NoRefresh }
     $dlg = New-Object Microsoft.Win32.SaveFileDialog
     $dlg.Filter = 'Raintile backup|*.zip'
@@ -3820,7 +3828,7 @@ function Invoke-Backup {
 # Info > Restore: replaces the data folder with a backup, then the window
 # closes and the skin reloads
 function Invoke-Restore {
-    if ($Data -eq $Resources) { [void](Show-Dialog 'Backup' 'Your data folder is not ready yet: refresh the skin once, then try again.'); return }
+    if ($Data -eq $Resources) { [void](Show-Dialog 'Restore backup' 'Your data folder is not ready yet: refresh the skin once, then try again.'); return }
     $zip = Select-File 'Raintile backup|*.zip|All files|*.*'
     if (-not $zip) { return }
     $problem = Test-DataBackup $zip

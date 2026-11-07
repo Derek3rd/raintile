@@ -486,7 +486,7 @@ namespace RaintileOptions
             {
                 string when = "";
                 DateTime d;
-                if (DateTime.TryParse(Json.Str(info, "Checked"), out d)) when = "   \u00B7   checked " + d.ToString("g");
+                if (DateTime.TryParse(Json.Str(info, "Checked"), out d)) when = "   " + Dot + "   checked " + d.ToString("g");
                 string latest = Json.Str(info, "Latest");
                 updLatest.Text = (latest != "" ? latest : "unknown") + when;
             }

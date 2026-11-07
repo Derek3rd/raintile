@@ -256,7 +256,8 @@
     </Setter>
   </Style>
 
-  <!-- Text fields -->
+  <!-- Text fields. Hover and focus set the box's own BorderBrush, not the border's:
+       the red one of a value that is not valid (set on the box) wins over them -->
   <Style TargetType="TextBox">
     <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
     <Setter Property="Background" Value="{StaticResource FieldBg}"/>
@@ -276,10 +277,10 @@
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource DimBrush}"/>
+              <Setter Property="BorderBrush" Value="{StaticResource DimBrush}"/>
             </Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+              <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Opacity" Value="0.4"/>
@@ -314,10 +315,10 @@
               <Setter TargetName="unit" Property="Margin" Value="0"/>
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource DimBrush}"/>
+              <Setter Property="BorderBrush" Value="{StaticResource DimBrush}"/>
             </Trigger>
             <Trigger Property="IsKeyboardFocused" Value="True">
-              <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+              <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Opacity" Value="0.4"/>

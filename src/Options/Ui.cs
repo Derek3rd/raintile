@@ -91,13 +91,18 @@ namespace RaintileOptions
         public bool Sync;
 
         // 'fallback' places the slider when the text is empty or not a number; the
-        // text being typed is left alone
+        // text being typed is left alone. A value put in (a reset, another tile) is
+        // valid again.
         public void Show(string value, double fallback)
         {
             Sync = true;
             try
             {
-                if (!Box.IsKeyboardFocused) Box.Text = value ?? "";
+                if (!Box.IsKeyboardFocused)
+                {
+                    Box.Text = value ?? "";
+                    Box.ClearValue(Control.BorderBrushProperty);
+                }
                 double n;
                 if (!Core.TryNumber(value, out n)) n = fallback;
                 Slider.Value = Math.Min(Slider.Maximum, Math.Max(Slider.Minimum, n));
@@ -122,6 +127,7 @@ namespace RaintileOptions
                 string v = (value ?? "").Trim();
                 bool pct = v.EndsWith("%");
                 Box.Text = v.TrimEnd('%').Trim();
+                Box.ClearValue(Control.BorderBrushProperty);   // a value put in is valid again
                 Pct.IsChecked = pct;
                 Px.IsChecked = !pct;
             }

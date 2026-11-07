@@ -21,10 +21,6 @@ namespace RaintileOptions
         public CheckBox Box;
         public Panel Panel;
         public TextBox Text;
-        public Slider Slider;
-        public double Step;
-        public RadioButton Px, Pct;
-        public string Axis;
         public Button Swatch, Button, Clear;
         public Control Input;   // text, font, category, secret
         public WrapPanel Area, Monitor;
@@ -152,8 +148,6 @@ namespace RaintileOptions
                 r.Value.Visibility = MODE_KEYS[r.Key] == mode ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        static bool TryNum(string t, out double n) { return Core.TryNumber(t, out n); }
-
         // Shows the current value of 'key' in its controls (after a reset)
         void UpdateControl(string key)
         {
@@ -233,7 +227,7 @@ namespace RaintileOptions
             // an identifier or a huge range (a port): no slider
             var f = NewNumberField(item.Min, item.Max, item.Step, item.Unit, t => SetValue(key, t), !item.NoSlider);
             f.Show(V(key), item.Min);
-            ctl[key] = new Ctl { Kind = item.Kind, Num = f, Slider = f.Slider, Text = f.Box, Step = item.Step };
+            ctl[key] = new Ctl { Kind = item.Kind, Num = f, Text = f.Box };
             return f.Root;
         }
 
@@ -243,7 +237,7 @@ namespace RaintileOptions
             var f = NewSizeField(item.Axis, v => SetValue(key, v));
             f.Root.HorizontalAlignment = HorizontalAlignment.Right;
             f.Show(V(key));
-            ctl[key] = new Ctl { Kind = "size", Size = f, Text = f.Box, Px = f.Px, Pct = f.Pct, Axis = item.Axis };
+            ctl[key] = new Ctl { Kind = "size", Size = f, Text = f.Box };
             return f.Root;
         }
 

@@ -23,17 +23,15 @@ namespace RaintileOptions
         FrameworkElement NewAutoArtRow()
         {
             var panel = NewPanel();
-            var buttons = NewGrid("*", "8", "*", "8", "*", "8", "Auto");
-            autoArtAll = NewButton("All", "", "Search what is missing, background and logo, for every tile of the category");
-            autoArtBg = NewButton("Background", "", "Search a background for every tile of the category without one");
-            autoArtLogo = NewButton("Logo", "", "Search a logo for every tile of the category without one");
+            autoArtAll = NewButton("All");
+            autoArtBg = NewButton("Background");
+            autoArtLogo = NewButton("Logo");
+            AddTo(panel, NewEqualButtons(autoArtAll, autoArtBg, autoArtLogo));
+            // Stop: under the buttons, with the progress, while a search runs
             autoArtStop = NewButton("Stop");
+            autoArtStop.HorizontalAlignment = HorizontalAlignment.Left;
+            autoArtStop.Margin = T(0, Gap.Control, 0, 0);
             autoArtStop.Visibility = Visibility.Collapsed;
-            SetCol(autoArtBg, 2);
-            SetCol(autoArtLogo, 4);
-            SetCol(autoArtStop, 6);
-            buttons.Children.Add(autoArtAll); buttons.Children.Add(autoArtBg); buttons.Children.Add(autoArtLogo); buttons.Children.Add(autoArtStop);
-            AddTo(panel, buttons);
             autoArtFill = new Border { Width = 0, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3), Background = ResBrush("AccentBrush") };
             autoArtTrack = new Border
             {
@@ -41,16 +39,18 @@ namespace RaintileOptions
                 Child = autoArtFill, Visibility = Visibility.Collapsed,
             };
             AddTo(panel, autoArtTrack);
-            autoArtStatus = NewText("", 11.5, ResBrush("DimBrush"), false, true);
+            autoArtStatus = NewHelp("");
             autoArtStatus.Margin = T(0, 4, 0, 0);
             autoArtStatus.Visibility = Visibility.Collapsed;
             AddTo(panel, autoArtStatus);
+            AddTo(panel, autoArtStop);
             autoArtAll.Click += (s, e) => AutoFindArt(new[] { "Background", "Logo" });
             autoArtBg.Click += (s, e) => AutoFindArt(new[] { "Background" });
             autoArtLogo.Click += (s, e) => AutoFindArt(new[] { "Logo" });
             autoArtStop.Click += (s, e) => { autoArtStopAsked = true; autoArtStop.IsEnabled = false; };
             return NewFormRow("Auto find images", panel,
-                "Every tile of the category without a background (or a logo) gets the first image found online: Steam, SteamGridDB (with the key; only a game or app of the same name), Dashboard Icons, the website of a link.");
+                "Every tile of the category without a background (or a logo) gets the first image found online: Steam, SteamGridDB (with the key; only a game or app of the same name), Dashboard Icons, the website of a link. " +
+                "All looks for both, Background or Logo only for that one.");
         }
 
         void SetAutoArtProgress(double part)
@@ -90,7 +90,7 @@ namespace RaintileOptions
                 {
                     if (autoArtStopAsked) break;
                     string name = t.Name, command = Core.GetKey(t, "Command"), source = Core.GetKey(t, "Source");
-                    autoArtStatus.Text = "Searching " + (done + 1) + " of " + tiles.Count + ": " + name + "\u2026";
+                    autoArtStatus.Text = "Searching " + (done + 1) + " of " + tiles.Count + ": " + name + "...";
                     foreach (var kind in kinds)
                     {
                         if (autoArtStopAsked) break;

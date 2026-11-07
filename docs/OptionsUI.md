@@ -8,7 +8,9 @@ styles of `@Resources/Scripts/Options.xaml`.
 Most rules are already code: the constants and helpers in `src/Options/Ui.cs`
 (`Glyph`, `Fs`, `Gap`, `FieldWidth`, `NewHelp`, `NewSectionTitle`, `NewLabelBlock`,
 `NewClearButton`, `NewDeleteButton`, `NewResetIcon`, `SetActionVisible`,
-`MarkInvalid`, `SetTrimmed`, `ShowDialog`). Build new UI with them: no glyph codes,
+`MarkInvalid`, `SetTrimmed`, `NewNumberField`, `NewSizeField`, `NewEqualButtons`,
+`ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
+`SetFormHelp`. Build new UI with them: no glyph codes,
 font sizes or margins written by hand. When a page needs something the helpers do
 not have, add it to `Ui.cs` and to this page, not to the page's own file.
 
@@ -95,6 +97,7 @@ Widths:
 | Label, name of an entry in a list | `Fs.Label` 13.5 |
 | Help, hint, status, notes, values | `Fs.Help` 12, dim (accent for a note that asks for an action) |
 | Badges and chips | `Fs.Badge` 11 |
+| Caption under a thumbnail (tiles strip) | `Fs.Help` 12 |
 
 The window chrome keeps its own: the name in the menu (21) and its version (12), the
 title of the saving overlay (17).

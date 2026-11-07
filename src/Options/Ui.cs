@@ -40,6 +40,7 @@ namespace RaintileOptions
         public const int Add = 0xE710;
         public const int Up = 0xE74A, Down = 0xE74B, Left = 0xE72B, Right = 0xE72A;   // move an entry
         public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
+        public const int Pin = 0xE718;      // marks a pinned tile (not a button)
     }
 
     // Type sizes
@@ -71,6 +72,60 @@ namespace RaintileOptions
         public const double M = 220;     // colours, combos, short text
         public const double L = 300;     // text, paths, fonts
         public const double Wrap = 470;  // panels of segments or switches
+    }
+
+    // A number: slider + text box + unit (NewNumberField). Show() puts a value in
+    // it without reporting a change.
+    public class NumberField
+    {
+        public Slider Slider;
+        public TextBox Box;
+        public FrameworkElement Root;
+        public bool Sync;
+
+        // 'fallback' places the slider when the text is empty or not a number; the
+        // text being typed is left alone
+        public void Show(string value, double fallback)
+        {
+            Sync = true;
+            try
+            {
+                if (!Box.IsKeyboardFocused) Box.Text = value ?? "";
+                double n;
+                if (!Core.TryNumber(value, out n)) n = fallback;
+                Slider.Value = Math.Min(Slider.Maximum, Math.Max(Slider.Minimum, n));
+            }
+            finally { Sync = false; }
+        }
+    }
+
+    // A length in pixels or in % of the screen: text box + px / % (NewSizeField)
+    public class SizeField
+    {
+        public TextBox Box;
+        public RadioButton Px, Pct;
+        public FrameworkElement Root;
+        public bool Sync;
+
+        public void Show(string value)
+        {
+            Sync = true;
+            try
+            {
+                string v = (value ?? "").Trim();
+                bool pct = v.EndsWith("%");
+                Box.Text = v.TrimEnd('%').Trim();
+                Pct.IsChecked = pct;
+                Px.IsChecked = !pct;
+            }
+            finally { Sync = false; }
+        }
+
+        // as written to the file: "" when empty
+        public string Value
+        {
+            get { string t = Box.Text.Trim(); return t == "" ? "" : t + (Pct.IsChecked == true ? "%" : ""); }
+        }
     }
 
     static class Program
@@ -238,7 +293,12 @@ namespace RaintileOptions
         {
             t.TextTrimming = TextTrimming.CharacterEllipsis;
             t.ToolTip = full ?? t.Text;
-            t.ToolTipOpening += (s, e) => { if (full == null && !IsTrimmed(t)) e.Handled = true; };
+            t.ToolTipOpening += (s, e) =>
+            {
+                if (full != null) return;
+                if (!IsTrimmed(t)) { e.Handled = true; return; }
+                t.ToolTip = t.Text;   // the text may have changed since
+            };
         }
 
         public static bool IsTrimmed(TextBlock t)
@@ -246,6 +306,110 @@ namespace RaintileOptions
             var m = new TextBlock { Text = t.Text, FontSize = t.FontSize, FontFamily = t.FontFamily, FontWeight = t.FontWeight, FontStyle = t.FontStyle };
             m.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             return m.DesiredSize.Width > t.ActualWidth + 0.5;
+        }
+
+        // Slider + text box + unit for a number in a range (docs/OptionsUI.md, 3).
+        // 'changed' gets the text (empty allowed: the caller says what it means);
+        // text that is not a number gets the red border and is not reported.
+        // sliderWidth NaN: the slider fills the row. slider false: the box only.
+        public NumberField NewNumberField(double min, double max, double step, string unit, Action<string> changed,
+            double sliderWidth = 220, bool slider = true, double smallChange = 0)
+        {
+            var f = new NumberField();
+            var g = NewGrid(!slider ? "Auto" : double.IsNaN(sliderWidth) ? "*" : sliderWidth.ToString(System.Globalization.CultureInfo.InvariantCulture), "Auto", "Auto");
+            double small = smallChange > 0 ? smallChange : step;
+            var sl = new Slider { Minimum = min, Maximum = max, TickFrequency = step, SmallChange = small, LargeChange = small, VerticalAlignment = VerticalAlignment.Center };
+            var tb = new TextBox { Width = FieldWidth.S, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            if (slider) { tb.Margin = T(12, 0, 0, 0); g.Children.Add(sl); }
+            SetCol(tb, 1);
+            g.Children.Add(tb);
+            // every number keeps the room of a unit, so the sliders line up
+            var u = NewText(unit ?? "", Fs.Help, ResBrush("DimBrush"));
+            u.Width = 56;
+            u.Margin = T(Gap.Control, 0, 0, 0);
+            u.VerticalAlignment = VerticalAlignment.Center;
+            SetCol(u, 2);
+            g.Children.Add(u);
+            f.Slider = sl; f.Box = tb; f.Root = g;
+            sl.ValueChanged += (s, e) =>
+            {
+                if (f.Sync) return;
+                string t = Core.FormatNumber(sl.Value, step);
+                f.Sync = true;
+                tb.Text = t;
+                f.Sync = false;
+                MarkInvalid(tb, false);
+                changed(t);
+            };
+            tb.TextChanged += (s, e) =>
+            {
+                if (f.Sync) return;
+                string t = tb.Text.Trim();
+                double n;
+                bool bad = t != "" && !Core.TryNumber(t, out n);
+                MarkInvalid(tb, bad);
+                if (bad) return;
+                if (Core.TryNumber(t, out n))
+                {
+                    f.Sync = true;
+                    sl.Value = Math.Min(max, Math.Max(min, n));
+                    f.Sync = false;
+                }
+                changed(t);
+            };
+            return f;
+        }
+
+        // Text box + px / % for a length; switching the unit converts the number on the
+        // main screen (axis "W" or "H"). 'changed' gets the value as written ("" when empty).
+        public SizeField NewSizeField(string axis, Action<string> changed)
+        {
+            var f = new SizeField();
+            var sp = NewPanel(Orientation.Horizontal);
+            var tb = new TextBox { Width = FieldWidth.S, TextAlignment = TextAlignment.Right, Margin = T(0, 0, Gap.Control, 0), VerticalAlignment = VerticalAlignment.Center };
+            string group = "size_" + Guid.NewGuid().ToString("N");
+            var px = new RadioButton { Style = ResStyle("Segment"), Content = "px", GroupName = group, MinWidth = 42, IsChecked = true };
+            var pct = new RadioButton { Style = ResStyle("Segment"), Content = "%", GroupName = group, MinWidth = 42 };
+            AddTo(sp, tb); AddTo(sp, px); AddTo(sp, pct);
+            f.Box = tb; f.Px = px; f.Pct = pct; f.Root = sp;
+            tb.TextChanged += (s, e) =>
+            {
+                if (f.Sync) return;
+                double n;
+                bool bad = tb.Text.Trim() != "" && !Core.TryNumber(tb.Text.Trim(), out n);
+                MarkInvalid(tb, bad);
+                if (!bad) changed(f.Value);
+            };
+            RoutedEventHandler unitClick = (s, e) =>
+            {
+                bool toPct = pct.IsChecked == true;
+                int full = axis == "W" ? screenPx[0] : screenPx[1];
+                string t = tb.Text.Trim();
+                double n;
+                if (full > 0 && Core.TryNumber(t, out n))
+                    t = toPct ? Core.FormatNumber(n * 100 / full, 0.01) : Core.FormatNumber(n * full / 100, 1);
+                f.Sync = true;
+                tb.Text = t;
+                f.Sync = false;
+                changed(f.Value);
+            };
+            px.Click += unitClick;
+            pct.Click += unitClick;
+            return f;
+        }
+
+        // Buttons of the same width filling a row, 8 apart (docs/OptionsUI.md, 4)
+        public static Grid NewEqualButtons(params FrameworkElement[] items)
+        {
+            var g = new Grid();
+            for (int i = 0; i < items.Length; i++)
+            {
+                if (i > 0) g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Gap.Control) });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                SetCol(items[i], i * 2);
+                g.Children.Add(items[i]);
+            }
+            return g;
         }
 
         public static StackPanel NewPanel(Orientation o = Orientation.Vertical)

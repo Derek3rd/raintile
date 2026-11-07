@@ -28,6 +28,8 @@ namespace RaintileOptions
         public Button Swatch, Button, Clear;
         public Control Input;   // text, font, category, secret
         public WrapPanel Area, Monitor;
+        public NumberField Num;
+        public SizeField Size;
     }
 
     class ResetInfo { public string[] KeyList; public Button Button; }
@@ -171,17 +173,8 @@ namespace RaintileOptions
                         foreach (RadioButton rb in c.Panel.Children) rb.IsChecked = string.Equals(((string[])rb.Tag)[1], v, StringComparison.OrdinalIgnoreCase);
                         break;
                     case "int":
-                    case "float":
-                        c.Text.Text = v;
-                        double n;
-                        if (TryNum(v, out n)) c.Slider.Value = Math.Min(c.Slider.Maximum, Math.Max(c.Slider.Minimum, n));
-                        break;
-                    case "size":
-                        bool pct = v.Trim().EndsWith("%");
-                        c.Text.Text = v.Trim().TrimEnd('%').Trim();
-                        c.Pct.IsChecked = pct;
-                        c.Px.IsChecked = !pct;
-                        break;
+                    case "float": c.Num.Show(v, c.Num.Slider.Minimum); break;
+                    case "size": c.Size.Show(v); break;
                     case "color": c.Text.Text = v; c.Swatch.Background = NewColorBrush(v, true); break;
                     case "text": ((TextBox)c.Input).Text = v; break;
                     case "folders": Action redraw; if (folderLists.TryGetValue(key, out redraw)) redraw(); break;
@@ -237,96 +230,20 @@ namespace RaintileOptions
         UIElement NewNumberControl(Item item)
         {
             string key = item.Key;
-            var sp = NewPanel(Orientation.Horizontal);
-            var sl = new Slider { Width = 220, Minimum = item.Min, Maximum = item.Max, TickFrequency = item.Step, SmallChange = item.Step, LargeChange = item.Step };
-            var tb = new TextBox { Width = FieldWidth.S, Margin = T(item.NoSlider ? 0 : 12, 0, 0, 0), TextAlignment = TextAlignment.Right, Text = V(key) };
-            double n;
-            if (TryNum(V(key), out n)) sl.Value = Math.Min(item.Max, Math.Max(item.Min, n));
-            // every number keeps the room of a unit, so the sliders line up
-            var unit = NewText(item.Unit, Fs.Help, ResBrush("DimBrush"));
-            unit.Width = 56;
-            unit.Margin = T(Gap.Control, 0, 0, 0);
-            unit.VerticalAlignment = VerticalAlignment.Center;
             // an identifier or a huge range (a port): no slider
-            if (!item.NoSlider) AddTo(sp, sl);
-            AddTo(sp, tb); AddTo(sp, unit);
-            var c = new Ctl { Kind = item.Kind, Slider = sl, Text = tb, Step = item.Step };
-            ctl[key] = c;
-            sl.ValueChanged += (s, e) =>
-            {
-                if (updating) return;
-                string txt = Core.FormatNumber(sl.Value, c.Step);
-                updating = true;
-                tb.Text = txt;
-                updating = false;
-                SetValue(key, txt);
-            };
-            tb.TextChanged += (s, e) =>
-            {
-                if (updating) return;
-                string t = tb.Text.Trim();
-                double m;
-                bool bad = t != "" && !TryNum(t, out m);
-                MarkInvalid(tb, bad);
-                if (bad) return;
-                if (t != "" && TryNum(t, out m))
-                {
-                    updating = true;
-                    sl.Value = Math.Min(sl.Maximum, Math.Max(sl.Minimum, m));
-                    updating = false;
-                }
-                SetValue(key, t);
-            };
-            return sp;
+            var f = NewNumberField(item.Min, item.Max, item.Step, item.Unit, t => SetValue(key, t), 220, !item.NoSlider);
+            f.Show(V(key), item.Min);
+            ctl[key] = new Ctl { Kind = item.Kind, Num = f, Slider = f.Slider, Text = f.Box, Step = item.Step };
+            return f.Root;
         }
 
         UIElement NewSizeControl(Item item)
         {
             string key = item.Key;
-            string v = V(key).Trim();
-            var sp = NewPanel(Orientation.Horizontal);
-            var tb = new TextBox { Width = FieldWidth.S, TextAlignment = TextAlignment.Right, Margin = T(0, 0, Gap.Control, 0), Text = v.TrimEnd('%').Trim() };
-            var px = new RadioButton();
-            var pct = new RadioButton();
-            foreach (var p in new[] { Tuple.Create(px, "px"), Tuple.Create(pct, "%") })
-            {
-                p.Item1.Style = ResStyle("Segment");
-                p.Item1.Content = p.Item2;
-                p.Item1.GroupName = "size_" + key;
-                p.Item1.MinWidth = 42;
-            }
-            bool isPct = v.EndsWith("%");
-            pct.IsChecked = isPct;
-            px.IsChecked = !isPct;
-            AddTo(sp, tb); AddTo(sp, px); AddTo(sp, pct);
-            var c = new Ctl { Kind = "size", Text = tb, Px = px, Pct = pct, Axis = item.Axis };
-            ctl[key] = c;
-            tb.TextChanged += (s, e) =>
-            {
-                if (updating) return;
-                double m;
-                bool bad = tb.Text.Trim() != "" && !TryNum(tb.Text.Trim(), out m);
-                MarkInvalid(tb, bad);
-                if (bad) return;
-                SetValue(key, tb.Text.Trim() + (pct.IsChecked == true ? "%" : ""));
-            };
-            // switching unit converts the number (on the main screen)
-            RoutedEventHandler unitClick = (s, e) =>
-            {
-                bool toPct = pct.IsChecked == true;
-                int full = c.Axis == "W" ? screenPx[0] : screenPx[1];
-                string t = tb.Text.Trim();
-                double n;
-                if (full > 0 && TryNum(t, out n))
-                    t = toPct ? Core.FormatNumber(n * 100 / full, 0.01) : Core.FormatNumber(n * full / 100, 1);
-                updating = true;
-                tb.Text = t;
-                updating = false;
-                SetValue(key, t + (toPct ? "%" : ""));
-            };
-            px.Click += unitClick;
-            pct.Click += unitClick;
-            return sp;
+            var f = NewSizeField(item.Axis, v => SetValue(key, v));
+            f.Show(V(key));
+            ctl[key] = new Ctl { Kind = "size", Size = f, Text = f.Box, Px = f.Px, Pct = f.Pct, Axis = item.Axis };
+            return f.Root;
         }
 
         UIElement NewColorControl(string key)

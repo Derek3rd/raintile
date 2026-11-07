@@ -36,7 +36,7 @@ namespace RaintileOptions
             var root = new DockPanel { Margin = T(20, 16, 20, 16) };
             d.Content = root;
 
-            var status = NewText("Searching\u2026", 13, ResBrush("DimBrush"), false, true);
+            var status = NewHelp("Searching...");
             status.Margin = T(0, 0, 0, 10);
             DockPanel.SetDock(status, Dock.Top);
             root.Children.Add(status);
@@ -51,7 +51,7 @@ namespace RaintileOptions
             use.IsEnabled = false;
             var cancel = NewButton("Cancel");
             cancel.MinWidth = 90;
-            cancel.Margin = T(8, 0, 0, 0);
+            cancel.Margin = T(Gap.Control, 0, 0, 0);
             cancel.Click += (s, e) => d.Close();
             AddTo(bar, use);
             AddTo(bar, cancel);
@@ -67,10 +67,10 @@ namespace RaintileOptions
             {
                 if (list.Count == 0)
                 {
-                    status.Text = "Nothing found for " + name + "." + (key == "" ? " With a SteamGridDB key (Options > Import) more games and apps are found." : "");
+                    status.Text = "Nothing found for " + name + "." + (key == "" ? " A SteamGridDB key (Options > Import) finds more." : "");
                     return;
                 }
-                status.Text = list.Count + " found: click one, then Use it." + (key == "" ? " With a SteamGridDB key (Options > Import) there are more." : "");
+                status.Text = list.Count + " found: click one, then Use it." + (key == "" ? " A SteamGridDB key (Options > Import) finds more." : "");
                 foreach (var c in list)
                 {
                     var img = new Image { Stretch = Stretch.Uniform, Width = w, Height = h - 22 };
@@ -87,7 +87,7 @@ namespace RaintileOptions
                     catch { }
                     var panel = NewPanel();
                     AddTo(panel, img);
-                    var label = NewText(c.Source, 11, ResBrush("DimBrush"));
+                    var label = NewText(c.Source, Fs.Badge, ResBrush("DimBrush"));
                     label.HorizontalAlignment = HorizontalAlignment.Center;
                     AddTo(panel, label);
                     var box = new Border
@@ -113,10 +113,10 @@ namespace RaintileOptions
             {
                 if (chosen == null) return;
                 use.IsEnabled = false;
-                status.Text = "Downloading\u2026";
+                status.Text = "Downloading...";
                 string url = chosen.Url, file = null;
                 try { file = await Task.Run(() => Art.Download(url)); }
-                catch (Exception ex) { status.Text = "The download failed: " + ex.Message; use.IsEnabled = true; return; }
+                catch (Exception ex) { status.Text = "Download failed: " + ex.Message; use.IsEnabled = true; return; }
                 try
                 {
                     Core.CopyTileImage(b, kind.ToLowerInvariant(), name, file);

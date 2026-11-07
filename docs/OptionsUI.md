@@ -17,6 +17,12 @@ not have, add it to `Ui.cs` and to this page, not to the page's own file.
 `New-SectionTitle`, `New-ActionIcon`, `Set-ActionVisible`, `Set-Invalid`, `Set-Trimmed`
 and `Show-Dialog -Danger`.
 
+`python tools/check.py` fails on a glyph code or a font size written by hand in
+`src/Options/` (outside `Ui.cs`) or in `Options.ps1` (outside `$GLYPH` and the
+helpers). Where a value really has to be its own (a drawing, the menu chrome, the
+on-screen keyboard, the launcher preview), the line says why with a comment
+`ui-exempt: <why>`. Margins are not checked yet: use `Gap` all the same.
+
 ## 1. Nothing only in a tooltip
 
 The window is used with the mouse, the keyboard and the gamepad: hovering is not
@@ -120,7 +126,7 @@ wrap within `FieldWidth.Wrap` (470); `FieldWidth.M` / `L` only for fields outsid
 | Caption under a thumbnail (tiles strip) | `Fs.Help` 12 |
 
 The window chrome keeps its own: the name in the menu (21) and its version (12), the
-title of the saving overlay (17).
+menu's icons (15) and group chevrons (9), the title of the saving overlay (17).
 
 ## 6. Spacing (`Gap`)
 
@@ -179,7 +185,7 @@ title of the saving overlay (17).
 
 ## 11. Checklist for a change to the window
 
-- [ ] Glyphs, sizes, widths and margins come from `Ui.cs`.
+- [ ] Glyphs, sizes, widths and margins come from `Ui.cs` (`tools/check.py` passes).
 - [ ] Every field shows its help; tooltips only name icon buttons, show cut text or
       shortcuts.
 - [ ] The control matches the kind of value, and has its unit.

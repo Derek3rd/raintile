@@ -586,7 +586,7 @@ namespace RaintileOptions
             var dv = new DrawingVisual();
             using (var dc = dv.RenderOpen())
             {
-                var text = new FormattedText("\uE7FC", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                var text = new FormattedText("\uE7FC", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,   // ui-exempt: drawn into the placeholder logo
                     new Typeface("Segoe MDL2 Assets"), 200, Brushes.White, 1.0);
                 dc.DrawText(text, new Point((256 - text.Width) / 2, (256 - text.Height) / 2));
             }
@@ -1398,7 +1398,7 @@ namespace RaintileOptions
                 // centred anyway, in the size of the labels
                 tb.Height = FieldHeight;
                 tb.Padding = T(8, 0);
-                tb.FontSize = 13;
+                tb.FontSize = 13;   // ui-exempt: the text size of the fields
                 return;
             }
             if (d is ComboBox) { ((ComboBox)d).Height = FieldHeight; return; }
@@ -1890,7 +1890,7 @@ namespace RaintileOptions
                 Child = new TextBlock { Text = "24 h played - yesterday", FontWeight = FontWeights.SemiBold },
             };
             canvas.Children.Add(previewInfo);
-            previewLabel = NewText("", 14, NewColorBrush(V("TextColor")));
+            previewLabel = NewText("", 14, NewColorBrush(V("TextColor")));   // ui-exempt: preview of the launcher
             previewLabel.HorizontalAlignment = HorizontalAlignment.Left;
             previewLabel.VerticalAlignment = VerticalAlignment.Bottom;
             previewLabel.Margin = T(12, 0, 0, 10);

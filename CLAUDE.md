@@ -32,6 +32,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 ## Conventions
 - English for code, comments, docs, commit messages, PRs and release notes.
 - No local links or paths in what is committed or published (code, docs, commit messages, PRs, release notes, comments on GitHub): nothing of one machine (`C:\Users\<name>\...`, `/home/...`, `/tmp/...`, a scratch or worktree folder, `file://`). Point to files with paths relative to the repository or with GitHub addresses; an example path in the docs stays generic (`C:\Games\x.exe`).
+- No personal information there either: user and machine names, e-mail addresses, account and Steam IDs, keys and tokens, names of games or folders of someone's PC, details from a user's logs or screenshots. Use placeholders (`<name>`, `<steamid>`) and generic examples. Authorship is the exception, where it belongs: commit authors and trailers, `author` in `widgets/index.json`, credits.
 - Scripts and `.ini`/`.inc` files are ASCII only, without BOM: PowerShell 5.1 and Rainmeter read BOM-less files as ANSI. Use `[char]0x...` for glyphs in PowerShell, `\uXXXX` in C#.
 - Text that Lua sends to Rainmeter reaches it as ANSI: write non-ASCII characters as character references `[\xHHHH]` (`D.text()`).
 - PowerShell 5.1 syntax only: no `&&`/`||`, `??`, `?.`, ternary or other PowerShell 7 features. C# compiled by `Add-Type` (in `Helper.ps1`) is C# 5; the Options program is C# 7.3.

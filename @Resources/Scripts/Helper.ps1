@@ -1556,7 +1556,7 @@ public class RaintilePad
     //   (%APPDATA%\ModrinthApp\app.db, SQLite), read only, with the SQLite of
     //   Windows (winsqlite3.dll), the last played first.
     public string ListFlag, ListDir;
-    long nextList;
+    long nextList, nextListCheck;
     bool listOn;
     Dictionary<string, DateTime> listStamp = new Dictionary<string, DateTime>();
 
@@ -1662,15 +1662,20 @@ public class RaintilePad
 
     void ListStep(IntPtr window, long now)
     {
-        if (now < nextList) return;
-        nextList = now + 2000;
-        if (!System.IO.File.Exists(ListFlag))
+        // the request is looked for 4 times a second (read at once when the
+        // launcher opens); a change of the data only every 2 s
+        if (now < nextListCheck) return;
+        nextListCheck = now + 250;
+        bool on = System.IO.File.Exists(ListFlag);
+        if (!on)
         {
             if (listOn) listStamp.Clear(); // read again next time it opens
             listOn = false;
             return;
         }
+        if (listOn && now < nextList) return;
         listOn = true;
+        nextList = now + 2000;
         bool changed = false;
         foreach (string raw in System.IO.File.ReadAllLines(ListFlag))
         {

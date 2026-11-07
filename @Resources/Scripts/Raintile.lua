@@ -1171,9 +1171,6 @@ local function loadCategories(files)
 			end
 		end
 	end
-	-- the lists of the list widgets as read last time (the helper reads them
-	-- again when the launcher opens)
-	for src in pairs(D.LIST_LAUNCH) do M.readList(src) end
 	-- Widgets, of every category: their meters are numbered in this order
 	widgets = {}
 	for _, c in ipairs(cats) do
@@ -1194,8 +1191,10 @@ local function loadCategories(files)
 						if f then
 							local text = f:read('*a')
 							f:close()
+							-- (meters of its own, or rows from a List=)
 							t.widget.boxed = ('\n' .. text):lower():find('\n%s*meter%s*=') ~= nil
-							t.widget.why = path .. ': no meters in it (no Meter= line)'
+								or ('\n' .. text):lower():find('\n%s*list%s*=') ~= nil
+							t.widget.why = path .. ': no meters in it (no Meter= line) and no List='
 							-- (copied into Grid.inc as it is: it must be UTF-8 or ANSI)
 							if text:find('%z') then
 								t.widget.boxed = false
@@ -1240,7 +1239,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 15
+local GRID_VERSION = 16
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1432,15 +1431,15 @@ local function writeGrid(path, sig, files)
 			if part == 'Value' then w('FontWeight=600') end
 			w('')
 		end
-		-- a list widget: its rows, each a part of the tile (D.placeList)
-		if t.widget.kind == 'list' then
+		-- a widget with List=: its rows, each a part of the tile (D.placeList)
+		if t.widget.kind == 'custom' and M.widgetInfo(t).list then
 			for k = 1, M.LIST_ROWS do
 				w('[W' .. i .. 'RowHit' .. k .. ']')
 				w('Meter=Shape')
 				w('MeterStyle=StyleWidgetShape')
 				w('MouseOverAction=[!CommandMeasure MeasureScript "HoverPart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
 				w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeavePart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
-				w('LeftMouseUpAction=[!CommandMeasure MeasureScript "ListLaunch(' .. i .. ',' .. k .. ')"]')
+				w('LeftMouseUpAction=[!CommandMeasure MeasureScript "WidgetRowClick(' .. i .. ',' .. k .. ')"]')
 				w('')
 				w('[W' .. i .. 'RowIcon' .. k .. ']')
 				w('Meter=Image')
@@ -1463,14 +1462,16 @@ local function writeGrid(path, sig, files)
 		if t.widget.boxed then
 			local cc = t.widget.cat
 			local text = D.customWidgetText(t, i, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
+			-- its container only with meters in it; its measures in any case (a
+			-- widget of only a List= has its measure that reads the data)
 			if text and text:find('Container=CW' .. i .. 'Box', 1, true) then
 				w('[CW' .. i .. 'Box]')
 				w('Meter=Shape')
 				w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
 				w('Hidden=1')
 				w('')
-				w(text)
 			end
+			if text and text:find('%S') then w(text) end
 		end
 	end
 
@@ -2188,51 +2189,73 @@ local dash = { data = nil, hist = { cpu = {}, gpu = {}, ram = {}, down = {}, up 
 	skinsWanted = {}, skinsActive = {}, customShown = {} }
 D.DASH_HISTORY = 60 -- samples kept for the graphs
 
--- List widgets (Widget=list, Param=<source>): one row per item, each a part
--- of the tile (Raintile's highlight goes onto it), a click starts it.
--- Sources: modrinth (the instances of Modrinth App, the last played first).
--- While the launcher is open and shows a category with one, Generated\
--- ListOn.txt names the sources; the helper reads them (Helper.ps1, ListStep)
--- into Generated\List_<source>.txt ("<id>|<name>|<icon>|<last played>")
--- and calls OnLists().
+-- Widget API ---------------------------------------------------------------------
+-- What a custom widget can ask of Raintile, in a [Raintile] section of its file
+-- (read by D.customWidgetText into t.widget.api):
+--   OnShow=, OnHide=  bangs run when its category comes on screen and when it
+--                     leaves it (never while the launcher is hidden)
+--   List=<file>       rows Raintile draws in the tile (D.placeList), one per
+--                     line of the file, in the widget's folder:
+--                     "<title>|<subtitle>|<icon>|<command>"; each row is a part
+--                     of the tile (the highlight goes onto it), a click runs its
+--                     command (a bang, or a program, file or address)
+-- In any of its values #WIDGET:<Section># is the name that section of the
+-- widget has in the launcher. When its data changed (e.g. in the FinishAction
+-- of its RunCommand measure) the widget calls
+-- [!CommandMeasure MeasureScript "WidgetChanged()"].
 M.LIST_ROWS = 10
-M.lists = {}
-D.LIST_TITLES = { modrinth = 'Modrinth' }
-D.LIST_LAUNCH = {
-	-- the id goes in the address: encoded (spaces, brackets of legacy ids)
-	modrinth = function(id)
-		return 'modrinth://launch/instance/' .. id:gsub('[^%w%-%._~:]', function(c) return string.format('%%%02X', c:byte()) end)
-	end,
-}
 
-function M.readList(source)
-	local items = {}
-	for _, line in ipairs(readLines(resources .. 'Generated\\List_' .. source .. '.txt')) do
-		local id, name, icon, last = line:match('^([^|]+)|([^|]*)|([^|]*)|(%d*)$')
-		if id then items[#items + 1] = { id = id, name = name ~= '' and name or id, icon = icon, last = tonumber(last) or 0 } end
-	end
-	M.lists[source] = items
-end
-
--- The sources the helper reads while the launcher is open (the list widgets
--- of the categories), or none
-function M.writeListFlag(on)
-	local flag = resources .. 'Generated\\ListOn.txt'
-	local sources, seen = {}, {}
-	for _, t in ipairs(on and widgets or {}) do
-		local src = t.widget.kind == 'list' and t.widget.param:lower()
-		if src and D.LIST_LAUNCH[src] and not seen[src] then
-			seen[src] = true
-			sources[#sources + 1] = src
+-- The [Raintile] section and the parts of widget t: read from its file once
+-- per load (D.customWidgetText also does it when it writes Grid.inc)
+function M.widgetInfo(t)
+	local w = t.widget
+	if not w.api then
+		w.api, w.partsAt = {}, {}
+		if w.kind == 'custom' and w.boxed and w.cat then
+			local cc = w.cat
+			D.customWidgetText(t, w.idx, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
 		end
 	end
-	if #sources == 0 then os.remove(flag) return end
-	writeLines(flag, sources)
+	return w.api
 end
 
-function OnLists()
+function M.readWidgetList(t)
+	local api = M.widgetInfo(t)
+	if not api.list then return end
+	local items = {}
+	for _, line in ipairs(readLines(api.list)) do
+		local title, sub, icon, cmd = line:match('^([^|]*)|([^|]*)|([^|]*)|(.*)$')
+		if title and trim(title) ~= '' then
+			items[#items + 1] = { name = trim(title), sub = trim(sub), icon = trim(icon), cmd = trim(cmd) }
+		end
+	end
+	t.widget.items = items
+end
+
+-- The category whose widgets are on screen (OnShow run), or nil: c comes,
+-- the one before goes (OnHide)
+function M.widgetHooks(c)
+	if M.hookCat == c then return end
+	local function run(cat, key)
+		for _, t in ipairs(cat and cat.tiles or {}) do
+			if t.widget and t.widget.kind == 'custom' then
+				local api = M.widgetInfo(t)
+				if key == 'onShow' then M.readWidgetList(t) end
+				if api[key] and api[key] ~= '' then SKIN:Bang(api[key]) end
+			end
+		end
+	end
+	run(M.hookCat, 'onHide')
+	M.hookCat = c
+	run(c, 'onShow')
+end
+
+-- New data from a widget: its rows read again
+function WidgetChanged()
 	if not ready then return end
-	for src in pairs(D.LIST_LAUNCH) do M.readList(src) end
+	for _, t in ipairs(widgets) do
+		if t.widget.api and t.widget.api.list then M.readWidgetList(t) end
+	end
 	base = -1
 	if visible and M.frame then M.frame() end
 end
@@ -2243,8 +2266,8 @@ function D.hideRows(i, from)
 	end
 end
 
--- The rows of list widget t in its tile at x, y: as many as fit under the
--- title; each row a part (t.widget.partsAt: x, y, w, h in the tile)
+-- The rows of widget t (List=) in its tile at x, y: as many as fit under
+-- the title; each row a part (t.widget.partsAt: x, y, w, h in the tile)
 function D.placeList(t, x, y, alpha)
 	local w = t.widget
 	local i = w.idx
@@ -2253,8 +2276,10 @@ function D.placeList(t, x, y, alpha)
 	local top = D.layout(small, valueSize, line).top
 	local rowH = math.max(36, math.floor(line * 2.4))
 	local fit = math.max(0, math.min(M.LIST_ROWS, math.floor((H - top - math.floor(pad / 2)) / rowH)))
-	local items = M.lists[w.param:lower()] or {}
-	w.partsAt = {}
+	if not w.items then M.readWidgetList(t) end
+	local items = w.items or {}
+	-- (the parts of the widget's own meters stay)
+	for k = 1, M.LIST_ROWS do w.partsAt['W' .. i .. 'RowHit' .. k] = nil end
 	local shown = 0
 	for k = 1, math.min(fit, #items) do
 		local it = items[k]
@@ -2288,7 +2313,7 @@ function D.placeList(t, x, y, alpha)
 		set(name, 'FontSize', tostring(small + 1))
 		set(name, 'FontColor', fade(V.TextColor, alpha))
 		show(name, true)
-		set(sub, 'Text', it.last > 0 and ('Played ' .. ago(it.last)) or 'Not played yet')
+		set(sub, 'Text', D.text(it.sub))
 		set(sub, 'X', tostring(x + tx))
 		set(sub, 'Y', tostring(y + ry + math.floor(rowH / 2) + 1))
 		set(sub, 'W', tostring(math.max(1, W - tx - pad)))
@@ -2301,7 +2326,7 @@ function D.placeList(t, x, y, alpha)
 	-- nothing to list: say so on the first row
 	if #items == 0 then
 		local name = 'W' .. i .. 'RowName1'
-		set(name, 'Text', D.LIST_LAUNCH[w.param:lower()] and 'Nothing found yet' or ('Unknown list: ' .. w.param))
+		set(name, 'Text', 'Nothing to show yet')
 		set(name, 'X', tostring(x + pad))
 		set(name, 'Y', tostring(y + top))
 		set(name, 'W', tostring(math.max(1, W - 2 * pad)))
@@ -2311,15 +2336,14 @@ function D.placeList(t, x, y, alpha)
 	end
 end
 
--- Click on row k of list widget i: starts that item
-function ListLaunch(i, k)
+-- Click on row k of widget i: runs its command (a bang as it is; anything
+-- else is opened like a tile's command)
+function WidgetRowClick(i, k)
 	local t = widgets[i]
 	if not ready or launching or not t or M.menuOverGrid() then return end
-	local src = t.widget.param:lower()
-	local it = (M.lists[src] or {})[k]
-	local make = D.LIST_LAUNCH[src]
-	if not it or not make then return end
-	SKIN:Bang('["' .. make(it.id) .. '"]')
+	local it = (t.widget.items or {})[k]
+	if not it or it.cmd == '' then return end
+	if it.cmd:match('^%[') then SKIN:Bang(it.cmd) else SKIN:Bang('["' .. it.cmd:gsub('"', '') .. '"]') end
 	if V.CloseOnLaunch then Hide() end
 end
 
@@ -2508,6 +2532,9 @@ function D.customWidgetText(t, i, w, h)
 	-- X= and Y= (Rainmeter's GetX/GetY of a meter in a container depend on
 	-- where the container is)
 	t.widget.partsAt = {}
+	t.widget.api = {}
+	local api = t.widget.api
+	local raintile = false -- in its [Raintile] section (M.widgetInfo)
 	local function at(v)
 		v = trim(v or '0')
 		if v == '' then return 0 end
@@ -2540,7 +2567,8 @@ function D.customWidgetText(t, i, w, h)
 			flush()
 			sec = trim(sec)
 			local low = sec:lower()
-			skip = low == 'rainmeter' or low == 'metadata'
+			raintile = low == 'raintile'
+			skip = low == 'rainmeter' or low == 'metadata' or raintile
 			kind = nil
 			section = sec
 			if low == 'variables' then
@@ -2548,11 +2576,26 @@ function D.customWidgetText(t, i, w, h)
 			else
 				pending[#pending + 1] = '[' .. prefix .. sec .. ']'
 			end
+		elseif raintile then
+			-- what the widget asks of Raintile (see M.widgetInfo)
+			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
+			if k and trim(k) ~= '' then
+				local key = trim(k):lower()
+				v = trim(own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end))
+				if key == 'onshow' then api.onShow = v
+				elseif key == 'onhide' then api.onHide = v
+				elseif key == 'list' and v ~= '' then
+					-- (a file of the widget, in its folder)
+					api.list = (v:match('^%a:') or v:match('^\\')) and v or dir .. v
+				end
+			end
 		elseif section and not skip then
 			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
 			if k and k ~= '' then
 				local key = trim(k):lower()
 				v = own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
+				-- #WIDGET:<Section>#: that section's name in the launcher
+				v = v:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end)
 				-- [Section] and [Section:...] references
 				v = v:gsub('%[([^%]%[:]+)(:?[^%]%[]*)%]', function(n, rest) return '[' .. ref(n) .. rest .. ']' end)
 				if key:match('^measurename%d*$') then v = ref(trim(v)) end
@@ -2641,8 +2684,6 @@ function D.placeWidget(t, x, y, alpha)
 			dash.skinsWanted[config] = { file = file, x = math.floor(SKIN:GetX() + V.PadX + x + V.LabelPad),
 				y = math.floor(SKIN:GetY() + V.GridY + y + V.LabelPad) }
 		end
-	elseif w.kind == 'list' then
-		D.placeList(t, x, y, alpha)
 	elseif w.kind == 'custom' and w.boxed then
 		set('CW' .. i .. 'Box', 'X', tostring(math.floor(V.PadX + x)))
 		set('CW' .. i .. 'Box', 'Y', tostring(math.floor(V.GridY + y)))
@@ -2650,6 +2691,7 @@ function D.placeWidget(t, x, y, alpha)
 			math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))))
 		show('CW' .. i .. 'Box', inside)
 		dash.customShown[i] = inside or nil
+		if M.widgetInfo(t).list then D.placeList(t, x, y, alpha) end
 	end
 	local W, H, pad = V.TileW, V.TileH, V.LabelPad
 	local a = math.floor(255 * alpha + 0.5)
@@ -2736,10 +2778,9 @@ function D.fillWidget(t)
 	local barH = math.floor(6 * k + 0.5)
 	local maxLines = math.max(1, math.floor((H - pad - L.top) / line))
 	local function text(meter, s) set(meter, 'Text', D.text(s)) end
-	local title = w.title or D.WIDGET_TITLES[w.kind] or (w.kind == 'list' and D.LIST_TITLES[w.param:lower()]) or t.name
+	local title = w.title or D.WIDGET_TITLES[w.kind] or t.name
 	text(m .. 'Title', title:upper())
 	w.parts = { Title = true }
-	if w.kind == 'list' then return end -- its rows: D.placeList
 	-- a skin or a custom widget draws itself: only its title, if it has one
 	if w.kind == 'custom' and not w.boxed then
 		-- its file is missing (or has no meters): say where it goes
@@ -2886,6 +2927,8 @@ end
 
 updateDashState = function()
 	local on = D.dashActive()
+	-- the widgets' OnShow / OnHide (also between two categories with widgets)
+	M.widgetHooks(on and cats[active] or nil)
 	if on == dash.on then return end
 	dash.on = on
 	D.syncSkins()
@@ -3272,7 +3315,7 @@ local function placeSlots()
 		local n = t.widget.idx
 		if not dash.shown[n] then
 			for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List', 'Bar', 'Graph' }) do show('W' .. n .. part, false) end
-			if t.widget.kind == 'list' then D.hideRows(n, 1) end
+			if t.widget.api and t.widget.api.list then D.hideRows(n, 1) end
 		end
 		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
@@ -3721,9 +3764,8 @@ function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
 	-- a Dashboard left open by the previous load: the helper stops until shown
 	os.remove(resources .. 'Generated\\DashOn.txt')
-	-- and the Steam downloads and the lists, read only while it is open
+	-- and the Steam downloads, followed only while it is open
 	os.remove(resources .. 'Generated\\DownloadOn.txt')
-	os.remove(resources .. 'Generated\\ListOn.txt')
 	local userData = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Raintile\\'
 	data = fileExists(userData .. 'Settings.inc') and userData or resources
 	V.NeedsSetup = data ~= userData or settingsOutdated(userData .. 'Settings.inc')
@@ -4233,7 +4275,6 @@ function Show()
 	M.dl.f = 0
 	M.dl.anim = V.GameUpdates and next(gameUpdates) ~= nil
 	M.writeDownloadFlag()
-	M.writeListFlag(true)
 	frame() -- first frame drawn before showing the window
 	if M.dockAnimated() then
 		-- from where it is (it may be still going out)
@@ -4275,7 +4316,6 @@ function Hide()
 	-- the downloads are followed only while it is open
 	os.remove(resources .. 'Generated\\DownloadOn.txt')
 	M.dl.live = {}
-	M.writeListFlag(false)
 	if M.dockAnimated() then
 		-- goes out first; M.finishHide() hides the window at the end
 		M.dock.dir = -1
@@ -4904,18 +4944,10 @@ function HoverPart(name)
 	M.focusPart(t, slot, name)
 end
 
--- Where the parts of widget tile t are (D.customWidgetText fills it when it
--- writes Grid.inc; on the other loads it is read from the widget's file now)
+-- Where the parts of widget tile t are (its meters with Part=1, and its rows)
 function M.widgetParts(t)
-	local w = t.widget
-	if not w.partsAt then
-		w.partsAt = {}
-		if w.kind == 'custom' and w.boxed and w.cat then
-			local cc = w.cat
-			D.customWidgetText(t, w.idx, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
-		end
-	end
-	return w.partsAt
+	M.widgetInfo(t)
+	return t.widget.partsAt
 end
 
 -- The highlight onto part 'name' of widget tile t, in 'slot'

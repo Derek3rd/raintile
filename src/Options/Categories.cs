@@ -90,7 +90,6 @@ namespace RaintileOptions
             new[] { "fans", "Fans (sensors)", "Like Temperatures, for fans. Empty: the first fans." },
             new[] { "skin", "An installed skin", "<config>\\<file>.ini of a skin in Rainmeter's Skins folder, e.g. illustro\\Clock\\Clock.ini. It is loaded over the tile while its category is shown." },
             new[] { "custom", "Custom widget", "The name of a widget in the Widgets folder of your data (Widgets\\<name>.ini or Widgets\\<name>\\<name>.ini)." },
-            new[] { "list", "List to start from", "Where from: modrinth (the instances of Modrinth App, the last played first). Each row is pointed at and clicked on its own; a click starts it." },
         };
 
         // A widget (Widget=): a tile of any category that shows data or a skin

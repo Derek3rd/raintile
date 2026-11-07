@@ -26,9 +26,6 @@
 # adds it to TimePlayed.txt in the data folder ("<tile id>|<minutes>|<last>").
 # The exe found is kept in GameExe.txt for the next time.
 #
-# Lists: while the launcher is open, the items of the list widgets (the
-# instances of Modrinth App), read with the SQLite of Windows (see ListStep).
-#
 # Steam downloads: while the launcher is open, the progress, speed and time
 # left of the Steam games downloading an update (see DownloadStep).
 #
@@ -1546,171 +1543,6 @@ public class RaintilePad
         Send(window, Call("OnDownloads()"));
     }
 
-    // --- Lists (list widgets) ------------------------------------------------------
-    // While the launcher is open and has list widgets, the skin keeps
-    // Generated\ListOn.txt (their sources, one per line). Each source is read
-    // when the launcher opens and again when its data changes (checked every
-    // 2 s), into Generated\List_<source>.txt ("<id>|<name>|<icon>|<last
-    // played, unix time>" per line); OnLists() tells the skin.
-    //   modrinth: the instances of Modrinth App, from its database
-    //   (%APPDATA%\ModrinthApp\app.db, SQLite), read only, with the SQLite of
-    //   Windows (winsqlite3.dll), the last played first.
-    public string ListFlag, ListDir;
-    long nextList, nextListCheck;
-    bool listOn;
-    Dictionary<string, DateTime> listStamp = new Dictionary<string, DateTime>();
-
-    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_open_v2", CallingConvention = CallingConvention.StdCall)]
-    static extern int SqOpen(byte[] file, out IntPtr db, int flags, IntPtr vfs);
-    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_prepare_v2", CallingConvention = CallingConvention.StdCall)]
-    static extern int SqPrepare(IntPtr db, byte[] sql, int bytes, out IntPtr stmt, IntPtr tail);
-    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_step", CallingConvention = CallingConvention.StdCall)]
-    static extern int SqStep(IntPtr stmt);
-    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_column_text", CallingConvention = CallingConvention.StdCall)]
-    static extern IntPtr SqText(IntPtr stmt, int col);
-    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_column_int64", CallingConvention = CallingConvention.StdCall)]
-    static extern long SqInt64(IntPtr stmt, int col);
-    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_finalize", CallingConvention = CallingConvention.StdCall)]
-    static extern int SqFinalize(IntPtr stmt);
-    [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_close_v2", CallingConvention = CallingConvention.StdCall)]
-    static extern int SqClose(IntPtr db);
-
-    static byte[] Utf8z(string s) { return System.Text.Encoding.UTF8.GetBytes(s + "\0"); }
-
-    static string SqString(IntPtr stmt, int col)
-    {
-        IntPtr p = SqText(stmt, col);
-        if (p == IntPtr.Zero) return "";
-        var bytes = new List<byte>();
-        for (int i = 0; ; i++)
-        {
-            byte b = Marshal.ReadByte(p, i);
-            if (b == 0) break;
-            bytes.Add(b);
-        }
-        return System.Text.Encoding.UTF8.GetString(bytes.ToArray());
-    }
-
-    static string ListClean(string s) { return (s ?? "").Replace("|", "/").Replace("\r", " ").Replace("\n", " ").Trim(); }
-
-    // Rows of a query on an SQLite file, opened read only; null if it cannot
-    // be read (each row: its columns as text)
-    static List<string[]> SqQuery(string file, string[] queries, int columns)
-    {
-        IntPtr db;
-        // read only (mode=ro: also while the program using it is open)
-        if (SqOpen(Utf8z("file:" + file.Replace('\\', '/') + "?mode=ro"), out db, 0x01 | 0x40, IntPtr.Zero) != 0)
-        {
-            if (db != IntPtr.Zero) SqClose(db);
-            return null;
-        }
-        try
-        {
-            foreach (string sql in queries)
-            {
-                IntPtr stmt;
-                if (SqPrepare(db, Utf8z(sql), -1, out stmt, IntPtr.Zero) != 0 || stmt == IntPtr.Zero) continue;
-                var rows = new List<string[]>();
-                try
-                {
-                    while (SqStep(stmt) == 100) // SQLITE_ROW
-                    {
-                        var row = new string[columns];
-                        for (int c = 0; c < columns; c++) row[c] = SqString(stmt, c);
-                        rows.Add(row);
-                    }
-                }
-                finally { SqFinalize(stmt); }
-                return rows;
-            }
-            return null;
-        }
-        finally { SqClose(db); }
-    }
-
-    // The file a source is read from (its date tells when to read it again)
-    static string ListSourceFile(string source)
-    {
-        if (source == "modrinth")
-            return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"ModrinthApp\app.db");
-        return null;
-    }
-
-    static string ReadList(string source)
-    {
-        string file = ListSourceFile(source);
-        if (file == null || !System.IO.File.Exists(file)) return "";
-        var sb = new System.Text.StringBuilder();
-        if (source == "modrinth")
-        {
-            // columns of Modrinth App's instances table; the older ones without
-            // install_stage or last_played: the second query
-            var rows = SqQuery(file, new[] {
-                "SELECT id, name, icon_path, IFNULL(last_played, 0) FROM instances WHERE install_stage IS NULL OR install_stage = 'installed' ORDER BY IFNULL(last_played, 0) DESC, name COLLATE NOCASE",
-                "SELECT id, name, '', 0 FROM instances ORDER BY name COLLATE NOCASE" }, 4);
-            if (rows == null) return null;
-            foreach (var r in rows)
-            {
-                string id = ListClean(r[0]);
-                if (id == "") continue;
-                sb.Append(id).Append('|').Append(ListClean(r[1])).Append('|').Append(ListClean(r[2])).Append('|')
-                  .Append(ListClean(r[3])).Append("\r\n");
-            }
-        }
-        return sb.ToString();
-    }
-
-    void ListStep(IntPtr window, long now)
-    {
-        // the request is looked for 4 times a second (read at once when the
-        // launcher opens); a change of the data only every 2 s
-        if (now < nextListCheck) return;
-        nextListCheck = now + 250;
-        bool on = System.IO.File.Exists(ListFlag);
-        if (!on)
-        {
-            if (listOn) listStamp.Clear(); // read again next time it opens
-            listOn = false;
-            return;
-        }
-        if (listOn && now < nextList) return;
-        listOn = true;
-        nextList = now + 2000;
-        bool changed = false;
-        foreach (string raw in System.IO.File.ReadAllLines(ListFlag))
-        {
-            string source = raw.Trim().ToLowerInvariant();
-            string file = ListSourceFile(source);
-            if (file == null) continue;
-            DateTime stamp = DateTime.MinValue;
-            try
-            {
-                if (System.IO.File.Exists(file)) stamp = System.IO.File.GetLastWriteTimeUtc(file);
-                // (a database in WAL mode changes its -wal file first)
-                if (System.IO.File.Exists(file + "-wal"))
-                {
-                    DateTime wal = System.IO.File.GetLastWriteTimeUtc(file + "-wal");
-                    if (wal > stamp) stamp = wal;
-                }
-            }
-            catch { }
-            DateTime last;
-            if (listStamp.TryGetValue(source, out last) && last == stamp) continue;
-            listStamp[source] = stamp;
-            string text = null;
-            try { text = ReadList(source); } catch { }
-            if (text == null) continue; // not readable now: next time
-            string path = System.IO.Path.Combine(ListDir, "List_" + source + ".txt");
-            string old = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : null;
-            if (old == text) continue;
-            System.IO.File.WriteAllText(path + ".tmp", text, new System.Text.UTF8Encoding(false));
-            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
-            System.IO.File.Move(path + ".tmp", path);
-            changed = true;
-        }
-        if (changed) Send(window, Call("OnLists()"));
-    }
-
     // Main loop: ends when 'quit' is signalled (a new copy started) or when
     // Rainmeter is gone.
     public void Run(WaitHandle quit)
@@ -1730,7 +1562,6 @@ public class RaintilePad
             if (DashFlag != null && window != IntPtr.Zero) { try { DashStep(window, now); } catch { } }
             if (EdgeFile != null && window != IntPtr.Zero) { try { EdgeStep(window, now); } catch { } }
             if (DownloadFlag != null && window != IntPtr.Zero) { try { DownloadStep(window, now); } catch { } }
-            if (ListFlag != null && window != IntPtr.Zero) { try { ListStep(window, now); } catch { } }
             if (!PadEnabled) continue;
 
             // disconnected controllers are checked again every 2 s (the call
@@ -1785,8 +1616,6 @@ if ($Generated) {
     $pad.SizeFile = Join-Path $Generated 'LauncherSize.txt'
     $pad.DownloadFlag = Join-Path $Generated 'DownloadOn.txt'
     $pad.DownloadFile = Join-Path $Generated 'Downloads.txt'
-    $pad.ListFlag = Join-Path $Generated 'ListOn.txt'
-    $pad.ListDir = $Generated
 }
 if ($pad.TrackEnabled) {
     $pad.LaunchFile = Join-Path $Generated 'Launch.txt'

@@ -22,9 +22,6 @@ namespace RaintileOptions
         // where it fits: "General" (anywhere), or the name of a category of
         // Raintile's (Games, Apps, Dashboard...); its tile goes there by default
         public string Category;
-        // kind "builtin": a widget of Raintile itself (nothing to download): the
-        // tile it gets (Widget=, Param=, Size=)
-        public string Widget, Param, Size;
         public List<string> Files = new List<string>();
     }
 
@@ -75,7 +72,6 @@ namespace RaintileOptions
                     Description = Json.Str(d, "description"), Version = Json.Str(d, "version"), Kind = Json.Str(d, "kind"),
                     Base = Json.Str(d, "base"), Page = Json.Str(d, "page"), Skin = Json.Str(d, "skin"), Package = Json.Str(d, "package"),
                     Category = Json.Str(d, "category").Trim(),
-                    Widget = Json.Str(d, "widget").Trim(), Param = Json.Str(d, "param").Trim(), Size = Json.Str(d, "size").Trim(),
                 };
                 if (e.Category == "") e.Category = "General";
                 if (e.Base != "" && !e.Base.Contains("://") && !e.Base.Contains("..") && index != null)
@@ -86,9 +82,7 @@ namespace RaintileOptions
                 if (!SafeId(e.Id) || e.Name == "") continue;
                 if (e.Kind == "custom" && (!TestMarketUrl(e.Base) || e.Files.Count == 0 || !e.Files.All(SafeFile))) continue;
                 if (e.Kind == "skin" && !TestMarketUrl(e.Package)) continue;
-                if (e.Kind == "builtin" && (!Regex.IsMatch(e.Widget, @"^[a-z]{1,20}$") || !Regex.IsMatch(e.Param, @"^[A-Za-z0-9 ._:-]{0,64}$")
-                    || (e.Size != "" && !Regex.IsMatch(e.Size, @"^[1-8]x[1-8]$")))) continue;
-                if (e.Kind != "custom" && e.Kind != "skin" && e.Kind != "builtin") continue;
+                if (e.Kind != "custom" && e.Kind != "skin") continue;
                 list.Add(e);
             }
             return list;
@@ -174,7 +168,7 @@ namespace RaintileOptions
             texts.VerticalAlignment = VerticalAlignment.Center;
             var title = NewPanel(Orientation.Horizontal);
             AddTo(title, NewText(e.Name, 13.5));
-            string sub = (e.Kind == "skin" ? "skin" : e.Kind == "builtin" ? "built in" : "widget") + (e.Author != "" ? "   \u00B7   by " + e.Author : "") + (e.Version != "" ? "   \u00B7   " + e.Version : "");
+            string sub = (e.Kind == "skin" ? "skin" : "widget") + (e.Author != "" ? "   \u00B7   by " + e.Author : "") + (e.Version != "" ? "   \u00B7   " + e.Version : "");
             AddTo(texts, title);
             AddTo(texts, NewText(sub, 11.5, ResBrush("DimBrush")));
             if (e.Description != "") AddTo(texts, NewText(e.Description, 12, ResBrush("DimBrush"), false, true));
@@ -184,15 +178,14 @@ namespace RaintileOptions
             SetCol(bar, 1);
             row.Children.Add(bar);
             string installed = e.Kind == "custom" ? InstalledVersion(e) : null;
-            // built in: nothing to install, only the tile to add
-            if (e.Kind == "builtin" || (e.Kind == "custom" && installed != null))
+            if (e.Kind == "custom" && installed != null)
             {
                 if (e.Version != "" && installed != e.Version)
                 {
                     var update = NewButton("Update", "AccentButton");
                     update.Margin = T(8, 0, 0, 0);
                     update.Click += async (s, a) => await InstallWidget(e, false);
-                    if (e.Kind == "custom") AddTo(bar, update);
+                    AddTo(bar, update);
                 }
                 // a menu of the categories, the suggested one first
                 var add = NewButton("Add as a tile", "", "Add a tile with this widget to a category");
@@ -214,7 +207,6 @@ namespace RaintileOptions
                 };
                 AddTo(bar, add);
                 var remove = NewButton("Remove");
-                remove.Visibility = e.Kind == "custom" ? Visibility.Visible : Visibility.Collapsed;
                 remove.Margin = T(8, 0, 0, 0);
                 remove.Click += (s, a) =>
                 {
@@ -337,9 +329,8 @@ namespace RaintileOptions
             string name = Core.GetTileName(e.Name);
             for (int n = 2; TestTileName(m, name); n++) name = Core.GetTileName(e.Name) + " " + n;
             var t = new IniSection { Name = name };
-            Core.SetKey(t, "Widget", e.Kind == "builtin" ? e.Widget : e.Kind);
-            Core.SetKey(t, "Param", e.Kind == "skin" ? e.Skin : e.Kind == "builtin" ? e.Param : e.Id);
-            if (e.Kind == "builtin" && e.Size != "") Core.SetKey(t, "Size", e.Size);
+            Core.SetKey(t, "Widget", e.Kind);
+            Core.SetKey(t, "Param", e.Kind == "skin" ? e.Skin : e.Id);
             m.Sections.Add(t);
             Core.WriteCategory(Path.Combine(Core.CategoriesDir, file), m);
             changedFiles.Remove(file);

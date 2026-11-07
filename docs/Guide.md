@@ -6,6 +6,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 
 - [Opening and closing](#opening-and-closing)
   - [Full screen, window or docked](#full-screen-window-or-docked)
+  - [Grid or wheel](#grid-or-wheel)
 - [Controls](#controls)
   - [Mouse](#mouse)
   - [Keyboard](#keyboard)
@@ -70,6 +71,19 @@ Without the HotKey plugin you can toggle it from a Windows shortcut: create a sh
 Sizes in percent (margins, menu, fonts) are of the area, not of the window, so they stay the same in every mode.
 
 **Compact menu**: when the categories do not all fit in the menu (a narrow window, a launcher docked left or right, or just many categories) the clock, Favorites/Recent/Not played yet, the search, the power button and the gear move into a list opened by the **☰** button at the top left (with the time and date at its top). The categories stay in a strip between it and the X: scroll it with the wheel; its edges fade where more categories are hidden, and it follows the active one. *Search* in that list opens the search bar in the place of the categories.
+
+### Grid or wheel
+
+`ScrollMode` (Options > Layout > Grid > **Tiles**) sets how the tiles are laid out, in every mode:
+
+- **Grid** (default): rows and columns (`NX`, `NY`), scrolled by rows or columns.
+- **Wheel**: one line of tiles on an arc of a circle. The selected tile stays in the middle and the wheel turns: the mouse wheel, the arrows and the gamepad turn it by one tile, `Enter` / `A` launch the middle one. Best when docked.
+  - The arc runs along the docked side (`WheelAxis=Auto`; across the screen in a window or full screen) and bulges towards the screen (`WheelCurve=Out`, or hollow: `In`). `WheelRadius` is in percent of the launcher's length, `WheelAnchor` places the selected tile across the launcher (in percent from its docked side), `WheelTileSize` sizes the tiles (percent of the smaller side of the screen).
+  - `WheelSpacing` is the space from one tile to the next, in percent of a tile: under 100 they overlap, and the middle one is always on top. `WheelVisible` tiles show (odd), fading towards the ends by `WheelFade`. Names only on the middle tile (`WheelLabels=Center`) or on all.
+  - Tiles all take one cell (`Size=` is not used) and keep their size: widgets work as in the grid.
+  - The mouse resting on a side tile turns the wheel to it (`WheelHover=Turn`; `Highlight` only highlights it); a click on a side tile launches it (`WheelClick=Launch`) or turns it to the middle (`Center`). `WheelStepTime` is the time to turn by one tile.
+  - **Inner wheel of categories** (`WheelMenu=Ring`): the categories go on a smaller circle inside the wheel of tiles, a disc each with the category's icon (or its initial), the active one in line with the selected tile and its name beside it. `Q` / `E`, `LB` / `RB`, a click or the mouse wheel over it change category; Favorites, Recent and Not played yet keep their buttons next to the search bar. `WheelMenuGap` (distance from the tiles) and `WheelMenuSize` (size of the discs) are in percent of a tile. `WheelMenu=Bar` keeps the categories in the menu at the top.
+  - In a short launcher (docked at the top or bottom) leave room for the inner wheel: a lower `WheelAnchor` or `WheelTileSize`.
 
 Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter starts; `ShowZPos=1` brings it above other windows when shown (`-2` = on the desktop); `CloseAction=[!DeactivateConfig]` unloads the skin on close instead of hiding it (slower to reopen).
 
@@ -320,6 +334,7 @@ A tile with `Size=` takes more cells: `Size=2x1` is two columns wide, `Size=2x2`
 - A size larger than the grid is reduced to it (`NX` columns, `NY` rows).
 - The background thumbnail is made at the tile's size; framing and logo placement work on the whole tile.
 - In search results, Favorites, Recent and Not played yet every tile takes one cell.
+- With the [wheel](#grid-or-wheel) (`ScrollMode=Wheel`) every tile takes one cell.
 - Keyboard and gamepad move to the tile next to the highlighted one; up and down keep the column you came from.
 
 ### Commands
@@ -543,7 +558,29 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `NX`, `NY` | `4`, `2` | default visible tiles: columns × rows (per category: `NX`/`NY` in `[Category]`) |
 | `ScrollDir` | `V` | scroll direction: `V` (by rows) or `H` (by columns) |
 | `ScrollStep` | `1` | rows/columns per mouse wheel notch |
-| `InfiniteScroll` | `1` | after the last row the first comes back (only when the tiles don't all fit) |
+| `InfiniteScroll` | `1` | after the last row the first comes back (only when the tiles don't all fit); with the wheel, after the last tile the first |
+
+### Wheel
+
+See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `ScrollMode` | `Grid` | `Grid` (rows and columns) or `Wheel` (one line of tiles on an arc) |
+| `WheelAxis` | `Auto` | `Auto` (along the docked side; across otherwise), `Vertical` or `Horizontal` |
+| `WheelCurve` | `Out` | `Out`: the arc bulges towards the screen; `In`: hollow |
+| `WheelRadius` | `70` | radius of the arc, % of the launcher's length along the wheel |
+| `WheelSpacing` | `50` | from one tile to the next, % of a tile (under 100 they overlap) |
+| `WheelAnchor` | `69` | place of the selected tile across the launcher, % from its docked side |
+| `WheelTileSize` | `25` | size of the tiles, % of the smaller side of the screen |
+| `WheelVisible` | `11` | tiles shown (odd) |
+| `WheelFade` | `65` | fade towards the ends, % |
+| `WheelLabels` | `Center` | names on the middle tile only (`Center`) or on `All` |
+| `WheelStepTime` | `350` | ms to turn by one tile |
+| `WheelHover` | `Turn` | mouse resting on a side tile: `Turn` (the wheel turns to it) or `Highlight` |
+| `WheelClick` | `Launch` | click on a side tile: `Launch` it or turn it to the middle (`Center`) |
+| `WheelMenu` | `Ring` | categories on an inner wheel (`Ring`) or in the menu at the top (`Bar`) |
+| `WheelMenuGap`, `WheelMenuSize` | `50`, `50` | inner wheel: distance from the tiles and size of its discs, % of a tile |
 
 ### Spacing
 

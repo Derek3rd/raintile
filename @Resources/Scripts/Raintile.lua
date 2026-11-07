@@ -646,7 +646,10 @@ local function loadCategory(file)
 				c.widgets = true
 				local param = trim(k.param or '')
 				t.widget = { kind = trim(k.widget):lower(), param = param, parts = { Title = true, Value = true },
-					title = label ~= '' and label or nil }
+					title = label ~= '' and label or nil,
+					-- WidgetOption=: a setting of this tile for its custom widget
+					-- (#WIDGETOPTION#), e.g. which game
+					option = trim(k.widgetoption or '') }
 				-- a drive written as C, C: or C:\
 				local letter = param:match('^(%a):?\\?$')
 				t.widget.drive = letter and (letter:upper() .. ':') or param:upper()
@@ -1253,17 +1256,21 @@ local function signature()
 	if V.TileKeysOpen then s[#s + 1] = 'keys:open' end
 	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
 	for _, t in ipairs(widgets) do
-		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param .. ':' .. t.cols .. 'x' .. t.rows
+		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param .. ':' .. t.cols .. 'x' .. t.rows .. ':' .. (t.widget.option or '')
 		-- a changed custom widget file writes Grid.inc again
 		if t.widget.kind == 'custom' then
 			local path = D.customWidgetFile(t.widget.param)
-			local f = path and io.open(path, 'rb')
-			if f then
-				local text = f:read('*a')
-				f:close()
-				local sum = 0
-				for k = 1, #text, 7 do sum = (sum * 31 + text:byte(k)) % 1000000007 end
-				s[#s + 1] = '#' .. #text .. '.' .. sum
+			-- (and its settings, Options > Widgets: #OPTION:Name#)
+			local dir = path and path:match('^(.*[\\/])')
+			for _, file in ipairs({ path, dir and dir .. 'settings.inc' }) do
+				local f = io.open(file, 'rb')
+				if f then
+					local text = f:read('*a')
+					f:close()
+					local sum = 0
+					for k = 1, #text, 7 do sum = (sum * 31 + text:byte(k)) % 1000000007 end
+					s[#s + 1] = '#' .. #text .. '.' .. sum
+				end
 			end
 		end
 	end
@@ -2273,7 +2280,8 @@ function D.placeList(t, x, y, alpha)
 	local i = w.idx
 	local W, H, pad = V.TileW, V.TileH, V.LabelPad
 	local small, valueSize, line = D.sizes()
-	local top = D.layout(small, valueSize, line).top
+	-- (the widget draws its own title, if any: the rows start at the top, or at its ListY=)
+	local top = math.max(0, math.floor(M.widgetInfo(t).listY or math.floor(pad / 2)))
 	local rowH = math.max(36, math.floor(line * 2.4))
 	local fit = math.max(0, math.min(M.LIST_ROWS, math.floor((H - top - math.floor(pad / 2)) / rowH)))
 	if not w.items then M.readWidgetList(t) end
@@ -2510,7 +2518,31 @@ function D.customWidgetText(t, i, w, h)
 			if k and trim(k) ~= '' then vars[trim(k):lower()] = trim(v) end
 		end
 	end
+	-- its settings (Options > Widgets > <widget>): [Option:<Name>] sections
+	-- with their Default=, the values in settings.inc of its folder; secrets
+	-- stay out of the skin (its scripts read them from the file)
+	local opts, optSec, secret = {}, nil, {}
+	for _, line in ipairs(lines) do
+		local sec = line:match('^%s*%[([^%]]+)%]%s*$')
+		if sec then optSec = trim(sec):match('^[Oo][Pp][Tt][Ii][Oo][Nn]:%s*([%w_]+)$')
+			if optSec then optSec = optSec:lower(); opts[optSec] = '' end
+		elseif optSec then
+			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
+			if k and trim(k):lower() == 'default' then opts[optSec] = trim(v) end
+			if k and trim(k):lower() == 'kind' and trim(v):lower() == 'secret' then secret[optSec] = true end
+		end
+	end
+	local sf = io.open(dir .. 'settings.inc', 'rb')
+	if sf then
+		for line in (sf:read('*a'):gsub('^\239\187\191', '') .. '\n'):gmatch('([^\n]*)\n') do
+			local k, v = line:match('^%s*([%w_]+)%s*=(.*)$')
+			if k and opts[k:lower()] then opts[k:lower()] = trim((v:gsub('\r$', ''))) end
+		end
+		sf:close()
+	end
+	for n in pairs(secret) do opts[n] = '' end
 	local function own(v)
+		v = v:gsub('#[Oo][Pp][Tt][Ii][Oo][Nn]:([%w_]+)#', function(n) return opts[n:lower()] end)
 		for _ = 1, 3 do
 			local changed = false
 			v = v:gsub('#([%w_]+)#', function(n)
@@ -2568,7 +2600,7 @@ function D.customWidgetText(t, i, w, h)
 			sec = trim(sec)
 			local low = sec:lower()
 			raintile = low == 'raintile'
-			skip = low == 'rainmeter' or low == 'metadata' or raintile
+			skip = low == 'rainmeter' or low == 'metadata' or raintile or low:match('^option:') ~= nil
 			kind = nil
 			section = sec
 			if low == 'variables' then
@@ -2581,9 +2613,15 @@ function D.customWidgetText(t, i, w, h)
 			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
 			if k and trim(k) ~= '' then
 				local key = trim(k):lower()
-				v = trim(own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end))
+				v = trim(own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETOPTION#', ((t.widget.option or ''):gsub('%%', '%%%%')))
+					:gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
+					:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end))
 				if key == 'onshow' then api.onShow = v
 				elseif key == 'onhide' then api.onHide = v
+				elseif key == 'listy' and v ~= '' then
+					-- where the rows start, from the top of the tile (under a
+					-- title of the widget's own)
+					api.listY = tonumber(v) or tonumber(SKIN:ParseFormula(v:match('^%(') and v or '(' .. v .. ')'))
 				elseif key == 'list' and v ~= '' then
 					-- (a file of the widget, in its folder)
 					api.list = (v:match('^%a:') or v:match('^\\')) and v or dir .. v
@@ -2594,6 +2632,7 @@ function D.customWidgetText(t, i, w, h)
 			if k and k ~= '' then
 				local key = trim(k):lower()
 				v = own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
+					:gsub('#WIDGETOPTION#', ((t.widget.option or ''):gsub('%%', '%%%%')))
 				-- #WIDGET:<Section>#: that section's name in the launcher
 				v = v:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end)
 				-- [Section] and [Section:...] references
@@ -2789,8 +2828,9 @@ function D.fillWidget(t)
 		w.parts.Value, w.parts.Sub = true, true
 		return
 	end
+	-- (a custom widget writes its own title, if it wants one)
 	if w.kind == 'skin' or w.kind == 'custom' then
-		w.parts.Title = w.title ~= nil
+		w.parts.Title = w.kind == 'skin' and w.title ~= nil
 		return
 	end
 	if not d then

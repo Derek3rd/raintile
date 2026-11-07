@@ -49,7 +49,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 
 ## Widgets
 - Every tile that is not a normal tile or one of the system widgets (cpu, gpu, ram, disk, network, processes, system, temps, fans) is an installable custom widget in `widgets/<Id>/`, listed in `widgets/index.json` with its `category`: no widget-specific logic in `Raintile.lua` or `Helper.ps1`.
-- What a widget needs that Rainmeter does not give goes into the generic widget API (the `[Raintile]` section, `#WIDGET:Name#`, `Part=1`, `List=`, `OnShow`/`OnHide`, `WidgetChanged()`), documented in `docs/Widgets.md` in the same PR.
+- What a widget needs that Rainmeter does not give goes into the generic widget API (the `[Raintile]` section, `#WIDGET:Name#`, `Part=1`, `List=`, `ListY=`, `OnShow`/`OnHide`, `WidgetChanged()`, `[Option:Name]` settings in `settings.inc`), documented in `docs/Widgets.md` in the same PR.
 - Widget scripts follow the project's rules: PowerShell 5.1, ASCII, work only from `OnShow` (never at rest), exit early when nothing changed, other programs' data read only (SQLite: `winsqlite3.dll`, `mode=ro`), whole-file writes in the widget's folder.
 - A new widget is tried from the gallery of the `nightly` branch first (relative `base` in `index.json`); a widget meant for versions before the API keeps an absolute `base`.
 

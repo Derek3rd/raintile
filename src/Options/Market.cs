@@ -19,12 +19,24 @@ namespace RaintileOptions
     class MarketEntry
     {
         public string Id, Name, Author, Description, Version, Kind, Base, Page, Skin, Package;
+        // where it fits: "General" (anywhere), or the name of a category of
+        // Raintile's (Games, Apps, Dashboard...); its tile goes there by default
+        public string Category;
         public List<string> Files = new List<string>();
     }
 
     public partial class OptionsApp
     {
-        public const string MarketIndex = "https://raw.githubusercontent.com/" + Core.Repository + "/main/widgets/index.json";
+        // The list of the branch of the update channel: main for releases, nightly
+        // for nightly builds (refs/heads/: a tag is also called nightly)
+        string MarketIndex
+        {
+            get
+            {
+                bool nightly = V("UpdateChannel").Trim().Equals("Nightly", StringComparison.OrdinalIgnoreCase);
+                return "https://raw.githubusercontent.com/" + Core.Repository + (nightly ? "/refs/heads/nightly" : "/main") + "/widgets/index.json";
+            }
+        }
         StackPanel marketList;
         TextBlock marketStatus;
 
@@ -41,7 +53,10 @@ namespace RaintileOptions
         static bool SafeId(string id) { return Regex.IsMatch(id ?? "", @"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$") && !id.Contains(".."); }
         static bool SafeFile(string f) { return Regex.IsMatch(f ?? "", @"^[A-Za-z0-9][A-Za-z0-9 ._-]{0,99}$") && !f.Contains(".."); }
 
-        static List<MarketEntry> ParseMarket(string json)
+        // 'index': the address of the list; a "base" without https:// is a folder
+        // next to it (e.g. "BigClock"), so the list of a branch takes the files
+        // of the same branch
+        static List<MarketEntry> ParseMarket(string json, string index)
         {
             var list = new List<MarketEntry>();
             var root = Json.Parse(json) as Dictionary<string, object>;
@@ -56,7 +71,11 @@ namespace RaintileOptions
                     Id = Json.Str(d, "id"), Name = Json.Str(d, "name"), Author = Json.Str(d, "author"),
                     Description = Json.Str(d, "description"), Version = Json.Str(d, "version"), Kind = Json.Str(d, "kind"),
                     Base = Json.Str(d, "base"), Page = Json.Str(d, "page"), Skin = Json.Str(d, "skin"), Package = Json.Str(d, "package"),
+                    Category = Json.Str(d, "category").Trim(),
                 };
+                if (e.Category == "") e.Category = "General";
+                if (e.Base != "" && !e.Base.Contains("://") && !e.Base.Contains("..") && index != null)
+                    e.Base = index.Substring(0, index.LastIndexOf('/') + 1) + e.Base.Trim('/');
                 object files;
                 if (d.TryGetValue("files", out files) && files is object[])
                     foreach (var f in (object[])files) e.Files.Add(Convert.ToString(f));
@@ -125,10 +144,20 @@ namespace RaintileOptions
                 return;
             }
             List<MarketEntry> entries;
-            try { entries = ParseMarket(json); }
+            try { entries = ParseMarket(json, MarketIndex); }
             catch (Exception e) { marketStatus.Text = "The list could not be read: " + e.Message; return; }
-            marketStatus.Text = entries.Count + " widget" + (entries.Count != 1 ? "s" : "") + " in the gallery.";
-            foreach (var e in entries) marketList.Children.Add(NewMarketRow(e));
+            marketStatus.Text = entries.Count + " widget" + (entries.Count != 1 ? "s" : "") + " in the gallery"
+                + (MarketIndex.Contains("/nightly/") ? " (nightly list)." : ".");
+            // by category: General first, then the others by name
+            foreach (var g in entries.GroupBy(x => x.Category, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x.Key.Equals("General", StringComparison.OrdinalIgnoreCase) ? 0 : 1).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                var head = NewText(g.First().Category, 12, ResBrush("AccentBrush"));
+                head.FontWeight = FontWeights.SemiBold;
+                head.Margin = T(0, marketList.Children.Count > 0 ? 14 : 2, 0, 2);
+                marketList.Children.Add(head);
+                foreach (var e in g) marketList.Children.Add(NewMarketRow(e));
+            }
         }
 
         UIElement NewMarketRow(MarketEntry e)
@@ -158,9 +187,24 @@ namespace RaintileOptions
                     update.Click += async (s, a) => await InstallWidget(e, false);
                     AddTo(bar, update);
                 }
-                var add = NewButton("Add as a tile");
+                // a menu of the categories, the suggested one first
+                var add = NewButton("Add as a tile", "", "Add a tile with this widget to a category");
                 add.Margin = T(8, 0, 0, 0);
-                add.Click += (s, a) => AddWidgetTile(e);
+                add.Click += (s, a) =>
+                {
+                    var menu = new ContextMenu { PlacementTarget = add, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+                    string suggested = SuggestedCategory(e);
+                    foreach (var f in new[] { suggested }.Concat(Core.GetCategoryFiles().Select(x => x.Name).Where(x => x != suggested)))
+                    {
+                        if (f == null) continue;
+                        string target = f;
+                        var item = new MenuItem { Header = GetCategoryName(f) + (f == suggested ? "  (suggested)" : "") };
+                        item.Click += (s2, a2) => AddWidgetTile(e, target, false);
+                        menu.Items.Add(item);
+                    }
+                    if (menu.Items.Count == 0) { ShowDialog("Raintile", "There are no categories yet: create one, then add the widget."); return; }
+                    menu.IsOpen = true;
+                };
                 AddTo(bar, add);
                 var remove = NewButton("Remove");
                 remove.Margin = T(8, 0, 0, 0);
@@ -211,7 +255,7 @@ namespace RaintileOptions
                 if (!Core.TestRmskinPackage(dest)) { marketStatus.Text = "The downloaded file is not a Rainmeter package."; return; }
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dest) { UseShellExecute = true });
                 marketStatus.Text = "The Rainmeter installer opened " + e.Name + ".";
-                if (offerTile && e.Skin != "") AddWidgetTile(e);
+                if (offerTile && e.Skin != "") AddWidgetTile(e, SuggestedCategory(e), true);
                 return;
             }
             // a custom widget: its files in Widgets\<id>\ (a new folder first,
@@ -246,24 +290,41 @@ namespace RaintileOptions
             needsRefresh = true;
             UpdateDirty();
             marketStatus.Text = e.Name + " installed: save and refresh to see it.";
-            if (offerTile) AddWidgetTile(e);
+            if (offerTile) AddWidgetTile(e, SuggestedCategory(e), true);
             LoadMarket();
         }
 
-        // A tile with the widget, at the end of a category (asked first): the
-        // category open last, otherwise the example Dashboard, otherwise the first
-        void AddWidgetTile(MarketEntry e)
+        // The category a widget's tile goes to by default: the one of its
+        // Category (by file or menu name), otherwise (General, or not among the
+        // categories) the category open last, the Dashboard, the first one
+        string SuggestedCategory(MarketEntry e)
         {
             var files = Core.GetCategoryFiles().Select(f => f.Name).ToList();
-            if (files.Count == 0)
+            if (files.Count == 0) return null;
+            if (!e.Category.Equals("General", StringComparison.OrdinalIgnoreCase))
+            {
+                string match = files.FirstOrDefault(f => Path.GetFileNameWithoutExtension(f).Equals(e.Category, StringComparison.OrdinalIgnoreCase))
+                    ?? files.FirstOrDefault(f => GetCategoryName(f).Equals(e.Category, StringComparison.OrdinalIgnoreCase));
+                if (match != null) return match;
+            }
+            return currentFile != null && files.Contains(currentFile) ? currentFile
+                : files.FirstOrDefault(f => string.Equals(f, "Dashboard.ini", StringComparison.OrdinalIgnoreCase)) ?? files[0];
+        }
+
+        // A tile with the widget, at the end of category 'file' (ask: after
+        // installing, the suggested category is offered first)
+        void AddWidgetTile(MarketEntry e, string file, bool ask)
+        {
+            if (file == null)
             {
                 ShowDialog("Raintile", "There are no categories yet: create one, then add the widget.");
                 return;
             }
-            string file = currentFile != null && files.Contains(currentFile) ? currentFile
-                : files.FirstOrDefault(f => string.Equals(f, "Dashboard.ini", StringComparison.OrdinalIgnoreCase)) ?? files[0];
-            var r = ShowDialog("Raintile", "Add " + e.Name + " to " + GetCategoryName(file) + "? You can drag it to another category afterwards.", new[] { "Add", "Not now" });
-            if (r.Button != "Add") return;
+            if (ask)
+            {
+                var r = ShowDialog("Raintile", "Add " + e.Name + " to " + GetCategoryName(file) + "? Another category: Add as a tile in the gallery; you can also drag the tile afterwards.", new[] { "Add", "Not now" });
+                if (r.Button != "Add") return;
+            }
             var m = GetModel(file);
             string name = Core.GetTileName(e.Name);
             for (int n = 2; TestTileName(m, name); n++) name = Core.GetTileName(e.Name) + " " + n;

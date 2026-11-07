@@ -15,6 +15,7 @@ Open a pull request that adds an entry to `index.json` (and, if you want it host
   "author": "Raintile",
   "version": "1.0",
   "kind": "custom",
+  "category": "General",
   "description": "The time in big letters, with the day and the date.",
   "base": "https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<folder>",
   "files": ["BigClock.ini", "background.png"],
@@ -24,7 +25,8 @@ Open a pull request that adds an entry to `index.json` (and, if you want it host
 
 - `id`: letters, digits, `.`, `_` and `-`; also the name of the folder it is installed to (`Widgets\<id>\`) and of its main file, `<id>.ini`.
 - `kind`: `custom` (files downloaded to the Widgets folder, `Widget=custom`, `Param=<id>`) or `skin` (an `.rmskin` package, opened with the Rainmeter installer: give it as `package`, and its `skin` as `<config>\<file>.ini` for `Widget=skin`).
-- `base` and `files`: the folder the files are downloaded from and their names (no subfolders). Addresses must be `https` on GitHub (`raw.githubusercontent.com`, or `github.com` for release downloads).
+- `category`: where the widget fits, and where its tile goes by default (the gallery groups widgets by it): `General` (anywhere: the category open last, or the Dashboard) or the name of one of Raintile's categories, e.g. `Games`, `Apps`, `Dashboard` (the user's category of that file or menu name; `General` when there is none). Missing: `General`.
+- `base` and `files`: the folder the files are downloaded from and their names (no subfolders). Addresses must be `https` on GitHub (`raw.githubusercontent.com`, or `github.com` for release downloads). A `base` that is not an address (e.g. `MyWidget`) is a folder next to `index.json`, on the same branch: Options reads the list of `main`, or of `nightly` with nightly builds (Options > Advanced > Updates), so a widget can be tried there before a release. Only versions after 1.2.2 understand it: widgets meant for older ones keep a full address.
 - `version`: change it when the files change: the gallery offers the update.
 - Widgets are Rainmeter code and can run programs: entries are reviewed before they are merged. Prefer a fixed commit or tag in `base` over a branch, so the files cannot change after the review.
 - A widget's own `[Variables]` work as usual in its file: Raintile writes their values in place of `#Name#` when it adds the widget to the launcher (so changing one with `!SetVariable` does not change the meters). `#WIDGETW#` and `#WIDGETH#` are the size of the tile.

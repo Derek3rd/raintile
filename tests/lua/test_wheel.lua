@@ -151,4 +151,45 @@ function T.one_cell_each()
 	t.clean(s)
 end
 
+-- The inner ring (WheelMenu=Ring): a disc per category of the menu, the
+-- active one in line with the selected tile; Q / E turn it, the menu at the
+-- top no longer shows the categories
+function T.inner_ring()
+	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', WheelMenu = 'Ring' })
+	local cats, M, V = s:upvalue('cats'), s:upvalue('M'), s:upvalue('V')
+	local active = s:upvalue('active')
+	local dot = s.meters['ringdot' .. active]
+	t.ok(dot and not dot.hidden, 'no disc for the active category')
+	local name = s.meters['ringname']
+	t.ok(name and not name.hidden, 'the name of the active category is not shown')
+	-- in line with the selected tile: on the same horizontal (docked left), nearer the edge
+	local slot = slotOf(s, s:upvalue('offset'))
+	local tile = s.meters['tile' .. slot]
+	local tileY = num(tile, 'Y') + V.GridY + V.TileH / 2
+	local discY = num(dot, 'Y') + 0.5 * (V.TileW * V.WheelMenuSize / 100)
+	t.ok(math.abs(discY - tileY) <= 2, 'disc not level with the selected tile: ' .. discY .. ' / ' .. tileY)
+	t.ok(num(dot, 'X') < num(tile, 'X') + V.PadX, 'disc not nearer the docked edge than the tile')
+	for i, c in ipairs(cats) do
+		if not c.virtual then
+			local m = s.meters['cathit' .. i]
+			t.ok(not m or m.hidden, 'menu entry ' .. c.name .. ' still at the top')
+		end
+	end
+	-- Q / E: the next category of the ring, the ring turns to it
+	s:call('NextCategory(1)')
+	t.ok(s:upvalue('active') ~= active, 'NextCategory did not change category')
+	t.ok(not cats[s:upvalue('active')].virtual, 'NextCategory went to Favorites / Recent')
+	t.eq(M.ring.pos, M.ring.to, 'the ring did not finish turning')
+	s:call('Hide()')
+	t.clean(s)
+	t.atRest(s)
+end
+
+-- WheelMenu=Bar: the categories stay in the menu at the top, no ring
+function T.menu_bar()
+	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', WheelMenu = 'Bar' })
+	t.ok(not s.meters['ringname'], 'ring meters written with WheelMenu=Bar')
+	t.clean(s)
+end
+
 return T

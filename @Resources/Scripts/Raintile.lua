@@ -1243,7 +1243,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 16
+local GRID_VERSION = 17
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1252,7 +1252,7 @@ local function filterSpace()
 end
 
 local function signature()
-	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode, V.Wheel and ('wheel' .. (cats[1] and cats[1].tw or 0)) or 'grid' }
+	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode, V.Wheel and ('wheel' .. (cats[1] and cats[1].tw or 0) .. (V.WheelRing and 'r' or '')) or 'grid' }
 	for _, chip in ipairs(filter.chips) do s[#s + 1] = 'chip:' .. chip.label end
 	if V.TileKeysOpen then s[#s + 1] = 'keys:open' end
 	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
@@ -1379,6 +1379,52 @@ local function writeGrid(path, sig, files)
 			w('MouseLeaveAction=[!CommandMeasure MeasureScript "HoverCategory(0)"]')
 			w('')
 		end
+	end
+
+	-- The wheel's inner ring of categories (WheelMenu=Ring): a disc for each,
+	-- with its icon or its initial, and the name of the active one (placed by
+	-- M.ringRender); below the tiles. The wheel of the mouse turns it.
+	if V.Wheel and V.WheelRing then
+		for i, c in ipairs(cats) do
+			if not c.virtual then
+				w('[RingDot' .. i .. ']')
+				w('Meter=Shape')
+				w('Hidden=1')
+				w('LeftMouseUpAction=[!CommandMeasure MeasureScript "SetCategory(' .. i .. ')"]')
+				w('MouseOverAction=[!CommandMeasure MeasureScript "HoverCategory(' .. i .. ')"]')
+				w('MouseLeaveAction=[!CommandMeasure MeasureScript "HoverCategory(0)"]')
+				w('MouseScrollUpAction=[!CommandMeasure MeasureScript "NextCategory(-1)"]')
+				w('MouseScrollDownAction=[!CommandMeasure MeasureScript "NextCategory(1)"]')
+				w('')
+				if c.icon then
+					w('[RingIcon' .. i .. ']')
+					w('Meter=Image')
+					w('ImageName=' .. c.icon)
+					w('PreserveAspectRatio=1')
+					w('AntiAlias=1')
+					w('Hidden=1')
+				else
+					w('[RingText' .. i .. ']')
+					w('Meter=String')
+					w('FontFace=#FontFace#')
+					w('FontWeight=700')
+					w('StringAlign=CenterCenter')
+					w('AntiAlias=1')
+					w('Text=' .. D.text(c.label:sub(1, 1):upper()))
+					w('Hidden=1')
+				end
+				w('')
+			end
+		end
+		w('[RingName]')
+		w('Meter=String')
+		w('FontFace=#FontFace#')
+		w('FontWeight=700')
+		w('FontSize=(#MenuFontSize#*0.85)')
+		w('FontColor=#AccentColor#')
+		w('AntiAlias=1')
+		w('Hidden=1')
+		w('')
 	end
 
 	-- Grid slots, inside the GridClip container: as many as the category with
@@ -1808,6 +1854,9 @@ function M.readWheel()
 	V.WheelStepTime = math.max(16, num('WheelStepTime', 350))
 	V.WheelTurn = word('WheelHover', 'turn') == 'turn'
 	V.WheelClickLaunch = word('WheelClick', 'launch') ~= 'center'
+	V.WheelRing = word('WheelMenu', 'ring') ~= 'bar'
+	V.WheelMenuGap = math.max(0, num('WheelMenuGap', 50))
+	V.WheelMenuSize = math.min(150, math.max(10, num('WheelMenuSize', 50)))
 	if not V.Wheel then return end
 	-- along which axis: Auto follows the docked side
 	local vertical
@@ -1947,8 +1996,127 @@ function WheelDwell()
 	if V.AnimScroll then M.startTicker() else pos = offset M.frame() end
 end
 
+-- The inner ring of categories (WheelMenu=Ring): the categories of the menu
+-- (not Favorites, Recent, Not played yet: their buttons stay next to the
+-- search bar) on a smaller circle with the wheel's centre, the active one
+-- in line with the selected tile; it turns to the category chosen (Q / E,
+-- LB / RB, a click, the wheel of the mouse over it).
+M.ring = { from = 0, to = 0, t = 0, dur = 0 }
+function M.ringOn() return V.Wheel and V.WheelRing end
+function M.ringCats()
+	local list = {}
+	for i, c in ipairs(cats) do
+		if not c.virtual then list[#list + 1] = i end
+	end
+	return list
+end
+
+-- Turn the ring to the active category (the shorter way round)
+function M.ringGo()
+	local list = M.ringCats()
+	local n = #list
+	local j
+	for k, i in ipairs(list) do if i == active then j = k - 1 end end
+	if not j or n == 0 then return end
+	local r = M.ring
+	if r.pos == nil then r.pos, r.to = j, j return end
+	local d = ((j - r.to + n / 2) % n) - n / 2
+	if d == 0 then return end
+	r.from, r.to, r.t = r.pos, r.to + d, 0
+	r.dur = V.WheelStepTime * math.sqrt(math.abs(r.to - r.pos))
+	if V.AnimCategory then M.startTicker() else r.pos = r.to end
+end
+
+function M.ringAdvance()
+	local r = M.ring
+	if r.pos == nil or r.pos == r.to then return false end
+	r.t = r.t + 16 * M.animScale
+	local p = math.min(1, r.t / math.max(1, r.dur))
+	r.pos = r.from + (r.to - r.from) * easeOut(p)
+	M.animFast = true
+	if p >= 1 then r.pos = r.to end
+	M.ringRender()
+	return r.pos ~= r.to
+end
+
+function M.ringRender()
+	local list = M.ringCats()
+	local n = #list
+	if n == 0 then return end
+	local f = M.wf or M.wheelFrame()
+	local S = V.TileW
+	local rad = math.max(10, f.R - f.sgn * S * (0.5 + V.WheelMenuGap / 100))
+	local d = math.max(12, math.floor(S * V.WheelMenuSize / 100))
+	local stepA = d * 1.35 / rad
+	local ox, oy = V.PadX, V.GridY -- the grid's corner in the skin
+	local rp = M.ring.pos or 0
+	local nameAt
+	for j, i in ipairs(list) do
+		local dd = ((j - 1 - rp + n / 2) % n) - n / 2
+		local a = math.abs(dd)
+		local th = dd * stepA
+		local cx = ox + f.cx + f.sgn * rad * math.cos(th) * f.n[1] + rad * math.sin(th) * f.t[1]
+		local cy = oy + f.cy + f.sgn * rad * math.cos(th) * f.n[2] + rad * math.sin(th) * f.t[2]
+		local sz = math.floor(d * (1 - 0.35 * math.min(1, a / 2)) + 0.5)
+		local alpha = math.max(0, 1 - 0.45 * a)
+		local on, hot = i == active and not searchCat, i == hovered
+		local fill = on and V.ActiveCategoryColor or (hot and V.HoverCategoryColor or '255,255,255,20')
+		local stroke = on and V.AccentColor or '255,255,255,40'
+		local x, y = math.floor(cx - sz / 2 + 0.5), math.floor(cy - sz / 2 + 0.5)
+		local dot = 'RingDot' .. i
+		set(dot, 'X', tostring(x))
+		set(dot, 'Y', tostring(y))
+		set(dot, 'Shape', string.format('Ellipse %d,%d,%d | Fill Color %s | StrokeWidth 2 | Stroke Color %s',
+			math.floor(sz / 2), math.floor(sz / 2), math.max(1, math.floor(sz / 2) - 1), fade(fill, alpha), fade(stroke, alpha)))
+		show(dot, alpha > 0.02)
+		local c = cats[i]
+		if c.icon then
+			local m = math.floor(sz * 0.22)
+			set('RingIcon' .. i, 'X', tostring(x + m))
+			set('RingIcon' .. i, 'Y', tostring(y + m))
+			set('RingIcon' .. i, 'W', tostring(sz - 2 * m))
+			set('RingIcon' .. i, 'H', tostring(sz - 2 * m))
+			set('RingIcon' .. i, 'ImageAlpha', tostring(math.floor(255 * alpha * ((on or hot) and 1 or 0.7) + 0.5)))
+			show('RingIcon' .. i, alpha > 0.02)
+		else
+			set('RingText' .. i, 'X', tostring(math.floor(cx + 0.5)))
+			set('RingText' .. i, 'Y', tostring(math.floor(cy + 0.5)))
+			set('RingText' .. i, 'FontSize', tostring(math.max(6, math.floor(sz * 0.3))))
+			set('RingText' .. i, 'FontColor', fade(V.TextColor, alpha * ((on or hot) and 1 or 0.7)))
+			show('RingText' .. i, alpha > 0.02)
+		end
+		if on and a < 0.5 then nameAt = { cx, cy, sz, c } end
+	end
+	-- the name of the active category: above its disc (a wheel along the
+	-- height), beside it otherwise
+	if nameAt then
+		local cx, cy, sz, c = nameAt[1], nameAt[2], nameAt[3], nameAt[4]
+		set('RingName', 'Text', D.text(c.label))
+		if V.Horizontal then
+			set('RingName', 'StringAlign', 'LeftCenter')
+			set('RingName', 'X', tostring(math.floor(cx + sz / 2 + 8)))
+			set('RingName', 'Y', tostring(math.floor(cy)))
+		else
+			set('RingName', 'StringAlign', 'CenterBottom')
+			set('RingName', 'X', tostring(math.floor(math.max(V.PadX + 40, cx))))
+			set('RingName', 'Y', tostring(math.floor(cy - sz / 2 - 4)))
+		end
+	end
+	show('RingName', nameAt ~= nil)
+end
+
 -- Measures the (already updated) menu entries and centres the chain horizontally.
 local function layoutMenu()
+	-- the inner ring of the wheel takes the categories' place
+	if M.ringOn() then
+		for i, c in ipairs(cats) do
+			c.l, c.r = nil, nil
+			for _, name in ipairs(c.parts) do show(name, false) end
+			if not c.virtual then show('CatHit' .. i, false) end
+		end
+		laidOut = true
+		return
+	end
 	local first, last
 	for _, c in ipairs(cats) do
 		c.l, c.r = nil, nil
@@ -2081,6 +2249,13 @@ local startTicker -- defined further down
 
 local function renderCategories()
 	renderSide()
+	if M.ringOn() then
+		show('CatPillActive', false)
+		show('CatPillHover', false)
+		M.ringGo()
+		M.ringRender()
+		return
+	end
 	for i, c in ipairs(cats) do
 		local on = i == active or i == hovered
 		if c.showText then
@@ -3756,6 +3931,7 @@ local function advance()
 
 	if V.Wheel then moving = M.wheelAdvance() else pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth) end
 	busy = busy or moving or fadeMoving
+	if M.ringOn() and M.ringAdvance() then busy = true end
 
 	-- Steam updates, when the launcher opens: progress filling up, borders turning
 	if M.dl.anim then
@@ -5626,6 +5802,15 @@ end
 -- Previous (-1) or next (+1) category, wrapping around.
 function NextCategory(delta)
 	if not ready or launching or not visible then return end
+	if M.ringOn() then
+		local list = M.ringCats()
+		if #list == 0 then return end
+		local j = 0
+		for k, i in ipairs(list) do if i == active then j = k end end
+		if j == 0 then SetCategory(list[1]) return end
+		SetCategory(list[(j - 1 + delta) % #list + 1])
+		return
+	end
 	SetCategory((active - 1 + delta) % #cats + 1)
 end
 

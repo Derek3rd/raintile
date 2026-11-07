@@ -2340,12 +2340,25 @@ function D.customWidgetText(t, i, w, h)
 	-- Part=1 on a meter: a part of the tile with Raintile's own highlight; the
 	-- mouse actions telling the script about it go before the meter's own
 	local part, over, leave = false, nil, nil
+	local px, py -- its X, Y (from the tile's top left corner)
+	-- where the parts are in the tile, by meter name (HoverPart): from their
+	-- X= and Y= (Rainmeter's GetX/GetY of a meter in a container depend on
+	-- where the container is)
+	t.widget.partsAt = {}
+	local function at(v)
+		v = trim(v or '0')
+		if v == '' then return 0 end
+		if v:match('[rR]$') then return nil end -- relative to the meter before
+		return tonumber(v) or tonumber(SKIN:ParseFormula(v:match('^%(') and v or '(' .. v .. ')'))
+	end
 	local function flush()
 		if section and not skip then
 			if kind == 'meter' then
 				pending[#pending + 1] = 'Container=CW' .. i .. 'Box'
 				local name = prefix .. section
 				if part then
+					local ax, ay = at(px), at(py)
+					if ax and ay then t.widget.partsAt[name] = { ax, ay } end
 					over = '[!CommandMeasure MeasureScript "HoverPart(\'' .. name .. '\')"]' .. (over or '')
 					leave = '[!CommandMeasure MeasureScript "LeavePart(\'' .. name .. '\')"]' .. (leave or '')
 				end
@@ -2356,7 +2369,7 @@ function D.customWidgetText(t, i, w, h)
 			out[#out + 1] = ''
 		end
 		pending = {}
-		part, over, leave = false, nil, nil
+		part, over, leave, px, py = false, nil, nil, nil, nil
 	end
 	for _, line in ipairs(lines) do
 		local sec = line:match('^%s*%[([^%]]+)%]%s*$')
@@ -2383,6 +2396,8 @@ function D.customWidgetText(t, i, w, h)
 				if key == 'meter' then kind = 'meter' end
 				if key == 'container' then line = nil end
 				if key == 'part' then part, line = trim(v) ~= '' and trim(v) ~= '0', nil end
+				if key == 'x' then px = v end
+				if key == 'y' then py = v end
 				if key == 'mouseoveraction' then over, line = v, nil end
 				if key == 'mouseleaveaction' then leave, line = v, nil end
 				if line then
@@ -4669,6 +4684,15 @@ function HoverTile(slot)
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
 	setPointed(t)
+	-- a widget with parts: never the whole tile (the mouse is in the gap
+	-- between two parts, or comes back from one): the highlight stays on the
+	-- last part, or waits for one
+	if t.widget and next(M.widgetParts(t)) then
+		hover.part = nil
+		local last = hover.lastPart
+		if last and last.t == t then M.focusPart(t, slot, last.name) end
+		return
+	end
 	local tx, ty = slotToGrid(slot)
 	hover.anchor = V.Horizontal and ty or tx
 	hover.part = nil
@@ -4705,10 +4729,34 @@ function HoverPart(name)
 	if not slot then return end
 	M.picked = nil
 	setPointed(t)
+	hover.part = name
+	hover.lastPart = { t = t, name = name }
+	M.focusPart(t, slot, name)
+end
+
+-- Where the parts of widget tile t are (D.customWidgetText fills it when it
+-- writes Grid.inc; on the other loads it is read from the widget's file now)
+function M.widgetParts(t)
+	local w = t.widget
+	if not w.partsAt then
+		w.partsAt = {}
+		if w.kind == 'custom' and w.boxed and w.cat then
+			local cc = w.cat
+			D.customWidgetText(t, w.idx, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
+		end
+	end
+	return w.partsAt
+end
+
+-- The highlight onto part 'name' of widget tile t, in 'slot'
+function M.focusPart(t, slot, name)
+	local m = SKIN:GetMeter(name)
+	if not m then return end
 	local tx, ty = slotToGrid(slot)
 	hover.anchor = V.Horizontal and ty or tx
-	hover.part = name
-	focus(t, indexAt(slot), tx + m:GetX() / V.StepX, ty + m:GetY() / V.StepY, m:GetW(), m:GetH())
+	local p = M.widgetParts(t)[name]
+	local px, py = p and p[1] or m:GetX(), p and p[2] or m:GetY()
+	focus(t, indexAt(slot), tx + px / V.StepX, ty + py / V.StepY, m:GetW(), m:GetH())
 end
 
 function LeavePart(name)

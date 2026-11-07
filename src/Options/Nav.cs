@@ -239,7 +239,7 @@ namespace RaintileOptions
             var g = NewGrid("Auto", "*", "Auto");
             if (level == 0)
             {
-                var gl = NewGlyph(glyph, 15);
+                var gl = NewGlyph(glyph, 15);   // ui-exempt: menu chrome
                 gl.Width = 22;
                 gl.Margin = T(0, 0, 10, 0);
                 g.Children.Add(gl);
@@ -268,7 +268,7 @@ namespace RaintileOptions
             };
             if (open != null)
             {
-                var ch = NewGlyph(open.Value ? Glyph.GroupOpen : Glyph.GroupClosed, 9);
+                var ch = NewGlyph(open.Value ? Glyph.GroupOpen : Glyph.GroupClosed, 9);   // ui-exempt: menu chrome
                 ch.Foreground = ResBrush("DimBrush");
                 ch.Margin = T(8, 0, 0, 0);
                 SetCol(ch, 2);

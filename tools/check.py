@@ -15,7 +15,8 @@ parses with Windows PowerShell 5.1 (so no PowerShell 7 syntax), XAML and
 JSON load, Raintile.lua compiles with Lua 5.1, the widget gallery points to
 files that exist, every setting of Settings.inc is in the Options schema and
 SchemaData.cs is up to date, GRID_VERSION is bumped when writeGrid() changes,
-every page of docs/ goes to the wiki.
+every page of docs/ goes to the wiki, the Options window takes its glyphs and
+type sizes from Ui.cs / $GLYPH, $FS (docs/OptionsUI.md).
 
 Tests: tests/ps (PowerShell scripts run on temporary folders) and tests/lua
 (Raintile.lua run against a fake Rainmeter, tests/lua/rainmeter.lua).
@@ -300,6 +301,54 @@ def check_wiki_pages():
     print('  %d pages' % len(docs))
 
 
+# docs/OptionsUI.md: glyphs come from Glyph / $GLYPH and type sizes from Fs / $FS,
+# so the same action keeps the same icon and text the same size on every page.
+# A line that has to differ (a drawing, the menu chrome, the on-screen keyboard)
+# says why with "ui-exempt: <why>".
+UI_GLYPH = re.compile(r'0x[Ee][0-9A-Fa-f]{3}\b|\\u[Ee][0-9A-Fa-f]{3}')
+UI_RULES = {
+    'cs': [
+        (UI_GLYPH, 'glyph code: use Glyph'),
+        (re.compile(r'\bFontSize\s*=\s*\d'), 'font size: use Fs'),
+        (re.compile(r'\bNew(?:Text|Glyph)\((?:"[^"]*"|[^,()"]+),\s*\d'), 'font size: use Fs'),
+    ],
+    'ps1': [
+        (UI_GLYPH, 'glyph code: use $GLYPH'),
+        (re.compile(r'\.FontSize\s*=\s*\d'), 'font size: use $FS'),
+        (re.compile(r"\bNew-(?:Text|Glyph)\s+(?:'[^']*'|\"[^\"]*\"|\S+)\s+\d"), 'font size: use $FS'),
+    ],
+}
+
+
+def check_options_ui():
+    section('Options window: glyphs and type sizes from Ui.cs / $GLYPH, $FS (docs/OptionsUI.md)')
+    files = [f for f in glob.glob(os.path.join(ROOT, 'src', 'Options', '*.cs'))
+             if os.path.basename(f) not in ('Ui.cs', 'SchemaData.cs')]
+    files.append(os.path.join(ROOT, '@Resources', 'Scripts', 'Options.ps1'))
+    for path in files:
+        kind = 'cs' if path.endswith('.cs') else 'ps1'
+        in_glyphs = False
+        for i, line in enumerate(open(path, encoding='utf-8'), 1):
+            if 'ui-exempt:' in line:
+                continue
+            if kind == 'ps1':
+                # where the rules are defined: the $GLYPH table, the helpers'
+                # defaults, and the menu icon of each page in the schema
+                stripped = line.strip()
+                if stripped.startswith('$GLYPH = @{'):
+                    in_glyphs = True
+                if in_glyphs:
+                    in_glyphs = stripped != '}'
+                    continue
+                if stripped.startswith('function ') or re.search(r'\bIcon = 0x', line):
+                    continue
+            for rx, what in UI_RULES[kind]:
+                if rx.search(line):
+                    fail('%s:%d %s (docs/OptionsUI.md), or say why with "ui-exempt: ..."' % (rel(path), i, what))
+                    break
+    print('  %d files' % len(files))
+
+
 # Tests ----------------------------------------------------------------------------
 
 def run_ps_tests():
@@ -479,6 +528,7 @@ def main():
         check_lua(files)
         check_grid_version(args.base)
         check_wiki_pages()
+        check_options_ui()
     if args.tests or both:
         run_ps_tests()
         run_lua_tests()

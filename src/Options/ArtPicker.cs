@@ -30,7 +30,7 @@ namespace RaintileOptions
                 Title = kind + " for " + name, Owner = win, WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Width = 820, Height = 600, ShowInTaskbar = false,
                 Background = ResBrush("CardBg"), Foreground = ResBrush("TextBrush"),
-                FontFamily = new FontFamily("Segoe UI"), FontSize = 13,
+                FontFamily = new FontFamily("Segoe UI"), FontSize = 13,   // ui-exempt: base size of a window, as the main window
             };
             d.SourceInitialized += (s, e) => SetDarkTitle(d);
             var root = new DockPanel { Margin = T(20, 16, 20, 16) };

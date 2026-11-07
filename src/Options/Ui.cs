@@ -28,6 +28,51 @@ namespace RaintileOptions
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     }
 
+    // The rules of docs/OptionsUI.md as code: every page takes its glyphs, type
+    // sizes, spacing and field widths from here.
+
+    // One glyph per action (Segoe MDL2 Assets)
+    static class Glyph
+    {
+        public const int Reset = 0xE7A7;    // back to the default or to the value of All tiles
+        public const int Clear = 0xE711;    // empty a field, take an entry out of a list: no file is deleted
+        public const int Delete = 0xE74D;   // goes away or to the Recycle Bin: always confirmed
+        public const int Add = 0xE710;
+        public const int Up = 0xE74A, Down = 0xE74B, Left = 0xE72B, Right = 0xE72A;   // move an entry
+        public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
+    }
+
+    // Type sizes
+    static class Fs
+    {
+        public const double Title = 24;      // page title
+        public const double Section = 11.5;  // card title, upper case
+        public const double Label = 13.5;    // labels, names of entries
+        public const double Help = 12;       // help, hints, statuses, values
+        public const double Badge = 11;      // badges and chips
+    }
+
+    // Spacing
+    static class Gap
+    {
+        public const double Control = 8;     // between controls and between buttons
+        public const double Icon = 6;        // before an icon button (it has its own padding)
+        public const double Card = 16;       // between cards
+        public const double Row = 11;        // above and below a side-by-side row
+        public const double StackedRow = 8;  // above and below a stacked row
+        public const double ActionColumn = 34;   // the reset / clear column of a row
+        public static readonly Thickness Page = new Thickness(36, 4, 36, 24);
+    }
+
+    // Widths of fields
+    static class FieldWidth
+    {
+        public const double S = 80;      // numbers, sizes
+        public const double M = 220;     // colours, combos, short text
+        public const double L = 300;     // text, paths, fonts
+        public const double Wrap = 470;  // panels of segments or switches
+    }
+
     static class Program
     {
         // Arguments as in Options.ps1: -Resources <dir> -Data <dir> -Config <name> -Page <page>
@@ -129,6 +174,78 @@ namespace RaintileOptions
         public Button NewIconButton(int glyph, string tip)
         {
             return NewButton(((char)glyph).ToString(), "IconButton", tip);
+        }
+
+        // Help under a label, hints, statuses (dim, wrapped)
+        public TextBlock NewHelp(string text, Brush brush = null)
+        {
+            return NewText(text, Fs.Help, brush ?? ResBrush("DimBrush"), false, true);
+        }
+
+        // Title of a card or of a list
+        public TextBlock NewSectionTitle(string title)
+        {
+            return NewText((title ?? "").ToUpperInvariant(), Fs.Section, ResBrush("DimBrush"), true);
+        }
+
+        // Label with its help below: the left part of a row, or the top of a stacked one
+        public StackPanel NewLabelBlock(string label, string help)
+        {
+            var sp = NewPanel();
+            AddTo(sp, NewText(label, Fs.Label));
+            if (!string.IsNullOrEmpty(help))
+            {
+                var h = NewHelp(help);
+                h.Margin = T(0, 3, 0, 0);
+                AddTo(sp, h);
+            }
+            return sp;
+        }
+
+        Button NewActionIcon(int glyph, string tip)
+        {
+            var b = NewIconButton(glyph, tip);
+            b.Margin = T(Gap.Icon, 0, 0, 0);
+            b.VerticalAlignment = VerticalAlignment.Center;
+            return b;
+        }
+
+        // Empties a field or takes an entry out of a list (no file is deleted)
+        public Button NewClearButton(string tip) { return NewActionIcon(Glyph.Clear, tip); }
+
+        // Deletes something, or sends it to the Recycle Bin: its click asks first
+        public Button NewDeleteButton(string tip) { return NewActionIcon(Glyph.Delete, tip); }
+
+        // Back to the default, or to the value of All tiles
+        public Button NewResetIcon(string tip) { return NewActionIcon(Glyph.Reset, tip); }
+
+        // An icon button that would do nothing is hidden: its room stays, nothing moves
+        public static void SetActionVisible(UIElement b, bool canAct)
+        {
+            if (b != null) b.Visibility = canAct ? Visibility.Visible : Visibility.Hidden;
+        }
+
+        // A value that is not valid: red border until it is fixed
+        public void MarkInvalid(Control c, bool invalid)
+        {
+            if (invalid) c.BorderBrush = ResBrush("DangerBrush");
+            else c.ClearValue(Control.BorderBrushProperty);
+        }
+
+        // Text cut with an ellipsis when it does not fit; the full text (or 'full')
+        // as its tooltip, only while it is cut
+        public static void SetTrimmed(TextBlock t, string full = null)
+        {
+            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            t.ToolTip = full ?? t.Text;
+            t.ToolTipOpening += (s, e) => { if (full == null && !IsTrimmed(t)) e.Handled = true; };
+        }
+
+        public static bool IsTrimmed(TextBlock t)
+        {
+            var m = new TextBlock { Text = t.Text, FontSize = t.FontSize, FontFamily = t.FontFamily, FontWeight = t.FontWeight, FontStyle = t.FontStyle };
+            m.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            return m.DesiredSize.Width > t.ActualWidth + 0.5;
         }
 
         public static StackPanel NewPanel(Orientation o = Orientation.Vertical)
@@ -238,8 +355,10 @@ namespace RaintileOptions
         public class DialogResultInfo { public string Button; public string Text; }
 
         // Dialog in the window's style: message, optional text field, buttons (the
-        // first is the default)
-        public DialogResultInfo ShowDialog(string title, string message, string[] buttons = null, string inputText = null)
+        // first is the main action and the default). Titled with the action, not
+        // "Raintile". danger: the first button deletes or cannot be undone: it is
+        // red, and the last one (Cancel) is the default for Enter and Escape.
+        public DialogResultInfo ShowDialog(string title, string message, string[] buttons = null, string inputText = null, bool danger = false)
         {
             if (buttons == null) buttons = new[] { "OK" };
             var d = new Window
@@ -257,7 +376,7 @@ namespace RaintileOptions
             sp.MinWidth = 380;
             sp.MaxWidth = 520;
             d.Content = sp;
-            AddTo(sp, NewText(message, 13.5, null, false, true));
+            AddTo(sp, NewText(message, Fs.Label, null, false, true));
             TextBox tb = null;
             if (inputText != null)
             {
@@ -270,11 +389,12 @@ namespace RaintileOptions
             AddTo(sp, bar);
             for (int i = 0; i < buttons.Length; i++)
             {
-                var b = NewButton(buttons[i], i == 0 ? "AccentButton" : "");
-                b.Margin = T(8, 0, 0, 0);
+                var b = NewButton(buttons[i], i == 0 ? (danger && buttons.Length > 1 ? "DangerButton" : "AccentButton") : "");
+                b.Margin = T(Gap.Control, 0, 0, 0);
                 b.MinWidth = 90;
                 string label = buttons[i];
-                if (i == 0) b.IsDefault = true;
+                bool isDefault = danger && buttons.Length > 1 ? i == buttons.Length - 1 : i == 0;
+                if (isDefault) b.IsDefault = true;
                 b.Click += (s, e) => { result = label; d.Close(); };
                 AddTo(bar, b);
             }

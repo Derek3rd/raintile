@@ -187,7 +187,7 @@ function Format-HotKey([string]$value) {
 # --- Settings schema ------------------------------------------------------------------
 # Pages of the window: groups of items. Kinds:
 #   bool, choice (Choices = value, label), int / float (slider: Min, Max, Step,
-#   Unit), size (pixels or % of the screen width/height: Axis W/H), color,
+#   Unit; NoSlider: a text box only), size (pixels or % of the screen width/height: Axis W/H), color,
 #   text, font, category, stores, pad (gamepad buttons), key, combo (key with
 #   modifiers), keys (two keys for one action: Pair), screen (ScreenX/Y/W/H),
 #   info (text only), action (button), secret (hidden text, saved encrypted).
@@ -197,9 +197,12 @@ function S([string]$kind, [string]$key, [string]$label, [string]$help = '', [has
     foreach ($k in $more.Keys) { $item[$k] = $more[$k] }
     return $item
 }
-function Num([string]$key, [string]$label, [double]$min, [double]$max, [double]$step, [string]$unit = '', [string]$help = '') {
+function Num([string]$key, [string]$label, [double]$min, [double]$max, [double]$step, [string]$unit = '', [string]$help = '', [switch]$NoSlider) {
     $kind = if ($step -lt 1) { 'float' } else { 'int' }
-    return (S $kind $key $label $help @{ Min = $min; Max = $max; Step = $step; Unit = $unit })
+    $item = S $kind $key $label $help @{ Min = $min; Max = $max; Step = $step; Unit = $unit }
+    # an identifier or a huge range (a port): a text box only
+    if ($NoSlider) { $item.NoSlider = $true }
+    return $item
 }
 function Size([string]$key, [string]$label, [string]$axis, [string]$help = '') {
     return (S 'size' $key $label $help @{ Axis = $axis })
@@ -244,10 +247,10 @@ $schema = @(
         Desc = 'The default grid of tiles and the spaces around it. Each category can have its own grid (Categories).'
         Groups = @(
             @{ Title = 'Grid'; Items = @(
-                    (Num 'NX' 'Columns' 1 12 1),
-                    (Num 'NY' 'Rows' 1 8 1),
+                    (Num 'NX' 'Columns' 1 12 1 'columns'),
+                    (Num 'NY' 'Rows' 1 8 1 'rows'),
                     (S 'choice' 'ScrollDir' 'Scroll direction' '' @{ Choices = @(@('V', 'Vertical'), @('H', 'Horizontal')) }),
-                    (Num 'ScrollStep' 'Rows per mouse wheel notch' 1 5 1),
+                    (Num 'ScrollStep' 'Rows per mouse wheel notch' 1 5 1 'rows'),
                     (S 'bool' 'InfiniteScroll' 'Infinite scroll' 'After the last row the first one comes back (only when the tiles do not all fit).')
                 ) }
             @{ Title = 'Spacing'; Help = 'In pixels, or as a percentage of the screen.'; Items = @(
@@ -272,15 +275,15 @@ $schema = @(
                     (Size 'MenuItemPad' 'Entry padding' 'W'),
                     (Size 'MenuGap' 'Space between entries' 'W'),
                     (Size 'MenuRadius' 'Corner radius' 'H'),
-                    (Num 'MenuIconDimAlpha' 'Opacity of inactive icons' 0 255 5)
+                    (Num 'MenuIconDimAlpha' 'Opacity of inactive icons' 0 255 5 '/ 255' '0 = invisible, 255 = as the active one.')
                 ) }
             @{ Title = 'Favorites, Recent, Not played yet'; Help = 'Categories made of the tiles of the others: the icon buttons right of the clock.'; Items = @(
                     (S 'bool' 'ShowFavorites' 'Favorites' 'Right click a tile > Add to Favorites.'),
                     (S 'bool' 'ShowRecent' 'Recent'),
                     (S 'choice' 'RecentOrder' 'Recent shows' '' @{ Choices = @(@('Recent', 'Last launched'), @('MostUsed', 'Most used')) }),
-                    (Num 'RecentCount' 'Tiles in Recent' 1 48 1),
+                    (Num 'RecentCount' 'Tiles in Recent' 1 48 1 'tiles'),
                     (S 'bool' 'ShowUnplayed' 'Not played yet' 'Tiles never launched, the ones added last first.'),
-                    (Num 'UnplayedCount' 'Tiles in Not played yet' 1 96 1)
+                    (Num 'UnplayedCount' 'Tiles in Not played yet' 1 96 1 'tiles')
                 ) }
             @{ Title = 'Filter bar'; Help = 'Chips above the search results, one per tag (Tags of the tiles) and per store: a click shows only the results that have it.'; Items = @(
                     (S 'bool' 'FilterBar' 'Filter bar'),
@@ -298,7 +301,7 @@ $schema = @(
                     (Num 'ClockFontSize' 'Time font size' 8 60 1 'pt')
                 ) }
             @{ Title = 'Buttons'; Items = @(
-                    (Num 'CloseSize' 'Size of the X and gear buttons' 8 40 1),
+                    (Num 'CloseSize' 'Size of the X and gear buttons' 8 40 1 'pt'),
                     (S 'bool' 'ShowPower' 'Power button' 'Left of the gear: Lock, Sleep, Restart, Shut down. Restart and Shut down want a second click.')
                 ) }
         )
@@ -417,7 +420,7 @@ $schema = @(
             @{ Title = 'Controller'; Items = @(
                     (S 'bool' 'Gamepad' 'Gamepad support'),
                     (S 'pad' 'GamepadToggle' 'Open / close' 'Buttons to hold together.'),
-                    (Num 'GamepadDeadZone' 'Stick dead zone' 0 32767 500),
+                    (Num 'GamepadDeadZone' 'Stick dead zone' 0 32767 500 '/ 32767' 'How far the stick moves before it counts.'),
                     (Num 'GamepadRepeatDelay' 'Repeat delay' 50 1000 10 'ms' 'Holding a direction: wait before it repeats.'),
                     (Num 'GamepadRepeatRate' 'Repeat interval' 30 500 10 'ms')
                 ) }
@@ -439,7 +442,7 @@ $schema = @(
             @{ Title = 'Data'; Help = 'Any tile becomes a widget with Widget in the tile editor (Categories > the category > the tile), with its size and background.'; Items = @(
                     (Num 'DashInterval' 'Update every' 250 5000 250 'ms' 'Only while a category with widgets is on screen.'),
                     (S 'info' '' 'Temperatures and fans' 'From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours).'),
-                    (Num 'SensorPort' 'LibreHardwareMonitor port' 1 65535 1 '' 'The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).'),
+                    (Num 'SensorPort' 'LibreHardwareMonitor port' 1 65535 1 '' 'The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).' -NoSlider),
                     (S 'info' '' 'Custom widgets' 'Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>.')
                 ) }
             @{ Market = $true; Items = @() }

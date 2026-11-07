@@ -42,6 +42,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - Pass the resources path as `"#@#."`: a trailing backslash would escape the closing quote.
 - Background scripts run through RunCommand with `-NoProfile -NonInteractive -ExecutionPolicy Bypass`. Their last output line is `RESULT:...`, read by the skin in FinishAction.
 - The Options window: `RaintileOptions.exe` when present, otherwise `conhost.exe --headless powershell.exe -STA` with `Options.ps1`, so it has no console window and survives skin refreshes.
+- The Options window follows `docs/OptionsUI.md` (one glyph per action, help shown under every field, the same control for the same kind of value, one type scale): build it with the constants and helpers of `src/Options/Ui.cs`, never with glyph codes, font sizes or margins written by hand, and make the same change in `Options.ps1`.
 - File writes: UTF-8 without BOM, atomic (write `.tmp`, then `Move-Item`).
 - Comments explain why, at the density of the surrounding code.
 

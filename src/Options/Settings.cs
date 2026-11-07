@@ -25,7 +25,7 @@ namespace RaintileOptions
         public double Step;
         public RadioButton Px, Pct;
         public string Axis;
-        public Button Swatch, Button;
+        public Button Swatch, Button, Clear;
         public Control Input;   // text, font, category, secret
         public WrapPanel Area, Monitor;
     }
@@ -76,7 +76,7 @@ namespace RaintileOptions
             bool changed = values.Any(kv => { string f; fileValues.TryGetValue(kv.Key, out f); return kv.Value != f; });
             bool dirty = changed || changedFiles.Count > 0 || needsRefresh;
             dirtySettings = dirty;
-            status.Text = dirty ? "Unsaved changes" : "";
+            status.Text = dirty ? "Unsaved changes." : "";
             status.Foreground = dirty ? ResBrush("AccentBrush") : ResBrush("DimBrush");
             win.Title = dirty ? "Raintile - Options *" : "Raintile - Options";
         }
@@ -91,7 +91,7 @@ namespace RaintileOptions
                     string d;
                     if (Schema.Defaults.TryGetValue(k, out d) && V(k) != d) differs = true;
                 }
-                r.Button.Visibility = differs ? Visibility.Visible : Visibility.Hidden;
+                SetActionVisible(r.Button, differs);
             }
         }
 
@@ -160,6 +160,8 @@ namespace RaintileOptions
             if (!ctl.TryGetValue(key, out c)) return;
             string v = V(key);
             updating = true;
+            // a value put back (reset) is valid again
+            if (c.Text != null) MarkInvalid(c.Text, false);
             try
             {
                 switch (c.Kind)
@@ -193,7 +195,7 @@ namespace RaintileOptions
                         foreach (ToggleButton tb in c.Panel.Children) tb.IsChecked = Regex.Split(v, @"\s+").Contains(((string[])tb.Tag)[1]);
                         break;
                     case "key":
-                    case "combo": c.Button.Content = Schema.FormatHotKey(v); break;
+                    case "combo": c.Button.Content = Schema.FormatHotKey(v); SetActionVisible(c.Clear, v.Trim() != ""); break;
                     case "screen":
                         var sa = Core.ScreenAreaFrom(values);
                         if (sa != null)
@@ -219,7 +221,7 @@ namespace RaintileOptions
 
         UIElement NewChoiceControl(string key, List<string[]> choices)
         {
-            var wp = new WrapPanel { MaxWidth = 460, HorizontalAlignment = HorizontalAlignment.Right };
+            var wp = new WrapPanel { MaxWidth = FieldWidth.Wrap, HorizontalAlignment = HorizontalAlignment.Right };
             foreach (var c in choices)
             {
                 var rb = new RadioButton { Style = ResStyle("Segment"), Content = c[1], GroupName = "choice_" + key, Tag = new[] { key, c[0] } };
@@ -237,14 +239,17 @@ namespace RaintileOptions
             string key = item.Key;
             var sp = NewPanel(Orientation.Horizontal);
             var sl = new Slider { Width = 220, Minimum = item.Min, Maximum = item.Max, TickFrequency = item.Step, SmallChange = item.Step, LargeChange = item.Step };
-            var tb = new TextBox { Width = 72, Margin = T(12, 0, 0, 0), TextAlignment = TextAlignment.Right, Text = V(key) };
+            var tb = new TextBox { Width = FieldWidth.S, Margin = T(item.NoSlider ? 0 : 12, 0, 0, 0), TextAlignment = TextAlignment.Right, Text = V(key) };
             double n;
             if (TryNum(V(key), out n)) sl.Value = Math.Min(item.Max, Math.Max(item.Min, n));
-            var unit = NewText(item.Unit, 12, ResBrush("DimBrush"));
-            unit.Width = 40;
-            unit.Margin = T(8, 0, 0, 0);
+            // every number keeps the room of a unit, so the sliders line up
+            var unit = NewText(item.Unit, Fs.Help, ResBrush("DimBrush"));
+            unit.Width = 56;
+            unit.Margin = T(Gap.Control, 0, 0, 0);
             unit.VerticalAlignment = VerticalAlignment.Center;
-            AddTo(sp, sl); AddTo(sp, tb); AddTo(sp, unit);
+            // an identifier or a huge range (a port): no slider
+            if (!item.NoSlider) AddTo(sp, sl);
+            AddTo(sp, tb); AddTo(sp, unit);
             var c = new Ctl { Kind = item.Kind, Slider = sl, Text = tb, Step = item.Step };
             ctl[key] = c;
             sl.ValueChanged += (s, e) =>
@@ -261,7 +266,9 @@ namespace RaintileOptions
                 if (updating) return;
                 string t = tb.Text.Trim();
                 double m;
-                if (t != "" && !TryNum(t, out m)) return;
+                bool bad = t != "" && !TryNum(t, out m);
+                MarkInvalid(tb, bad);
+                if (bad) return;
                 if (t != "" && TryNum(t, out m))
                 {
                     updating = true;
@@ -278,7 +285,7 @@ namespace RaintileOptions
             string key = item.Key;
             string v = V(key).Trim();
             var sp = NewPanel(Orientation.Horizontal);
-            var tb = new TextBox { Width = 80, TextAlignment = TextAlignment.Right, Margin = T(0, 0, 10, 0), Text = v.TrimEnd('%').Trim() };
+            var tb = new TextBox { Width = FieldWidth.S, TextAlignment = TextAlignment.Right, Margin = T(0, 0, Gap.Control, 0), Text = v.TrimEnd('%').Trim() };
             var px = new RadioButton();
             var pct = new RadioButton();
             foreach (var p in new[] { Tuple.Create(px, "px"), Tuple.Create(pct, "%") })
@@ -297,6 +304,10 @@ namespace RaintileOptions
             tb.TextChanged += (s, e) =>
             {
                 if (updating) return;
+                double m;
+                bool bad = tb.Text.Trim() != "" && !TryNum(tb.Text.Trim(), out m);
+                MarkInvalid(tb, bad);
+                if (bad) return;
                 SetValue(key, tb.Text.Trim() + (pct.IsChecked == true ? "%" : ""));
             };
             // switching unit converts the number (on the main screen)
@@ -323,7 +334,7 @@ namespace RaintileOptions
             var sp = NewPanel(Orientation.Horizontal);
             var sw = NewButton("", "Swatch", "Pick a colour");
             sw.Background = NewColorBrush(V(key), true);
-            var tb = new TextBox { Width = 170, Margin = T(10, 0, 0, 0), Text = V(key) };
+            var tb = new TextBox { Width = FieldWidth.M, Margin = T(Gap.Control, 0, 0, 0), Text = V(key) };
             AddTo(sp, sw); AddTo(sp, tb);
             ctl[key] = new Ctl { Kind = "color", Swatch = sw, Text = tb };
             sw.Click += (s, e) =>
@@ -338,10 +349,10 @@ namespace RaintileOptions
                 if (brush != null)
                 {
                     sw.Background = brush;
-                    tb.ClearValue(Control.BorderBrushProperty);
+                    MarkInvalid(tb, false);
                     SetValue(key, tb.Text.Trim());
                 }
-                else tb.BorderBrush = ResBrush("DangerBrush");
+                else MarkInvalid(tb, true);
             };
             return sp;
         }
@@ -349,13 +360,13 @@ namespace RaintileOptions
         // Hidden text (the SteamGridDB key): shown as dots, saved encrypted
         UIElement NewSecretControl(string key)
         {
-            var pb = new PasswordBox { Width = 300, Password = Core.UnprotectSecret(V(key)) };
+            var pb = new PasswordBox { Width = FieldWidth.L, Password = Core.UnprotectSecret(V(key)) };
             pb.PasswordChanged += (s, e) => SetValue(key, Core.ProtectSecret(pb.Password));
             ctl[key] = new Ctl { Kind = "secret", Input = pb };
             return pb;
         }
 
-        UIElement NewTextControl(string key, double width = 300)
+        UIElement NewTextControl(string key, double width = FieldWidth.L)
         {
             var tb = new TextBox { Width = width, Text = V(key) };
             tb.TextChanged += (s, e) => SetValue(key, tb.Text.Trim());
@@ -365,7 +376,7 @@ namespace RaintileOptions
 
         UIElement NewFontControl(string key)
         {
-            var cb = new ComboBox { Width = 300, IsEditable = true };
+            var cb = new ComboBox { Width = FieldWidth.L, IsEditable = true };
             foreach (var f in Fonts.SystemFontFamilies.Select(x => x.Source).Distinct().OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) cb.Items.Add(f);
             cb.Text = V(key);
             cb.AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler((s, e) => SetValue(key, cb.Text.Trim())));
@@ -375,7 +386,7 @@ namespace RaintileOptions
 
         UIElement NewCategoryControl(string key)
         {
-            var cb = new ComboBox { Width = 220 };
+            var cb = new ComboBox { Width = FieldWidth.M };
             var names = Core.GetCategoryFiles().Select(f => System.IO.Path.GetFileNameWithoutExtension(f.Name)).ToList();
             if (V(key) != "" && !names.Contains(V(key))) names.Add(V(key));
             foreach (var n in names) cb.Items.Add(n);
@@ -387,7 +398,7 @@ namespace RaintileOptions
 
         UIElement NewStoresControl(string key)
         {
-            var wp = new WrapPanel { MaxWidth = 470, HorizontalAlignment = HorizontalAlignment.Right };
+            var wp = new WrapPanel { MaxWidth = FieldWidth.Wrap, HorizontalAlignment = HorizontalAlignment.Right };
             var current = V(key).Split('|').Select(x => x.Trim().Replace(".", "")).ToList();
             foreach (var store in Schema.SOURCES)
             {
@@ -405,7 +416,7 @@ namespace RaintileOptions
 
         UIElement NewPadControl(string key)
         {
-            var wp = new WrapPanel { MaxWidth = 470, HorizontalAlignment = HorizontalAlignment.Right };
+            var wp = new WrapPanel { MaxWidth = FieldWidth.Wrap, HorizontalAlignment = HorizontalAlignment.Right };
             var current = Regex.Split(V(key).ToUpperInvariant(), @"\s+");
             foreach (var b in Schema.GAMEPAD_BUTTONS)
             {
@@ -426,15 +437,16 @@ namespace RaintileOptions
         {
             var sp = NewPanel(Orientation.Horizontal);
             var b = NewButton(Schema.FormatHotKey(V(key)), "KeyButton", "Click, then press a key");
-            var clear = NewIconButton(0xE711, "No key");
+            var clear = NewClearButton("Clear the key");
             AddTo(sp, b); AddTo(sp, clear);
-            ctl[key] = new Ctl { Kind = combo ? "combo" : "key", Button = b };
+            ctl[key] = new Ctl { Kind = combo ? "combo" : "key", Button = b, Clear = clear };
+            SetActionVisible(clear, V(key).Trim() != "");
             keyButtons[key] = b;
 
             b.Click += (s, e) =>
             {
                 capturing = b;
-                b.Content = "Press a key\u2026";
+                b.Content = "Press a key...";
                 b.Focus();
             };
             b.LostKeyboardFocus += (s, e) =>
@@ -466,7 +478,7 @@ namespace RaintileOptions
                         if (alt) held.Add("ALT");
                         if (shift) held.Add("SHIFT");
                         if (winKey) held.Add("LWIN");
-                        if (held.Count > 0) b.Content = Schema.FormatHotKey(string.Join(" ", held)) + " + \u2026";
+                        if (held.Count > 0) b.Content = Schema.FormatHotKey(string.Join(" ", held)) + " + ...";
                         return;
                     }
                 }
@@ -478,6 +490,7 @@ namespace RaintileOptions
                 capturing = null;
                 b.Content = Schema.FormatHotKey(value);
                 SetValue(key, value);
+                SetActionVisible(clear, true);
             };
             clear.Click += (s, e) =>
             {
@@ -493,14 +506,14 @@ namespace RaintileOptions
             var sp = NewPanel();
             sp.HorizontalAlignment = HorizontalAlignment.Right;
             var area = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
-            var mon = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = T(0, 6, 0, 0) };
+            var mon = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = T(0, Gap.Control, 0, 0) };
             foreach (var a in new[] { new[] { "SCREENAREA", "Whole screen" }, new[] { "WORKAREA", "Work area" } })
             {
                 var rb = new RadioButton { Style = ResStyle("Segment"), Content = a[1], GroupName = "screen_area", Tag = new[] { "area", a[0] }, IsChecked = sa[0] == a[0] };
                 area.Children.Add(rb);
             }
-            var monLabel = NewText("Monitor", 12, ResBrush("DimBrush"));
-            monLabel.Margin = T(0, 0, 10, 0);
+            var monLabel = NewText("Monitor", Fs.Help, ResBrush("DimBrush"));
+            monLabel.Margin = T(0, 0, Gap.Control, 0);
             monLabel.VerticalAlignment = VerticalAlignment.Center;
             mon.Children.Add(monLabel);
             foreach (var m in new[] { new[] { "", "Main" }, new[] { "1", "1" }, new[] { "2", "2" }, new[] { "3", "3" }, new[] { "4", "4" } })
@@ -537,10 +550,8 @@ namespace RaintileOptions
 
         Button NewResetButton(string[] keys)
         {
-            var b = NewIconButton(0xE7A7, "Restore default");
-            b.Margin = T(6, 0, 0, 0);
-            b.VerticalAlignment = VerticalAlignment.Center;
-            b.Visibility = Visibility.Hidden;
+            var b = NewResetIcon("Restore default");
+            SetActionVisible(b, false);
             b.Click += (s, e) =>
             {
                 foreach (var k in keys) { string d; if (Schema.Defaults.TryGetValue(k, out d)) values[k] = d; }
@@ -555,18 +566,11 @@ namespace RaintileOptions
 
         Border NewRow(string label, string help, UIElement control, UIElement reset)
         {
-            var g = NewGrid("*", "Auto", "34");
-            g.Margin = T(0, 11);
-            var left = NewPanel();
+            var g = NewGrid("*", "Auto", Gap.ActionColumn.ToString(CultureInfo.InvariantCulture));
+            g.Margin = T(0, Gap.Row);
+            var left = NewLabelBlock(label, help);
             left.VerticalAlignment = VerticalAlignment.Center;
             left.Margin = T(0, 0, 24, 0);
-            AddTo(left, NewText(label, 13.5));
-            if (!string.IsNullOrEmpty(help))
-            {
-                var h = NewText(help, 12, ResBrush("DimBrush"), false, true);
-                h.Margin = T(0, 3, 0, 0);
-                AddTo(left, h);
-            }
             g.Children.Add(left);
             if (control != null)
             {
@@ -586,14 +590,14 @@ namespace RaintileOptions
             b.Child = sp;
             if (!string.IsNullOrEmpty(title))
             {
-                var h = NewText(title.ToUpperInvariant(), 11.5, ResBrush("DimBrush"), true);
+                var h = NewSectionTitle(title);
                 h.Margin = T(0, 12, 0, 4);
                 AddTo(sp, h);
             }
             if (!string.IsNullOrEmpty(help))
             {
-                var x = NewText(help, 12, ResBrush("DimBrush"), false, true);
-                x.Margin = T(0, 0, 0, 8);
+                var x = NewHelp(help);
+                x.Margin = T(0, 0, 0, Gap.Control);
                 AddTo(sp, x);
             }
             return b;
@@ -620,10 +624,10 @@ namespace RaintileOptions
                         {
                             var row = NewPanel(Orientation.Horizontal);
                             row.Margin = T(0, 2);
-                            var l = NewText(sk, 12, ResBrush("DimBrush"));
+                            var l = NewText(sk, Fs.Help, ResBrush("DimBrush"));
                             l.Width = 64;
                             l.VerticalAlignment = VerticalAlignment.Center;
-                            AddTo(row, l); AddTo(row, NewTextControl(sk, 230));
+                            AddTo(row, l); AddTo(row, NewTextControl(sk, FieldWidth.M));
                             AddTo(sp, row);
                         }
                         return NewRow(item.Label, "Custom values: written as they are.", sp, NewResetButton(screenKeys));
@@ -636,7 +640,7 @@ namespace RaintileOptions
                     foreach (var kk in present)
                     {
                         var kc = NewKeyControl(kk);
-                        kc.Margin = T(6, 0, 0, 0);
+                        kc.Margin = T(Gap.Control, 0, 0, 0);
                         AddTo(kp, kc);
                     }
                     return NewRow(item.Label, item.Help, kp, NewResetButton(present));
@@ -671,7 +675,7 @@ namespace RaintileOptions
             var sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
             sp = NewPanel();
             // as wide as the window: the rows stretch and their help text wraps less
-            sp.Margin = T(36, 4, 36, 24);
+            sp.Margin = Gap.Page;
             sv.Content = sp;
             return sv;
         }

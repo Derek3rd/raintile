@@ -22,8 +22,8 @@ namespace RaintileOptions
         UIElement NewFoldersControl(string key)
         {
             var root = NewPanel();
-            root.MinWidth = 320;
-            root.MaxWidth = 470;
+            root.MinWidth = FieldWidth.L;
+            root.MaxWidth = FieldWidth.Wrap;
             root.HorizontalAlignment = HorizontalAlignment.Right;
             var rows = NewPanel();
             AddTo(root, rows);
@@ -38,23 +38,24 @@ namespace RaintileOptions
                 rows.Children.Clear();
                 var folders = SplitFolders(V(key));
                 if (folders.Count == 0)
-                    AddTo(rows, NewText("No folders yet.", 12, ResBrush("DimBrush")));
+                    AddTo(rows, NewHelp("No folders yet: add one with Add folder..."));
                 foreach (var folder in folders)
                 {
                     var row = NewGrid("*", "Auto");
                     row.Margin = T(0, 0, 0, 4);
-                    var path = NewText(folder, 12.5);
-                    path.TextTrimming = TextTrimming.CharacterEllipsis;
-                    path.ToolTip = folder;
-                    path.VerticalAlignment = VerticalAlignment.Center;
+                    var cell = NewPanel();
+                    cell.VerticalAlignment = VerticalAlignment.Center;
+                    var path = NewText(folder, Fs.Label);
+                    SetTrimmed(path);
+                    AddTo(cell, path);
+                    // shown, not only in a tooltip: a folder that is not there finds nothing
                     if (!System.IO.Directory.Exists(System.Environment.ExpandEnvironmentVariables(folder)))
                     {
                         path.Foreground = ResBrush("DimBrush");
-                        path.ToolTip = folder + " (not found: a drive not connected?)";
+                        AddTo(cell, NewHelp("Not found: a drive not connected?"));
                     }
-                    row.Children.Add(path);
+                    row.Children.Add(cell);
                     var remove = NewClearButton("Remove this folder from the list (nothing is deleted)");
-                    remove.Margin = T(8, 0, 0, 0);
                     SetCol(remove, 1);
                     row.Children.Add(remove);
                     string f = folder;

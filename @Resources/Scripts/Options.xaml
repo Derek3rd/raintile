@@ -64,6 +64,14 @@
     <Setter Property="FontWeight" Value="SemiBold"/>
   </Style>
 
+  <!-- An action that deletes or cannot be undone: never the default button -->
+  <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Background" Value="{StaticResource DangerBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+  </Style>
+
   <!-- Small icon button (Segoe MDL2 Assets glyphs) -->
   <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Background" Value="Transparent"/>
@@ -274,7 +282,7 @@
               <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-              <Setter Property="Opacity" Value="0.5"/>
+              <Setter Property="Opacity" Value="0.4"/>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -353,7 +361,7 @@
               <Setter TargetName="content" Property="Visibility" Value="Hidden"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-              <Setter Property="Opacity" Value="0.5"/>
+              <Setter Property="Opacity" Value="0.4"/>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>

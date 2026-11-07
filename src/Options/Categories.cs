@@ -1430,15 +1430,6 @@ namespace RaintileOptions
             swatch.Background = (Brush)NewColorBrush(value, true) ?? ResBrush("FieldBg");
         }
 
-        // The one button that empties a field (hot key, image, icon); the trash is for
-        // deleting a tile or a category
-        Button NewClearButton(string tip)
-        {
-            var b = NewIconButton(0xE711, tip);
-            b.Margin = T(6, 0, 0, 0);
-            return b;
-        }
-
         // A field that fills the column between an optional element before it
         // (swatch, thumbnail) and one after it (clear button)
         Grid NewFieldRow(FrameworkElement lead, FrameworkElement field, FrameworkElement tail)

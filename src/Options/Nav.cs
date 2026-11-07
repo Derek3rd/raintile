@@ -26,6 +26,7 @@ namespace RaintileOptions
         public TextBlock Title;
         public Image Icon;
         public Ellipse Dot;
+        public string DotTip;   // what the dot means, while it is shown
     }
 
     public partial class OptionsApp
@@ -131,7 +132,7 @@ namespace RaintileOptions
             win.Closing += (s, e) =>
             {
                 if (!dirtySettings || skipSavePrompt) return;
-                var r = ShowDialog("Raintile", "Save the changes before closing?", new[] { "Save", "Don't save", "Cancel" });
+                var r = ShowDialog("Unsaved changes", "Save the changes before closing?", new[] { "Save", "Don't save", "Cancel" });
                 if (r.Button == "Save") SaveAll();
                 else if (r.Button != "Don't save") e.Cancel = true;
             };
@@ -249,14 +250,23 @@ namespace RaintileOptions
                 tag.Icon = img;
                 item.Padding = T(44, 7, 12, 7);
             }
-            var t = NewText(title, level == 0 ? 13.5 : 13);
+            var t = NewText(title, Fs.Label);
             t.VerticalAlignment = VerticalAlignment.Center;
             t.TextTrimming = TextTrimming.CharacterEllipsis;
             SetCol(t, 1);
             g.Children.Add(t);
+            // the tooltip: the full name when it is cut, and what the dot means (UpdateNavDots)
+            item.ToolTip = "";
+            item.ToolTipOpening += (s, e) =>
+            {
+                string tip = IsTrimmed(t) ? t.Text : "";
+                if (tag.DotTip != null) tip += (tip != "" ? "\r\n" : "") + tag.DotTip;
+                if (tip == "") { e.Handled = true; return; }
+                item.ToolTip = tip;
+            };
             if (open != null)
             {
-                var ch = NewGlyph(open.Value ? 0xE70D : 0xE76C, 9);
+                var ch = NewGlyph(open.Value ? Glyph.GroupOpen : Glyph.GroupClosed, 9);
                 ch.Foreground = ResBrush("DimBrush");
                 ch.Margin = T(8, 0, 0, 0);
                 SetCol(ch, 2);
@@ -314,8 +324,8 @@ namespace RaintileOptions
                 if (tag.Dot == null) continue;
                 bool on = (tag.Id == "page:import" && newFound) || (tag.Id == "page:info" && update);
                 tag.Dot.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-                it.ToolTip = !on ? null : (update && tag.Id == "page:info") ? "A new version of Raintile is available"
-                    : "New games or apps found, or tiles of games no longer installed";
+                tag.DotTip = !on ? null : (update && tag.Id == "page:info") ? "A new version of Raintile is available."
+                    : "New games or apps found, or tiles of games no longer installed.";
             }
         }
 
@@ -458,7 +468,7 @@ namespace RaintileOptions
         // install" downloads the release's .rmskin and opens it: the Rainmeter
         // installer takes over (your data is not in the skin folder, so it stays).
 
-        TextBlock updInstalled, updLatest, updStatus, updNotes;
+        TextBlock updInstalled, updLatest, updStatus, updNotes, updHow;
         Border updNotesBox;
         Button updInstall, updInstaller, updPage, updCheck;
 
@@ -487,6 +497,7 @@ namespace RaintileOptions
             bool asset = newer && Json.Str(info, "Asset") != "";
             updInstall.Content = asset ? "Direct update" : "Open the release page";
             updInstaller.Visibility = asset ? Visibility.Visible : Visibility.Collapsed;
+            if (updHow != null) updHow.Visibility = updInstaller.Visibility;
             updPage.Visibility = info != null && Json.Str(info, "Page") != "" ? Visibility.Visible : Visibility.Collapsed;
             UpdateNavDots(true);
         }
@@ -494,7 +505,7 @@ namespace RaintileOptions
         // Asks GitHub through Update.ps1 (in the background), then shows the result
         void InvokeCheckNow()
         {
-            updStatus.Text = "Checking\u2026";
+            updStatus.Text = "Checking...";
             updCheck.IsEnabled = false;
             Process p;
             try { p = StartScript("Update.ps1", "-Resources " + Arg(Core.Resources) + " -Data " + Arg(Core.Data) + " -Force"); }
@@ -538,15 +549,15 @@ namespace RaintileOptions
                     "Your settings, categories and images stay: they are in " + Core.Data + ". Then Rainmeter reloads.", new[] { "Direct update", "Cancel" })
                 : ShowDialog("Update Raintile", "Download Raintile " + latest + " and open the Rainmeter installer?\r\n\r\n" +
                     "Your settings, categories and images stay: they are in " + Core.Data + ", which the installer does not touch. " +
-                    "In the installer keep the default options and press Install.", new[] { "Rainmeter Update", "Cancel" });
-            if (r.Button != "Direct update" && r.Button != "Rainmeter Update") return;
+                    "In the installer keep the default options and press Install.", new[] { "Rainmeter installer", "Cancel" });
+            if (r.Button != "Direct update" && r.Button != "Rainmeter installer") return;
             // a new folder of its own, and a name made here: nothing else can be
             // put in its place before it is opened
             string ver = Core.GetSafeVersion(latest);
             string folder = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "Raintile-update-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);
             string dest = System.IO.Path.Combine(folder, ver != "" ? "Raintile_" + ver + ".rmskin" : "Raintile_update.rmskin");
-            updStatus.Text = "Downloading\u2026";
+            updStatus.Text = "Downloading...";
             updInstall.IsEnabled = false;
             updInstaller.IsEnabled = false;
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
@@ -573,7 +584,7 @@ namespace RaintileOptions
                     win.Close();
                     return;
                 }
-                updStatus.Text = "Installing\u2026";
+                updStatus.Text = "Installing...";
                 win.Cursor = Cursors.Wait;
                 string backup = null;
                 try
@@ -581,7 +592,7 @@ namespace RaintileOptions
                     using (var zip = Core.OpenRmskin(dest))
                     {
                         string problem = Core.TestUpdatePackage(zip);
-                        if (problem != null) { updStatus.Text = "This package can not be installed: " + problem + ". Nothing was changed."; return; }
+                        if (problem != null) { updStatus.Text = "This package cannot be installed: " + problem + ". Nothing was changed."; return; }
                         backup = Core.BackupSkin(skinDir, Core.GetInstalledVersion());
                         Core.InstallUpdatePackage(zip, skinDir, backup);
                     }
@@ -596,7 +607,7 @@ namespace RaintileOptions
                     win.Cursor = null;
                     try { Directory.Delete(folder, true); } catch { }
                 }
-                ShowDialog("Raintile", "Raintile " + latest + " is installed. Rainmeter reloads now.\r\n\r\nThe previous files are in:\r\n" + backup);
+                ShowDialog("Update Raintile", "Raintile " + latest + " is installed. Rainmeter reloads now.\r\n\r\nThe previous files are in:\r\n" + backup);
                 // every skin is reloaded (new mini-skins and scripts are seen);
                 // the launcher shows itself once loaded
                 WriteShowOnLoad();
@@ -610,35 +621,40 @@ namespace RaintileOptions
         {
             var card = NewCard("Updates", "");
             var f = CardPanel(card);
-            updInstalled = NewText("", 13, null, false, true);
-            updLatest = NewText("", 13, null, false, true);
+            updInstalled = NewHelp("", ResBrush("TextBrush"));
+            updLatest = NewHelp("", ResBrush("TextBrush"));
             foreach (var row in new[] { Tuple.Create(updInstalled, "Installed"), Tuple.Create(updLatest, "Latest version") })
             {
-                row.Item1.MaxWidth = 460;
+                row.Item1.MaxWidth = FieldWidth.Wrap;
                 row.Item1.TextAlignment = TextAlignment.Right;
                 f.Children.Add(NewRow(row.Item2, "", row.Item1, null));
             }
-            updStatus = NewText("", 13.5, null, false, true);
+            updStatus = NewText("", Fs.Label, null, false, true);
             updStatus.Margin = T(0, 12, 0, 6);
             AddTo(f, updStatus);
             updNotesBox = new Border { Background = ResBrush("FieldBg"), CornerRadius = new CornerRadius(8), Padding = T(14, 10), Margin = T(0, 0, 0, 10) };
             var sv = new ScrollViewer { MaxHeight = 220, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-            updNotes = NewText("", 12.5, ResBrush("DimBrush"), false, true);
+            updNotes = NewHelp("");
             sv.Content = updNotes;
             updNotesBox.Child = sv;
             AddTo(f, updNotesBox);
+            // the two ways to install first (main one, then the installer), then the
+            // check, the link last
             var bar = NewPanel(Orientation.Horizontal);
             bar.Margin = T(0, 4, 0, 10);
             updInstall = NewButton("Direct update", "AccentButton");
-            updInstall.Margin = T(0, 0, 8, 0);
-            updInstaller = NewButton("Rainmeter Update", "", "Opens the downloaded package with the Rainmeter skin installer");
-            updInstaller.Margin = T(0, 0, 8, 0);
+            updInstall.Margin = T(0, 0, Gap.Control, 0);
+            updInstaller = NewButton("Rainmeter installer");
+            updInstaller.Margin = T(0, 0, Gap.Control, 0);
             updCheck = NewButton("Check now");
-            updCheck.Margin = T(0, 0, 8, 0);
+            updCheck.Margin = T(0, 0, Gap.Control, 0);
             updPage = NewButton("Release page", "LinkButton");
             updPage.VerticalAlignment = VerticalAlignment.Center;
-            AddTo(bar, updInstall); AddTo(bar, updCheck); AddTo(bar, updInstaller); AddTo(bar, updPage);
+            AddTo(bar, updInstall); AddTo(bar, updInstaller); AddTo(bar, updCheck); AddTo(bar, updPage);
             AddTo(f, bar);
+            updHow = NewHelp("Direct update replaces the files of the skin folder and keeps a copy of them; Rainmeter installer opens the package with the skin installer of Rainmeter.");
+            updHow.Margin = T(0, 0, 0, 10);
+            AddTo(f, updHow);
             updInstall.Click += (s, e) => InstallUpdate(true);
             updInstaller.Click += (s, e) => InstallUpdate(false);
             updCheck.Click += (s, e) => InvokeCheckNow();
@@ -654,25 +670,25 @@ namespace RaintileOptions
             var sv = NewPageScroller(out sp);
 
             var card = NewCard("", "");
-            card.Padding = T(24, 20, 24, 20);
             var head = NewPanel(Orientation.Horizontal);
-            AddTo(head, NewText("Raintile", 26, null, true));
+            head.Margin = T(0, 16, 0, 0);
+            AddTo(head, NewText("Raintile", Fs.Title, null, true));
             if (version != "")
             {
                 var badge = new Border
                 {
                     Background = ResBrush("AccentSoftBrush"), CornerRadius = new CornerRadius(4), Padding = T(8, 2, 8, 2),
                     Margin = T(12, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-                    Child = NewText(version, 12, ResBrush("AccentBrush"), true),
+                    Child = NewText(version, Fs.Badge, ResBrush("AccentBrush"), true),
                 };
                 AddTo(head, badge);
             }
             AddTo(CardPanel(card), head);
-            var about = NewText(information != "" ? information : "Full-screen tile launcher for Rainmeter.", 13.5, ResBrush("DimBrush"), false, true);
-            about.Margin = T(0, 8, 0, 0);
+            var about = NewText(information != "" ? information : "Full-screen tile launcher for Rainmeter.", Fs.Label, ResBrush("DimBrush"), false, true);
+            about.Margin = T(0, Gap.Control, 0, 0);
             AddTo(CardPanel(card), about);
-            var more = NewText("Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, games and apps found on this PC. Every setting is described in the Guide, on GitHub.", 12.5, ResBrush("DimBrush"), false, true);
-            more.Margin = T(0, 6, 0, 0);
+            var more = NewHelp("Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, games and apps found on this PC. Every setting is described in the Guide, on GitHub.");
+            more.Margin = T(0, 6, 0, 12);
             AddTo(CardPanel(card), more);
             AddTo(sp, card);
 
@@ -689,8 +705,8 @@ namespace RaintileOptions
                 new[] { "Tiles", tiles + " written by hand, " + imported + " imported" },
             })
             {
-                var v = NewText(row[1], 13, null, false, true);
-                v.MaxWidth = 460;
+                var v = NewHelp(row[1], ResBrush("TextBrush"));
+                v.MaxWidth = FieldWidth.Wrap;
                 v.TextAlignment = TextAlignment.Right;
                 CardPanel(card).Children.Add(NewRow(row[0], "", v, null));
             }
@@ -704,7 +720,7 @@ namespace RaintileOptions
             cp.Children.Add(NewRow("Your data", "Settings, categories and images: updates never touch this folder.", NewActionControl("OpenFolder", "Open the folder"), null));
             var backupButtons = NewPanel(Orientation.Horizontal);
             var b = (FrameworkElement)NewActionControl("Backup", "Back up...");
-            b.Margin = T(0, 0, 8, 0);
+            b.Margin = T(0, 0, Gap.Control, 0);
             AddTo(backupButtons, b);
             AddTo(backupButtons, NewActionControl("Restore", "Restore..."));
             cp.Children.Add(NewRow("Backup", "Your data in a zip file, to keep it safe or move it to another PC (the SteamGridDB key only works for the same Windows user).", backupButtons, null));

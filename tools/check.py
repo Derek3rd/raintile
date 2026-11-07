@@ -7,6 +7,8 @@
     python tools/check.py --tests         only the tests
     python tools/check.py --base <ref>    the branch the change goes to (default:
                                           the PR's base, else origin/nightly)
+    python tools/check.py --install-hook  makes them required before every push
+                                          (.git/hooks/pre-push, local)
 
 Checks on the files: scripts and .ini/.inc ASCII only without BOM, every .ps1
 parses with Windows PowerShell 5.1 (so no PowerShell 7 syntax), XAML and
@@ -382,12 +384,90 @@ def run_lua_tests():
                 shutil.rmtree(d, ignore_errors=True)
 
 
+# Pre-push hook ------------------------------------------------------------------
+
+HOOK_MARK = '# raintile-check-hook'
+HOOK = '''#!/bin/sh
+%s
+# Installed by "python tools/check.py --install-hook": every commit pushed is
+# checked first (tools/check.py --pre-push); if a check fails the push stops.
+# Local only (.git/hooks). "git push --no-verify" skips it.
+[ -f tools/check.py ] || { echo "[pre-push] tools/check.py is not in this branch: not checked"; exit 0; }
+for p in python py python3; do
+    if "$p" -c "import sys; sys.exit(sys.version_info[0] != 3)" >/dev/null 2>&1; then
+        exec "$p" tools/check.py --pre-push
+    fi
+done
+echo "[pre-push] Python 3 not found: push stopped"
+exit 1
+''' % HOOK_MARK
+
+
+def git_path(name):
+    out = subprocess.run(['git', 'rev-parse', '--git-path', name], cwd=ROOT,
+                         capture_output=True, text=True, check=True).stdout.strip()
+    return os.path.join(ROOT, out) if not os.path.isabs(out) else out
+
+
+def install_hook():
+    path = git_path('hooks/pre-push')
+    if os.path.exists(path) and HOOK_MARK not in open(path, encoding='utf-8', errors='replace').read():
+        sys.exit('%s exists and is not this hook: not replaced' % path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='ascii', newline='\n') as f:
+        f.write(HOOK)
+    os.chmod(path, 0o755)
+    print('Installed %s: the checks run before every push' % path)
+
+
+def pre_push():
+    """The pre-push hook: git gives one line per ref pushed ("<local ref>
+    <local sha> <remote ref> <remote sha>"). Each commit is checked out in a
+    temporary worktree and checked there with its own tools/check.py: what is
+    checked is what is pushed, not the working folder."""
+    zero = '0' * 40
+    shas = []
+    for line in sys.stdin:
+        parts = line.split()
+        if len(parts) == 4 and parts[1] != zero and parts[1] not in shas:
+            shas.append(parts[1])
+    for sha in shas:
+        print('[pre-push] checking %s...' % sha[:10], flush=True)
+        base = tempfile.mkdtemp(prefix='raintile-push-')
+        tree = os.path.join(base, 'tree')
+        nohooks = os.path.join(base, 'nohooks')
+        os.mkdir(nohooks)
+        try:
+            # without the local hooks (post-checkout would build Options there)
+            subprocess.run(['git', '-c', 'core.hooksPath=' + nohooks, 'worktree', 'add', '--detach', '--quiet', tree, sha],
+                           cwd=ROOT, check=True)
+            script = os.path.join(tree, 'tools', 'check.py')
+            if not os.path.isfile(script):
+                print('[pre-push] %s has no tools/check.py: not checked' % sha[:10])
+                continue
+            if subprocess.run([sys.executable, script], cwd=tree).returncode != 0:
+                print('\n[pre-push] %s does not pass the checks: push stopped. Fix it, commit, push again.' % sha[:10])
+                return 1
+        finally:
+            subprocess.run(['git', 'worktree', 'remove', '--force', tree], cwd=ROOT, capture_output=True)
+            shutil.rmtree(base, ignore_errors=True)
+            subprocess.run(['git', 'worktree', 'prune'], cwd=ROOT, capture_output=True)
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description='Checks and tests of Raintile')
     parser.add_argument('--static', action='store_true', help='only the checks on the files')
     parser.add_argument('--tests', action='store_true', help='only the tests')
     parser.add_argument('--base', help='branch the change goes to, for the GRID_VERSION check')
+    parser.add_argument('--install-hook', action='store_true', help='run the checks before every push')
+    parser.add_argument('--pre-push', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.install_hook:
+        install_hook()
+        return
+    if args.pre_push:
+        sys.exit(pre_push())
     both = not args.static and not args.tests
     if args.static or both:
         files = tracked_files()

@@ -67,7 +67,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - Release: bump `Version=` on `nightly`, PR `nightly` -> `main`, tag `vX.Y.Z` on `main`; the workflows attach the `.rmskin` and merge `main` back into `nightly` (see "Publishing a release" in the Guide). Release notes in English.
 
 ## Verifying changes
-- `python tools/check.py` passes before every commit (needs `pip install lupa`): it runs the checks below that can be automated and the tests in `tests/`; the `checks` job runs it on every PR. A fixed bug gets a test that fails without the fix, where the fake Rainmeter or a PowerShell test can show it; when the fake lacks a Rainmeter behaviour the change relies on, add it to `tests/lua/rainmeter.lua`.
+- `python tools/check.py` passes before every commit (needs `pip install lupa`): it runs the checks below that can be automated and the tests in `tests/`; the `checks` job runs it on every PR, and `python tools/check.py --install-hook` makes it run before every push (a failure stops the push: fix, commit, push again; never `--no-verify`). A fixed bug gets a test that fails without the fix, where the fake Rainmeter or a PowerShell test can show it; when the fake lacks a Rainmeter behaviour the change relies on, add it to `tests/lua/rainmeter.lua`.
 - Every changed `.ps1` parses without errors (`[System.Management.Automation.Language.Parser]::ParseFile`), and `Options.xaml` loads as `[xml]`.
 - Changed scripts are still ASCII only and without BOM.
 - Lua: `tools/check.py` compiles it with Lua 5.1 and runs it in the fake Rainmeter; that does not replace a live test.

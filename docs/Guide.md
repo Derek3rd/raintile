@@ -496,6 +496,8 @@ With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest r
 
 What the fake Rainmeter cannot show (drawing, the order of the layers, real mouse moves, the Options window) is still tested live.
 
+**Before every push**: `python tools/check.py --install-hook` installs a local `pre-push` hook (in `.git\hooks`, next to any you have). From then on every commit you push is checked first, in a temporary copy of that commit (a git worktree), so uncommitted changes do not count; if a check fails the push stops: fix, commit, push again. Branches without `tools\check.py` are pushed unchecked.
+
 ### Publishing a release
 
 The work goes to the branch **`nightly`** (pull requests included); **`main`** only gets what is released:

@@ -185,15 +185,15 @@ namespace RaintileOptions
 
         ListBoxItem NewFoundEntry(FoundItem it, string inCategory)
         {
-            var li = new ListBoxItem { Tag = it, Padding = T(8, 6) };
+            var li = new ListBoxItem { Tag = it, Padding = T(Gap.Control, Gap.Icon) };
             var g = NewGrid("Auto", "Auto", "*", "Auto");
-            var tick = new CheckBox { Style = ResStyle("Tick"), IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = T(2, 0, 12, 0) };
+            var tick = new CheckBox { Style = ResStyle("Tick"), IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Margin = T(0, 0, Gap.Group, 0) };
             var binding = new Binding("IsSelected") { RelativeSource = new RelativeSource(RelativeSourceMode.FindAncestor, typeof(ListBoxItem), 1) };
             tick.SetBinding(ToggleButton.IsCheckedProperty, binding);
             g.Children.Add(tick);
             if (foundCovers)
             {
-                var b = new Border { Width = 96, Height = 45, CornerRadius = new CornerRadius(4), ClipToBounds = true, Background = ResBrush("FieldBg"), Margin = T(0, 0, 12, 0) };
+                var b = new Border { Width = 96, Height = 45, CornerRadius = new CornerRadius(4), ClipToBounds = true, Background = ResBrush("FieldBg"), Margin = T(0, 0, Gap.Group, 0) };
                 var img = new Image();
                 if (it.Hero != "" && File.Exists(it.Hero))
                 {
@@ -203,7 +203,7 @@ namespace RaintileOptions
                 else
                 {
                     img.Stretch = Stretch.Uniform;
-                    img.Margin = T(8, 5, 8, 5);
+                    img.Margin = T(8, 5, 8, 5);   // ui-exempt: drawn on the thumbnail
                     img.Source = GetBitmap(it.Logo != "" ? it.Logo : it.Icon, 96);
                 }
                 b.Child = img;
@@ -218,7 +218,7 @@ namespace RaintileOptions
             {
                 var badge = new Border
                 {
-                    Background = ResBrush("AccentSoftBrush"), CornerRadius = new CornerRadius(3), Padding = T(5, 0, 5, 1), Margin = T(0, 0, Gap.Control, 0),
+                    Background = ResBrush("AccentSoftBrush"), CornerRadius = new CornerRadius(3), Padding = Gap.Chip, Margin = T(0, 0, Gap.Control, 0),
                     VerticalAlignment = VerticalAlignment.Center, Child = NewText("NEW", Fs.Badge, ResBrush("AccentBrush"), true),
                 };
                 title.Children.Add(badge);
@@ -237,7 +237,7 @@ namespace RaintileOptions
             {
                 var note = NewText("in " + inCategory, Fs.Help, ResBrush("DimBrush"));
                 note.VerticalAlignment = VerticalAlignment.Center;
-                note.Margin = T(12, 0, 4, 0);
+                note.Margin = T(Gap.Group, 0, Gap.Line, 0);
                 SetCol(note, 3);
                 g.Children.Add(note);
                 li.IsEnabled = false;
@@ -478,18 +478,18 @@ namespace RaintileOptions
 
             // search again + status
             var head = NewGrid("Auto", "*");
-            head.Margin = T(0, 2, 0, 10);
+            head.Margin = T(0, 0, 0, Gap.Text);
             foundScanButton = NewButton("Search again");
             head.Children.Add(foundScanButton);
             foundStatus = NewHelp("");
             foundStatus.VerticalAlignment = VerticalAlignment.Center;
-            foundStatus.Margin = T(12, 0, 0, 0);
+            foundStatus.Margin = T(Gap.Group, 0, 0, 0);
             SetCol(foundStatus, 1);
             head.Children.Add(foundStatus);
             AddTo(f, head);
 
             // filters: type, text, already added, covers
-            var filters = new WrapPanel { Margin = T(0, 0, 0, 10) };
+            var filters = new WrapPanel { Margin = T(0, 0, 0, Gap.Text) };
             foreach (var k in new[] { new[] { "all", "All" }, new[] { "game", "Games" }, new[] { "app", "Apps" } })
             {
                 var rb = new RadioButton { Style = ResStyle("Segment"), Content = k[1], GroupName = "found_kind", IsChecked = foundKind == k[0] };
@@ -497,19 +497,19 @@ namespace RaintileOptions
                 rb.Click += (s, e) => { foundKind = kind; RefreshFoundList(); };
                 filters.Children.Add(rb);
             }
-            var search = new TextBox { Width = FieldWidth.M, Margin = T(10, 2, 16, 2) };
+            var search = new TextBox { Width = FieldWidth.M, Margin = T(Gap.Text, 0, Gap.Group, 0), VerticalAlignment = VerticalAlignment.Center };
             search.TextChanged += (s, e) => { foundFilter = search.Text; RefreshFoundList(); };
             filters.Children.Add(search);
-            var showAdded = new CheckBox { Content = "Show added", Margin = T(0, 4, 16, 4), IsChecked = foundShowAdded };
+            var showAdded = new CheckBox { Content = "Show added", Margin = T(0, 0, Gap.Group, 0), VerticalAlignment = VerticalAlignment.Center, IsChecked = foundShowAdded };
             showAdded.Click += (s, e) => { foundShowAdded = showAdded.IsChecked == true; RefreshFoundList(); };
             filters.Children.Add(showAdded);
-            var covers = new CheckBox { Content = "Covers", Margin = T(0, 4, 16, 4), IsChecked = foundCovers };
+            var covers = new CheckBox { Content = "Covers", Margin = T(0, 0, Gap.Group, 0), VerticalAlignment = VerticalAlignment.Center, IsChecked = foundCovers };
             covers.Click += (s, e) => { foundCovers = covers.IsChecked == true; RefreshFoundList(); };
             filters.Children.Add(covers);
             AddTo(f, filters);
 
             // the list
-            var frame = new Border { BorderBrush = ResBrush("LineBrush"), BorderThickness = T(1), CornerRadius = new CornerRadius(8), Padding = T(4), Height = 440 };
+            var frame = new Border { BorderBrush = ResBrush("LineBrush"), BorderThickness = T(1), CornerRadius = new CornerRadius(8), Padding = T(Gap.Line), Height = 440 };
             var grid = new Grid();
             frame.Child = grid;
             foundList = new ListBox { SelectionMode = SelectionMode.Multiple };
@@ -530,7 +530,7 @@ namespace RaintileOptions
 
             // select all / none, where, add
             var bottom = NewGrid("Auto", "Auto", "*", "Auto", "Auto");
-            bottom.Margin = T(0, 10, 0, 6);
+            bottom.Margin = T(0, Gap.Text, 0, Gap.Icon);
             var all = NewButton("Select all", "LinkButton");
             var none = NewButton("Select none", "LinkButton");
             SetCol(none, 1);
@@ -644,7 +644,7 @@ namespace RaintileOptions
             foreach (var t in tiles)
             {
                 var row = NewGrid("*", "Auto", "Auto");
-                row.Margin = T(0, 3);
+                row.Margin = T(0, 0, 0, Gap.Line);
                 var texts = NewPanel();
                 texts.VerticalAlignment = VerticalAlignment.Center;
                 var name = NewText(t.Name, Fs.Label);
@@ -692,7 +692,7 @@ namespace RaintileOptions
             missingList = NewPanel();
             AddTo(f, missingList);
             var bottom = NewPanel(Orientation.Horizontal);
-            bottom.Margin = T(0, 10, 0, 6);
+            bottom.Margin = T(0, Gap.Text, 0, Gap.Icon);
             var all = NewButton("Remove all");
             all.Click += (s, e) => { var list = GetMissingList(); if (list.Count > 0 && ConfirmRemoveMissing(list.Count)) RemoveMissingTiles(list); };
             AddTo(bottom, all);

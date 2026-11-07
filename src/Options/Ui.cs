@@ -53,18 +53,28 @@ namespace RaintileOptions
         public const double Badge = 11;      // badges and chips
     }
 
-    // Spacing
+    // Spacing: every margin and padding of the pages is one of these (or 0)
     static class Gap
     {
+        public const double Help = 3;        // a label to its help below
+        public const double Line = 4;        // a hint or status under its control, the lines of a list
+        public const double Icon = 6;        // before an icon button (it has its own padding); small insets
         public const double Control = 8;     // between controls and between buttons
-        public const double Icon = 6;        // before an icon button (it has its own padding)
+        public const double Text = 10;       // a thumbnail or icon to its text; a header or note to what follows
+        public const double Group = 12;      // between groups in a card; a status after its buttons; a slider to its box
         public const double Card = 16;       // between cards
+        public const double Indent = 18;     // a switch that belongs to the one above
+        public const double Column = 24;     // the label column to the control column
+        public const double DialogBar = 20;  // above the buttons of a dialog
         public const double Row = 11;        // above and below a side-by-side row
         public const double StackedRow = 8;  // above and below a stacked row
         public const double ActionColumn = 34;   // the reset / clear column of a row
         public const double ScrollBar = 9;       // the page scrollbar (Options.xaml), kept also when hidden
         public const double CardPadding = 20;    // left and right, the Card style
         public static readonly Thickness Page = new Thickness(36, 4, 36, 24);
+        public static readonly Thickness Dialog = new Thickness(24, 20, 24, 18);   // inside a dialog
+        public static readonly Thickness Chip = new Thickness(8, 1, 8, 2);         // padding of badges and chips
+        public static readonly Thickness ListItem = new Thickness(12, 9, 12, 9);  // padding of menu and category entries
     }
 
     // Widths of fields
@@ -279,7 +289,7 @@ namespace RaintileOptions
             if (!string.IsNullOrEmpty(help))
             {
                 var h = NewHelp(help);
-                h.Margin = T(0, 3, 0, 0);
+                h.Margin = T(0, Gap.Help, 0, 0);
                 AddTo(sp, h);
             }
             return sp;
@@ -349,7 +359,7 @@ namespace RaintileOptions
             double small = smallChange > 0 ? smallChange : step;
             var sl = new Slider { Minimum = min, Maximum = max, TickFrequency = step, SmallChange = small, LargeChange = small, VerticalAlignment = VerticalAlignment.Center };
             var tb = new TextBox { Width = FieldWidth.S, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-            if (slider) { tb.Margin = T(12, 0, 0, 0); g.Children.Add(sl); }
+            if (slider) { tb.Margin = T(Gap.Group, 0, 0, 0); g.Children.Add(sl); }
             if (!slider) g.HorizontalAlignment = HorizontalAlignment.Right;
             SetCol(tb, 1);
             g.Children.Add(tb);
@@ -562,7 +572,7 @@ namespace RaintileOptions
             string result = null;
             d.SourceInitialized += (s, e) => SetDarkTitle(d);
             var sp = NewPanel();
-            sp.Margin = T(24, 20, 24, 18);
+            sp.Margin = Gap.Dialog;
             sp.MinWidth = 380;
             sp.MaxWidth = 520;
             d.Content = sp;
@@ -570,12 +580,12 @@ namespace RaintileOptions
             TextBox tb = null;
             if (inputText != null)
             {
-                tb = new TextBox { Text = inputText, Margin = T(0, 14, 0, 0) };
+                tb = new TextBox { Text = inputText, Margin = T(0, Gap.Group, 0, 0) };
                 AddTo(sp, tb);
             }
             var bar = NewPanel(Orientation.Horizontal);
             bar.HorizontalAlignment = HorizontalAlignment.Right;
-            bar.Margin = T(0, 20, 0, 0);
+            bar.Margin = T(0, Gap.DialogBar, 0, 0);
             AddTo(sp, bar);
             for (int i = 0; i < buttons.Length; i++)
             {

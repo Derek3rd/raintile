@@ -17,11 +17,13 @@ not have, add it to `Ui.cs` and to this page, not to the page's own file.
 `New-SectionTitle`, `New-ActionIcon`, `Set-ActionVisible`, `Set-Invalid`, `Set-Trimmed`
 and `Show-Dialog -Danger`.
 
-`python tools/check.py` fails on a glyph code or a font size written by hand in
-`src/Options/` (outside `Ui.cs`) or in `Options.ps1` (outside `$GLYPH` and the
-helpers). Where a value really has to be its own (a drawing, the menu chrome, the
-on-screen keyboard, the launcher preview), the line says why with a comment
-`ui-exempt: <why>`. Margins are not checked yet: use `Gap` all the same.
+`python tools/check.py` fails on a glyph code, a font size, or a margin or padding
+with a number other than 0 written by hand in `src/Options/` (outside `Ui.cs`) or in
+`Options.ps1` (outside `$GLYPH` and the helpers). Where a value really has to be its
+own (a drawing on a thumbnail, the menu chrome, the on-screen keyboard, the launcher
+preview), the line says why with a comment `ui-exempt: <why>`. The XAML of the window
+(`Options.xaml` and the window's frame: menu, header, footer) is the chrome and is not
+checked.
 
 ## 1. Nothing only in a tooltip
 
@@ -130,12 +132,30 @@ menu's icons (15) and group chevrons (9), the title of the saving overlay (17).
 
 ## 6. Spacing (`Gap`)
 
-- Page: margin 36, 4, 36, 24 (`Gap.Page`); the footer lines up with it.
-- Cards: the `Card` style; 16 between cards (`Gap.Card`).
-- Rows: 11 above and below in side-by-side rows (`Gap.Row`), 8 in stacked rows
-  (`Gap.StackedRow`).
-- 8 between controls and between buttons (`Gap.Control`); an icon button after a
-  field: 6 (`Gap.Icon`, the button has its own padding).
+Every margin and padding of a page is one of these, or 0 (`$GAP` in `Options.ps1`,
+where the page margin is `$GAP.PageBox`):
+
+| Constant | px | Where |
+|---|---|---|
+| `Gap.Help` | 3 | a label to its help below |
+| `Gap.Line` | 4 | a hint or status under its control, between the lines of a list |
+| `Gap.Icon` | 6 | before an icon button after a field (the button has its own padding); small insets: a thumbnail's frame, the control under its label in a stacked row |
+| `Gap.Control` | 8 | between controls and between buttons |
+| `Gap.Text` | 10 | a thumbnail or icon to its text; a header or a note to what follows |
+| `Gap.Group` | 12 | between groups inside a card (a heading, a block of fields); a status after its buttons; a slider to its number box |
+| `Gap.Card` | 16 | between cards |
+| `Gap.Indent` | 18 | a switch that belongs to the one above it |
+| `Gap.Column` | 24 | the label column to the control column |
+| `Gap.DialogBar` | 20 | above the buttons of a dialog |
+| `Gap.Row` | 11 | above and below a side-by-side row |
+| `Gap.StackedRow` | 8 | above and below a stacked row |
+| `Gap.Page` | 36, 4, 36, 24 | around a page; the footer lines up with it |
+| `Gap.Dialog` | 24, 20, 24, 18 | inside a dialog (`ShowDialog`, the image picker) |
+| `Gap.Chip` | 8, 1, 8, 2 | padding of badges and chips |
+| `Gap.ListItem` | 12, 9 | padding of the entries of the menu and of the category list |
+
+Cards use the `Card` style. A spacing that none of these fits is a new constant in
+`Ui.cs`, in `$GAP` and in this table, not a number in the page.
 
 ## 7. Buttons and dialogs
 

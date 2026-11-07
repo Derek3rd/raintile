@@ -24,7 +24,7 @@ namespace RaintileOptions
             {
                 var create = NewButton("Add the example Dashboard", "AccentButton");
                 create.HorizontalAlignment = HorizontalAlignment.Left;
-                create.Margin = T(0, Gap.Control, 0, 4);
+                create.Margin = T(0, Gap.Control, 0, Gap.Line);
                 create.Click += (s, e) => CreateDashboard();
                 AddTo(f, create);
             }

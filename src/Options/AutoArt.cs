@@ -35,12 +35,12 @@ namespace RaintileOptions
             autoArtFill = new Border { Width = 0, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(3), Background = ResBrush("AccentBrush") };
             autoArtTrack = new Border
             {
-                Height = 6, Margin = T(0, 8, 0, 0), CornerRadius = new CornerRadius(3), Background = ResBrush("FieldBg"),
+                Height = 6, Margin = T(0, Gap.Control, 0, 0), CornerRadius = new CornerRadius(3), Background = ResBrush("FieldBg"),
                 Child = autoArtFill, Visibility = Visibility.Collapsed,
             };
             AddTo(panel, autoArtTrack);
             autoArtStatus = NewHelp("");
-            autoArtStatus.Margin = T(0, 4, 0, 0);
+            autoArtStatus.Margin = T(0, Gap.Line, 0, 0);
             autoArtStatus.Visibility = Visibility.Collapsed;
             AddTo(panel, autoArtStatus);
             AddTo(panel, autoArtStop);

@@ -33,17 +33,17 @@ namespace RaintileOptions
                 FontFamily = new FontFamily("Segoe UI"), FontSize = 13,   // ui-exempt: base size of a window, as the main window
             };
             d.SourceInitialized += (s, e) => SetDarkTitle(d);
-            var root = new DockPanel { Margin = T(20, 16, 20, 16) };
+            var root = new DockPanel { Margin = Gap.Dialog };
             d.Content = root;
 
             var status = NewHelp("Searching...");
-            status.Margin = T(0, 0, 0, 10);
+            status.Margin = T(0, 0, 0, Gap.Text);
             DockPanel.SetDock(status, Dock.Top);
             root.Children.Add(status);
 
             var bar = NewPanel(Orientation.Horizontal);
             bar.HorizontalAlignment = HorizontalAlignment.Right;
-            bar.Margin = T(0, 12, 0, 0);
+            bar.Margin = T(0, Gap.DialogBar, 0, 0);
             DockPanel.SetDock(bar, Dock.Bottom);
             root.Children.Add(bar);
             var use = NewButton("Use it", "AccentButton");
@@ -92,7 +92,7 @@ namespace RaintileOptions
                     AddTo(panel, label);
                     var box = new Border
                     {
-                        Child = panel, Padding = T(6), Margin = T(0, 0, 10, 10), CornerRadius = new CornerRadius(6),
+                        Child = panel, Padding = T(Gap.Icon), Margin = T(0, 0, Gap.Text, Gap.Text), CornerRadius = new CornerRadius(6),
                         BorderThickness = T(2), BorderBrush = Brushes.Transparent, Background = ResBrush("FieldBg"),
                         Cursor = System.Windows.Input.Cursors.Hand,
                     };

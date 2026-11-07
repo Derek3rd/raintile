@@ -13,6 +13,9 @@ Most rules are already code: the constants and helpers in `src/Options/Ui.cs`
 `SetFormHelp`. Build new UI with them: no glyph codes,
 font sizes or margins written by hand. When a page needs something the helpers do
 not have, add it to `Ui.cs` and to this page, not to the page's own file.
+`Options.ps1` has the same rules as `$GLYPH`, `$FS`, `$GAP`, `$FIELD`, `New-Help`,
+`New-SectionTitle`, `New-ActionIcon`, `Set-ActionVisible`, `Set-Invalid`, `Set-Trimmed`
+and `Show-Dialog -Danger`.
 
 ## 1. Nothing only in a tooltip
 

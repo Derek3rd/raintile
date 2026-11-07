@@ -4564,15 +4564,15 @@ function OpenOptions(page)
 	SKIN:Bang('["' .. M.optionsExe() .. '"' .. args .. ']')
 end
 
--- The Options program, or nil after saying it is missing: a copy of the
--- repository has none until tools\dev-build.ps1 builds it (a message box of
--- Windows, through PowerShell: the skin has none of its own)
+-- The Options program, or nil after saying it is missing and Raintile should
+-- be installed again (a message box of Windows, through PowerShell: the skin
+-- has none of its own)
 function M.optionsExe()
 	local exe = resources .. 'Bin\\RaintileOptions.exe'
 	if fileExists(exe) then return exe end
 	print('Raintile: ' .. exe .. ' not found')
-	SKIN:Bang('["conhost.exe" --headless powershell.exe -NoProfile -NonInteractive -Command "$null = (New-Object -ComObject WScript.Shell).Popup(\'The Options program is missing: '
-		.. 'Bin\\RaintileOptions.exe in the skin folder. Reinstall Raintile, or in a copy of the repository build it with tools\\dev-build.ps1.\', 0, \'Raintile\', 48)"]')
+	SKIN:Bang('["conhost.exe" --headless powershell.exe -NoProfile -NonInteractive -Command "$null = (New-Object -ComObject WScript.Shell).Popup(\'The Options program is missing (Bin\\RaintileOptions.exe in the skin folder): '
+		.. 'install Raintile again to get it back.\', 0, \'Raintile\', 48)"]')
 	return nil
 end
 

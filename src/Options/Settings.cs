@@ -317,7 +317,7 @@ namespace RaintileOptions
             var current = V(key).Split('|').Select(x => x.Trim().Replace(".", "")).ToList();
             foreach (var store in Schema.SOURCES)
             {
-                var cb = new CheckBox { Content = Schema.STORE_LABELS[store], Margin = T(18, 4, 0, 4), Tag = new[] { key, store }, IsChecked = current.Contains(store) };
+                var cb = new CheckBox { Content = Schema.STORE_LABELS[store], Margin = T(Gap.Indent, Gap.Line, 0, Gap.Line), Tag = new[] { key, store }, IsChecked = current.Contains(store) };
                 cb.Click += (s, e) =>
                 {
                     var on = wp.Children.OfType<CheckBox>().Where(x => x.IsChecked == true).Select(x => ((string[])x.Tag)[1]);
@@ -491,7 +491,7 @@ namespace RaintileOptions
             g.Margin = T(0, Gap.Row);
             var left = NewLabelBlock(label, help);
             left.VerticalAlignment = VerticalAlignment.Center;
-            left.Margin = T(0, 0, 24, 0);
+            left.Margin = T(0, 0, Gap.Column, 0);
             g.Children.Add(left);
             if (control != null)
             {
@@ -513,7 +513,7 @@ namespace RaintileOptions
             if (!string.IsNullOrEmpty(title))
             {
                 var h = NewSectionTitle(title);
-                h.Margin = T(0, 12, 0, 4);
+                h.Margin = T(0, Gap.Group, 0, Gap.Line);
                 AddTo(sp, h);
             }
             if (!string.IsNullOrEmpty(help))
@@ -545,7 +545,7 @@ namespace RaintileOptions
                         foreach (var sk in screenKeys)
                         {
                             var row = NewGrid("64", "*");
-                            row.Margin = T(0, 2);
+                            row.Margin = T(0, 0, 0, Gap.Line);
                             var l = NewText(sk, Fs.Help, ResBrush("DimBrush"));
                             l.VerticalAlignment = VerticalAlignment.Center;
                             var field = NewTextControl(sk);

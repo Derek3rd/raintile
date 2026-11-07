@@ -1002,7 +1002,13 @@ $GLYPH = @{
     GroupOpen = 0xE70D; GroupClosed = 0xE76C   # menu groups only
 }
 $FS = @{ Title = 24; Section = 11.5; Label = 13.5; Help = 12; Badge = 11 }
-$GAP = @{ Control = 8; Icon = 6; Card = 16; Row = 11; StackedRow = 8; ActionColumn = 34; ScrollBar = 9; Page = 36; CardPadding = 20 }
+$GAP = @{ Help = 3; Line = 4; Icon = 6; Control = 8; Text = 10; Group = 12; Card = 16; Indent = 18; Column = 24; DialogBar = 20
+    Row = 11; StackedRow = 8; ActionColumn = 34; ScrollBar = 9; Page = 36; CardPadding = 20 }
+# the margins and paddings of Ui.cs (Gap.Page, Dialog, Chip, ListItem)
+$GAP.PageBox = T $GAP.Page 4 $GAP.Page 24
+$GAP.Dialog = T 24 20 24 18
+$GAP.Chip = T 8 1 8 2
+$GAP.ListItem = T 12 9
 $FIELD = @{ S = 120; M = 220; L = 300; Wrap = 470; ControlMin = 300; ControlMax = 440 }
 
 # One width of the control column for every page: half the room inside a card
@@ -1142,7 +1148,7 @@ function Show-Dialog([string]$title, [string]$message, [string[]]$buttons = @('O
     $d.Add_SourceInitialized({ param($s, $e) Set-DarkTitle $s })
 
     $sp = New-Panel
-    $sp.Margin = T 24 20 24 18
+    $sp.Margin = $GAP.Dialog
     $sp.MinWidth = 380
     $sp.MaxWidth = 520
     $d.Content = $sp
@@ -1151,12 +1157,12 @@ function Show-Dialog([string]$title, [string]$message, [string[]]$buttons = @('O
     if ($null -ne $inputText) {
         $tb = New-Object System.Windows.Controls.TextBox
         $tb.Text = $inputText
-        $tb.Margin = T 0 14 0 0
+        $tb.Margin = T 0 $GAP.Group 0 0
         [void](Add-To $sp $tb)
     }
     $bar = New-Panel 'Horizontal'
     $bar.HorizontalAlignment = 'Right'
-    $bar.Margin = T 0 20 0 0
+    $bar.Margin = T 0 $GAP.DialogBar 0 0
     [void](Add-To $sp $bar)
     for ($i = 0; $i -lt $buttons.Count; $i++) {
         $isDanger = $Danger -and $buttons.Count -gt 1
@@ -1441,7 +1447,7 @@ function New-NumberControl($item) {
     $tb = New-Object System.Windows.Controls.TextBox
     $tb.Style = Res 'UnitBox'
     $tb.Width = $FIELD.S
-    $tb.Margin = if ($item.NoSlider) { T 0 } else { T 12 0 0 0 }
+    $tb.Margin = if ($item.NoSlider) { T 0 } else { T $GAP.Group 0 0 0 }
     $tb.VerticalAlignment = 'Center'
     $tb.Uid = $key
     if ($item.Unit) { $tb.Tag = $item.Unit }
@@ -1633,7 +1639,7 @@ function New-StoresControl([string]$key) {
     foreach ($store in $SOURCES) {
         $cb = New-Object System.Windows.Controls.CheckBox
         $cb.Content = $STORE_LABELS[$store]
-        $cb.Margin = T 18 4 0 4
+        $cb.Margin = T $GAP.Indent $GAP.Line 0 $GAP.Line
         $cb.Tag = @($key, $store)
         $cb.IsChecked = ($current -contains $store)
         $cb.Add_Click({
@@ -1812,11 +1818,11 @@ function New-Row([string]$label, [string]$help, $control, $reset) {
     $g.Margin = T 0 $GAP.Row
     $left = New-Panel
     $left.VerticalAlignment = 'Center'
-    $left.Margin = T 0 0 24 0
+    $left.Margin = T 0 0 $GAP.Column 0
     [void](Add-To $left (New-Text $label $FS.Label -Wrap))
     if ($help) {
         $h = New-Help $help
-        $h.Margin = T 0 3 0 0
+        $h.Margin = T 0 $GAP.Help 0 0
         [void](Add-To $left $h)
     }
     [void]$g.Children.Add($left)
@@ -1840,7 +1846,7 @@ function New-Card([string]$title, [string]$help) {
     $b.Child = $sp
     if ($title) {
         $h = New-SectionTitle $title
-        $h.Margin = T 0 12 0 4
+        $h.Margin = T 0 $GAP.Group 0 $GAP.Line
         [void](Add-To $sp $h)
     }
     if ($help) {
@@ -1867,7 +1873,7 @@ function New-ItemRow($item) {
                 $sp = New-Panel
                 foreach ($sk in 'ScreenX', 'ScreenY', 'ScreenW', 'ScreenH') {
                     $row = New-Grid @('64', '*')
-                    $row.Margin = T 0 2
+                    $row.Margin = T 0 0 0 $GAP.Line
                     $l = New-Text $sk $FS.Help (Res 'DimBrush'); $l.VerticalAlignment = 'Center'
                     $field = New-TextControl $sk; Set-Col $field 1
                     [void]$row.Children.Add($l); [void]$row.Children.Add($field)
@@ -1919,7 +1925,7 @@ function New-SettingsPage($page) {
     $sv.VerticalScrollBarVisibility = 'Auto'
     $sp = New-Panel
     # as wide as the window: the rows stretch and their help text wraps less
-    $sp.Margin = T 36 4 36 24
+    $sp.Margin = $GAP.PageBox
     $sv.Content = $sp
     Set-ScrollRoom $sv $sp
     $schemaKeys = Get-SchemaKeys
@@ -1970,7 +1976,7 @@ function New-Thumb([double]$size) {
     $b.Background = Res 'FieldBg'
     $img = New-Object System.Windows.Controls.Image
     $img.Stretch = 'Uniform'
-    $img.Margin = T ([Math]::Round($size / 8))
+    $img.Margin = T ([Math]::Round($size / 8))   # ui-exempt: drawn on the thumbnail
     $b.Child = $img
     return $b
 }
@@ -1983,7 +1989,7 @@ function New-ListEntry([string]$title, [string]$sub, $tag, [double]$thumbSize = 
     $item = New-Object System.Windows.Controls.ListBoxItem
     $sp = New-Panel 'Horizontal'
     $thumb = New-Thumb $thumbSize
-    $thumb.Margin = T 0 0 10 0
+    $thumb.Margin = T 0 0 $GAP.Text 0
     [void](Add-To $sp $thumb)
     $texts = New-Panel
     $texts.VerticalAlignment = 'Center'
@@ -2173,7 +2179,7 @@ function Refresh-Cats([string]$selectFile = '') {
         if ($e.Imported) { $count += " + $($e.Imported) imported" }
         $item = New-ListEntry $e.Name "$($e.File)   $([char]0xB7)   $count" @{ File = $e.File } 36
         Set-Thumb $item.Tag.Thumb $e.Icon
-        $item.Padding = T 12 9
+        $item.Padding = $GAP.ListItem
         [void]$cat.Cats.Items.Add($item)
         if ($e.File -eq $selectFile) { $index = $i }
         $i++
@@ -2551,7 +2557,7 @@ function Update-TagSuggestions {
     foreach ($tag in Get-AllTags) {
         if ($mine -contains $tag.ToLowerInvariant()) { continue }
         $b = New-Button "+ $tag" 'LinkButton' 'Add this tag'
-        $b.Margin = T 0 0 12 0
+        $b.Margin = T 0 0 $GAP.Group 0
         $b.Tag = $tag
         $b.Add_Click({
                 param($s, $e)
@@ -2598,11 +2604,11 @@ function New-FormRow([string]$label, $control, [string]$hint = '', $hintBlock = 
     [void](Add-To $sp (New-Text $label $FS.Label -Wrap))
     if ($hint) {
         $h = New-Help $hint
-        $h.Margin = T 0 2 0 0
+        $h.Margin = T 0 $GAP.Help 0 0
         [void](Add-To $sp $h)
     }
     $line = New-Grid @('*', [string]$GAP.ActionColumn)
-    $line.Margin = T 0 6 0 0
+    $line.Margin = T 0 $GAP.Icon 0 0
     [void]$line.Children.Add($control)
     if ($action) {
         $action.Margin = T $GAP.Icon 0 0 0
@@ -2611,19 +2617,19 @@ function New-FormRow([string]$label, $control, [string]$hint = '', $hintBlock = 
         [void]$line.Children.Add($action)
     }
     [void](Add-To $sp $line)
-    if ($hintBlock) { $hintBlock.Margin = T 0 4 0 0; [void](Add-To $sp $hintBlock) }
+    if ($hintBlock) { $hintBlock.Margin = T 0 $GAP.Line 0 0; [void](Add-To $sp $hintBlock) }
     return $sp
 }
 
 function New-ListColumn([string]$title, $list, [object[]]$buttons) {
     $b = New-Object System.Windows.Controls.Border
     $b.Style = Res 'Card'
-    $b.Padding = T 8 4 8 8
-    $b.Margin = T 0 0 14 0
+    $b.Padding = T $GAP.Control $GAP.Line $GAP.Control $GAP.Control
+    $b.Margin = T 0 0 $GAP.Card 0
     $dp = New-Object System.Windows.Controls.DockPanel
     $b.Child = $dp
     $head = New-Grid @('*', 'Auto')
-    $head.Margin = T 6 8 0 6
+    $head.Margin = T $GAP.Icon $GAP.Control 0 $GAP.Icon
     [System.Windows.Controls.DockPanel]::SetDock($head, 'Top')
     $h = New-SectionTitle $title
     $h.VerticalAlignment = 'Center'
@@ -2640,7 +2646,7 @@ function New-ListColumn([string]$title, $list, [object[]]$buttons) {
 # Categories page: the list of categories, to create, reorder and delete them
 function New-CategoryListPage {
     $grid = New-Grid @('440', '*')
-    $grid.Margin = T 36 4 36 24
+    $grid.Margin = $GAP.PageBox
     $sv = New-Object System.Windows.Controls.ScrollViewer
     $sv.VerticalScrollBarVisibility = 'Auto'
     Set-Col $sv 1
@@ -2786,7 +2792,7 @@ function New-CategoryListPage {
 # Page of one category (the same page for all: Show-Category fills it)
 function New-CategoryPage {
     $grid = New-Grid @('300', '*')
-    $grid.Margin = T 36 4 36 24
+    $grid.Margin = $GAP.PageBox
 
     # Column 1: tiles of the category
     $cat.Tiles = New-Object System.Windows.Controls.ListBox
@@ -2812,11 +2818,11 @@ function New-CategoryPage {
     $card.Visibility = 'Collapsed'
     [void](Add-To $details $card)
     $txt = New-Text 'From the old automatic import (written below its marker line), so it cannot be edited here. Make it a normal tile to edit or move it: its images are copied to the category folders. Opening Import turns all of them into normal tiles.' $FS.Help (Res 'DimBrush') -Wrap
-    $txt.Margin = T 0 0 0 10
+    $txt.Margin = T 0 0 0 $GAP.Text
     [void](Add-To $card.Child $txt)
     $btnConvert = New-Button 'Make it a normal tile' 'AccentButton'
     $btnConvert.HorizontalAlignment = 'Left'
-    $btnConvert.Margin = T 0 0 0 10
+    $btnConvert.Margin = T 0 0 0 $GAP.Text
     [void](Add-To $card.Child $btnConvert)
     $btnConvert.Add_Click({
             $sel = $cat.Tiles.SelectedItem
@@ -2841,7 +2847,7 @@ function New-CategoryPage {
     $p.Width = 384; $p.Height = 216
     $p.CornerRadius = New-Object System.Windows.CornerRadius(8)
     $p.HorizontalAlignment = 'Left'
-    $p.Margin = T 0 4 0 10
+    $p.Margin = T 0 $GAP.Line 0 $GAP.Text
     $p.ClipToBounds = $true
     $pg = New-Object System.Windows.Controls.Grid
     $p.Child = $pg
@@ -2855,7 +2861,7 @@ function New-CategoryPage {
     [void]$canvas.Children.Add($cat.PreviewLogo)
     $cat.PreviewLabel = New-Text '' 14 (New-ColorBrush "$($values['TextColor'])")   # ui-exempt: preview of the launcher
     $cat.PreviewLabel.HorizontalAlignment = 'Left'; $cat.PreviewLabel.VerticalAlignment = 'Bottom'
-    $cat.PreviewLabel.Margin = T 12 0 0 10
+    $cat.PreviewLabel.Margin = T 12 0 0 10   # ui-exempt: preview of the launcher
     $cat.PreviewLabel.Effect = New-Object System.Windows.Media.Effects.DropShadowEffect -Property @{ BlurRadius = 6; ShadowDepth = 1; Opacity = 0.8 }
     # logo and label must not catch the drag (the preview tells them apart)
     $cat.PreviewLogo.IsHitTestVisible = $false; $cat.PreviewLabel.IsHitTestVisible = $false
@@ -2874,7 +2880,7 @@ function New-CategoryPage {
         $sl.VerticalAlignment = 'Center'
         $tb = New-Object System.Windows.Controls.TextBox
         $tb.Style = Res 'UnitBox'; $tb.Tag = [string][char]0xD7
-        $tb.Width = $FIELD.S; $tb.Margin = T 12 0 0 0; $tb.VerticalAlignment = 'Center'
+        $tb.Width = $FIELD.S; $tb.Margin = T $GAP.Group 0 0 0; $tb.VerticalAlignment = 'Center'
         $r = New-ActionIcon $GLYPH.Reset $tip
         Set-Col $tb 1
         foreach ($x in $sl, $tb) { [void]$g.Children.Add($x) }
@@ -3266,13 +3272,13 @@ function Update-FoundStatus([string]$extra = '') {
 function New-FoundEntry($it, [string]$in) {
     $li = New-Object System.Windows.Controls.ListBoxItem
     $li.Tag = $it
-    $li.Padding = T 8 6
+    $li.Padding = T $GAP.Control $GAP.Icon
     $g = New-Grid @('Auto', 'Auto', '*', 'Auto')
     $tick = New-Object System.Windows.Controls.CheckBox
     $tick.Style = Res 'Tick'
     $tick.IsHitTestVisible = $false
     $tick.VerticalAlignment = 'Center'
-    $tick.Margin = T 2 0 12 0
+    $tick.Margin = T 0 0 $GAP.Group 0
     $binding = New-Object System.Windows.Data.Binding('IsSelected')
     $binding.RelativeSource = New-Object System.Windows.Data.RelativeSource([System.Windows.Data.RelativeSourceMode]::FindAncestor, [System.Windows.Controls.ListBoxItem], 1)
     [void]$tick.SetBinding([System.Windows.Controls.Primitives.ToggleButton]::IsCheckedProperty, $binding)
@@ -3283,14 +3289,14 @@ function New-FoundEntry($it, [string]$in) {
         $b.CornerRadius = New-Object System.Windows.CornerRadius(4)
         $b.ClipToBounds = $true
         $b.Background = Res 'FieldBg'
-        $b.Margin = T 0 0 12 0
+        $b.Margin = T 0 0 $GAP.Group 0
         $img = New-Object System.Windows.Controls.Image
         if ($it.Hero -and (Test-Path -LiteralPath $it.Hero)) {
             $img.Stretch = 'UniformToFill'
             $img.Source = Get-Bitmap $it.Hero 192
         } else {
             $img.Stretch = 'Uniform'
-            $img.Margin = T 8 5 8 5
+            $img.Margin = T 8 5 8 5   # ui-exempt: drawn on the thumbnail
             $img.Source = Get-Bitmap $(if ($it.Logo) { $it.Logo } else { $it.Icon }) 96
         }
         $b.Child = $img
@@ -3307,8 +3313,8 @@ function New-FoundEntry($it, [string]$in) {
         $badge = New-Object System.Windows.Controls.Border
         $badge.Background = Res 'AccentSoftBrush'
         $badge.CornerRadius = New-Object System.Windows.CornerRadius(3)
-        $badge.Padding = T 5 0 5 1
-        $badge.Margin = T 8 0 0 0
+        $badge.Padding = $GAP.Chip
+        $badge.Margin = T $GAP.Control 0 0 0
         $badge.VerticalAlignment = 'Center'
         $badge.Child = New-Text 'NEW' $FS.Badge (Res 'AccentBrush') -Bold
         [void](Add-To $title $badge)
@@ -3322,7 +3328,7 @@ function New-FoundEntry($it, [string]$in) {
     if ($in) {
         $note = New-Text "in $in" $FS.Help (Res 'DimBrush')
         $note.VerticalAlignment = 'Center'
-        $note.Margin = T 12 0 4 0
+        $note.Margin = T $GAP.Group 0 $GAP.Line 0
         Set-Col $note 3
         [void]$g.Children.Add($note)
         $li.IsEnabled = $false
@@ -3460,25 +3466,25 @@ function New-FoundCard {
     $converted = Convert-OldImports
     if ($converted) {
         $note = New-Text "$converted games of the old automatic import are now normal tiles: you can edit and move them." $FS.Help (Res 'AccentBrush') -Wrap
-        $note.Margin = T 0 0 0 8
+        $note.Margin = T 0 0 0 $GAP.Control
         [void](Add-To $f $note)
     }
 
     # search again + status
     $head = New-Grid @('Auto', '*')
-    $head.Margin = T 0 2 0 10
+    $head.Margin = T 0 0 0 $GAP.Text
     $found.ScanButton = New-Button 'Search again'
     [void]$head.Children.Add($found.ScanButton)
     $found.Status = New-Help ''
     $found.Status.VerticalAlignment = 'Center'
-    $found.Status.Margin = T 12 0 0 0
+    $found.Status.Margin = T $GAP.Group 0 0 0
     Set-Col $found.Status 1
     [void]$head.Children.Add($found.Status)
     [void](Add-To $f $head)
 
     # filters: type, text, already added, covers
     $filters = New-Object System.Windows.Controls.WrapPanel
-    $filters.Margin = T 0 0 0 10
+    $filters.Margin = T 0 0 0 $GAP.Text
     foreach ($k in @(@('all', 'All'), @('game', 'Games'), @('app', 'Apps'))) {
         $rb = New-Object System.Windows.Controls.RadioButton
         $rb.Style = Res 'Segment'; $rb.Content = $k[1]; $rb.GroupName = 'found_kind'; $rb.Tag = $k[0]
@@ -3488,13 +3494,13 @@ function New-FoundCard {
     }
     $search = New-Object System.Windows.Controls.TextBox
     $search.Width = 200
-    $search.Margin = T 10 2 16 2
+    $search.Margin = T $GAP.Text 0 $GAP.Group 0; $search.VerticalAlignment = 'Center'
     $search.ToolTip = 'Filter by name or store'
     $search.Add_TextChanged({ param($s, $e) $found.Filter = $s.Text; Refresh-FoundList })
     [void]$filters.Children.Add($search)
     foreach ($o in @(@('ShowAdded', 'Show added'), @('Covers', 'Covers'))) {
         $cb = New-Object System.Windows.Controls.CheckBox
-        $cb.Content = $o[1]; $cb.Tag = $o[0]; $cb.Margin = T 0 4 16 4
+        $cb.Content = $o[1]; $cb.Tag = $o[0]; $cb.Margin = T 0 0 $GAP.Group 0; $cb.VerticalAlignment = 'Center'
         $cb.IsChecked = [bool]$found[$o[0]]
         $cb.Add_Click({ param($s, $e) $found[$s.Tag] = [bool]$s.IsChecked; Refresh-FoundList })
         [void]$filters.Children.Add($cb)
@@ -3506,7 +3512,7 @@ function New-FoundCard {
     $frame.BorderBrush = Res 'LineBrush'
     $frame.BorderThickness = T 1
     $frame.CornerRadius = New-Object System.Windows.CornerRadius(8)
-    $frame.Padding = T 4
+    $frame.Padding = T $GAP.Line
     $frame.Height = 440
     $grid = New-Object System.Windows.Controls.Grid
     $frame.Child = $grid
@@ -3529,7 +3535,7 @@ function New-FoundCard {
 
     # select all / none, where, add
     $bottom = New-Grid @('Auto', 'Auto', '*', 'Auto', 'Auto')
-    $bottom.Margin = T 0 10 0 6
+    $bottom.Margin = T 0 $GAP.Text 0 $GAP.Icon
     $all = New-Button 'Select all' 'LinkButton'
     $none = New-Button 'Select none' 'LinkButton'
     Set-Col $none 1
@@ -3538,7 +3544,7 @@ function New-FoundCard {
     $none.Add_Click({ $found.List.UnselectAll(); $found.Selected.Clear(); Update-FoundCount })
     $found.Target = New-Object System.Windows.Controls.ComboBox
     $found.Target.Width = 290
-    $found.Target.Margin = T 0 0 10 0
+    $found.Target.Margin = T 0 0 $GAP.Control 0
     $ci = New-Object System.Windows.Controls.ComboBoxItem
     $ci.Content = "By type: games to $($values['ImportCategory']), apps to $($values['AppsCategory'])"
     $ci.Tag = 'auto'
@@ -3647,7 +3653,7 @@ function Refresh-MissingList {
     foreach ($e in Get-CategoryEntries) { $names[$e.File] = $e.Name }
     foreach ($t in $tiles) {
         $row = New-Grid @('*', 'Auto', 'Auto')
-        $row.Margin = T 0 3
+        $row.Margin = T 0 0 0 $GAP.Line
         $texts = New-Panel
         $texts.VerticalAlignment = 'Center'
         $name = New-Text $t.Name $FS.Label
@@ -3692,7 +3698,7 @@ function New-MissingCard {
     $missingUi.List = New-Panel
     [void](Add-To $f $missingUi.List)
     $bottom = New-Panel 'Horizontal'
-    $bottom.Margin = T 0 10 0 6
+    $bottom.Margin = T 0 $GAP.Text 0 $GAP.Icon
     $all = New-Button 'Remove all'
     $all.Add_Click({ $list = @(Get-MissingList); if ($list.Count -and (Confirm-RemoveMissing $list.Count)) { Remove-MissingTiles $list } })
     [void](Add-To $bottom $all)
@@ -3879,17 +3885,17 @@ function New-NavItem([string]$id, [string]$title, [int]$glyph, [int]$level, [has
     if ($level -eq 0) {
         $gl = New-Glyph $glyph 15   # ui-exempt: menu chrome
         $gl.Width = 22
-        $gl.Margin = T 0 0 10 0
+        $gl.Margin = T 0 0 $GAP.Text 0
         [void]$g.Children.Add($gl)
-        $item.Padding = T 12 9
+        $item.Padding = $GAP.ListItem
     } else {
         $img = New-Object System.Windows.Controls.Image
         $img.Width = 16; $img.Height = 16
-        $img.Margin = T 0 0 10 0
+        $img.Margin = T 0 0 $GAP.Text 0
         $img.Source = Get-Bitmap $icon 40
         [void]$g.Children.Add($img)
         $tag.Icon = $img
-        $item.Padding = T 44 7 12 7
+        $item.Padding = T 44 7 12 7   # ui-exempt: menu chrome, the entries of a group
     }
     $t = New-Text $title $FS.Label
     $t.VerticalAlignment = 'Center'
@@ -3899,7 +3905,7 @@ function New-NavItem([string]$id, [string]$title, [int]$glyph, [int]$level, [has
     if ($null -ne $open) {
         $ch = New-Glyph $(if ($open) { $GLYPH.GroupOpen } else { $GLYPH.GroupClosed }) 9   # ui-exempt: menu chrome
         $ch.Foreground = Res 'DimBrush'
-        $ch.Margin = T 8 0 0 0
+        $ch.Margin = T $GAP.Control 0 0 0
         Set-Col $ch 2
         [void]$g.Children.Add($ch)
         $item.Add_PreviewMouseLeftButtonDown({ param($s, $e) Switch-NavGroup $s $e })
@@ -3909,7 +3915,7 @@ function New-NavItem([string]$id, [string]$title, [int]$glyph, [int]$level, [has
         $dot = New-Object System.Windows.Shapes.Ellipse
         $dot.Width = 8; $dot.Height = 8
         $dot.Fill = Res 'AccentBrush'
-        $dot.Margin = T 8 0 0 0
+        $dot.Margin = T $GAP.Control 0 0 0
         $dot.VerticalAlignment = 'Center'
         $dot.Visibility = 'Collapsed'
         Set-Col $dot 2
@@ -4125,13 +4131,13 @@ function New-UpdateCard {
         [void]$f.Children.Add((New-Row $row[1] '' $v $null))
     }
     $upd.Status = New-Text '' $FS.Label -Wrap
-    $upd.Status.Margin = T 0 12 0 6
+    $upd.Status.Margin = T 0 $GAP.Group 0 $GAP.Icon
     [void](Add-To $f $upd.Status)
     $notesBox = New-Object System.Windows.Controls.Border
     $notesBox.Background = Res 'FieldBg'
     $notesBox.CornerRadius = New-Object System.Windows.CornerRadius(8)
-    $notesBox.Padding = T 14 10
-    $notesBox.Margin = T 0 0 0 10
+    $notesBox.Padding = T $GAP.Group $GAP.Text
+    $notesBox.Margin = T 0 0 0 $GAP.Text
     $sv = New-Object System.Windows.Controls.ScrollViewer
     $sv.MaxHeight = 220
     $sv.VerticalScrollBarVisibility = 'Auto'
@@ -4141,11 +4147,11 @@ function New-UpdateCard {
     $upd.NotesBox = $notesBox
     [void](Add-To $f $notesBox)
     $bar = New-Panel 'Horizontal'
-    $bar.Margin = T 0 4 0 10
+    $bar.Margin = T 0 $GAP.Line 0 $GAP.Text
     $upd.Install = New-Button 'Download and install' 'AccentButton'
-    $upd.Install.Margin = T 0 0 8 0
+    $upd.Install.Margin = T 0 0 $GAP.Control 0
     $check = New-Button 'Check now'
-    $check.Margin = T 0 0 8 0
+    $check.Margin = T 0 0 $GAP.Control 0
     $upd.Page = New-Button 'Release page' 'LinkButton'
     $upd.Page.VerticalAlignment = 'Center'
     foreach ($b in $upd.Install, $check, $upd.Page) { [void](Add-To $bar $b) }
@@ -4163,30 +4169,30 @@ function New-InfoPage {
     $sv.VerticalScrollBarVisibility = 'Auto'
     $sp = New-Panel
     # as wide as the window: the rows stretch and their help text wraps less
-    $sp.Margin = T 36 4 36 24
+    $sp.Margin = $GAP.PageBox
     $sv.Content = $sp
     Set-ScrollRoom $sv $sp
 
     $card = New-Card '' ''
-    $card.Padding = T 24 20 24 20
     $head = New-Panel 'Horizontal'
+    $head.Margin = T 0 $GAP.Card 0 0
     [void](Add-To $head (New-Text 'Raintile' $FS.Title -Bold))
     if ($version) {
         $badge = New-Object System.Windows.Controls.Border
         $badge.Background = Res 'AccentSoftBrush'
         $badge.CornerRadius = New-Object System.Windows.CornerRadius(4)
-        $badge.Padding = T 8 2 8 2
-        $badge.Margin = T 12 4 0 0
+        $badge.Padding = $GAP.Chip
+        $badge.Margin = T $GAP.Group $GAP.Line 0 0
         $badge.VerticalAlignment = 'Center'
         $badge.Child = New-Text $version $FS.Badge (Res 'AccentBrush') -Bold
         [void](Add-To $head $badge)
     }
     [void](Add-To $card.Child $head)
     $about = New-Text $(if ($information) { $information } else { 'Full-screen tile launcher for Rainmeter.' }) $FS.Label (Res 'DimBrush') -Wrap
-    $about.Margin = T 0 8 0 0
+    $about.Margin = T 0 $GAP.Control 0 0
     [void](Add-To $card.Child $about)
     $more = New-Text 'Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, games and apps found on this PC. Every setting is described in the Guide, on GitHub.' $FS.Help (Res 'DimBrush') -Wrap
-    $more.Margin = T 0 6 0 0
+    $more.Margin = T 0 $GAP.Icon 0 $GAP.Group
     [void](Add-To $card.Child $more)
     [void](Add-To $sp $card)
 

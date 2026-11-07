@@ -241,16 +241,16 @@ namespace RaintileOptions
             {
                 var gl = NewGlyph(glyph, 15);   // ui-exempt: menu chrome
                 gl.Width = 22;
-                gl.Margin = T(0, 0, 10, 0);
+                gl.Margin = T(0, 0, Gap.Text, 0);
                 g.Children.Add(gl);
-                item.Padding = T(12, 9);
+                item.Padding = Gap.ListItem;
             }
             else
             {
-                var img = new Image { Width = 16, Height = 16, Margin = T(0, 0, 10, 0), Source = GetBitmap(icon, 40) };
+                var img = new Image { Width = 16, Height = 16, Margin = T(0, 0, Gap.Text, 0), Source = GetBitmap(icon, 40) };
                 g.Children.Add(img);
                 tag.Icon = img;
-                item.Padding = T(44, 7, 12, 7);
+                item.Padding = T(44, 7, 12, 7);   // ui-exempt: menu chrome, the entries of a group
             }
             var t = NewText(title, Fs.Label);
             t.VerticalAlignment = VerticalAlignment.Center;
@@ -270,7 +270,7 @@ namespace RaintileOptions
             {
                 var ch = NewGlyph(open.Value ? Glyph.GroupOpen : Glyph.GroupClosed, 9);   // ui-exempt: menu chrome
                 ch.Foreground = ResBrush("DimBrush");
-                ch.Margin = T(8, 0, 0, 0);
+                ch.Margin = T(Gap.Control, 0, 0, 0);
                 SetCol(ch, 2);
                 g.Children.Add(ch);
                 item.PreviewMouseLeftButtonDown += (s, e) => SwitchNavGroup(item, e);
@@ -280,7 +280,7 @@ namespace RaintileOptions
                 // the dot of the gear in the launcher, on the entry it leads to
                 var dot = new Ellipse
                 {
-                    Width = 8, Height = 8, Fill = ResBrush("AccentBrush"), Margin = T(8, 0, 0, 0),
+                    Width = 8, Height = 8, Fill = ResBrush("AccentBrush"), Margin = T(Gap.Control, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
                 };
                 SetCol(dot, 2);
@@ -632,9 +632,9 @@ namespace RaintileOptions
                 f.Children.Add(NewRow(row.Item2, "", row.Item1, null));
             }
             updStatus = NewText("", Fs.Label, null, false, true);
-            updStatus.Margin = T(0, 12, 0, 6);
+            updStatus.Margin = T(0, Gap.Group, 0, Gap.Icon);
             AddTo(f, updStatus);
-            updNotesBox = new Border { Background = ResBrush("FieldBg"), CornerRadius = new CornerRadius(8), Padding = T(14, 10), Margin = T(0, 0, 0, 10) };
+            updNotesBox = new Border { Background = ResBrush("FieldBg"), CornerRadius = new CornerRadius(8), Padding = T(Gap.Group, Gap.Text), Margin = T(0, 0, 0, Gap.Text) };
             var sv = new ScrollViewer { MaxHeight = 220, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
             updNotes = NewHelp("");
             sv.Content = updNotes;
@@ -643,7 +643,7 @@ namespace RaintileOptions
             // the two ways to install first (main one, then the installer), then the
             // check, the link last
             var bar = NewPanel(Orientation.Horizontal);
-            bar.Margin = T(0, 4, 0, 10);
+            bar.Margin = T(0, Gap.Line, 0, Gap.Text);
             updInstall = NewButton("Direct update", "AccentButton");
             updInstall.Margin = T(0, 0, Gap.Control, 0);
             updInstaller = NewButton("Rainmeter installer");
@@ -655,7 +655,7 @@ namespace RaintileOptions
             AddTo(bar, updInstall); AddTo(bar, updInstaller); AddTo(bar, updCheck); AddTo(bar, updPage);
             AddTo(f, bar);
             updHow = NewHelp("Direct update replaces the files of the skin folder and keeps a copy of them; Rainmeter installer opens the package with the skin installer of Rainmeter.");
-            updHow.Margin = T(0, 0, 0, 10);
+            updHow.Margin = T(0, 0, 0, Gap.Text);
             AddTo(f, updHow);
             updInstall.Click += (s, e) => InstallUpdate(true);
             updInstaller.Click += (s, e) => InstallUpdate(false);
@@ -673,14 +673,14 @@ namespace RaintileOptions
 
             var card = NewCard("", "");
             var head = NewPanel(Orientation.Horizontal);
-            head.Margin = T(0, 16, 0, 0);
+            head.Margin = T(0, Gap.Card, 0, 0);
             AddTo(head, NewText("Raintile", Fs.Title, null, true));
             if (version != "")
             {
                 var badge = new Border
                 {
-                    Background = ResBrush("AccentSoftBrush"), CornerRadius = new CornerRadius(4), Padding = T(8, 2, 8, 2),
-                    Margin = T(12, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+                    Background = ResBrush("AccentSoftBrush"), CornerRadius = new CornerRadius(4), Padding = Gap.Chip,
+                    Margin = T(Gap.Group, Gap.Line, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                     Child = NewText(version, Fs.Badge, ResBrush("AccentBrush"), true),
                 };
                 AddTo(head, badge);
@@ -690,7 +690,7 @@ namespace RaintileOptions
             about.Margin = T(0, Gap.Control, 0, 0);
             AddTo(CardPanel(card), about);
             var more = NewHelp("Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, games and apps found on this PC. Every setting is described in the Guide, on GitHub.");
-            more.Margin = T(0, 6, 0, 12);
+            more.Margin = T(0, Gap.Icon, 0, Gap.Group);
             AddTo(CardPanel(card), more);
             AddTo(sp, card);
 

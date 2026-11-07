@@ -256,7 +256,7 @@ The widget is read again when its file changes (refresh the skin).
 
 ### Widget gallery
 
-Options > Widgets > **Widget gallery** lists widgets made for Raintile: **Install** downloads one to the `Widgets` folder (and offers to add it as a tile to the category open last, or the Dashboard; drag it to another one afterwards), **Update** appears when a newer version is out, **Remove** sends it to the Recycle Bin. A widget can run programs like any Rainmeter skin: install only the ones you trust.
+Options > Widgets > **Widget gallery** lists widgets made for Raintile, grouped by where they fit (General, Games...): **Install** downloads one to the `Widgets` folder (and offers to add it as a tile to its category: e.g. Games for a games widget; General ones to the category open last, or the Dashboard), **Add as a tile** adds it to any category, picked from a menu (the suggested one first). With nightly builds (`UpdateChannel=Nightly`) the gallery is the list of the `nightly` branch, with the widgets not released yet; **Update** appears when a newer version is out, **Remove** sends it to the Recycle Bin. A widget can run programs like any Rainmeter skin: install only the ones you trust.
 
 The list is [`widgets/index.json`](../widgets/index.json) in this repository; the widgets themselves can be here (`widgets/<id>/`) or in their authors' repositories. To publish one, see [widgets/README.md](../widgets/README.md).
 

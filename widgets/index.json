@@ -7,6 +7,7 @@
       "author": "Raintile",
       "version": "1.0",
       "kind": "custom",
+      "category": "General",
       "description": "The time in big letters, with the day and the date. It fills the tile.",
       "base": "https://raw.githubusercontent.com/Derek3rd/raintile/main/widgets/BigClock",
       "files": ["BigClock.ini"],

@@ -16,7 +16,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Tags and filter bar](#tags-and-filter-bar)
 - [Play time](#play-time)
 - [Launching a tile](#launching-a-tile)
-- [Dashboard](#dashboard)
+- [Widgets and the Dashboard](#widgets-and-the-dashboard)
   - [Widgets](#widgets)
   - [Temperatures and fans](#temperatures-and-fans)
   - [Skins in a tile](#skins-in-a-tile)
@@ -197,20 +197,20 @@ On click the tile expands to full screen (with background and logo at full resol
 | `LaunchLogoSize` | `33%` | final logo size |
 | `LaunchFontSize` | `48` | centre text for tiles without a logo |
 
-## Dashboard
+## Widgets and the Dashboard
 
-A **Dashboard** is a category whose tiles are widgets that watch the PC: processor, graphics card, memory, disks, network, processes, temperatures. The default one (`Categories\Dashboard.ini`, added once to existing data too) is a 5 x 4 grid: CPU, GPU and temperatures of 2 x 2 cells, memory and processes of 1 x 2, network and disks.
+A **widget** is a tile that shows something instead of starting a game: processor, graphics card, memory, disks, network, processes, temperatures, a skin of yours. Any tile of any category can be a widget, next to the games: e.g. a clock among your apps.
 
-- In the Options window the Dashboard has a page of its own, apart from the categories: **Dashboard** turns it on and off (`Hidden=1` in its `[Category]`), names it and sets its grid; **Dashboard > Widgets** edits its widgets like the tiles of a category. *Create the Dashboard* brings the default one back if you deleted it.
-- Any category with `Type=Dashboard` in its `[Category]` section is a Dashboard; `Hidden=1` keeps any category out of the menu.
+The **Dashboard** (`Categories\Dashboard.ini`, added once to existing data too) is a normal category kept as an example: a 5 x 4 grid of system widgets, CPU, GPU and temperatures of 2 x 2 cells, memory and processes of 1 x 2, network and disks.
 
-- The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a Dashboard is on screen, every `DashInterval` ms (default 1000): with the Dashboard closed nothing is measured.
-- Widgets are left out of search, Favorites, Recent and the filters.
+- In the Options window it is among the categories like the others: name, icon, grid, **Show in the menu** (`Hidden=1` in its `[Category]` keeps any category out of the menu). Options > **Widgets** > *Add the example Dashboard* brings it back if you deleted it.
+- The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a category with widgets is on screen, every `DashInterval` ms (default 1000): with it closed nothing is measured.
+- Widgets are left out of search, Favorites, Recent and the filters. In a sorted category they are sorted like the other tiles (by name, by when they were added...); pin them to keep them first.
 - Clicking a widget runs its `Command=`, or by default opens what fits: Task Manager (CPU, GPU, RAM, processes), the disk in Explorer, network or system settings.
 
 ### Widgets
 
-A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options > Dashboard > Widgets pick **Widget** and **Widget option** in the tile editor. `Label=` is the title shown on the widget (by default the name of the kind), `Size=2x1` makes it larger (see [Tiles of more cells](#tiles-of-more-cells)).
+A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options > Categories > *the category* > *the tile* pick **Widget** and **Widget option**. `Label=` is the title shown on the widget (by default the name of the kind), `Size=2x1` makes it larger (see [Tiles of more cells](#tiles-of-more-cells)).
 
 | `Widget=` | Shows | `Param=` |
 | --- | --- | --- |
@@ -230,7 +230,7 @@ A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Optio
 
 Windows does not give temperatures to programs without a driver, so Raintile reads them from a sensor program that runs beside it:
 
-- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (free, open source; looked at first): download it, start it (it asks to run as administrator, to read the sensors) and keep it running: in its menu *Options* turn on *Start Minimized*, *Minimize To Tray*, *Run On Windows Startup* and **Remote Web Server > Run**. Raintile reads its sensors from that web server, on this PC only (`http://localhost:8085/data.json`; another port: `SensorPort`, Options > Dashboard); Windows may ask about the firewall: it is not needed for this. Older versions also publish them through WMI, which Raintile reads too.
+- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (free, open source; looked at first): download it, start it (it asks to run as administrator, to read the sensors) and keep it running: in its menu *Options* turn on *Start Minimized*, *Minimize To Tray*, *Run On Windows Startup* and **Remote Web Server > Run**. Raintile reads its sensors from that web server, on this PC only (`http://localhost:8085/data.json`; another port: `SensorPort`, Options > Widgets); Windows may ask about the firewall: it is not needed for this. Older versions also publish them through WMI, which Raintile reads too.
 - **[HWiNFO](https://www.hwinfo.com/)** (free), when LibreHardwareMonitor is not running: start it (sensors only is enough), open **Settings** and turn on **Shared Memory Support**. Its free version turns the shared memory off after 12 hours: start it again then.
 
 - Without `Param=`, `temps` shows the CPU and GPU temperatures it finds (package, die, hot spot, ...), `fans` the first fans.
@@ -239,7 +239,7 @@ Windows does not give temperatures to programs without a driver, so Raintile rea
 
 ### Skins in a tile
 
-`Widget=skin` with `Param=<config>\<file>.ini` loads a skin you already have in Rainmeter, places it over the tile while the Dashboard is open and unloads it when the launcher hides. The skin keeps its own size: pick one that fits the tile, or change the grid of the Dashboard (`NX`, `NY`).
+`Widget=skin` with `Param=<config>\<file>.ini` loads a skin you already have in Rainmeter, places it over the tile while its category is open and unloads it when the launcher hides. The skin keeps its own size: pick one that fits the tile, or change the grid of the category (`NX`, `NY`).
 
 ### Custom widgets
 
@@ -255,7 +255,7 @@ The widget is read again when its file changes (refresh the skin).
 
 ### Widget gallery
 
-Options > Dashboard > **Widget gallery** lists widgets made for Raintile: **Install** downloads one to the `Widgets` folder (and offers to add it to the Dashboard), **Update** appears when a newer version is out, **Remove** sends it to the Recycle Bin. A widget can run programs like any Rainmeter skin: install only the ones you trust.
+Options > Widgets > **Widget gallery** lists widgets made for Raintile: **Install** downloads one to the `Widgets` folder (and offers to add it as a tile to the category open last, or the Dashboard; drag it to another one afterwards), **Update** appears when a newer version is out, **Remove** sends it to the Recycle Bin. A widget can run programs like any Rainmeter skin: install only the ones you trust.
 
 The list is [`widgets/index.json`](../widgets/index.json) in this repository; the widgets themselves can be here (`widgets/<id>/`) or in their authors' repositories. To publish one, see [widgets/README.md](../widgets/README.md).
 
@@ -273,7 +273,6 @@ Order=1            ; position in the menu (default: alphabetical)
 NX=4               ; grid of this category (default: NX/NY from Settings.inc)
 NY=1
 IconSize=12%       ; logo size in this category's tiles (pixels or %)
-Type=              ; Dashboard = a category of widgets (see Dashboard)
 Hidden=            ; 1 = not in the menu (the file and its tiles stay)
 Sort=              ; keep the tiles in an order (see Sorting the tiles): name, name-desc, added, recent, played, playtime
 TileColor=         ; colour of its tiles without a Color= of their own
@@ -461,7 +460,7 @@ Settings.inc      your settings (every key, with its comments)
 State.inc         last category and scroll positions
 Categories\*.ini  your categories and tiles
 Images\           their icons, backgrounds and logos
-Widgets\          custom widgets (Dashboard), installed from the gallery or by hand
+Widgets\          custom widgets, installed from the gallery or by hand
 Favorites.txt     your favorite tiles
 Usage.txt         how many times and when each tile was launched (Recent)
 Seen.txt          games and apps already shown in the Import list
@@ -644,11 +643,11 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 | `SearchPlaceholder` | `Search` | text shown in the empty search bar |
 | `SearchHover` | `1` | `1` = only the magnifier until the mouse is over it, `0` = always open |
 
-### Dashboard
+### Widgets
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `DashInterval` | `1000` | ms between two updates of the [Dashboard](#dashboard) widgets (250-5000), only while one is on screen |
+| `DashInterval` | `1000` | ms between two updates of the [widgets](#widgets-and-the-dashboard) (250-5000), only while a category with widgets is on screen |
 | `SensorPort` | `8085` | port of LibreHardwareMonitor's web server (its Options > Remote Web Server), read for the [sensors](#temperatures-and-fans) |
 
 ### Clock
@@ -765,8 +764,8 @@ TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated whi
   Generated/GameUpdates.txt  Steam games with an update waiting
   Generated/DownloadOn.txt   while the launcher is open: the downloads for the helper to follow
   Generated/Downloads.txt    their progress, speed and time left (Helper.ps1)
-  Generated/DashOn.txt       present while a Dashboard is on screen: the helper collects its data
-  Generated/DashData.txt     the data of the Dashboard widgets (written by the helper)
+  Generated/DashOn.txt       present while a category with widgets is on screen: the helper collects their data
+  Generated/DashData.txt     the data of the widgets (written by the helper)
   Generated/DockEdge.txt     docked with DockEdge=1: the edge the helper watches to open it
   Generated/LauncherSize.txt size of the launcher, for the helper to find its window
   Generated/TileKeys.inc     the measures of the TileKeys mini-skin

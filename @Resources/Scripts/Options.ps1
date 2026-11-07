@@ -431,12 +431,12 @@ $schema = @(
                 ) }
         )
     }
-    @{ Id = 'dashboard'; Title = 'Dashboard'; Icon = 0xE9D2
-        Desc = 'Categories of widgets: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.'
+    @{ Id = 'dashboard'; Title = 'Widgets'; Icon = 0xE9D2
+        Desc = 'Tiles that show something instead of starting it, in any category: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.'
         Groups = @(
             @{ Dash = $true; Items = @() }
-            @{ Title = 'Widgets'; Help = 'The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.'; Items = @(
-                    (Num 'DashInterval' 'Update every' 250 5000 250 'ms' 'Only while a Dashboard is on screen.'),
+            @{ Title = 'Data'; Help = 'Any tile becomes a widget with Widget in the tile editor (Categories > the category > the tile), with its size and background.'; Items = @(
+                    (Num 'DashInterval' 'Update every' 250 5000 250 'ms' 'Only while a category with widgets is on screen.'),
                     (S 'info' '' 'Temperatures and fans' 'From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours).'),
                     (Num 'SensorPort' 'LibreHardwareMonitor port' 1 65535 1 '' 'The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).'),
                     (S 'info' '' 'Custom widgets' 'Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>.')

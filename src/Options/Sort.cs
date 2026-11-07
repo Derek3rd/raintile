@@ -55,6 +55,7 @@ namespace RaintileOptions
             sortLoading = false;
         }
 
+
         void SetPinned(bool on)
         {
             if (sortLoading || loading || currentFile == null) return;

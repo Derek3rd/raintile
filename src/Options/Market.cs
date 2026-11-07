@@ -1,7 +1,7 @@
-// Raintile Options: the widget gallery (Dashboard page). The list is
+// Raintile Options: the widget gallery (Widgets page). The list is
 // widgets/index.json of the Raintile repository; each entry points to files on
 // GitHub, in this repository or in its author's. Custom widgets are downloaded
-// to Widgets\<id>\ in the data folder (and can be added to a Dashboard); skins
+// to Widgets\<id>\ in the data folder (and can be added as a tile to a category); skins
 // (.rmskin) open with the Rainmeter installer.
 
 using System;
@@ -158,7 +158,7 @@ namespace RaintileOptions
                     update.Click += async (s, a) => await InstallWidget(e, false);
                     AddTo(bar, update);
                 }
-                var add = NewButton("Add to the Dashboard");
+                var add = NewButton("Add as a tile");
                 add.Margin = T(8, 0, 0, 0);
                 add.Click += (s, a) => AddWidgetTile(e);
                 AddTo(bar, add);
@@ -250,17 +250,19 @@ namespace RaintileOptions
             LoadMarket();
         }
 
-        // A tile with the widget, at the end of the first Dashboard (asked first)
+        // A tile with the widget, at the end of a category (asked first): the
+        // category open last, otherwise the example Dashboard, otherwise the first
         void AddWidgetTile(MarketEntry e)
         {
-            var dashboards = Core.GetCategoryFiles().Select(f => f.Name).Where(IsDashboard).ToList();
-            if (dashboards.Count == 0)
+            var files = Core.GetCategoryFiles().Select(f => f.Name).ToList();
+            if (files.Count == 0)
             {
-                ShowDialog("Raintile", "There is no Dashboard yet: create it with Create the Dashboard at the top of this page, then add the widget.");
+                ShowDialog("Raintile", "There are no categories yet: create one, then add the widget.");
                 return;
             }
-            string file = dashboards[0];
-            var r = ShowDialog("Raintile", "Add " + e.Name + " to the Dashboard (" + Path.GetFileNameWithoutExtension(file) + ")?", new[] { "Add", "Not now" });
+            string file = currentFile != null && files.Contains(currentFile) ? currentFile
+                : files.FirstOrDefault(f => string.Equals(f, "Dashboard.ini", StringComparison.OrdinalIgnoreCase)) ?? files[0];
+            var r = ShowDialog("Raintile", "Add " + e.Name + " to " + GetCategoryName(file) + "? You can drag it to another category afterwards.", new[] { "Add", "Not now" });
             if (r.Button != "Add") return;
             var m = GetModel(file);
             string name = Core.GetTileName(e.Name);
@@ -273,7 +275,7 @@ namespace RaintileOptions
             changedFiles.Remove(file);
             needsRefresh = true;
             UpdateDirty();
-            marketStatus.Text = e.Name + " is in the Dashboard: save and refresh to see it.";
+            marketStatus.Text = e.Name + " is in " + GetCategoryName(file) + ": save and refresh to see it.";
         }
     }
 }

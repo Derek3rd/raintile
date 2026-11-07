@@ -75,7 +75,7 @@ namespace RaintileOptions
         readonly Dictionary<string, TextBox> allFields = new Dictionary<string, TextBox>();
         BitmapSource placeholderBg, placeholderLogo;
 
-        // Widgets of a Dashboard: kind, label in the list, what Param= means
+        // Widgets: kind, label in the list, what Param= means
         static readonly string[][] WIDGET_KINDS =
         {
             new[] { "", "(none: a normal tile)", "" },
@@ -88,13 +88,14 @@ namespace RaintileOptions
             new[] { "system", "System", "" },
             new[] { "temps", "Temperatures (sensors)", "Sensor readings (LibreHardwareMonitor or HWiNFO) separated by ;, with temp:, load:, clock:, power:, fan: or volt: before one to pick that kind (load:GPU Core); (e.g. CPU Package; GPU Temperature; Total CPU Usage), =Name to rename one (GPU Hot Spot=GPU hot). Temperatures first, then any reading with that label. Empty: CPU, GPU and drives." },
             new[] { "fans", "Fans (sensors)", "Like Temperatures, for fans. Empty: the first fans." },
-            new[] { "skin", "An installed skin", "<config>\\<file>.ini of a skin in Rainmeter's Skins folder, e.g. illustro\\Clock\\Clock.ini. It is loaded over the tile while the Dashboard is shown." },
+            new[] { "skin", "An installed skin", "<config>\\<file>.ini of a skin in Rainmeter's Skins folder, e.g. illustro\\Clock\\Clock.ini. It is loaded over the tile while its category is shown." },
             new[] { "custom", "Custom widget", "The name of a widget in the Widgets folder of your data (Widgets\\<name>.ini or Widgets\\<name>\\<name>.ini)." },
         };
 
-        bool IsDashboard(string file)
+        // A widget (Widget=): a tile of any category that shows data or a skin
+        static bool IsWidget(IniSection s)
         {
-            return file != null && string.Equals(Core.GetKey(Core.GetCategorySection(GetModel(file)), "Type").Trim(), "Dashboard", StringComparison.OrdinalIgnoreCase);
+            return s != null && Core.GetKey(s, "Widget").Trim() != "";
         }
 
         void UpdateWidgetHint()
@@ -108,6 +109,7 @@ namespace RaintileOptions
         Button colorSwatch;
         WrapPanel tagSuggestions;
         readonly Dictionary<string, TextBox> catFields = new Dictionary<string, TextBox>();
+        CheckBox catShown;
         readonly Dictionary<string, TextBox> tileFields = new Dictionary<string, TextBox>();
 
         CategoryModel GetModel(string file)
@@ -348,13 +350,11 @@ namespace RaintileOptions
         }
 
         // Categories in menu order, with their counts
-        // (the Dashboards have a page of their own: left out unless asked)
-        List<CategoryEntry> GetCategoryEntries(bool withDashboards = false)
+        List<CategoryEntry> GetCategoryEntries(bool withDashboards = true)
         {
             var list = new List<CategoryEntry>();
             foreach (var f in Core.GetCategoryFiles())
             {
-                if (!withDashboards && IsDashboard(f.Name)) continue;
                 var m = GetModel(f.Name);
                 var c = Core.GetCategorySection(m);
                 string b = Path.GetFileNameWithoutExtension(f.Name);
@@ -623,6 +623,7 @@ namespace RaintileOptions
             catCard.IsEnabled = file != null;
             var c = file != null ? Core.GetCategorySection(GetModel(file)) : null;
             catFields["Name"].Text = c != null ? Core.GetKey(c, "Name") : "";
+            catShown.IsChecked = c == null || Core.GetKey(c, "Hidden").Trim() != "1";
             SetThumb(catIcon, c != null ? Core.GetCategoryIcon(GetListBase(), c) : null);
             catIconHint.Text = file != null ? "Default: Images\\" + GetListBase() + "\\icon.png" : "";
             loading = false;
@@ -890,7 +891,7 @@ namespace RaintileOptions
         {
             string file = currentFile;
             if (placementHint == null) return;
-            placementRow.Visibility = file != null && !IsDashboard(file) ? Visibility.Visible : Visibility.Collapsed;
+            placementRow.Visibility = file != null ? Visibility.Visible : Visibility.Collapsed;
             if (autoArtRow != null)
             {
                 autoArtRow.Visibility = placementRow.Visibility;
@@ -1212,8 +1213,8 @@ namespace RaintileOptions
             ReadLogoPlace(s);
             logoPlace.Box = currentFile != null ? GetLogoBox(currentFile) : 96.0;
             ReadInfoPlace(s);
-            // the line is not drawn with TileInfo=Never, nor on the widgets of a Dashboard
-            bool info = currentFile != null && !IsDashboard(currentFile) && !V("TileInfo").Equals("never", StringComparison.OrdinalIgnoreCase);
+            // the line is not drawn with TileInfo=Never, nor on widgets
+            bool info = currentFile != null && !IsWidget(all ? null : s) && !V("TileInfo").Equals("never", StringComparison.OrdinalIgnoreCase);
             previewInfo.Visibility = info ? Visibility.Visible : Visibility.Collapsed;
             infoRow.Visibility = info ? Visibility.Visible : Visibility.Collapsed;
             UpdateFraming();
@@ -1300,13 +1301,12 @@ namespace RaintileOptions
             UpdateTagSuggestions();
             ShowPinned(s);
             tileKeyButton.Content = Schema.FormatHotKey(s != null ? Core.GetKey(s, "HotKey") : "");
-            bool dashboard = IsDashboard(currentFile);
-            widgetRow.Visibility = dashboard ? Visibility.Visible : Visibility.Collapsed;
+            // every tile can be a widget
+            widgetRow.Visibility = Visibility.Visible;
             string kind = s != null ? Core.GetKey(s, "Widget").Trim().ToLowerInvariant() : "";
             widgetKind.SelectedItem = widgetKind.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == kind) ?? widgetKind.Items[0];
             widgetParam.Text = s != null ? Core.GetKey(s, "Param") : "";
             UpdateWidgetHint();
-            if (!dashboard) widgetParamRow.Visibility = Visibility.Collapsed;
             var size = Regex.Match(s != null ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
             int sc = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[1].Value))) : 1;
             int sr = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[2].Value))) : 1;
@@ -1316,8 +1316,8 @@ namespace RaintileOptions
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
             tileNote.Visibility = tileNote.Text != "" ? Visibility.Visible : Visibility.Collapsed;
-            // a Dashboard has widgets: no backgrounds or logos to place
-            bool dash = IsDashboard(currentFile);
+            // a widget: no background framing or logo to place
+            bool dash = !all && IsWidget(s);
             frameRow.Visibility = logoRow.Visibility = dash ? Visibility.Collapsed : Visibility.Visible;
             loading = false;
             UpdateTilePreview();
@@ -1553,7 +1553,7 @@ namespace RaintileOptions
 
         // A tile of the strip dropped on another category of the menu moves there
         // with its images (both category files are saved at once). Not for imported
-        // tiles, the Dashboard and its widgets.
+        // tiles.
         void EnableTileDropOnNav()
         {
             ListBoxItem marked = null;
@@ -1561,10 +1561,10 @@ namespace RaintileOptions
             Func<DragEventArgs, string> target = e =>
             {
                 var tile = e.Data.GetData("RaintileItem") as ListBoxItem;
-                if (tile == null || !tilesList.Items.Contains(tile) || currentFile == null || IsDashboard(currentFile)) return null;
+                if (tile == null || !tilesList.Items.Contains(tile) || currentFile == null) return null;
                 var over = ItemAt(nav, e.OriginalSource as DependencyObject);
                 var tag = over != null ? over.Tag as NavTag : null;
-                if (tag == null || tag.Type != "category" || tag.File == currentFile || IsDashboard(tag.File)) return null;
+                if (tag == null || tag.Type != "category" || tag.File == currentFile) return null;
                 return tag.File;
             };
             nav.AllowDrop = true;
@@ -1664,6 +1664,16 @@ namespace RaintileOptions
             var f = CardPanel(catCard);
             catFields["Name"] = new TextBox();
             AddTo(f, NewFormRow("Name", catFields["Name"], "Text shown in the menu."));
+            // Hidden=1: kept with its tiles, but not in the launcher's menu
+            catShown = new CheckBox { Content = "Show in the menu", VerticalAlignment = VerticalAlignment.Center };
+            AddTo(f, NewFormRow("In the launcher", catShown, "Off: the category stays in its file with its tiles, but is not in the launcher (and its widgets measure nothing)."));
+            catShown.Click += (s, e) =>
+            {
+                string file = GetListFile();
+                if (file == null) return;
+                Core.SetKey(Core.GetCategorySection(GetModel(file)), "Hidden", catShown.IsChecked == true ? "" : "1");
+                SetChanged(file);
+            };
             catIcon = NewThumb(FieldHeight);
             var btnIcon = NewButton("Choose...");
             var btnIconDel = NewClearButton("Remove the icon");
@@ -2187,10 +2197,10 @@ namespace RaintileOptions
             SetCol(btnCmd, 1);
             cmdRow.Children.Add(btnCmd);
             AddTo(f, NewFormRow("Command", cmdRow, "A program, a .lnk/.url shortcut, a URL (also steam://...), a folder or a Rainmeter bang."));
-            // widgets: only in a Dashboard
+            // widgets: any tile, in any category
             widgetKind = new ComboBox();
             foreach (var k in WIDGET_KINDS) widgetKind.Items.Add(new ComboBoxItem { Content = k[1], Tag = k[0] });
-            widgetRow = NewFormRow("Widget", widgetKind, "What the tile shows in the Dashboard. A click opens its Command, or the tool that fits.");
+            widgetRow = NewFormRow("Widget", widgetKind, "What the tile shows instead of images. A click opens its Command, or the tool that fits.");
             AddTo(f, widgetRow);
             widgetParam = new TextBox();
             widgetHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);

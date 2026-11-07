@@ -568,8 +568,7 @@ local function loadCategory(file)
 	local catLabel = trim(catKeys.name or '')
 	if catLabel ~= '' then c.label = catLabel end
 	c.order = tonumber(catKeys.order or '') or math.huge
-	c.dashboard = trim(catKeys.type or ''):lower() == 'dashboard'
-	-- Hidden=1: kept in the file but not in the menu (e.g. the Dashboard turned off)
+	-- Hidden=1: kept in the file but not in the menu
 	c.hidden = trim(catKeys.hidden or '') == '1'
 	-- Sort=: the order of its tiles (name, name-desc, added, recent, played,
 	-- playtime), worked out by the launcher; empty = the order of the file
@@ -641,7 +640,13 @@ local function loadCategory(file)
 			t.pinned = trim(k.pinned or '') == '1' or nil
 			if t.pinned then c.anyPinned = true end
 			t.hotkey = trim(k.hotkey or '') -- e.g. CTRL ALT 1
-			if c.dashboard and trim(k.widget or '') ~= '' then
+			-- Highlight=0: no highlight under the mouse (a custom widget that
+			-- draws its own, e.g. with parts of its own to click)
+			t.noHighlight = trim(k.highlight or '') == '0' or nil
+			-- a widget (Widget=): a tile of any category that shows data or a
+			-- skin instead of images; c.widgets: the category has some
+			if trim(k.widget or '') ~= '' then
+				c.widgets = true
 				local param = trim(k.param or '')
 				t.widget = { kind = trim(k.widget):lower(), param = param, parts = { Title = true, Value = true },
 					title = label ~= '' and label or nil }
@@ -987,7 +992,7 @@ end
 function M.sortCategories(dynamicOnly)
 	for _, c in ipairs(cats) do
 		local wanted = dynamicOnly and M.DYNAMIC_SORTS[c.sort] or not dynamicOnly and (c.sort or c.anyPinned)
-		if wanted and not c.virtual and not c.dashboard then
+		if wanted and not c.virtual then
 			M.sortTiles(c)
 		end
 	end
@@ -1051,10 +1056,14 @@ end
 local function fillVirtual()
 	local byId, all = {}, {}
 	for _, c in ipairs(cats) do
-		if not c.virtual and not c.dashboard then
+		if not c.virtual then
+			-- (widgets are not launched like the other tiles: not in Favorites,
+			-- Recent, Not played yet)
 			for _, t in ipairs(c.tiles) do
-				byId[tileId(t)] = t
-				all[#all + 1] = t
+				if not t.widget then
+					byId[tileId(t)] = t
+					all[#all + 1] = t
+				end
 			end
 		end
 	end
@@ -1131,12 +1140,13 @@ local function loadCategories(files)
 	if V.FilterBar then
 		local stores, tags, storeList, tagList = {}, {}, {}, {}
 		for _, c in ipairs(cats) do
-			for _, t in ipairs((c.virtual or c.dashboard) and {} or c.tiles) do
-				if t.store and not stores[t.store] then
+			for _, t in ipairs(c.virtual and {} or c.tiles) do
+				-- (widgets are not in the search results the bar filters)
+				if t.store and not t.widget and not stores[t.store] then
 					stores[t.store] = true
 					storeList[#storeList + 1] = t.store
 				end
-				for _, tag in ipairs(t.tags or {}) do
+				for _, tag in ipairs(t.widget and {} or t.tags or {}) do
 					if not tags[tag:lower()] then
 						tags[tag:lower()] = tag
 						tagList[#tagList + 1] = tag:lower()
@@ -1164,10 +1174,10 @@ local function loadCategories(files)
 			end
 		end
 	end
-	-- Dashboard widgets: their meters are numbered in this order
+	-- Widgets, of every category: their meters are numbered in this order
 	widgets = {}
 	for _, c in ipairs(cats) do
-		if c.dashboard then
+		if c.widgets and not c.virtual then
 			for _, t in ipairs(c.tiles) do
 				if t.widget then
 					widgets[#widgets + 1] = t
@@ -2132,13 +2142,14 @@ local function fillSlots()
 	end
 end
 
--- Dashboard widgets -------------------------------------------------------------
--- A category with Type=Dashboard holds widgets: tiles with Widget= (cpu, gpu,
--- ram, disk, network, processes, system, temps, fans) and Param=. Their
--- meters (W<i>Title, Value, Sub, Bar, Graph, List) are written in Grid.inc and
--- placed over the tile's slot. The data comes from the helper (Helper.ps1),
--- only while a Dashboard is shown: Generated\DashOn.txt asks for it, and
--- DashTick() reads Generated\DashData.txt.
+-- Widgets ------------------------------------------------------------------------
+-- Tiles of any category with Widget= (cpu, gpu, ram, disk, network, processes,
+-- system, temps, fans, skin, custom) and Param= (the Dashboard of the skin is
+-- an example category of them). Their meters (W<i>Title, Value, Sub, Bar,
+-- Graph, List) are written in Grid.inc and placed over the tile's slot. The
+-- data comes from the helper (Helper.ps1), only while a category with widgets
+-- is shown: Generated\DashOn.txt asks for it, and DashTick() reads
+-- Generated\DashData.txt.
 local dash = { data = nil, hist = { cpu = {}, gpu = {}, ram = {}, down = {}, up = {} }, on = false, shown = {}, barCount = {},
 	skinsWanted = {}, skinsActive = {}, customShown = {} }
 D.DASH_HISTORY = 60 -- samples kept for the graphs
@@ -2628,10 +2639,10 @@ function D.fillWidget(t)
 	end
 end
 
--- The active category is a Dashboard on screen: the helper is asked for the
--- data (Generated\DashOn.txt: "<interval>|<processes>|<sensors>")
+-- The active category has widgets and is on screen: the helper is asked
+-- for the data (Generated\DashOn.txt: "<interval>|<processes>|<sensors>")
 function D.dashActive()
-	return ready and visible and not searchCat and cats[active] ~= nil and cats[active].dashboard == true
+	return ready and visible and not searchCat and cats[active] ~= nil and cats[active].widgets == true
 end
 
 -- The widgets of the Dashboard on screen, from dash.data
@@ -3040,7 +3051,8 @@ local function placeSlots()
 end
 
 local function placeHover()
-	if not V.TileHover or hover.a <= 0 or hover.idx == 0 then
+	local ht = hover.idx ~= 0 and cur().tiles[hover.idx]
+	if not V.TileHover or hover.a <= 0 or hover.idx == 0 or (ht and ht.noHighlight) then
 		show('TileHover', false)
 		return
 	end
@@ -4276,11 +4288,11 @@ local function setPointed(t)
 	if t then
 		-- & would underline the next letter in a menu
 		items[#items + 1] = { 'Edit ' .. t.name:gsub('&', '&&') .. '...', 'edit' }
-		if V.ShowFavorites and t.file and t.file ~= '' then
+		if V.ShowFavorites and t.file and t.file ~= '' and not t.widget then
 			items[#items + 1] = { favorites.set[tileId(t)] and 'Remove from Favorites' or 'Add to Favorites', 'favorite' }
 		end
 		local home = t.file and t.file ~= '' and M.catOf(t)
-		if home and not home.dashboard then
+		if home then
 			items[#items + 1] = { t.pinned and 'Unpin' or 'Pin to the start', 'pin' }
 		end
 		local path, args = commandTarget(t.command)
@@ -4356,7 +4368,7 @@ end
 
 function M.togglePin(t)
 	local c = M.catOf(t)
-	if not c or c.dashboard or not M.writeTileKey(t.file, t.name, 'Pinned', t.pinned and '' or '1') then return end
+	if not c or not M.writeTileKey(t.file, t.name, 'Pinned', t.pinned and '' or '1') then return end
 	t.pinned = not t.pinned or nil
 	c.anyPinned = nil
 	for _, x in ipairs(c.tiles) do if x.pinned then c.anyPinned = true end end
@@ -5111,10 +5123,11 @@ local function runSearch(text)
 
 	local results = {}
 	for _, c in ipairs(cats) do
-		for _, t in ipairs((c.virtual or c.dashboard) and {} or c.tiles) do
+		for _, t in ipairs(c.virtual and {} or c.tiles) do
+			-- (widgets are not launched like the other tiles: not searched)
 			local hay = (t.name .. ' ' .. (t.label or '') .. ' ' .. t.catLabel .. ' ' .. (t.store or '')
 				.. ' #' .. table.concat(t.tags or {}, ' #')):lower()
-			local ok = true
+			local ok = not t.widget
 			for _, w in ipairs(words) do
 				if not hay:find(w, 1, true) then ok = false break end
 			end

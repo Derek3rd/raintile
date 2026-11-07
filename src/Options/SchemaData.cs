@@ -222,14 +222,14 @@ namespace RaintileOptions
                     new Item { Kind = "info", Key = "", Label = "LT / RT", Help = "Filter chips of the search results" },
                 } },
             } },
-            new Page { Id = "dashboard", Title = "Dashboard", Icon = 0xE9D2, Desc = "Categories of widgets: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>
+            new Page { Id = "dashboard", Title = "Widgets", Icon = 0xE9D2, Desc = "Tiles that show something instead of starting it, in any category: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>
             {
                 new Group { Title = null, Help = null, Dash = true, Items = new List<Item>
                 {
                 } },
-                new Group { Title = "Widgets", Help = "The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.", Items = new List<Item>
+                new Group { Title = "Data", Help = "Any tile becomes a widget with Widget in the tile editor (Categories > the category > the tile), with its size and background.", Items = new List<Item>
                 {
-                    new Item { Kind = "int", Key = "DashInterval", Label = "Update every", Help = "Only while a Dashboard is on screen.", Min = 250.0, Max = 5000.0, Step = 250.0, Unit = "ms" },
+                    new Item { Kind = "int", Key = "DashInterval", Label = "Update every", Help = "Only while a category with widgets is on screen.", Min = 250.0, Max = 5000.0, Step = 250.0, Unit = "ms" },
                     new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours)." },
                     new Item { Kind = "int", Key = "SensorPort", Label = "LibreHardwareMonitor port", Help = "The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).", Min = 1.0, Max = 65535.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "info", Key = "", Label = "Custom widgets", Help = "Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>." },

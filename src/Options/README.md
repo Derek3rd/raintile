@@ -31,3 +31,5 @@ repository) and as the library of `TileAction.ps1`.
 | `Categories.cs` | Categories page, tiles of a category, framing and logo editor |
 | `Import.cs` | games and apps found, tiles of games no longer installed |
 | `Save.cs` | saving, Save and refresh, backup and restore |
+| `Gamepad.cs` | the window with a controller (XInput): moving between controls, pressing, pages |
+| `Osk.cs` | on-screen keyboard for text fields, for the controller |

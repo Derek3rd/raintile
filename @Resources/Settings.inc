@@ -234,6 +234,10 @@ GamepadRepeatRate=110
 ; on it, A types, X deletes, Start keeps the results, B closes. LT/RT pick
 ; the filter chips of the results.
 GamepadSearch=Y
+; Button that opens the Options window, as the gear (RS = right stick click).
+; It does nothing on a button of GamepadSearch or GamepadToggle; on X, LT or
+; RT it takes their place. Empty = no button.
+GamepadOptions=RS
 
 ; --- Search ---------------------------------------------------------------------
 ; Bar at the top left, after the clock and the Favorites / Recent buttons (or

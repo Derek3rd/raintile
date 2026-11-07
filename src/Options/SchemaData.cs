@@ -220,6 +220,7 @@ namespace RaintileOptions
                     new Item { Kind = "info", Key = "", Label = "LB / RB", Help = "Previous / next category" },
                     new Item { Kind = "pad", Key = "GamepadSearch", Label = "Search with the on-screen keyboard", Help = "D-pad/stick move on it, A types, X deletes, Start keeps the results, B closes." },
                     new Item { Kind = "info", Key = "", Label = "LT / RT", Help = "Filter chips of the search results" },
+                    new Item { Kind = "pad", Key = "GamepadOptions", Label = "Open these options", Help = "As the gear. RS is the right stick click. Not on a button of the search or of Open / close." },
                 } },
             } },
             new Page { Id = "dashboard", Title = "Widgets", Icon = 0xE9D2, Desc = "Tiles that show something instead of starting it, in any category: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>
@@ -363,6 +364,7 @@ namespace RaintileOptions
             { "FrameRate", "Auto" },
             { "Gamepad", "1" },
             { "GamepadDeadZone", "12000" },
+            { "GamepadOptions", "RS" },
             { "GamepadRepeatDelay", "350" },
             { "GamepadRepeatRate", "110" },
             { "GamepadSearch", "Y" },

@@ -11,7 +11,7 @@
 #   GamepadSearch (Y)             search with the on-screen keyboard
 #   X / Start                     on-screen keyboard: delete / done
 #   LT / RT                       filter chips of the search results
-#   R3 (right stick click)        the Options window
+#   GamepadOptions (RS)           the Options window
 # While the launcher is hidden, commands other than open/close are ignored by
 # the skin.
 #
@@ -43,6 +43,7 @@ param(
     [int]$RepeatDelay = 350,
     [int]$RepeatRate = 110,
     [string]$SearchButton = 'Y',
+    [string]$OptionsButton = 'RS',
     [int]$Track = 1,
     [int]$Dash = 1,
     [string]$Generated = '',
@@ -643,7 +644,7 @@ public class RaintilePad
 
     readonly string config;
     readonly int toggleMask, deadZone, repeatDelay, repeatRate;
-    public int SearchMask = Y;
+    public int SearchMask = Y, OptionsMask = RS;
     int previous, previousForRelease;
     bool toggleHeld, toggleUsed;
     readonly long[] nextRepeat = new long[4];
@@ -717,12 +718,15 @@ public class RaintilePad
         if ((pressed & LB) != 0) bangs.Add(Call("NextCategory(-1)"));
         if ((pressed & RB) != 0) bangs.Add(Call("NextCategory(1)"));
         if (SearchMask != 0 && (pressed & SearchMask) != 0) bangs.Add(Call("PadSearch()"));
-        if ((pressed & X) != 0 && (SearchMask & X) == 0) bangs.Add(Call("PadX()"));
-        if ((pressed & LT) != 0 && (SearchMask & LT) == 0) bangs.Add(Call("PadChip(-1)"));
-        if ((pressed & RT) != 0 && (SearchMask & RT) == 0) bangs.Add(Call("PadChip(1)"));
-        // R3 (right stick click): the Options window, unless the search or
-        // the open/close combination use it
-        if ((pressed & RS) != 0 && ((SearchMask | toggleMask) & RS) == 0) bangs.Add(Call("PadOptions()"));
+        // the Options window: not on a button of the search or of the
+        // open/close combination
+        int options = OptionsMask & ~SearchMask & ~toggleMask;
+        if (options != 0 && (pressed & options) != 0) bangs.Add(Call("PadOptions()"));
+        // the search and Options buttons take the place of X, LT and RT
+        int chosen = SearchMask | options;
+        if ((pressed & X) != 0 && (chosen & X) == 0) bangs.Add(Call("PadX()"));
+        if ((pressed & LT) != 0 && (chosen & LT) == 0) bangs.Add(Call("PadChip(-1)"));
+        if ((pressed & RT) != 0 && (chosen & RT) == 0) bangs.Add(Call("PadChip(1)"));
         return bangs;
     }
 
@@ -1611,6 +1615,7 @@ $pad = New-Object RaintilePad($Config, [RaintilePad]::ParseButtons($Toggle), $De
 $pad.PadEnabled = [bool]$Gamepad
 $pad.AutoHide = [bool]$AutoHide
 $pad.SearchMask = [RaintilePad]::ParseButtons($SearchButton)
+$pad.OptionsMask = [RaintilePad]::ParseButtons($OptionsButton)
 $pad.TrackEnabled = [bool]$Track -and $Generated -and $Data
 if ($Generated) {
     $pad.DashFlag = Join-Path $Generated 'DashOn.txt'

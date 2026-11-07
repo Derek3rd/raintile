@@ -219,7 +219,7 @@ FadeDuration=0
 
 ; --- Gamepad (XInput: Xbox and compatible controllers) --------------------------
 ; D-pad/left stick = move, A = launch, B = back/close,
-; LB/RB = previous/next category, R3 (RS) = Options, GamepadToggle = open/close.
+; LB/RB = previous/next category, GamepadToggle = open/close.
 ; 1 = on (background helper), 0 = off
 Gamepad=1
 ; Buttons to hold together to open/close the launcher
@@ -234,6 +234,10 @@ GamepadRepeatRate=110
 ; on it, A types, X deletes, Start keeps the results, B closes. LT/RT pick
 ; the filter chips of the results.
 GamepadSearch=Y
+; Button that opens the Options window, as the gear (RS = right stick click).
+; It does nothing on a button of GamepadSearch or GamepadToggle; on X, LT or
+; RT it takes their place. Empty = no button.
+GamepadOptions=RS
 
 ; --- Search ---------------------------------------------------------------------
 ; Bar at the top left, after the clock and the Favorites / Recent buttons (or

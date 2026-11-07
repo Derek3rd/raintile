@@ -428,7 +428,7 @@ $schema = @(
                     (S 'info' '' 'LB / RB' 'Previous / next category'),
                     (S 'pad' 'GamepadSearch' 'Search with the on-screen keyboard' 'D-pad/stick move on it, A types, X deletes, Start keeps the results, B closes.'),
                     (S 'info' '' 'LT / RT' 'Filter chips of the search results'),
-                    (S 'info' '' 'R3 (right stick click)' 'Open these options, as the gear')
+                    (S 'pad' 'GamepadOptions' 'Open these options' 'As the gear. RS is the right stick click. Not on a button of the search or of Open / close.')
                 ) }
         )
     }
@@ -520,7 +520,7 @@ $defaults = @{
     MenuMode = 'IconText'; MenuH = '44'; MenuIconSize = '24'; MenuIconGap = '8'; MenuItemPad = '16'; MenuGap = '6'
     MenuRadius = '22'; MenuIconDimAlpha = '150'
     ShowFavorites = '1'; ShowRecent = '1'; RecentOrder = 'Recent'; RecentCount = '12'; ShowUnplayed = '1'; UnplayedCount = '24'
-    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; DownloadInfo = 'percent speed eta size schedule'; DownloadStyle = 'Bar'; DownloadColor1 = '0,210,180,255'; DownloadColor2 = '120,90,255,255'; UpdateGlowTime = '3'; GamepadSearch = 'Y'; DashInterval = '1000'; SensorPort = '8085'
+    ShowPower = '1'; TrackPlaytime = '1'; GameUpdates = '1'; DownloadInfo = 'percent speed eta size schedule'; DownloadStyle = 'Bar'; DownloadColor1 = '0,210,180,255'; DownloadColor2 = '120,90,255,255'; UpdateGlowTime = '3'; GamepadSearch = 'Y'; GamepadOptions = 'RS'; DashInterval = '1000'; SensorPort = '8085'
     FilterBar = '1'; FilterStores = '1'; FilterH = '30'; FilterGap = '6'; FilterPad = '12'; FilterFontSize = '10'
     TileInfo = 'Hover'; InfoFontSize = '10'
     OpenHotKey = 'CTRL ALT G'; CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'; CloseSize = '14'

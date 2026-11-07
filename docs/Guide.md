@@ -112,7 +112,7 @@ Xbox and compatible controllers (XInput):
 | `LB` / `RB` | previous / next category |
 | `Y` (`GamepadSearch`) | search with the on-screen keyboard |
 | `LT` / `RT` | with search results: the previous / next filter chip, alone |
-| `R3` (right stick click) | open the [Options window](#options-window), as the gear (not when `RS` is in `GamepadSearch` or `GamepadToggle`) |
+| `RS`, the right stick click (`GamepadOptions`) | open the [Options window](#options-window), as the gear |
 
 **On-screen keyboard**: `GamepadSearch` opens the search with a keyboard at the bottom of the screen (letters, digits, `-` and `.`, Delete, Space, Done). The D-pad or stick moves on it, `A` types the key, `X` deletes, `Start` (or *Done*) closes it and keeps the results (the first one highlighted, `A` launches it), `B` closes the search. The keys can be clicked with the mouse too. `Start` is also part of `GamepadToggle`: alone it counts when released, so `Back` + `Start` still opens and closes the launcher.
 
@@ -120,7 +120,7 @@ Rainmeter cannot read controllers, so a small background helper does it (`Script
 
 The [Options window](#options-window) can be used with the controller too.
 
-Settings: `Gamepad=0` turns it off (in the Options window too); `GamepadSearch` (one or more buttons), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
+Settings: `Gamepad=0` turns it off (in the Options window too); `GamepadSearch` and `GamepadOptions` (one or more buttons, or none; on `X`, `LT` or `RT` they take their place, and `GamepadOptions` does nothing on a button of `GamepadSearch` or `GamepadToggle`), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
 
 ## Search
 
@@ -640,7 +640,7 @@ Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Contai
 
 ### Gamepad
 
-See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms).
+See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadSearch`, `GamepadOptions`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms).
 
 ### Search
 

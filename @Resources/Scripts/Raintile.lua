@@ -5430,7 +5430,7 @@ function PadX()
 	if osk.open and typing then TypeKey('BACK') end
 end
 
--- R3 (right stick click): the Options window, as the gear. Only while the
+-- GamepadOptions (RS): the Options window, as the gear. Only while the
 -- launcher is shown, like the other buttons, so it never fires in a game.
 -- OpenOptions hides the launcher, which closes the search and the keyboard.
 function PadOptions()

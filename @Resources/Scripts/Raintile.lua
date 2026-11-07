@@ -640,9 +640,6 @@ local function loadCategory(file)
 			t.pinned = trim(k.pinned or '') == '1' or nil
 			if t.pinned then c.anyPinned = true end
 			t.hotkey = trim(k.hotkey or '') -- e.g. CTRL ALT 1
-			-- Highlight=0: no highlight under the mouse (a custom widget that
-			-- draws its own, e.g. with parts of its own to click)
-			t.noHighlight = trim(k.highlight or '') == '0' or nil
 			-- a widget (Widget=): a tile of any category that shows data or a
 			-- skin instead of images; c.widgets: the category has some
 			if trim(k.widget or '') ~= '' then
@@ -3086,8 +3083,7 @@ local function placeSlots()
 end
 
 local function placeHover()
-	local ht = hover.idx ~= 0 and cur().tiles[hover.idx]
-	if not V.TileHover or hover.a <= 0 or hover.idx == 0 or (ht and ht.noHighlight) then
+	if not V.TileHover or hover.a <= 0 or hover.idx == 0 then
 		show('TileHover', false)
 		return
 	end

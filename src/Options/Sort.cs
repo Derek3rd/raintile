@@ -52,27 +52,9 @@ namespace RaintileOptions
         {
             sortLoading = true;
             tilePinned.IsChecked = IsPinned(s);
-            tileHighlight.IsChecked = s == null || Core.GetKey(s, "Highlight").Trim() != "0";
             sortLoading = false;
         }
 
-        // "Highlight" in the tile editor: Highlight=0 for a tile that draws its own
-        // (a custom widget with parts to click)
-        CheckBox tileHighlight;
-        FrameworkElement NewHighlightRow()
-        {
-            tileHighlight = new CheckBox { Content = "Under the mouse", VerticalAlignment = VerticalAlignment.Center };
-            tileHighlight.Click += (s, e) =>
-            {
-                if (sortLoading || loading || currentFile == null) return;
-                var t = GetCurrentTile();
-                if (t == null) return;
-                Core.SetKey(t, "Highlight", tileHighlight.IsChecked == true ? "" : "0");
-                SetChanged(currentFile);
-            };
-            return NewFormRow("Highlight", tileHighlight,
-                "The border and fill that follow the mouse. Off for a widget that highlights its own parts.");
-        }
 
         void SetPinned(bool on)
         {

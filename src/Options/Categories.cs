@@ -2263,7 +2263,6 @@ namespace RaintileOptions
             tagSuggestions = new WrapPanel();
             AddTo(f, NewFormRow("Tags", tileFields["Tags"], "Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", tagSuggestions));
             AddTo(f, NewPinRow());
-            AddTo(f, NewHighlightRow());
             // hot key: click, then press the combination (with modifiers)
             tileKeyButton = NewButton("None", "KeyButton", "Click, then press the combination");
             var keyClear = NewClearButton("No hot key");

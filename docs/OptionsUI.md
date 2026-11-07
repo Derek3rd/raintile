@@ -197,4 +197,6 @@ menu's icons (15) and group chevrons (9), the title of the saving overlay (17).
       in "Words".
 - [ ] Works with the keyboard and the gamepad, without hovering.
 - [ ] Fits the narrowest window (960 px): nothing cut without its tooltip.
+- [ ] `tools\options-shots.ps1 -Base origin/nightly`: only the pages you meant to
+      change are different, in the program and in the fallback.
 - [ ] The same change in `Options.ps1`, when the page exists there too.

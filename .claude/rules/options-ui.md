@@ -22,3 +22,6 @@ paths:
   and `powershell -NoProfile -ExecutionPolicy Bypass -File tools\dev-build.ps1`, then
   ask the user to test both the program and the `Options.ps1` fallback, saying which
   pages changed.
+- A layout change: run `tools\options-shots.ps1 -Base origin/nightly` and look at
+  `build\options-shots\report.txt` and the pictures in `diff\` (CLAUDE.md,
+  "Verifying changes"); say in the hand-over which pages changed and how.

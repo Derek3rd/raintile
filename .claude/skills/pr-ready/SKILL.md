@@ -16,6 +16,9 @@ passed, what failed and what was not verified.
    so the live test runs the new program (close the Options window first).
 3. The schema of `Options.ps1` changed: `python tools/gen_options_schema.py --check` when
    `pwsh` exists; otherwise say the `package` check will do it.
+4. The layout of the Options window changed: `powershell -NoProfile -ExecutionPolicy Bypass
+   -File tools\options-shots.ps1 -Base origin/nightly`, then look at the changed pages in
+   `build\options-shots\diff\`. Only for such changes: it takes a few minutes.
 
 ## 2. Docs in sync
 - A new or changed setting: its comment in `@Resources/Settings.inc` and the "Settings

@@ -62,6 +62,8 @@ namespace RaintileOptions
         public const double Row = 11;        // above and below a side-by-side row
         public const double StackedRow = 8;  // above and below a stacked row
         public const double ActionColumn = 34;   // the reset / clear column of a row
+        public const double ScrollBar = 9;       // the page scrollbar (Options.xaml), kept also when hidden
+        public const double CardPadding = 20;    // left and right, the Card style
         public static readonly Thickness Page = new Thickness(36, 4, 36, 24);
     }
 
@@ -72,10 +74,11 @@ namespace RaintileOptions
         public const double M = 220;     // short fields outside rows (filters, lists)
         public const double L = 300;
         public const double Wrap = 470;  // panels of segments or switches
-        // the control column of side-by-side rows: as wide as the widest control
-        // of the page, at least this; text fields and sliders fill it
-        public const double Control = 360;
-        public const string ControlGroup = "Control";
+        // the control column of side-by-side rows: one width for every page, half
+        // the room of a card between these two (UpdateControlColumn); text fields
+        // and sliders fill it
+        public const double ControlMin = 300, ControlMax = 440;
+        public const string ControlKey = "ControlColumn";   // its GridLength in the resources
     }
 
     // A number: slider + text box + unit (NewNumberField). Show() puts a value in
@@ -236,6 +239,18 @@ namespace RaintileOptions
         public Button NewIconButton(int glyph, string tip)
         {
             return NewButton(((char)glyph).ToString(), "IconButton", tip);
+        }
+
+        // One width of the control column for every page: half the room inside a card
+        // (page width without its margins, the scrollbar, the card padding and border),
+        // between FieldWidth.ControlMin and ControlMax; set again with the window size
+        void UpdateControlColumn()
+        {
+            double page = pageHost != null && pageHost.ActualWidth > 0 ? pageHost.ActualWidth : 1064;
+            double room = page - Gap.Page.Left - Gap.Page.Right - Gap.ScrollBar - 2 * Gap.CardPadding - 2;
+            double w = Math.Max(FieldWidth.ControlMin, Math.Min(FieldWidth.ControlMax, Math.Round(room * 0.5)));
+            var old = app.Resources[FieldWidth.ControlKey] as GridLength?;
+            if (old == null || old.Value.Value != w) app.Resources[FieldWidth.ControlKey] = new GridLength(w);
         }
 
         // Help under a label, hints, statuses (dim, wrapped)

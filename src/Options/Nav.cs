@@ -77,6 +77,8 @@ namespace RaintileOptions
             nav = (ListBox)win.FindName("Nav");
             navBottom = (ListBox)win.FindName("NavBottom");
             pageHost = (Grid)win.FindName("PageHost");
+            UpdateControlColumn();
+            pageHost.SizeChanged += (s, e) => UpdateControlColumn();
             pageTitle = (TextBlock)win.FindName("PageTitle");
             pageDesc = (TextBlock)win.FindName("PageDesc");
             status = (TextBlock)win.FindName("Status");

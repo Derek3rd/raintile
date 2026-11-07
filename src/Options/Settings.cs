@@ -489,12 +489,11 @@ namespace RaintileOptions
 
         Border NewRow(string label, string help, UIElement control, UIElement reset)
         {
-            // the control column is shared by the rows of the page (as wide as its
-            // widest control, at least FieldWidth.Control): fields and sliders fill it,
-            // the other controls end at its right edge, the action column follows
+            // the control column has the same width on every page (UpdateControlColumn):
+            // fields and sliders fill it, the other controls end at its right edge,
+            // the action column follows
             var g = NewGrid("*", "Auto", Gap.ActionColumn.ToString(CultureInfo.InvariantCulture));
-            g.ColumnDefinitions[1].SharedSizeGroup = FieldWidth.ControlGroup;
-            g.ColumnDefinitions[1].MinWidth = FieldWidth.Control;
+            g.ColumnDefinitions[1].SetResourceReference(ColumnDefinition.WidthProperty, FieldWidth.ControlKey);
             g.Margin = T(0, Gap.Row);
             var left = NewLabelBlock(label, help);
             left.VerticalAlignment = VerticalAlignment.Center;
@@ -607,8 +606,15 @@ namespace RaintileOptions
             sp = NewPanel();
             // as wide as the window: the rows stretch and their help text wraps less
             sp.Margin = Gap.Page;
-            Grid.SetIsSharedSizeScope(sp, true);   // one control column for the page
             sv.Content = sp;
+            // the room of the scrollbar is kept also when there is none, so the cards
+            // and their columns are in the same place on every page
+            var panel = sp;
+            sv.ScrollChanged += (s, e) =>
+            {
+                double right = Gap.Page.Right + (sv.ComputedVerticalScrollBarVisibility == Visibility.Visible ? 0 : Gap.ScrollBar);
+                if (panel.Margin.Right != right) panel.Margin = new Thickness(Gap.Page.Left, Gap.Page.Top, right, Gap.Page.Bottom);
+            };
             return sv;
         }
 

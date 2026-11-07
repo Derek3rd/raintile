@@ -1001,8 +1001,32 @@ $GLYPH = @{
     Add = 0xE710; Up = 0xE74A; Down = 0xE74B; Left = 0xE72B; Right = 0xE72A
 }
 $FS = @{ Title = 24; Section = 11.5; Label = 13.5; Help = 12; Badge = 11 }
-$GAP = @{ Control = 8; Icon = 6; Card = 16; Row = 11; StackedRow = 8; ActionColumn = 34 }
-$FIELD = @{ S = 120; M = 220; L = 300; Wrap = 470; Control = 360 }
+$GAP = @{ Control = 8; Icon = 6; Card = 16; Row = 11; StackedRow = 8; ActionColumn = 34; ScrollBar = 9 }
+$FIELD = @{ S = 120; M = 220; L = 300; Wrap = 470; ControlMin = 300; ControlMax = 440 }
+
+# One width of the control column for every page: half the room inside a card
+# (page width without its margins, the scrollbar, the card padding and border),
+# between $FIELD.ControlMin and ControlMax; set again with the window size
+function Update-ControlColumn {
+    $page = if ($pageHost -and $pageHost.ActualWidth -gt 0) { $pageHost.ActualWidth } else { 1064 }
+    $room = $page - 72 - $GAP.ScrollBar - 40 - 2
+    $w = [Math]::Max($FIELD.ControlMin, [Math]::Min($FIELD.ControlMax, [Math]::Round($room * 0.5)))
+    $old = $app.Resources['ControlColumn']
+    # the GridLength itself, not a PowerShell wrapper (WPF would refuse it)
+    if (-not $old -or $old.Value -ne $w) { $app.Resources['ControlColumn'] = ([System.Windows.GridLength]::new([double]$w)).psobject.BaseObject }
+}
+
+# The room of the scrollbar is kept also when there is none, so the cards and
+# their columns are in the same place on every page
+function Set-ScrollRoom($sv, $panel) {
+    $sv.Tag = $panel
+    $sv.Add_ScrollChanged({
+            param($s, $e)
+            $right = 36 + $(if ($s.ComputedVerticalScrollBarVisibility -eq 'Visible') { 0 } else { $GAP.ScrollBar })
+            $m = $s.Tag.Margin
+            if ($m.Right -ne $right) { $s.Tag.Margin = T $m.Left $m.Top $right $m.Bottom }
+        })
+}
 
 # Help under a label, hints, statuses (dim, wrapped)
 function New-Help([string]$text, $brush = $null) {
@@ -1239,6 +1263,8 @@ $win.FindName('Version').Text = $version
 Add-StartStep 'window'
 $nav = $win.FindName('Nav')
 $pageHost = $win.FindName('PageHost')
+Update-ControlColumn
+$pageHost.Add_SizeChanged({ Update-ControlColumn })
 $pageTitle = $win.FindName('PageTitle')
 $pageDesc = $win.FindName('PageDesc')
 $status = $win.FindName('Status')
@@ -1777,12 +1803,11 @@ function New-ResetButton([string[]]$keys) {
 }
 
 function New-Row([string]$label, [string]$help, $control, $reset) {
-    # the control column is shared by the rows of the page (as wide as its widest
-    # control, at least $FIELD.Control): fields and sliders fill it, the other
-    # controls end at its right edge, the action column follows
+    # the control column has the same width on every page (Update-ControlColumn):
+    # fields and sliders fill it, the other controls end at its right edge, the
+    # action column follows
     $g = New-Grid @('*', 'Auto', [string]$GAP.ActionColumn)
-    $g.ColumnDefinitions[1].SharedSizeGroup = 'Control'
-    $g.ColumnDefinitions[1].MinWidth = $FIELD.Control
+    $g.ColumnDefinitions[1].SetResourceReference([System.Windows.Controls.ColumnDefinition]::WidthProperty, 'ControlColumn')
     $g.Margin = T 0 $GAP.Row
     $left = New-Panel
     $left.VerticalAlignment = 'Center'
@@ -1894,8 +1919,8 @@ function New-SettingsPage($page) {
     $sp = New-Panel
     # as wide as the window: the rows stretch and their help text wraps less
     $sp.Margin = T 36 4 36 24
-    [System.Windows.Controls.Grid]::SetIsSharedSizeScope($sp, $true)   # one control column for the page
     $sv.Content = $sp
+    Set-ScrollRoom $sv $sp
     $schemaKeys = Get-SchemaKeys
     foreach ($group in $page.Groups) {
         $card = New-Card $group.Title $group.Help
@@ -4130,8 +4155,8 @@ function New-InfoPage {
     $sp = New-Panel
     # as wide as the window: the rows stretch and their help text wraps less
     $sp.Margin = T 36 4 36 24
-    [System.Windows.Controls.Grid]::SetIsSharedSizeScope($sp, $true)   # one control column for the page
     $sv.Content = $sp
+    Set-ScrollRoom $sv $sp
 
     $card = New-Card '' ''
     $card.Padding = T 24 20 24 20

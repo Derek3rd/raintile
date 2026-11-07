@@ -91,9 +91,11 @@ Every row, of both kinds, ends with the **action column** (34 px, `Gap.ActionCol
 the row's reset or clear button, or nothing. It is there even when empty, so every
 control of a card ends at the same right edge.
 
-In side-by-side rows the **control column is shared by the whole page**
-(`SharedSizeGroup`, the page panel is the scope): as wide as the widest control of the
-page, at least `FieldWidth.Control` (360). In it:
+In side-by-side rows the **control column has one width for every page** (the
+`ControlColumn` resource, set by `UpdateControlColumn` / `Update-ControlColumn` with
+the window size): half the room inside a card, between `FieldWidth.ControlMin` (300)
+and `ControlMax` (440). The room of the page scrollbar is kept also on pages that do
+not scroll, so cards and columns are in the same place on every page. In it:
 
 - text fields, combos, colours, folder lists and sliders **fill** the column (no
   width of their own), so their left and right edges line up;

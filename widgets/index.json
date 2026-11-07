@@ -12,6 +12,18 @@
       "base": "https://raw.githubusercontent.com/Derek3rd/raintile/main/widgets/BigClock",
       "files": ["BigClock.ini"],
       "page": "https://github.com/Derek3rd/raintile/tree/main/widgets/BigClock"
+    },
+    {
+      "id": "Modrinth",
+      "name": "Modrinth instances",
+      "author": "Raintile",
+      "version": "1.0",
+      "kind": "custom",
+      "category": "Games",
+      "description": "Your Modrinth App instances with their icons, the last played first: click one to start it. Give the tile more cells for more rows.",
+      "base": "Modrinth",
+      "files": ["Modrinth.ini", "Modrinth.ps1"],
+      "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/Modrinth"
     }
   ]
 }

@@ -1191,8 +1191,10 @@ local function loadCategories(files)
 						if f then
 							local text = f:read('*a')
 							f:close()
+							-- (meters of its own, or rows from a List=)
 							t.widget.boxed = ('\n' .. text):lower():find('\n%s*meter%s*=') ~= nil
-							t.widget.why = path .. ': no meters in it (no Meter= line)'
+								or ('\n' .. text):lower():find('\n%s*list%s*=') ~= nil
+							t.widget.why = path .. ': no meters in it (no Meter= line) and no List='
 							-- (copied into Grid.inc as it is: it must be UTF-8 or ANSI)
 							if text:find('%z') then
 								t.widget.boxed = false
@@ -1237,7 +1239,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 14
+local GRID_VERSION = 16
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1429,20 +1431,47 @@ local function writeGrid(path, sig, files)
 			if part == 'Value' then w('FontWeight=600') end
 			w('')
 		end
+		-- a widget with List=: its rows, each a part of the tile (D.placeList)
+		if t.widget.kind == 'custom' and M.widgetInfo(t).list then
+			for k = 1, M.LIST_ROWS do
+				w('[W' .. i .. 'RowHit' .. k .. ']')
+				w('Meter=Shape')
+				w('MeterStyle=StyleWidgetShape')
+				w('MouseOverAction=[!CommandMeasure MeasureScript "HoverPart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
+				w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeavePart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
+				w('LeftMouseUpAction=[!CommandMeasure MeasureScript "WidgetRowClick(' .. i .. ',' .. k .. ')"]')
+				w('')
+				w('[W' .. i .. 'RowIcon' .. k .. ']')
+				w('Meter=Image')
+				w('Container=GridClip')
+				w('PreserveAspectRatio=1')
+				w('Hidden=1')
+				w('')
+				for _, part in ipairs({ 'RowName', 'RowSub' }) do
+					w('[W' .. i .. part .. k .. ']')
+					w('Meter=String')
+					w('MeterStyle=StyleWidgetText')
+					if part == 'RowName' then w('FontWeight=600') end
+					w('')
+				end
+			end
+		end
 		-- a custom widget: its sections, in a container over the tile
 		-- (only when its file is there: a container without meters would be
 		-- drawn as it is, a white box)
 		if t.widget.boxed then
 			local cc = t.widget.cat
 			local text = D.customWidgetText(t, i, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
+			-- its container only with meters in it; its measures in any case (a
+			-- widget of only a List= has its measure that reads the data)
 			if text and text:find('Container=CW' .. i .. 'Box', 1, true) then
 				w('[CW' .. i .. 'Box]')
 				w('Meter=Shape')
 				w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
 				w('Hidden=1')
 				w('')
-				w(text)
 			end
+			if text and text:find('%S') then w(text) end
 		end
 	end
 
@@ -2160,6 +2189,164 @@ local dash = { data = nil, hist = { cpu = {}, gpu = {}, ram = {}, down = {}, up 
 	skinsWanted = {}, skinsActive = {}, customShown = {} }
 D.DASH_HISTORY = 60 -- samples kept for the graphs
 
+-- Widget API ---------------------------------------------------------------------
+-- What a custom widget can ask of Raintile, in a [Raintile] section of its file
+-- (read by D.customWidgetText into t.widget.api):
+--   OnShow=, OnHide=  bangs run when its category comes on screen and when it
+--                     leaves it (never while the launcher is hidden)
+--   List=<file>       rows Raintile draws in the tile (D.placeList), one per
+--                     line of the file, in the widget's folder:
+--                     "<title>|<subtitle>|<icon>|<command>"; each row is a part
+--                     of the tile (the highlight goes onto it), a click runs its
+--                     command (a bang, or a program, file or address)
+-- In any of its values #WIDGET:<Section># is the name that section of the
+-- widget has in the launcher. When its data changed (e.g. in the FinishAction
+-- of its RunCommand measure) the widget calls
+-- [!CommandMeasure MeasureScript "WidgetChanged()"].
+M.LIST_ROWS = 10
+
+-- The [Raintile] section and the parts of widget t: read from its file once
+-- per load (D.customWidgetText also does it when it writes Grid.inc)
+function M.widgetInfo(t)
+	local w = t.widget
+	if not w.api then
+		w.api, w.partsAt = {}, {}
+		if w.kind == 'custom' and w.boxed and w.cat then
+			local cc = w.cat
+			D.customWidgetText(t, w.idx, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
+		end
+	end
+	return w.api
+end
+
+function M.readWidgetList(t)
+	local api = M.widgetInfo(t)
+	if not api.list then return end
+	local items = {}
+	for _, line in ipairs(readLines(api.list)) do
+		local title, sub, icon, cmd = line:match('^([^|]*)|([^|]*)|([^|]*)|(.*)$')
+		if title and trim(title) ~= '' then
+			items[#items + 1] = { name = trim(title), sub = trim(sub), icon = trim(icon), cmd = trim(cmd) }
+		end
+	end
+	t.widget.items = items
+end
+
+-- The category whose widgets are on screen (OnShow run), or nil: c comes,
+-- the one before goes (OnHide)
+function M.widgetHooks(c)
+	if M.hookCat == c then return end
+	local function run(cat, key)
+		for _, t in ipairs(cat and cat.tiles or {}) do
+			if t.widget and t.widget.kind == 'custom' then
+				local api = M.widgetInfo(t)
+				if key == 'onShow' then M.readWidgetList(t) end
+				if api[key] and api[key] ~= '' then SKIN:Bang(api[key]) end
+			end
+		end
+	end
+	run(M.hookCat, 'onHide')
+	M.hookCat = c
+	run(c, 'onShow')
+end
+
+-- New data from a widget: its rows read again
+function WidgetChanged()
+	if not ready then return end
+	for _, t in ipairs(widgets) do
+		if t.widget.api and t.widget.api.list then M.readWidgetList(t) end
+	end
+	base = -1
+	if visible and M.frame then M.frame() end
+end
+
+function D.hideRows(i, from)
+	for k = from, M.LIST_ROWS do
+		for _, part in ipairs({ 'RowHit', 'RowIcon', 'RowName', 'RowSub' }) do show('W' .. i .. part .. k, false) end
+	end
+end
+
+-- The rows of widget t (List=) in its tile at x, y: as many as fit under
+-- the title; each row a part (t.widget.partsAt: x, y, w, h in the tile)
+function D.placeList(t, x, y, alpha)
+	local w = t.widget
+	local i = w.idx
+	local W, H, pad = V.TileW, V.TileH, V.LabelPad
+	local small, valueSize, line = D.sizes()
+	local top = D.layout(small, valueSize, line).top
+	local rowH = math.max(36, math.floor(line * 2.4))
+	local fit = math.max(0, math.min(M.LIST_ROWS, math.floor((H - top - math.floor(pad / 2)) / rowH)))
+	if not w.items then M.readWidgetList(t) end
+	local items = w.items or {}
+	-- (the parts of the widget's own meters stay)
+	for k = 1, M.LIST_ROWS do w.partsAt['W' .. i .. 'RowHit' .. k] = nil end
+	local shown = 0
+	for k = 1, math.min(fit, #items) do
+		local it = items[k]
+		local ry = top + (k - 1) * rowH
+		local hit, icon, name, sub = 'W' .. i .. 'RowHit' .. k, 'W' .. i .. 'RowIcon' .. k, 'W' .. i .. 'RowName' .. k, 'W' .. i .. 'RowSub' .. k
+		local hx, hw = math.floor(pad / 2), W - 2 * math.floor(pad / 2)
+		set(hit, 'X', tostring(x + hx))
+		set(hit, 'Y', tostring(y + ry))
+		-- (not fully transparent: Rainmeter gives the mouse only to pixels that are not)
+		set(hit, 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,1 | StrokeWidth 0', hw, rowH))
+		show(hit, alpha >= 1)
+		w.partsAt[hit] = { hx, ry, hw, rowH }
+		local size = rowH - 10
+		local tx = pad
+		if it.icon ~= '' and fileExists(it.icon) then
+			set(icon, 'ImageName', it.icon)
+			set(icon, 'X', tostring(x + pad))
+			set(icon, 'Y', tostring(y + ry + 5))
+			set(icon, 'W', tostring(size))
+			set(icon, 'H', tostring(size))
+			set(icon, 'ImageAlpha', tostring(math.floor(255 * alpha + 0.5)))
+			show(icon, true)
+			tx = pad + size + 10
+		else
+			show(icon, false)
+		end
+		set(name, 'Text', D.text(it.name))
+		set(name, 'X', tostring(x + tx))
+		set(name, 'Y', tostring(y + ry + math.floor(rowH / 2) - math.floor(small * 1.5)))
+		set(name, 'W', tostring(math.max(1, W - tx - pad)))
+		set(name, 'FontSize', tostring(small + 1))
+		set(name, 'FontColor', fade(V.TextColor, alpha))
+		show(name, true)
+		set(sub, 'Text', D.text(it.sub))
+		set(sub, 'X', tostring(x + tx))
+		set(sub, 'Y', tostring(y + ry + math.floor(rowH / 2) + 1))
+		set(sub, 'W', tostring(math.max(1, W - tx - pad)))
+		set(sub, 'FontSize', tostring(small))
+		set(sub, 'FontColor', fade(V.TextDimColor, alpha))
+		show(sub, true)
+		shown = k
+	end
+	D.hideRows(i, shown + 1)
+	-- nothing to list: say so on the first row
+	if #items == 0 then
+		local name = 'W' .. i .. 'RowName1'
+		set(name, 'Text', 'Nothing to show yet')
+		set(name, 'X', tostring(x + pad))
+		set(name, 'Y', tostring(y + top))
+		set(name, 'W', tostring(math.max(1, W - 2 * pad)))
+		set(name, 'FontSize', tostring(small))
+		set(name, 'FontColor', fade(V.TextDimColor, alpha))
+		show(name, true)
+	end
+end
+
+-- Click on row k of widget i: runs its command (a bang as it is; anything
+-- else is opened like a tile's command)
+function WidgetRowClick(i, k)
+	local t = widgets[i]
+	if not ready or launching or not t or M.menuOverGrid() then return end
+	local it = (t.widget.items or {})[k]
+	if not it or it.cmd == '' then return end
+	if it.cmd:match('^%[') then SKIN:Bang(it.cmd) else SKIN:Bang('["' .. it.cmd:gsub('"', '') .. '"]') end
+	if V.CloseOnLaunch then Hide() end
+end
+
 D.WIDGET_TITLES = {
 	cpu = 'CPU', gpu = 'GPU', ram = 'Memory', disk = 'Disks', network = 'Network',
 	processes = 'Processes', system = 'System', temps = 'Temperatures', fans = 'Fans',
@@ -2345,6 +2532,9 @@ function D.customWidgetText(t, i, w, h)
 	-- X= and Y= (Rainmeter's GetX/GetY of a meter in a container depend on
 	-- where the container is)
 	t.widget.partsAt = {}
+	t.widget.api = {}
+	local api = t.widget.api
+	local raintile = false -- in its [Raintile] section (M.widgetInfo)
 	local function at(v)
 		v = trim(v or '0')
 		if v == '' then return 0 end
@@ -2377,7 +2567,8 @@ function D.customWidgetText(t, i, w, h)
 			flush()
 			sec = trim(sec)
 			local low = sec:lower()
-			skip = low == 'rainmeter' or low == 'metadata'
+			raintile = low == 'raintile'
+			skip = low == 'rainmeter' or low == 'metadata' or raintile
 			kind = nil
 			section = sec
 			if low == 'variables' then
@@ -2385,11 +2576,26 @@ function D.customWidgetText(t, i, w, h)
 			else
 				pending[#pending + 1] = '[' .. prefix .. sec .. ']'
 			end
+		elseif raintile then
+			-- what the widget asks of Raintile (see M.widgetInfo)
+			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
+			if k and trim(k) ~= '' then
+				local key = trim(k):lower()
+				v = trim(own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end))
+				if key == 'onshow' then api.onShow = v
+				elseif key == 'onhide' then api.onHide = v
+				elseif key == 'list' and v ~= '' then
+					-- (a file of the widget, in its folder)
+					api.list = (v:match('^%a:') or v:match('^\\')) and v or dir .. v
+				end
+			end
 		elseif section and not skip then
 			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
 			if k and k ~= '' then
 				local key = trim(k):lower()
 				v = own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
+				-- #WIDGET:<Section>#: that section's name in the launcher
+				v = v:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end)
 				-- [Section] and [Section:...] references
 				v = v:gsub('%[([^%]%[:]+)(:?[^%]%[]*)%]', function(n, rest) return '[' .. ref(n) .. rest .. ']' end)
 				if key:match('^measurename%d*$') then v = ref(trim(v)) end
@@ -2485,6 +2691,7 @@ function D.placeWidget(t, x, y, alpha)
 			math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))))
 		show('CW' .. i .. 'Box', inside)
 		dash.customShown[i] = inside or nil
+		if M.widgetInfo(t).list then D.placeList(t, x, y, alpha) end
 	end
 	local W, H, pad = V.TileW, V.TileH, V.LabelPad
 	local a = math.floor(255 * alpha + 0.5)
@@ -2720,6 +2927,8 @@ end
 
 updateDashState = function()
 	local on = D.dashActive()
+	-- the widgets' OnShow / OnHide (also between two categories with widgets)
+	M.widgetHooks(on and cats[active] or nil)
 	if on == dash.on then return end
 	dash.on = on
 	D.syncSkins()
@@ -3106,6 +3315,7 @@ local function placeSlots()
 		local n = t.widget.idx
 		if not dash.shown[n] then
 			for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List', 'Bar', 'Graph' }) do show('W' .. n .. part, false) end
+			if t.widget.api and t.widget.api.list then D.hideRows(n, 1) end
 		end
 		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
@@ -4718,7 +4928,7 @@ end
 -- the tile: their X, Y are from its top left corner.
 function HoverPart(name)
 	if not ready or launching or M.more.open or power.open then return end
-	local n = tonumber(name:match('^CW(%d+)_') or '')
+	local n = tonumber(name:match('^CW(%d+)_') or name:match('^W(%d+)RowHit%d+$') or '')
 	local t = n and widgets[n]
 	local m = t and SKIN:GetMeter(name)
 	if not m then return end
@@ -4734,18 +4944,10 @@ function HoverPart(name)
 	M.focusPart(t, slot, name)
 end
 
--- Where the parts of widget tile t are (D.customWidgetText fills it when it
--- writes Grid.inc; on the other loads it is read from the widget's file now)
+-- Where the parts of widget tile t are (its meters with Part=1, and its rows)
 function M.widgetParts(t)
-	local w = t.widget
-	if not w.partsAt then
-		w.partsAt = {}
-		if w.kind == 'custom' and w.boxed and w.cat then
-			local cc = w.cat
-			D.customWidgetText(t, w.idx, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
-		end
-	end
-	return w.partsAt
+	M.widgetInfo(t)
+	return t.widget.partsAt
 end
 
 -- The highlight onto part 'name' of widget tile t, in 'slot'
@@ -4756,7 +4958,7 @@ function M.focusPart(t, slot, name)
 	hover.anchor = V.Horizontal and ty or tx
 	local p = M.widgetParts(t)[name]
 	local px, py = p and p[1] or m:GetX(), p and p[2] or m:GetY()
-	focus(t, indexAt(slot), tx + px / V.StepX, ty + py / V.StepY, m:GetW(), m:GetH())
+	focus(t, indexAt(slot), tx + px / V.StepX, ty + py / V.StepY, p and p[3] or m:GetW(), p and p[4] or m:GetH())
 end
 
 function LeavePart(name)

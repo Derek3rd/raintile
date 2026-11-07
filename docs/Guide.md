@@ -205,6 +205,7 @@ The **Dashboard** (`Categories\Dashboard.ini`, added once to existing data too) 
 
 - In the Options window it is among the categories like the others: name, icon, grid, **Show in the menu** (`Hidden=1` in its `[Category]` keeps any category out of the menu). Options > **Widgets** > *Add the example Dashboard* brings it back if you deleted it.
 - The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a category with widgets is on screen, every `DashInterval` ms (default 1000): with it closed nothing is measured.
+- **Modrinth instances** (widget gallery, under Games): the instances of [Modrinth App](https://modrinth.com/app), the last played first, with their icons; a click starts one. Its script reads Modrinth App's database (read only) when the category comes on screen. More cells for the tile (`Size=1x2`), more rows. Widgets can do the same for anything: see *What Raintile does for a widget* in `widgets/README.md`.
 - A custom widget can have parts (`Part=1` on its meters): the highlight goes onto the part under the mouse and a click runs the part's own action (see `widgets/README.md`).
 - Widgets are left out of search, Favorites, Recent and the filters. In a sorted category they are sorted like the other tiles (by name, by when they were added...); pin them to keep them first.
 - Clicking a widget runs its `Command=`, or by default opens what fits: Task Manager (CPU, GPU, RAM, processes), the disk in Explorer, network or system settings.
@@ -244,15 +245,7 @@ Windows does not give temperatures to programs without a driver, so Raintile rea
 
 ### Custom widgets
 
-A custom widget is a Rainmeter `.ini` drawn inside the tile, as part of the launcher (no separate skin). Put it in the data folder, `Widgets\<name>\<name>.ini` (or `Widgets\<name>.ini`), and use `Widget=custom`, `Param=<name>`. Write it like a skin, with these differences:
-
-- `#WIDGETW#` and `#WIDGETH#` are the size of the tile in pixels, `#WIDGETPATH#` the folder of the widget (for images: `#WIDGETPATH#bar.png`). Coordinates start at the top left of the tile.
-- `[Rainmeter]` and `[Metadata]` are ignored; `[Variables]` are added to the launcher's, so give them names of your own (`MyWidgetColor`, not `Color`).
-- Measures update every `DashInterval` ms, while the widget is visible.
-- Section names get a prefix (`CW3_MeterTime`): references as `[MeterTime]`, `[MeasureCPU:%]` and `MeasureName=` are renamed by themselves, names written bare in a bang are not. In a meter's own actions use `#CURRENTSECTION#`: `LeftMouseUpAction=[!SetOption #CURRENTSECTION# FontColor 255,0,0]`.
-- Plugins work as in any skin, but heavy ones slow the launcher down.
-
-The widget is read again when its file changes (refresh the skin).
+A custom widget is a Rainmeter `.ini` drawn inside the tile, as part of the launcher (no separate skin), with scripts of its own if it needs data: put it in the data folder, `Widgets\<name>\<name>.ini`, and use `Widget=custom`, `Param=<name>`; the gallery does it for you. How to write one, and what Raintile offers to widgets (lists of things to start, parts of a tile, `OnShow` / `OnHide`): [Writing Raintile widgets](Widgets.md).
 
 ### Widget gallery
 

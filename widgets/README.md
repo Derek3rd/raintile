@@ -1,8 +1,8 @@
 # Raintile widgets
 
-The widgets of the gallery in Options > Dashboard. [`index.json`](index.json) is the list the Options window reads; the widgets can live in this folder (`widgets/<id>/`) or in their authors' own repositories.
+The widgets of the gallery in Options > Widgets. [`index.json`](index.json) is the list the Options window reads; the widgets can live in this folder (`widgets/<id>/`) or in their authors' own repositories.
 
-How to write a custom widget: [Guide > Custom widgets](../docs/Guide.md#custom-widgets).
+How to write a widget, and what Raintile offers to widgets: [docs/Widgets.md](../docs/Widgets.md).
 
 ## Adding a widget
 
@@ -30,9 +30,3 @@ Open a pull request that adds an entry to `index.json` (and, if you want it host
 - `version`: change it when the files change: the gallery offers the update.
 - Widgets are Rainmeter code and can run programs: entries are reviewed before they are merged. Prefer a fixed commit or tag in `base` over a branch, so the files cannot change after the review.
 - A widget's own `[Variables]` work as usual in its file: Raintile writes their values in place of `#Name#` when it adds the widget to the launcher (so changing one with `!SetVariable` does not change the meters). `#WIDGETW#` and `#WIDGETH#` are the size of the tile.
-
-## Parts of a tile
-
-A widget can split its tile into parts that are pointed at and clicked on their own: give the meter of each part `Part=1` and its own `LeftMouseUpAction`. Raintile's highlight then goes onto the part under the mouse, with the same animation as between tiles (and its colours and rounded corners), and a click runs the part's action instead of the tile's. Parts are rectangles: the meter's X, Y, W and H inside the tile; write X and Y as numbers or formulas from the tile's top left corner (not relative to the meter before, `r`/`R`). The whole tile is never highlighted: between two parts the highlight stays on the last one. Its own `MouseOverAction` / `MouseLeaveAction`, if any, still run.
-
-`QuadTest` (not in the gallery) is an example: four smaller tiles in a 2 x 2 grid, starting Notepad, Calculator, Explorer and Task Manager. Copy `QuadTest\QuadTest.ini` to `Widgets\QuadTest\` in your data folder and add a tile with `Widget=custom`, `Param=QuadTest`, `Size=2x2`. The keyboard and the gamepad still select the whole tile.

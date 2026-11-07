@@ -112,12 +112,15 @@ Xbox and compatible controllers (XInput):
 | `LB` / `RB` | previous / next category |
 | `Y` (`GamepadSearch`) | search with the on-screen keyboard |
 | `LT` / `RT` | with search results: the previous / next filter chip, alone |
+| `R3` (right stick click) | open the [Options window](#options-window), as the gear (not when `RS` is in `GamepadSearch` or `GamepadToggle`) |
 
 **On-screen keyboard**: `GamepadSearch` opens the search with a keyboard at the bottom of the screen (letters, digits, `-` and `.`, Delete, Space, Done). The D-pad or stick moves on it, `A` types the key, `X` deletes, `Start` (or *Done*) closes it and keeps the results (the first one highlighted, `A` launches it), `B` closes the search. The keys can be clicked with the mouse too. `Start` is also part of `GamepadToggle`: alone it counts when released, so `Back` + `Start` still opens and closes the launcher.
 
 Rainmeter cannot read controllers, so a small background helper does it (`Scripts\Helper.ps1`: C# compiled by PowerShell on first start). It polls the controllers every 16 ms at below-normal priority and sends commands to Rainmeter through a Windows message (`WM_COPYDATA`), without starting processes. Only one copy runs: refreshing the skin replaces it, and it exits by itself when Rainmeter is closed. While the launcher is hidden, commands other than open/close are ignored, so it does not interfere with games.
 
-Settings: `Gamepad=0` turns it off; `GamepadSearch` (one or more buttons), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
+The [Options window](#options-window) can be used with the controller too.
+
+Settings: `Gamepad=0` turns it off (in the Options window too); `GamepadSearch` (one or more buttons), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
 
 ## Search
 
@@ -446,6 +449,9 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
     - **Pinned tiles** (the tile's **Pinned** box, or right click on the tile in the launcher > **Pin to the start**) come first, in the order you drag them to, with a pin on their small tile; sorting moves only the others.
   - **Moving a tile to another category**: drag it from the strip onto that category in the menu on the left (the entry is outlined when it can take it). The tile and its images move, and both category files are saved at once. Imported games move only once they are normal tiles.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
+- **Gamepad** (the program only, not `Options.ps1`; off with `Gamepad=0`): while the window is in the foreground the controller moves a ring between the controls. D-pad / left stick move (on a slider left and right change the value, the field next to it is skipped), `A` presses a button, flips a switch, picks a choice or a list entry, opens a drop-down list (up/down choose, `LB`/`RB` jump by 10, `A` keeps, `B` puts back) or types into a text field, `B` goes back to the menu (in the menu it closes the window, in a dialog it cancels), `LB` / `RB` go to the previous / next page, `Start` alone saves and refreshes, the right stick scrolls. The ring goes away when you move the mouse or press a key; the next pad input brings it back without acting.
+  - **On-screen keyboard** (`A` on a text field): the launcher's layout with lower case, **Shift** for capitals and a page of symbols (`#+=`) for paths and commands; the text shows above the keys. `A` types the key, `X` deletes, `Y` adds a space, `LB` / `RB` move the cursor, `LT` is Shift, `RT` the symbols, `Start` (or *Done*) keeps the text, `B` puts back what was there. The keys can be clicked too.
+  - Still mouse or keyboard: key bindings (they wait for a key), colour and file pickers (Windows dialogs), framing the background and placing the logo by dragging (the zoom and logo size sliders work with the pad).
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 
 The window hides the launcher while open. You can always keep editing the files by hand.

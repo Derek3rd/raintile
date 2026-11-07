@@ -22,6 +22,10 @@ namespace RaintileOptions
         [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hdc);
         [DllImport("gdi32.dll")] public static extern int GetDeviceCaps(IntPtr hdc, int index);
+        [StructLayout(LayoutKind.Sequential)] public struct Point { public int X, Y; }
+        [DllImport("user32.dll")] public static extern bool GetCursorPos(out Point p);
+        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     }
 
     static class Program

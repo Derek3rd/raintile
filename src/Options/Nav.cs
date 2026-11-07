@@ -136,6 +136,7 @@ namespace RaintileOptions
                 else if (r.Button != "Don't save") e.Cancel = true;
             };
             win.SourceInitialized += (s, e) => SetDarkTitle(win);
+            InitGamepad();
             // Started without a console: bring the window to the foreground explicitly
             win.ContentRendered += (s, e) =>
             {

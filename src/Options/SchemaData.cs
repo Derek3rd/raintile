@@ -220,6 +220,7 @@ namespace RaintileOptions
                     new Item { Kind = "info", Key = "", Label = "LB / RB", Help = "Previous / next category" },
                     new Item { Kind = "pad", Key = "GamepadSearch", Label = "Search with the on-screen keyboard", Help = "D-pad/stick move on it, A types, X deletes, Start keeps the results, B closes." },
                     new Item { Kind = "info", Key = "", Label = "LT / RT", Help = "Filter chips of the search results" },
+                    new Item { Kind = "info", Key = "", Label = "R3 (right stick click)", Help = "Open these options, as the gear" },
                 } },
             } },
             new Page { Id = "dashboard", Title = "Widgets", Icon = 0xE9D2, Desc = "Tiles that show something instead of starting it, in any category: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>

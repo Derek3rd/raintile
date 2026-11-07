@@ -219,7 +219,7 @@ FadeDuration=0
 
 ; --- Gamepad (XInput: Xbox and compatible controllers) --------------------------
 ; D-pad/left stick = move, A = launch, B = back/close,
-; LB/RB = previous/next category, GamepadToggle = open/close.
+; LB/RB = previous/next category, R3 (RS) = Options, GamepadToggle = open/close.
 ; 1 = on (background helper), 0 = off
 Gamepad=1
 ; Buttons to hold together to open/close the launcher

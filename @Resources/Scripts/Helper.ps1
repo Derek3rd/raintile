@@ -11,6 +11,7 @@
 #   GamepadSearch (Y)             search with the on-screen keyboard
 #   X / Start                     on-screen keyboard: delete / done
 #   LT / RT                       filter chips of the search results
+#   R3 (right stick click)        the Options window
 # While the launcher is hidden, commands other than open/close are ignored by
 # the skin.
 #
@@ -719,6 +720,9 @@ public class RaintilePad
         if ((pressed & X) != 0 && (SearchMask & X) == 0) bangs.Add(Call("PadX()"));
         if ((pressed & LT) != 0 && (SearchMask & LT) == 0) bangs.Add(Call("PadChip(-1)"));
         if ((pressed & RT) != 0 && (SearchMask & RT) == 0) bangs.Add(Call("PadChip(1)"));
+        // R3 (right stick click): the Options window, unless the search or
+        // the open/close combination use it
+        if ((pressed & RS) != 0 && ((SearchMask | toggleMask) & RS) == 0) bangs.Add(Call("PadOptions()"));
         return bangs;
     }
 

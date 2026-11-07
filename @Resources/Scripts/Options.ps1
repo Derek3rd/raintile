@@ -427,7 +427,8 @@ $schema = @(
                     (S 'info' '' 'B' 'Close the search, or the launcher'),
                     (S 'info' '' 'LB / RB' 'Previous / next category'),
                     (S 'pad' 'GamepadSearch' 'Search with the on-screen keyboard' 'D-pad/stick move on it, A types, X deletes, Start keeps the results, B closes.'),
-                    (S 'info' '' 'LT / RT' 'Filter chips of the search results')
+                    (S 'info' '' 'LT / RT' 'Filter chips of the search results'),
+                    (S 'info' '' 'R3 (right stick click)' 'Open these options, as the gear')
                 ) }
         )
     }

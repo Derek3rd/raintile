@@ -1,0 +1,661 @@
+// Raintile Options: the window driven by a gamepad (XInput, Xbox and
+// compatible controllers, as the launcher's helper). The controllers are read
+// every 16 ms only while a window of this program is active and Gamepad
+// support is on. A ring marks the control the pad is on; it goes away when the
+// mouse moves or a key is pressed, and the first pad input brings it back
+// without acting.
+//
+//   D-pad / left stick   move between controls (on a slider: left/right change it)
+//   A                    press, switch, open a list, or type in a field (OskOpen)
+//   B                    back to the menu; in the menu: close; in a dialog: cancel
+//   LB / RB              previous / next page
+//   Start                Save and refresh (alone, on release: Back + Start is the
+//                        launcher's toggle, read by the helper)
+//   right stick          scrolls
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
+
+namespace RaintileOptions
+{
+    static class XInput
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        public struct State
+        {
+            public uint PacketNumber;
+            public ushort Buttons;
+            public byte LeftTrigger, RightTrigger;
+            public short ThumbLX, ThumbLY, ThumbRX, ThumbRY;
+        }
+
+        [DllImport("xinput1_4.dll", EntryPoint = "XInputGetState")]
+        static extern uint GetState14(uint index, out State state);
+
+        [DllImport("xinput9_1_0.dll", EntryPoint = "XInputGetState")]
+        static extern uint GetState910(uint index, out State state);
+
+        static bool use14 = true, none;
+
+        public static bool GetState(uint index, out State state)
+        {
+            state = new State();
+            if (none) return false;
+            if (use14)
+            {
+                try { return GetState14(index, out state) == 0; }
+                catch (DllNotFoundException) { use14 = false; }
+                catch (EntryPointNotFoundException) { use14 = false; }
+            }
+            try { return GetState910(index, out state) == 0; }
+            catch (DllNotFoundException) { none = true; }
+            catch (EntryPointNotFoundException) { none = true; }
+            return false;
+        }
+    }
+
+    // The ring around the control the pad is on (drawn above the window, not
+    // clipped by lists and scroll areas)
+    class PadRing : Adorner
+    {
+        readonly Pen pen;
+
+        public PadRing(UIElement element, Brush brush) : base(element)
+        {
+            IsHitTestVisible = false;
+            pen = new Pen(brush, 2);
+            pen.Freeze();
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            var s = AdornedElement.RenderSize;
+            dc.DrawRoundedRectangle(null, pen, new Rect(-4, -4, s.Width + 8, s.Height + 8), 9, 9);
+        }
+    }
+
+    public partial class OptionsApp
+    {
+        // XInput buttons, and the triggers pressed past half way (as Helper.ps1)
+        const int PadUp = 0x1, PadDown = 0x2, PadLeft = 0x4, PadRight = 0x8, PadStart = 0x10,
+            PadLB = 0x100, PadRB = 0x200, PadA = 0x1000, PadB = 0x2000, PadX = 0x4000, PadY = 0x8000,
+            PadLT = 0x10000, PadRT = 0x20000;
+        const int PadDirs = PadUp | PadDown | PadLeft | PadRight;
+
+        DispatcherTimer padTimer;
+        readonly Stopwatch padClock = Stopwatch.StartNew();
+        readonly bool[] padConnected = new bool[4];
+        long padNextScan, padRepeatAt, padRepeatXAt;
+        int padPrev, padRepeatDir;
+        bool padStartAlone, padRepeatX;
+        bool padMode;                 // the ring is shown: the last input came from the pad
+        FrameworkElement padFocus;    // the control the pad is on
+        PadRing padRing;
+        Win32.Point padCursor;
+        ComboBox padCombo;            // list opened with A
+        int padComboStart;
+        readonly uint padProcess = (uint)Process.GetCurrentProcess().Id;
+
+        static readonly MethodInfo buttonOnClick = typeof(ButtonBase).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        void InitGamepad()
+        {
+            padTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = TimeSpan.FromMilliseconds(16) };
+            padTimer.Tick += (s, e) => PadTick();
+            // only while this program is in the foreground (its dialogs too)
+            app.Activated += (s, e) => StartPad();
+            win.Activated += (s, e) => StartPad();
+            app.Deactivated += (s, e) => StopPad();
+            win.Closed += (s, e) => StopPad();
+            // a click or a key: mouse and keyboard take over
+            EventManager.RegisterClassHandler(typeof(Window), UIElement.PreviewMouseDownEvent, new MouseButtonEventHandler((s, e) => PadModeOff(true)));
+            EventManager.RegisterClassHandler(typeof(Window), UIElement.PreviewKeyDownEvent, new KeyEventHandler((s, e) => PadModeOff(true)));
+        }
+
+        void StartPad()
+        {
+            if (V("Gamepad") == "0" || padTimer.IsEnabled) return;
+            // buttons already held when the window comes back do not count
+            padNextScan = 0;
+            int rx, ry;
+            padPrev = ReadPad(out rx, out ry);
+            padRepeatDir = 0;
+            padRepeatX = false;
+            padStartAlone = false;
+            Win32.GetCursorPos(out padCursor);
+            padTimer.Start();
+        }
+
+        void StopPad()
+        {
+            padTimer.Stop();
+            CloseOsk(true);
+            padCombo = null;
+        }
+
+        void PadModeOff(bool closeOsk)
+        {
+            if (closeOsk) CloseOsk(true);
+            if (!padMode) return;
+            padMode = false;
+            HideRing();
+        }
+
+        int PadSetting(string key, int fallback, int min, int max)
+        {
+            double n;
+            if (!TryNum(V(key), out n)) return fallback;
+            return (int)Math.Max(min, Math.Min(max, n));
+        }
+
+        // Buttons of all the controllers together; the left stick counts as the D-pad.
+        // Disconnected controllers are checked again every 2 s (the call on an empty
+        // slot is slow).
+        int ReadPad(out int rx, out int ry)
+        {
+            long now = padClock.ElapsedMilliseconds;
+            bool scan = now >= padNextScan;
+            if (scan) padNextScan = now + 2000;
+            int buttons = 0, lx = 0, ly = 0;
+            rx = 0; ry = 0;
+            for (uint i = 0; i < 4; i++)
+            {
+                if (!padConnected[i] && !scan) continue;
+                XInput.State st;
+                padConnected[i] = XInput.GetState(i, out st);
+                if (!padConnected[i]) continue;
+                buttons |= st.Buttons;
+                if (st.LeftTrigger > 128) buttons |= PadLT;
+                if (st.RightTrigger > 128) buttons |= PadRT;
+                if (Math.Abs((int)st.ThumbLX) > Math.Abs(lx)) lx = st.ThumbLX;
+                if (Math.Abs((int)st.ThumbLY) > Math.Abs(ly)) ly = st.ThumbLY;
+                if (Math.Abs((int)st.ThumbRX) > Math.Abs(rx)) rx = st.ThumbRX;
+                if (Math.Abs((int)st.ThumbRY) > Math.Abs(ry)) ry = st.ThumbRY;
+            }
+            int dead = PadSetting("GamepadDeadZone", 12000, 0, 32767);
+            if (Math.Abs(lx) > dead || Math.Abs(ly) > dead)
+                buttons |= Math.Abs(lx) > Math.Abs(ly) ? (lx > 0 ? PadRight : PadLeft) : (ly > 0 ? PadUp : PadDown);
+            if (Math.Abs(rx) <= dead) rx = 0;
+            if (Math.Abs(ry) <= dead) ry = 0;
+            return buttons;
+        }
+
+        static int FirstDir(int buttons)
+        {
+            foreach (int d in new[] { PadUp, PadDown, PadLeft, PadRight }) if ((buttons & d) != 0) return d;
+            return 0;
+        }
+
+        static Window ActiveWindow()
+        {
+            foreach (Window w in Application.Current.Windows) if (w.IsActive) return w;
+            return null;
+        }
+
+        void PadTick()
+        {
+            if (V("Gamepad") == "0") { StopPad(); return; }
+            int rx, ry;
+            int buttons = ReadPad(out rx, out ry);
+            int prev = padPrev;
+            padPrev = buttons;
+            long now = padClock.ElapsedMilliseconds;
+
+            // the mouse moved: the ring goes (the on-screen keyboard stays, its keys can be clicked)
+            Win32.Point c;
+            if (Win32.GetCursorPos(out c))
+            {
+                if (Math.Abs(c.X - padCursor.X) + Math.Abs(c.Y - padCursor.Y) > 3) PadModeOff(false);
+                padCursor = c;
+            }
+
+            // one direction held repeats, as in the launcher; X too (delete, on the keyboard)
+            int fire = buttons & ~prev & ~(PadDirs | PadX);
+            int dir = FirstDir(buttons);
+            if (dir == 0) padRepeatDir = 0;
+            else if (dir != padRepeatDir)
+            {
+                padRepeatDir = dir;
+                padRepeatAt = now + PadSetting("GamepadRepeatDelay", 350, 50, 1000);
+                fire |= dir;
+            }
+            else if (now >= padRepeatAt)
+            {
+                padRepeatAt = now + PadSetting("GamepadRepeatRate", 110, 30, 500);
+                fire |= dir;
+            }
+            if ((buttons & PadX) == 0) padRepeatX = false;
+            else if (!padRepeatX)
+            {
+                padRepeatX = true;
+                padRepeatXAt = now + PadSetting("GamepadRepeatDelay", 350, 50, 1000);
+                fire |= PadX;
+            }
+            else if (now >= padRepeatXAt)
+            {
+                padRepeatXAt = now + PadSetting("GamepadRepeatRate", 110, 30, 500);
+                fire |= PadX;
+            }
+            // Start alone, on release
+            if ((buttons & ~prev & PadStart) != 0) padStartAlone = buttons == PadStart;
+            else if ((buttons & PadStart) != 0 && buttons != PadStart) padStartAlone = false;
+            bool start = (prev & PadStart) != 0 && (buttons & PadStart) == 0 && padStartAlone;
+            if (start) padStartAlone = false;
+
+            var root = ActiveWindow();
+            if (root == null)
+            {
+                // another program in the foreground: stop until a window of this
+                // one is active again (a colour or file dialog of its own: wait)
+                uint pid;
+                Win32.GetWindowThreadProcessId(Win32.GetForegroundWindow(), out pid);
+                if (pid != padProcess) StopPad();
+                return;
+            }
+            if (root == win && refreshing) return;
+
+            if (oskTarget != null) { OskInput(fire, start); return; }
+            if (padCombo != null)
+            {
+                if (padCombo.IsDropDownOpen) { PadComboInput(fire); return; }
+                padCombo = null;
+            }
+            if (rx != 0 || ry != 0) PadScroll(root, rx, ry);
+            if (padMode)
+            {
+                // the control may be gone (page rebuilt, dialog opened or closed)
+                EnsurePadFocus(root);
+                ShowRing();
+            }
+            if (fire == 0 && !start) return;
+
+            // first input after the mouse: shows where the pad is
+            if (!padMode)
+            {
+                padMode = true;
+                EnsurePadFocus(root);
+                ShowRing();
+                if ((fire & (PadDirs | PadA)) != 0) return;
+            }
+
+            int d = FirstDir(fire);
+            if (d != 0) PadMove(root, d);
+            else if ((fire & PadA) != 0) PadActivate();
+            else if ((fire & PadB) != 0) PadBack(root);
+            else if ((fire & PadLB) != 0 && root == win) PadPage(-1);
+            else if ((fire & PadRB) != 0 && root == win) PadPage(1);
+            else if (start && root == win)
+            {
+                // the button takes the focus first, as with a click: fields that
+                // keep their value when left (tile name) do so
+                btnSave.Focus();
+                StartSaveAndRefresh();
+            }
+            ShowRing();
+        }
+
+        // --- Where the pad is --------------------------------------------------------
+
+        static bool IsPadTarget(FrameworkElement fe)
+        {
+            return fe is ButtonBase || fe is TextBox || fe is PasswordBox || fe is ComboBox || fe is Slider || fe is ListBoxItem;
+        }
+
+        // The field next to a slider: the pad changes the value with the slider
+        static bool IsSliderField(FrameworkElement fe)
+        {
+            var p = VisualTreeHelper.GetParent(fe) as Panel;
+            return fe is TextBox && p != null && p.Children.OfType<Slider>().Any();
+        }
+
+        static void CollectPadTargets(DependencyObject d, List<FrameworkElement> list)
+        {
+            var fe = d as FrameworkElement;
+            if (fe != null)
+            {
+                if (!fe.IsVisible || !fe.IsEnabled || fe is ScrollBar) return;
+                if (IsPadTarget(fe))
+                {
+                    if (fe.Focusable && !IsSliderField(fe)) list.Add(fe);
+                    return;
+                }
+            }
+            int n = VisualTreeHelper.GetChildrenCount(d);
+            for (int i = 0; i < n; i++) CollectPadTargets(VisualTreeHelper.GetChild(d, i), list);
+        }
+
+        static bool PadUsable(FrameworkElement fe, Window root)
+        {
+            return fe != null && fe.IsVisible && fe.IsEnabled && IsPadTarget(fe) && Window.GetWindow(fe) == root;
+        }
+
+        void EnsurePadFocus(Window root)
+        {
+            if (PadUsable(padFocus, root)) return;
+            FrameworkElement next = null;
+            // the control with the keyboard focus (the field of an editable list: the list)
+            var focused = Keyboard.FocusedElement as FrameworkElement;
+            if (focused is TextBox && focused.TemplatedParent is ComboBox) focused = (ComboBox)focused.TemplatedParent;
+            if (PadUsable(focused, root)) next = focused;
+            else if (root == win) next = (nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem;
+            if (!PadUsable(next, root))
+            {
+                var all = new List<FrameworkElement>();
+                CollectPadTargets(root, all);
+                next = all.OfType<Button>().FirstOrDefault(b => b.IsDefault) ?? all.FirstOrDefault();
+            }
+            if (next != null) PadSetFocus(next, false);
+        }
+
+        void PadSetFocus(FrameworkElement fe, bool scroll = true)
+        {
+            padFocus = fe;
+            fe.Focus();
+            // some room around it: the title of its card, the next row
+            if (scroll) fe.BringIntoView(new Rect(-24, -56, fe.ActualWidth + 48, fe.ActualHeight + 112));
+            ShowRing();
+        }
+
+        void ShowRing()
+        {
+            if (!padMode || padFocus == null || (padRing != null && padRing.AdornedElement == padFocus)) return;
+            HideRing();
+            var layer = AdornerLayer.GetAdornerLayer(padFocus);
+            if (layer == null) return;
+            padRing = new PadRing(padFocus, ResBrush("AccentBrush"));
+            layer.Add(padRing);
+        }
+
+        void HideRing()
+        {
+            if (padRing == null) return;
+            var layer = AdornerLayer.GetAdornerLayer(padRing.AdornedElement);
+            if (layer != null) layer.Remove(padRing);
+            padRing = null;
+        }
+
+        // --- Moving ------------------------------------------------------------------
+
+        static Rect PadRect(FrameworkElement fe, Visual root)
+        {
+            try { return fe.TransformToAncestor(root).TransformBounds(new Rect(0, 0, fe.ActualWidth, fe.ActualHeight)); }
+            catch (InvalidOperationException) { return Rect.Empty; }
+        }
+
+        static ScrollViewer PadScope(DependencyObject d)
+        {
+            for (var p = VisualTreeHelper.GetParent(d); p != null; p = VisualTreeHelper.GetParent(p))
+            {
+                var sv = p as ScrollViewer;
+                if (sv != null) return sv;
+            }
+            return null;
+        }
+
+        // Outside the scroll areas the pad is in, only what they show counts:
+        // the rest of a page is not under the buttons at the bottom
+        bool PadShown(FrameworkElement fe, Rect r, Visual root)
+        {
+            for (var p = VisualTreeHelper.GetParent(fe); p != null; p = VisualTreeHelper.GetParent(p))
+            {
+                var sv = p as ScrollViewer;
+                if (sv == null || sv.IsAncestorOf(padFocus)) continue;
+                var view = Rect.Intersect(PadRect(sv, root), r);
+                if (view.IsEmpty || view.Width < 2 || view.Height < 2) return false;
+            }
+            return true;
+        }
+
+        // Is b in direction 'dir' from a? major: the distance that way; gap: how far
+        // apart they are across (0 when they overlap); center: their centers across
+        static bool PadDirTo(Rect a, Rect b, int dir, out double major, out double gap, out double center)
+        {
+            double acx = a.Left + a.Width / 2, acy = a.Top + a.Height / 2;
+            double bcx = b.Left + b.Width / 2, bcy = b.Top + b.Height / 2;
+            major = gap = center = 0;
+            bool vertical = dir == PadUp || dir == PadDown;
+            if (dir == PadDown && (bcy <= acy + 1 || b.Bottom <= a.Bottom)) return false;
+            if (dir == PadUp && (bcy >= acy - 1 || b.Top >= a.Top)) return false;
+            if (dir == PadRight && (bcx <= acx + 1 || b.Right <= a.Right)) return false;
+            if (dir == PadLeft && (bcx >= acx - 1 || b.Left >= a.Left)) return false;
+            switch (dir)
+            {
+                case PadDown: major = b.Top - a.Bottom; break;
+                case PadUp: major = a.Top - b.Bottom; break;
+                case PadRight: major = b.Left - a.Right; break;
+                default: major = a.Left - b.Right; break;
+            }
+            major = Math.Max(0, major);
+            gap = vertical ? Math.Max(0, Math.Max(b.Left - a.Right, a.Left - b.Right)) : Math.Max(0, Math.Max(b.Top - a.Bottom, a.Top - b.Bottom));
+            center = vertical ? Math.Abs(bcx - acx) : Math.Abs(bcy - acy);
+            return true;
+        }
+
+        // The control to go to: the nearest one that way, first in the scroll area
+        // the pad is in (a page goes on below what is shown). Sideways only what is
+        // level with it counts, except when leaving the area (menu <-> page).
+        FrameworkElement PadFind(Window root, int dir)
+        {
+            var cur = PadRect(padFocus, root);
+            if (cur.IsEmpty) return null;
+            var scope = PadScope(padFocus);
+            var all = new List<FrameworkElement>();
+            CollectPadTargets(root, all);
+            bool sideways = dir == PadLeft || dir == PadRight;
+            int tiers = sideways ? 3 : 2;
+            for (int tier = 0; tier < tiers; tier++)
+            {
+                FrameworkElement best = null;
+                double bestScore = double.MaxValue;
+                foreach (var c in all)
+                {
+                    if (c == padFocus) continue;
+                    var r = PadRect(c, root);
+                    if (r.IsEmpty) continue;
+                    bool inScope = scope != null && scope.IsAncestorOf(c);
+                    if (!inScope && !PadShown(c, r, root)) continue;
+                    double major, gap, center;
+                    if (!PadDirTo(cur, r, dir, out major, out gap, out center)) continue;
+                    bool level = gap <= 0;
+                    double score;
+                    if (sideways)
+                    {
+                        if (tier == 0 && !(inScope && level)) continue;
+                        if (tier == 1 && !level) continue;
+                        if (tier == 2 && inScope) continue;
+                        score = tier < 2 ? major * 4 + center * 0.5 : gap * 4 + major * 0.5;
+                    }
+                    else
+                    {
+                        if (tier == 0 && !inScope) continue;
+                        score = major * 4 + gap + center * 0.05;
+                    }
+                    if (score < bestScore) { bestScore = score; best = c; }
+                }
+                if (best != null) return best;
+            }
+            return null;
+        }
+
+        static Panel ItemsHost(DependencyObject d)
+        {
+            int n = VisualTreeHelper.GetChildrenCount(d);
+            for (int i = 0; i < n; i++)
+            {
+                var child = VisualTreeHelper.GetChild(d, i);
+                var p = child as Panel;
+                if (p != null && p.IsItemsHost) return p;
+                var found = ItemsHost(child);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        // In a list the next entry is the next by index, also when it is not built
+        // yet (long lists build only what is on screen)
+        bool PadListStep(ListBoxItem item, int dir)
+        {
+            var list = ItemsControl.ItemsControlFromItemContainer(item) as ListBox;
+            if (list == null) return false;
+            var host = ItemsHost(list);
+            bool horizontal;
+            if (host is StackPanel) horizontal = ((StackPanel)host).Orientation == Orientation.Horizontal;
+            else if (host is VirtualizingStackPanel) horizontal = ((VirtualizingStackPanel)host).Orientation == Orientation.Horizontal;
+            else return false;
+            int step;
+            if (horizontal) step = dir == PadRight ? 1 : dir == PadLeft ? -1 : 0;
+            else step = dir == PadDown ? 1 : dir == PadUp ? -1 : 0;
+            if (step == 0) return false;
+            int i = list.ItemContainerGenerator.IndexFromContainer(item) + step;
+            for (; i >= 0 && i < list.Items.Count; i += step)
+            {
+                list.ScrollIntoView(list.Items[i]);
+                list.UpdateLayout();
+                var next = list.ItemContainerGenerator.ContainerFromIndex(i) as ListBoxItem;
+                if (next != null && next.IsVisible && next.IsEnabled) { PadSetFocus(next); return true; }
+            }
+            return false;
+        }
+
+        void PadMove(Window root, int dir)
+        {
+            // a slider changes with left and right
+            var slider = padFocus as Slider;
+            if (slider != null && (dir == PadLeft || dir == PadRight))
+            {
+                (dir == PadRight ? Slider.IncreaseSmall : Slider.DecreaseSmall).Execute(null, slider);
+                return;
+            }
+            var item = padFocus as ListBoxItem;
+            if (item != null && PadListStep(item, dir)) return;
+            var next = PadFind(root, dir);
+            if (next != null) PadSetFocus(next);
+        }
+
+        // --- Acting ------------------------------------------------------------------
+
+        void PadActivate()
+        {
+            var fe = padFocus;
+            if (fe == null) return;
+            var cb = fe as ComboBox;
+            if (cb != null)
+            {
+                padCombo = cb;
+                padComboStart = cb.SelectedIndex;
+                cb.IsDropDownOpen = true;
+                return;
+            }
+            var tb = fe as TextBox;
+            if ((tb != null && !tb.IsReadOnly) || fe is PasswordBox) { OpenOsk(fe); return; }
+            var item = fe as ListBoxItem;
+            if (item != null)
+            {
+                var list = ItemsControl.ItemsControlFromItemContainer(item) as ListBox;
+                if (list != null && list.SelectionMode != SelectionMode.Single) item.IsSelected = !item.IsSelected;
+                else item.IsSelected = true;
+                return;
+            }
+            var b = fe as ButtonBase;
+            if (b != null) PadClick(b);
+        }
+
+        // As a click: switches, choices and buttons run their own handlers
+        static void PadClick(ButtonBase b)
+        {
+            try { buttonOnClick.Invoke(b, null); }
+            catch (TargetInvocationException e)
+            {
+                if (e.InnerException != null) ExceptionDispatchInfo.Capture(e.InnerException).Throw();
+                throw;
+            }
+        }
+
+        void PadBack(Window root)
+        {
+            // a dialog: as Esc
+            if (root != win) { root.Close(); return; }
+            var list = padFocus is ListBoxItem ? ItemsControl.ItemsControlFromItemContainer(padFocus) : null;
+            if (list == nav || list == navBottom) { win.Close(); return; }
+            var sel = (nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem;
+            if (sel != null) PadSetFocus(sel);
+        }
+
+        // LB / RB: the pages of the menu in order (a closed group counts as one:
+        // it opens on its first page)
+        void PadPage(int delta)
+        {
+            var entries = new List<ListBoxItem>();
+            foreach (ListBoxItem it in nav.Items)
+            {
+                var tag = (NavTag)it.Tag;
+                if (tag.Type == "group" && navOpen.ContainsKey(tag.Group) && navOpen[tag.Group]) continue;
+                entries.Add(it);
+            }
+            foreach (ListBoxItem it in navBottom.Items) entries.Add(it);
+            int i = entries.IndexOf((nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem);
+            int n = i + delta;
+            if (i < 0 || n < 0 || n >= entries.Count) return;
+            var next = entries[n];
+            if (navBottom.Items.Contains(next)) navBottom.SelectedItem = next;
+            else nav.SelectedItem = next;
+            // a group rebuilds the menu: the pad goes to its new entry on the next read
+            PadSetFocus(next);
+        }
+
+        void PadComboInput(int fire)
+        {
+            var cb = padCombo;
+            int step = (fire & PadDown) != 0 ? 1 : (fire & PadUp) != 0 ? -1 : (fire & PadRB) != 0 ? 10 : (fire & PadLB) != 0 ? -10 : 0;
+            if (step != 0 && cb.Items.Count > 0)
+            {
+                int i = Math.Max(0, Math.Min(cb.Items.Count - 1, cb.SelectedIndex + step));
+                if (cb.SelectedIndex < 0) i = 0;
+                cb.SelectedIndex = i;
+                var popup = cb.Template.FindName("PART_Popup", cb) as Popup;
+                var host = popup != null && popup.Child != null ? ItemsHost(popup.Child) as VirtualizingStackPanel : null;
+                if (host != null) host.BringIndexIntoViewPublic(i);
+                else
+                {
+                    var c = cb.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
+                    if (c != null) c.BringIntoView();
+                }
+            }
+            if ((fire & PadA) != 0) { cb.IsDropDownOpen = false; padCombo = null; }
+            else if ((fire & PadB) != 0)
+            {
+                cb.SelectedIndex = padComboStart;
+                cb.IsDropDownOpen = false;
+                padCombo = null;
+            }
+        }
+
+        // Right stick: scrolls the area the pad is in (or the page)
+        void PadScroll(Window root, int rx, int ry)
+        {
+            ScrollViewer v = null, h = null;
+            for (DependencyObject p = padFocus; p != null; p = VisualTreeHelper.GetParent(p))
+            {
+                var sv = p as ScrollViewer;
+                if (sv == null) continue;
+                if (v == null && sv.ScrollableHeight > 0) v = sv;
+                if (h == null && sv.ScrollableWidth > 0) h = sv;
+            }
+            if (v == null && root == win) v = FindScrollViewer(pageHost);
+            if (v != null && ry != 0) v.ScrollToVerticalOffset(v.VerticalOffset - ry / 32767.0 * 24);
+            if (h != null && rx != 0) h.ScrollToHorizontalOffset(h.HorizontalOffset + rx / 32767.0 * 24);
+        }
+    }
+}

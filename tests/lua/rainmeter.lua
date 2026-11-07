@@ -227,7 +227,8 @@ local RECORDED = {
 
 -- Options of a skin: data folders, settings, screen.
 --   settings = { Key = value }  written to the user's Settings.inc
---   screen = { x, y, w, h }      the work area (#SCREENAREA...#)
+--   screen = { x, y, w, h }      the screen (#SCREENAREA...#)
+--   work = { x, y, w, h }        its work area (#WORKAREA...#), the screen if not given
 function R.new(opts)
 	opts = opts or {}
 	local self = setmetatable({}, Skin)
@@ -252,6 +253,7 @@ function R.new(opts)
 		writeFile(self.data .. 'Settings.inc', text)
 	end
 	local sc = opts.screen or { 0, 0, 1920, 1040 }
+	local wa = opts.work or sc
 	self.builtins = {
 		['@'] = self.resources,
 		settingspath = self.settingsPath,
@@ -262,8 +264,8 @@ function R.new(opts)
 		programpath = 'C:\\Program Files\\Rainmeter\\',
 		screenareax = tostring(sc[1]), screenareay = tostring(sc[2]),
 		screenareawidth = tostring(sc[3]), screenareaheight = tostring(sc[4]),
-		workareax = tostring(sc[1]), workareay = tostring(sc[2]),
-		workareawidth = tostring(sc[3]), workareaheight = tostring(sc[4]),
+		workareax = tostring(wa[1]), workareay = tostring(wa[2]),
+		workareawidth = tostring(wa[3]), workareaheight = tostring(wa[4]),
 		virtualscreenx = '0', virtualscreeny = '0',
 		virtualscreenwidth = tostring(sc[3]), virtualscreenheight = tostring(sc[4]),
 		pscreenareawidth = tostring(sc[3]), pscreenareaheight = tostring(sc[4]),

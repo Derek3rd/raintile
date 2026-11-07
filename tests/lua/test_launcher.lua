@@ -61,6 +61,22 @@ function T.window_session()
 	session(s)
 end
 
+-- A window never covers the taskbar: at 100% on the whole screen it fills the
+-- work area; full screen still covers all of it.
+function T.window_full_size_leaves_taskbar()
+	local opts = { screen = { 0, 0, 1920, 1080 }, work = { 0, 0, 1920, 1032 } }
+	opts.settings = { LauncherMode = 'Window', WindowW = '100%', WindowH = '100%' }
+	local s = R.new(opts):start()
+	t.clean(s)
+	local V = s:upvalue('V')
+	t.eq(V.ScreenX .. ',' .. V.ScreenY .. ',' .. V.ScreenW .. ',' .. V.ScreenH, '0,0,1920,1032', 'window rect')
+	opts.settings = { LauncherMode = 'Fullscreen' }
+	s = R.new(opts):start()
+	t.clean(s)
+	V = s:upvalue('V')
+	t.eq(V.ScreenH, 1080, 'full screen height')
+end
+
 function T.docked_left_session()
 	local s = launcher({ LauncherMode = 'Dock', DockSide = 'Left' })
 	session(s)

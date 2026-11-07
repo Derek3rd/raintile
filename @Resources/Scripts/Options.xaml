@@ -1,5 +1,5 @@
 <!--
-  Raintile: look of the Options window (Options.ps1). Colours, and the styles
+  Raintile: look of the Options window (RaintileOptions.exe). Colours, and the styles
   of every control type: they apply to the whole window by themselves.
 -->
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"

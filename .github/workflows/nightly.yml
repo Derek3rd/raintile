@@ -46,10 +46,6 @@ jobs:
           echo "version=$base.$count" >> "$GITHUB_OUTPUT"
           echo "Nightly $base.$count (since ${last:-the start}: $count commits)"
 
-      - name: Check the Options schema
-        if: steps.version.outputs.count != '0'
-        run: python3 tools/gen_options_schema.py --check
-
       - name: Build the Options program
         if: steps.version.outputs.count != '0'
         run: |

@@ -354,14 +354,20 @@ namespace RaintileOptions
                     else
                     {
                         var page = Schema.ById(node.Page);
-                        nav.Items.Add(NewNavItem("page:" + node.Page, page.Title, page.Icon, 0, new NavTag { Type = "page", Page = page }));
-                        // Widgets: one entry per installed widget, its settings
-                        if (node.Page == "dashboard")
-                            foreach (var id in InstalledWidgets())
-                            {
-                                string name = WidgetInfo(id, "Name");
-                                nav.Items.Add(NewNavItem("widget:" + id, name != "" ? name : id, 0, 1, new NavTag { Type = "widget", File = id }));
-                            }
+                        // Widgets: below it the installed widgets that have settings, a group that opens and closes
+                        var withSettings = node.Page == "dashboard" ? InstalledWidgets().Where(id => WidgetOptions(id).Count > 0).ToList() : null;
+                        if (withSettings != null && withSettings.Count > 0)
+                        {
+                            bool open = navOpen.ContainsKey("widgets") && navOpen["widgets"];
+                            nav.Items.Add(NewNavItem("page:" + node.Page, page.Title, page.Icon, 0, new NavTag { Type = "page", Group = "widgets", Page = page }, "", open));
+                            if (open)
+                                foreach (var id in withSettings)
+                                {
+                                    string name = WidgetInfo(id, "Name");
+                                    nav.Items.Add(NewNavItem("widget:" + id, name != "" ? name : id, 0, 1, new NavTag { Type = "widget", File = id }));
+                                }
+                        }
+                        else nav.Items.Add(NewNavItem("page:" + node.Page, page.Title, page.Icon, 0, new NavTag { Type = "page", Page = page }));
                     }
                 }
                 foreach (ListBoxItem it in nav.Items) if (((NavTag)it.Tag).Id == selectId) nav.SelectedItem = it;

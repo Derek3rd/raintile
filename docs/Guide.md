@@ -210,14 +210,14 @@ The **Dashboard** (`Categories\Dashboard.ini`, added once to existing data too) 
 - The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a category with widgets is on screen, every `DashInterval` ms (default 1000): with it closed nothing is measured.
 - **Modrinth instances** (widget gallery, under Games): the instances of [Modrinth App](https://modrinth.com/app), the last played first, with their icons; a click starts one. Its script reads Modrinth App's database (read only) when the category comes on screen. More cells for the tile (`Size=1x2`), more rows. Widgets can do the same for anything: see *What Raintile does for a widget* in `widgets/README.md`.
 - **Steam achievements** (widget gallery, under Games): the achievements of the Steam game played last, or of the game in the tile's *Widget setting* (its Steam app id, `WidgetOption=570`): how many are unlocked, the last ones unlocked, the locked ones most players have. A click opens the game's achievements in Steam. It needs your Steam Web API key (free, from [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)) in Options > Widgets > Steam achievements (the widget's own settings), and your profile's game details public; it asks Steam at most every 5 minutes for the same game.
-- Installed widgets with settings of their own (a key, a colour) have an entry each under Options > **Widgets**, in the menu on the left; the settings are kept in the widget's folder (`settings.inc`) and survive its updates. What a single tile shows (e.g. which game) is its *Widget setting* in the tile editor instead.
+- Installed widgets with settings of their own (a key, a colour) have an entry each under Options > **Widgets**, in the menu on the left (click *Widgets* again to open or close the list); the settings are kept in the widget's folder (`settings.inc`) and survive its updates. What a single tile shows (e.g. which game) is its *Widget setting* in the tile editor instead.
 - A custom widget can have parts (`Part=1` on its meters): the highlight goes onto the part under the mouse and a click runs the part's own action (see `widgets/README.md`).
 - Widgets are left out of search, Favorites, Recent and the filters. In a sorted category they are sorted like the other tiles (by name, by when they were added...); pin them to keep them first.
 - Clicking a widget runs its `Command=`, or by default opens what fits: Task Manager (CPU, GPU, RAM, processes), the disk in Explorer, network or system settings.
 
 ### Widgets
 
-A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options > Categories > *the category* > *the tile* pick **Widget** and **Widget option**. `Label=` is the title shown on the widget (by default the name of the kind), `Size=2x1` makes it larger (see [Tiles of more cells](#tiles-of-more-cells)).
+A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options > Categories > *the category* > *the tile* pick **Widget** and **Widget option**. `Label=` is the title shown on the widget (by default the name of the kind; custom widgets draw their own title, if any), `Size=2x1` makes it larger (see [Tiles of more cells](#tiles-of-more-cells)).
 
 | `Widget=` | Shows | `Param=` |
 | --- | --- | --- |

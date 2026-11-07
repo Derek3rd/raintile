@@ -2280,7 +2280,8 @@ function D.placeList(t, x, y, alpha)
 	local i = w.idx
 	local W, H, pad = V.TileW, V.TileH, V.LabelPad
 	local small, valueSize, line = D.sizes()
-	local top = D.layout(small, valueSize, line).top
+	-- (the widget draws its own title, if any: the rows start at the top, or at its ListY=)
+	local top = math.max(0, math.floor(M.widgetInfo(t).listY or math.floor(pad / 2)))
 	local rowH = math.max(36, math.floor(line * 2.4))
 	local fit = math.max(0, math.min(M.LIST_ROWS, math.floor((H - top - math.floor(pad / 2)) / rowH)))
 	if not w.items then M.readWidgetList(t) end
@@ -2613,9 +2614,14 @@ function D.customWidgetText(t, i, w, h)
 			if k and trim(k) ~= '' then
 				local key = trim(k):lower()
 				v = trim(own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETOPTION#', ((t.widget.option or ''):gsub('%%', '%%%%')))
+					:gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
 					:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end))
 				if key == 'onshow' then api.onShow = v
 				elseif key == 'onhide' then api.onHide = v
+				elseif key == 'listy' and v ~= '' then
+					-- where the rows start, from the top of the tile (under a
+					-- title of the widget's own)
+					api.listY = tonumber(v) or tonumber(SKIN:ParseFormula(v:match('^%(') and v or '(' .. v .. ')'))
 				elseif key == 'list' and v ~= '' then
 					-- (a file of the widget, in its folder)
 					api.list = (v:match('^%a:') or v:match('^\\')) and v or dir .. v
@@ -2822,8 +2828,9 @@ function D.fillWidget(t)
 		w.parts.Value, w.parts.Sub = true, true
 		return
 	end
+	-- (a custom widget writes its own title, if it wants one)
 	if w.kind == 'skin' or w.kind == 'custom' then
-		w.parts.Title = w.title ~= nil
+		w.parts.Title = w.kind == 'skin' and w.title ~= nil
 		return
 	end
 	if not d then

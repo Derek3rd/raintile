@@ -38,7 +38,6 @@ Widgets\<Id>\settings.inc  its settings, written by the Options window (see Sett
 Widget=custom
 Param=<Id>
 Size=1x2          ; optional: more cells
-Label=            ; optional: a title written at the top left of the tile
 WidgetOption=     ; optional: a setting of this tile for the widget (#WIDGETOPTION#)
 ```
 
@@ -75,7 +74,10 @@ What the widget asks of Raintile:
 OnShow=[!CommandMeasure #WIDGET:Read# "Run"]
 OnHide=
 List=list.txt
+ListY=
 ```
+
+Raintile writes no title on a custom widget's tile (the tile's `Label=` is not used): the whole tile is the widget's, and a widget that wants a title draws it with a meter of its own.
 
 ### OnShow and OnHide
 
@@ -96,7 +98,7 @@ Bangs run when the widget's category comes on screen (the launcher opens on it, 
 | icon | an image file (full path); may be empty |
 | command | what a click on the row runs: a bang (starting with `[`), or a program, file or address, opened like a tile's `Command` (`modrinth://...`, `"C:\Games\x.exe"`); empty: nothing |
 
-The rows go under the tile's title, as many as fit (at most 10; more cells for the tile, more rows). Each row is a [part](#parts-of-a-tile): Raintile's highlight goes onto it, and the launcher hides after a click like after a tile (`CloseOnLaunch`). A file with no rows shows *Nothing to show yet*. Write the file UTF-8, `|` and line breaks out of the fields, and replace it whole (write a `.tmp`, then move it): Raintile may read it at any time.
+The rows start at the top of the tile, or at `ListY=` (pixels or a formula from the tile's top, e.g. `ListY=(#WIDGETH#*0.2)`) to leave room for a title of the widget's own; as many as fit (at most 10; more cells for the tile, more rows). Each row is a [part](#parts-of-a-tile): Raintile's highlight goes onto it, and the launcher hides after a click like after a tile (`CloseOnLaunch`). A file with no rows shows *Nothing to show yet*. Write the file UTF-8, `|` and line breaks out of the fields, and replace it whole (write a `.tmp`, then move it): Raintile may read it at any time.
 
 A widget can have a list and meters of its own (e.g. a picture behind the rows), or only a list.
 

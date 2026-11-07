@@ -45,7 +45,7 @@ namespace RaintileOptions
             tilePinned.Checked += (s, e) => SetPinned(true);
             tilePinned.Unchecked += (s, e) => SetPinned(false);
             return NewFormRow("Pinned", tilePinned,
-                "Pinned tiles come first, in the order you drag them to; sorting (All tiles > Order) only moves the others. Also from the tile's menu in the launcher.");
+                "Pinned tiles come first, in the order you drag them to, with a pin in the strip; sorting (All tiles > Order) only moves the others, and while a category keeps its order only pinned tiles can be moved. Also from the tile's menu in the launcher.");
         }
 
         void ShowPinned(IniSection s)
@@ -68,18 +68,18 @@ namespace RaintileOptions
 
         FrameworkElement NewSortRow()
         {
-            var grid = NewGrid("*", "8", "Auto", "12", "Auto");
+            // the order and Sort now on a line, Keep sorted below it
+            var grid = NewGrid("*", Gap.Control.ToString(System.Globalization.CultureInfo.InvariantCulture), "Auto");
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             sortBox = new ComboBox();
             foreach (var s in SORTS) sortBox.Items.Add(new ComboBoxItem { Content = s[1], Tag = s[0] });
             sortBox.SelectedIndex = 0;
-            sortNow = NewButton("Sort now", "", "Put the tiles of the category in this order once; you can still drag them afterwards");
-            sortKeep = new CheckBox
-            {
-                Content = "Keep sorted", VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = "Always in this order: new and changed tiles go to their place, and the launcher works the order out again each time it opens (play changes it). Dragging is off.",
-            };
+            sortNow = NewButton("Sort now");
+            sortKeep = new CheckBox { Content = "Keep sorted", VerticalAlignment = VerticalAlignment.Center, Margin = T(0, Gap.Control, 0, 0) };
             SetCol(sortNow, 2);
-            SetCol(sortKeep, 4);
+            Grid.SetRow(sortKeep, 1);
+            Grid.SetColumnSpan(sortKeep, 3);
             grid.Children.Add(sortBox); grid.Children.Add(sortNow); grid.Children.Add(sortKeep);
             sortNow.Click += (s, e) =>
             {
@@ -92,6 +92,7 @@ namespace RaintileOptions
             sortKeep.Unchecked += (s, e) => SetKeepSorted(false);
             sortBox.SelectionChanged += (s, e) => { if (sortKeep.IsChecked == true) SetKeepSorted(true); };
             return sortRow = NewFormRow("Order", grid,
+                "Sort now puts the tiles in this order once (you can still drag them). Keep sorted: always in this order, new and changed tiles go to their place and the launcher works the order out again each time it opens; dragging is off. " +
                 "Played: the launches counted by Raintile, Steam's last launch and play time, and the play time measured for the other games. Ties keep the order they had.");
         }
 

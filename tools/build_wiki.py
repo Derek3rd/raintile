@@ -4,8 +4,8 @@ docs are written in docs/ and the wiki is rewritten from them by
 
     python tools/build_wiki.py <out folder> [<owner/repo> [<branch>]]
 
-Pages: Home, Guide (docs/Guide.md), Writing-widgets (docs/Widgets.md) and
-the sidebar. Links between the docs become links between wiki pages; links
+Pages: Home, Guide (docs/Guide.md), Writing-widgets (docs/Widgets.md),
+Options-window-UI (docs/OptionsUI.md) and the sidebar. Links between the docs become links between wiki pages; links
 to other files of the repository become links to them on GitHub.
 """
 
@@ -19,6 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAGES = {
     'Guide.md': 'Guide',
     'Widgets.md': 'Writing-widgets',
+    'OptionsUI.md': 'Options-window-UI',
 }
 
 LINK = re.compile(r'\]\(([^)\s]+)\)')
@@ -61,9 +62,11 @@ def main():
                 'in a window or docked on a side, with widgets.\n\n'
                 '- [Guide](Guide): installing, using and setting up Raintile, every setting.\n'
                 '- [Writing widgets](Writing-widgets): custom widgets and what Raintile offers them.\n'
+                '- [Options window UI](Options-window-UI): the rules for changes to the Options window.\n'
                 '- [Downloads](https://github.com/%s/releases): the releases and the nightly build.\n' % repo)
     with open(os.path.join(out, '_Sidebar.md'), 'w', encoding='utf-8', newline='\n') as f:
         f.write('**Raintile**\n\n- [Home](Home)\n- [Guide](Guide)\n- [Writing widgets](Writing-widgets)\n'
+                '- [Options window UI](Options-window-UI)\n'
                 '- [Releases](https://github.com/%s/releases)\n' % repo)
     print('wiki pages written to', out)
 

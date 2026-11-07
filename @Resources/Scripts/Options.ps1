@@ -187,7 +187,7 @@ function Format-HotKey([string]$value) {
 # --- Settings schema ------------------------------------------------------------------
 # Pages of the window: groups of items. Kinds:
 #   bool, choice (Choices = value, label), int / float (slider: Min, Max, Step,
-#   Unit), size (pixels or % of the screen width/height: Axis W/H), color,
+#   Unit; NoSlider: a text box only), size (pixels or % of the screen width/height: Axis W/H), color,
 #   text, font, category, stores, pad (gamepad buttons), key, combo (key with
 #   modifiers), keys (two keys for one action: Pair), screen (ScreenX/Y/W/H),
 #   info (text only), action (button), secret (hidden text, saved encrypted).
@@ -197,9 +197,12 @@ function S([string]$kind, [string]$key, [string]$label, [string]$help = '', [has
     foreach ($k in $more.Keys) { $item[$k] = $more[$k] }
     return $item
 }
-function Num([string]$key, [string]$label, [double]$min, [double]$max, [double]$step, [string]$unit = '', [string]$help = '') {
+function Num([string]$key, [string]$label, [double]$min, [double]$max, [double]$step, [string]$unit = '', [string]$help = '', [switch]$NoSlider) {
     $kind = if ($step -lt 1) { 'float' } else { 'int' }
-    return (S $kind $key $label $help @{ Min = $min; Max = $max; Step = $step; Unit = $unit })
+    $item = S $kind $key $label $help @{ Min = $min; Max = $max; Step = $step; Unit = $unit }
+    # an identifier or a huge range (a port): a text box only
+    if ($NoSlider) { $item.NoSlider = $true }
+    return $item
 }
 function Size([string]$key, [string]$label, [string]$axis, [string]$help = '') {
     return (S 'size' $key $label $help @{ Axis = $axis })
@@ -244,10 +247,10 @@ $schema = @(
         Desc = 'The default grid of tiles and the spaces around it. Each category can have its own grid (Categories).'
         Groups = @(
             @{ Title = 'Grid'; Items = @(
-                    (Num 'NX' 'Columns' 1 12 1),
-                    (Num 'NY' 'Rows' 1 8 1),
+                    (Num 'NX' 'Columns' 1 12 1 'columns'),
+                    (Num 'NY' 'Rows' 1 8 1 'rows'),
                     (S 'choice' 'ScrollDir' 'Scroll direction' '' @{ Choices = @(@('V', 'Vertical'), @('H', 'Horizontal')) }),
-                    (Num 'ScrollStep' 'Rows per mouse wheel notch' 1 5 1),
+                    (Num 'ScrollStep' 'Rows per mouse wheel notch' 1 5 1 'rows'),
                     (S 'bool' 'InfiniteScroll' 'Infinite scroll' 'After the last row the first one comes back (only when the tiles do not all fit).')
                 ) }
             @{ Title = 'Spacing'; Help = 'In pixels, or as a percentage of the screen.'; Items = @(
@@ -272,15 +275,15 @@ $schema = @(
                     (Size 'MenuItemPad' 'Entry padding' 'W'),
                     (Size 'MenuGap' 'Space between entries' 'W'),
                     (Size 'MenuRadius' 'Corner radius' 'H'),
-                    (Num 'MenuIconDimAlpha' 'Opacity of inactive icons' 0 255 5)
+                    (Num 'MenuIconDimAlpha' 'Opacity of inactive icons' 0 255 5 '/ 255' '0 = invisible, 255 = as the active one.')
                 ) }
             @{ Title = 'Favorites, Recent, Not played yet'; Help = 'Categories made of the tiles of the others: the icon buttons right of the clock.'; Items = @(
                     (S 'bool' 'ShowFavorites' 'Favorites' 'Right click a tile > Add to Favorites.'),
                     (S 'bool' 'ShowRecent' 'Recent'),
                     (S 'choice' 'RecentOrder' 'Recent shows' '' @{ Choices = @(@('Recent', 'Last launched'), @('MostUsed', 'Most used')) }),
-                    (Num 'RecentCount' 'Tiles in Recent' 1 48 1),
+                    (Num 'RecentCount' 'Tiles in Recent' 1 48 1 'tiles'),
                     (S 'bool' 'ShowUnplayed' 'Not played yet' 'Tiles never launched, the ones added last first.'),
-                    (Num 'UnplayedCount' 'Tiles in Not played yet' 1 96 1)
+                    (Num 'UnplayedCount' 'Tiles in Not played yet' 1 96 1 'tiles')
                 ) }
             @{ Title = 'Filter bar'; Help = 'Chips above the search results, one per tag (Tags of the tiles) and per store: a click shows only the results that have it.'; Items = @(
                     (S 'bool' 'FilterBar' 'Filter bar'),
@@ -298,7 +301,7 @@ $schema = @(
                     (Num 'ClockFontSize' 'Time font size' 8 60 1 'pt')
                 ) }
             @{ Title = 'Buttons'; Items = @(
-                    (Num 'CloseSize' 'Size of the X and gear buttons' 8 40 1),
+                    (Num 'CloseSize' 'Size of the X and gear buttons' 8 40 1 'pt'),
                     (S 'bool' 'ShowPower' 'Power button' 'Left of the gear: Lock, Sleep, Restart, Shut down. Restart and Shut down want a second click.')
                 ) }
         )
@@ -417,7 +420,7 @@ $schema = @(
             @{ Title = 'Controller'; Items = @(
                     (S 'bool' 'Gamepad' 'Gamepad support'),
                     (S 'pad' 'GamepadToggle' 'Open / close' 'Buttons to hold together.'),
-                    (Num 'GamepadDeadZone' 'Stick dead zone' 0 32767 500),
+                    (Num 'GamepadDeadZone' 'Stick dead zone' 0 32767 500 '/ 32767' 'How far the stick moves before it counts.'),
                     (Num 'GamepadRepeatDelay' 'Repeat delay' 50 1000 10 'ms' 'Holding a direction: wait before it repeats.'),
                     (Num 'GamepadRepeatRate' 'Repeat interval' 30 500 10 'ms')
                 ) }
@@ -439,7 +442,7 @@ $schema = @(
             @{ Title = 'Data'; Help = 'Any tile becomes a widget with Widget in the tile editor (Categories > the category > the tile), with its size and background.'; Items = @(
                     (Num 'DashInterval' 'Update every' 250 5000 250 'ms' 'Only while a category with widgets is on screen.'),
                     (S 'info' '' 'Temperatures and fans' 'From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours).'),
-                    (Num 'SensorPort' 'LibreHardwareMonitor port' 1 65535 1 '' 'The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).'),
+                    (Num 'SensorPort' 'LibreHardwareMonitor port' 1 65535 1 '' 'The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).' -NoSlider),
                     (S 'info' '' 'Custom widgets' 'Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>.')
                 ) }
             @{ Market = $true; Items = @() }
@@ -989,6 +992,77 @@ function New-Panel([string]$orientation = 'Vertical') {
 
 function Add-To($panel, $child) { [void]$panel.Children.Add($child); return $child }
 
+# The rules of docs/OptionsUI.md, as in Ui.cs of the Options program: one glyph
+# per action, the type sizes, the spacing and the widths of the fields.
+$GLYPH = @{
+    Reset = 0xE7A7    # a field back to its default or to the value of All tiles
+    Clear = 0xE711    # a field emptied (its image or icon file to the Recycle Bin, asked)
+    Delete = 0xE74D   # an entry of a list goes away (list header only): always asked
+    Add = 0xE710; Up = 0xE74A; Down = 0xE74B; Left = 0xE72B; Right = 0xE72A
+}
+$FS = @{ Title = 24; Section = 11.5; Label = 13.5; Help = 12; Badge = 11 }
+$GAP = @{ Control = 8; Icon = 6; Card = 16; Row = 11; StackedRow = 8; ActionColumn = 34; ScrollBar = 9; Page = 36; CardPadding = 20 }
+$FIELD = @{ S = 120; M = 220; L = 300; Wrap = 470; ControlMin = 300; ControlMax = 440 }
+
+# One width of the control column for every page: half the room inside a card
+# (page width without its margins, the scrollbar, the card padding and border),
+# between $FIELD.ControlMin and ControlMax; set again with the window size
+function Update-ControlColumn {
+    $page = if ($pageHost -and $pageHost.ActualWidth -gt 0) { $pageHost.ActualWidth } else { 1064 }
+    $room = $page - 2 * $GAP.Page - $GAP.ScrollBar - 2 * $GAP.CardPadding - 2
+    $w = [Math]::Max($FIELD.ControlMin, [Math]::Min($FIELD.ControlMax, [Math]::Round($room * 0.5)))
+    $old = $app.Resources['ControlColumn']
+    # the GridLength itself, not a PowerShell wrapper (WPF would refuse it)
+    if (-not $old -or $old.Value -ne $w) { $app.Resources['ControlColumn'] = ([System.Windows.GridLength]::new([double]$w)).psobject.BaseObject }
+}
+
+# The room of the scrollbar is kept also when there is none, so the cards and
+# their columns are in the same place on every page
+function Set-ScrollRoom($sv, $panel) {
+    $sv.Tag = $panel
+    $sv.Add_ScrollChanged({
+            param($s, $e)
+            $right = $GAP.Page + $(if ($s.ComputedVerticalScrollBarVisibility -eq 'Visible') { 0 } else { $GAP.ScrollBar })
+            $m = $s.Tag.Margin
+            if ($m.Right -ne $right) { $s.Tag.Margin = T $m.Left $m.Top $right $m.Bottom }
+        })
+}
+
+# Help under a label, hints, statuses (dim, wrapped)
+function New-Help([string]$text, $brush = $null) {
+    if (-not $brush) { $brush = Res 'DimBrush' }
+    return (New-Text $text $FS.Help $brush -Wrap)
+}
+
+# Title of a card or of a list
+function New-SectionTitle([string]$title) {
+    return (New-Text $title.ToUpperInvariant() $FS.Section (Res 'DimBrush') -Bold)
+}
+
+function New-ActionIcon([int]$glyph, [string]$tip) {
+    $b = New-IconButton $glyph $tip
+    $b.Margin = T $GAP.Icon 0 0 0
+    $b.VerticalAlignment = 'Center'
+    return $b
+}
+
+# An icon button that would do nothing is hidden: its room stays, nothing moves
+function Set-ActionVisible($button, [bool]$canAct) {
+    if ($button) { $button.Visibility = if ($canAct) { 'Visible' } else { 'Hidden' } }
+}
+
+# A value that is not valid: red border until it is fixed
+function Set-Invalid($control, [bool]$invalid) {
+    if ($invalid) { $control.BorderBrush = Res 'DangerBrush' }
+    else { $control.ClearValue([System.Windows.Controls.Control]::BorderBrushProperty) }
+}
+
+# Text cut with an ellipsis when it does not fit, the full text as its tooltip
+function Set-Trimmed($textBlock) {
+    $textBlock.TextTrimming = 'CharacterEllipsis'
+    $textBlock.ToolTip = $textBlock.Text
+}
+
 function New-Grid([string[]]$columns) {
     $g = New-Object System.Windows.Controls.Grid
     foreach ($w in $columns) {
@@ -1048,8 +1122,10 @@ function Select-Color([string]$old) {
 }
 
 # Dialog in the window's style: message, optional text field, buttons (the
-# first is the default). Returns @{ Button = <text or $null>; Text = <field> }
-function Show-Dialog([string]$title, [string]$message, [string[]]$buttons = @('OK'), $inputText = $null) {
+# first is the main action and the default). Titled with the action, not
+# "Raintile". -Danger: the first button deletes or cannot be undone: it is red,
+# and the last one (Cancel) is the default. Returns @{ Button = <text or $null>; Text = <field> }
+function Show-Dialog([string]$title, [string]$message, [string[]]$buttons = @('OK'), $inputText = $null, [switch]$Danger) {
     $d = New-Object System.Windows.Window
     $d.Title = $title
     $d.Owner = $win
@@ -1069,7 +1145,7 @@ function Show-Dialog([string]$title, [string]$message, [string[]]$buttons = @('O
     $sp.MinWidth = 380
     $sp.MaxWidth = 520
     $d.Content = $sp
-    [void](Add-To $sp (New-Text $message 13.5 -Wrap))
+    [void](Add-To $sp (New-Text $message $FS.Label -Wrap))
     $tb = $null
     if ($null -ne $inputText) {
         $tb = New-Object System.Windows.Controls.TextBox
@@ -1082,11 +1158,13 @@ function Show-Dialog([string]$title, [string]$message, [string[]]$buttons = @('O
     $bar.Margin = T 0 20 0 0
     [void](Add-To $sp $bar)
     for ($i = 0; $i -lt $buttons.Count; $i++) {
-        $b = New-Button $buttons[$i] $(if ($i -eq 0) { 'AccentButton' } else { '' })
-        $b.Margin = T 8 0 0 0
+        $isDanger = $Danger -and $buttons.Count -gt 1
+        $style = if ($i -ne 0) { '' } elseif ($isDanger) { 'DangerButton' } else { 'AccentButton' }
+        $b = New-Button $buttons[$i] $style
+        $b.Margin = T $GAP.Control 0 0 0
         $b.MinWidth = 90
         $b.Tag = $buttons[$i]
-        if ($i -eq 0) { $b.IsDefault = $true }
+        if (($isDanger -and $i -eq $buttons.Count - 1) -or (-not $isDanger -and $i -eq 0)) { $b.IsDefault = $true }
         $b.Add_Click({
                 param($s, $e)
                 $w = [System.Windows.Window]::GetWindow($s)
@@ -1148,12 +1226,11 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
         <TextBlock x:Name="PageDesc" Foreground="{StaticResource DimBrush}" Margin="0,5,0,0" TextWrapping="Wrap" HorizontalAlignment="Left"/>
       </StackPanel>
       <Grid x:Name="PageHost" Grid.Row="1"/>
-      <Border Grid.Row="2" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="28,12">
+      <Border Grid.Row="2" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="36,12">
         <DockPanel>
           <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-            <Button x:Name="BtnClose" Content="Close" MinWidth="90"/>
-            <Button x:Name="BtnSave" Content="Save and refresh" Style="{StaticResource AccentButton}" Margin="10,0,0,0"
-                    ToolTip="Ctrl+S"/>
+            <Button x:Name="BtnSave" Content="Save and refresh" Style="{StaticResource AccentButton}" ToolTip="Ctrl+S"/>
+            <Button x:Name="BtnClose" Content="Close" MinWidth="90" Margin="8,0,0,0"/>
           </StackPanel>
           <TextBlock x:Name="Status" VerticalAlignment="Center" Foreground="{StaticResource DimBrush}"/>
         </DockPanel>
@@ -1167,7 +1244,7 @@ $win = [System.Windows.Markup.XamlReader]::Parse(@'
           <TextBlock Text="The launcher opens in a moment." Foreground="{StaticResource DimBrush}" Margin="0,4,0,18"/>
           <DockPanel Margin="0,0,0,8">
             <TextBlock x:Name="ProgressPercent" DockPanel.Dock="Right" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}"/>
-            <TextBlock x:Name="ProgressStage" Foreground="{StaticResource DimBrush}" FontSize="12.5"/>
+            <TextBlock x:Name="ProgressStage" Foreground="{StaticResource DimBrush}" FontSize="12"/>
           </DockPanel>
           <Border x:Name="ProgressTrack" Height="10" CornerRadius="5" Background="{StaticResource FieldBg}" ClipToBounds="True">
             <Border x:Name="ProgressBar" Width="0" HorizontalAlignment="Left" CornerRadius="5" Background="{StaticResource AccentBrush}"/>
@@ -1186,6 +1263,8 @@ $win.FindName('Version').Text = $version
 Add-StartStep 'window'
 $nav = $win.FindName('Nav')
 $pageHost = $win.FindName('PageHost')
+Update-ControlColumn
+$pageHost.Add_SizeChanged({ Update-ControlColumn })
 $pageTitle = $win.FindName('PageTitle')
 $pageDesc = $win.FindName('PageDesc')
 $status = $win.FindName('Status')
@@ -1225,7 +1304,7 @@ function Update-Dirty {
     $changed = @($values.Keys | Where-Object { $values[$_] -ne $fileValues[$_] })
     $dirty = $changed.Count -gt 0 -or $changedFiles.Count -gt 0 -or $script:needsRefresh
     $script:dirtySettings = $dirty
-    $status.Text = if ($dirty) { 'Unsaved changes' } else { '' }
+    $status.Text = if ($dirty) { 'Unsaved changes.' } else { '' }
     $status.Foreground = if ($dirty) { Res 'AccentBrush' } else { Res 'DimBrush' }
     $win.Title = if ($dirty) { 'Raintile - Options *' } else { 'Raintile - Options' }
 }
@@ -1234,7 +1313,7 @@ function Update-Resets {
     foreach ($r in $resets) {
         $differs = $false
         foreach ($k in $r.KeyList) { if ($defaults.ContainsKey($k) -and $values[$k] -ne $defaults[$k]) { $differs = $true } }
-        $r.Button.Visibility = if ($differs) { 'Visible' } else { 'Hidden' }
+        Set-ActionVisible $r.Button $differs
     }
 }
 
@@ -1276,6 +1355,8 @@ function Update-Control([string]$key) {
     if (-not $c) { return }
     $v = "$($values[$key])"
     $script:updating = $true
+    # a value put back (reset) is valid again
+    if ($c.Text) { Set-Invalid $c.Text $false }
     try {
         switch ($c.Kind) {
             'bool' { $c.Box.IsChecked = ($v -eq '1') }
@@ -1299,7 +1380,7 @@ function Update-Control([string]$key) {
             'category' { $c.Box.SelectedItem = $v }
             'stores' { foreach ($cb in $c.Panel.Children) { $cb.IsChecked = (@($v -split '\|') -contains $cb.Tag[1]) } }
             'pad' { foreach ($tb in $c.Panel.Children) { $tb.IsChecked = (@($v -split '\s+') -contains $tb.Tag[1]) } }
-            { $_ -in 'key', 'combo' } { $c.Button.Content = Format-HotKey $v }
+            { $_ -in 'key', 'combo' } { $c.Button.Content = Format-HotKey $v; Set-ActionVisible $c.Clear ($v.Trim() -ne '') }
             'screen' {
                 $sa = ConvertFrom-ScreenArea $values
                 if ($sa) {
@@ -1317,6 +1398,7 @@ function New-BoolControl([string]$key) {
     $cb = New-Object System.Windows.Controls.CheckBox
     $cb.Tag = $key
     $cb.IsChecked = ($values[$key] -eq '1')
+    $cb.HorizontalAlignment = 'Right'
     $cb.Add_Click({ param($s, $e) Set-Value $s.Tag $(if ($s.IsChecked) { '1' } else { '0' }) })
     $ctl[$key] = @{ Kind = 'bool'; Box = $cb }
     return $cb
@@ -1324,7 +1406,7 @@ function New-BoolControl([string]$key) {
 
 function New-ChoiceControl([string]$key, $choices) {
     $wp = New-Object System.Windows.Controls.WrapPanel
-    $wp.MaxWidth = 460
+    $wp.MaxWidth = $FIELD.Wrap
     $wp.HorizontalAlignment = 'Right'
     foreach ($c in $choices) {
         $rb = New-Object System.Windows.Controls.RadioButton
@@ -1340,32 +1422,37 @@ function New-ChoiceControl([string]$key, $choices) {
     return $wp
 }
 
+# A number in a range (docs/OptionsUI.md, 3): the slider fills the control
+# column, the box ends it with the unit inside (UnitBox style: the unit is its
+# Tag, so the box keeps the key of its setting in Uid)
 function New-NumberControl($item) {
     $key = $item.Key
-    $sp = New-Panel 'Horizontal'
+    $g = New-Grid @($(if ($item.NoSlider) { 'Auto' } else { '*' }), 'Auto')
+    if ($item.NoSlider) { $g.HorizontalAlignment = 'Right' }
     $sl = New-Object System.Windows.Controls.Slider
-    $sl.Width = 220
     $sl.Minimum = $item.Min
     $sl.Maximum = $item.Max
     $sl.TickFrequency = $item.Step
     $sl.SmallChange = $item.Step
     $sl.LargeChange = $item.Step
+    $sl.VerticalAlignment = 'Center'
     $sl.Tag = $key
     $tb = New-Object System.Windows.Controls.TextBox
-    $tb.Width = 72
-    $tb.Margin = T 12 0 0 0
-    $tb.TextAlignment = 'Right'
-    $tb.Tag = $key
+    $tb.Style = Res 'UnitBox'
+    $tb.Width = $FIELD.S
+    $tb.Margin = if ($item.NoSlider) { T 0 } else { T 12 0 0 0 }
+    $tb.VerticalAlignment = 'Center'
+    $tb.Uid = $key
+    if ($item.Unit) { $tb.Tag = $item.Unit }
     $tb.Text = "$($values[$key])"
     $n = 0.0
     if ([double]::TryParse("$($values[$key])", 'Float', [Globalization.CultureInfo]::InvariantCulture, [ref]$n)) {
         $sl.Value = [Math]::Min($item.Max, [Math]::Max($item.Min, $n))
     }
-    $unit = New-Text $item.Unit 12 (Res 'DimBrush')
-    $unit.Width = 40
-    $unit.Margin = T 8 0 0 0
-    $unit.VerticalAlignment = 'Center'
-    [void](Add-To $sp $sl); [void](Add-To $sp $tb); [void](Add-To $sp $unit)
+    # an identifier or a huge range (a port): no slider
+    if (-not $item.NoSlider) { [void]$g.Children.Add($sl) }
+    Set-Col $tb 1
+    [void]$g.Children.Add($tb)
     $ctl[$key] = @{ Kind = $item.Kind; Slider = $sl; Text = $tb; Step = $item.Step }
 
     $sl.Add_ValueChanged({
@@ -1376,23 +1463,26 @@ function New-NumberControl($item) {
             $script:updating = $true
             $c.Text.Text = $txt
             $script:updating = $false
+            Set-Invalid $c.Text $false
             Set-Value $s.Tag $txt
         })
     $tb.Add_TextChanged({
             param($s, $e)
             if ($script:updating) { return }
-            $c = $ctl[$s.Tag]
+            $c = $ctl[$s.Uid]
             $t = $s.Text.Trim()
             $n = 0.0
-            if ($t -ne '' -and -not [double]::TryParse($t, 'Float', [Globalization.CultureInfo]::InvariantCulture, [ref]$n)) { return }
+            $bad = $t -ne '' -and -not [double]::TryParse($t, 'Float', [Globalization.CultureInfo]::InvariantCulture, [ref]$n)
+            Set-Invalid $s $bad
+            if ($bad) { return }
             if ($t -ne '') {
                 $script:updating = $true
                 $c.Slider.Value = [Math]::Min($c.Slider.Maximum, [Math]::Max($c.Slider.Minimum, $n))
                 $script:updating = $false
             }
-            Set-Value $s.Tag $t
+            Set-Value $s.Uid $t
         })
-    return $sp
+    return $g
 }
 
 function New-SizeControl($item) {
@@ -1400,9 +1490,9 @@ function New-SizeControl($item) {
     $v = "$($values[$key])".Trim()
     $sp = New-Panel 'Horizontal'
     $tb = New-Object System.Windows.Controls.TextBox
-    $tb.Width = 80
+    $tb.Width = $FIELD.S
     $tb.TextAlignment = 'Right'
-    $tb.Margin = T 0 0 10 0
+    $tb.Margin = T 0 0 $GAP.Control 0
     $tb.Tag = $key
     $tb.Text = $v.TrimEnd('%').Trim()
     $px = New-Object System.Windows.Controls.RadioButton
@@ -1418,13 +1508,19 @@ function New-SizeControl($item) {
     $pct.IsChecked = $isPct
     $px.IsChecked = -not $isPct
     [void](Add-To $sp $tb); [void](Add-To $sp $px); [void](Add-To $sp $pct)
+    $sp.HorizontalAlignment = 'Right'
     $ctl[$key] = @{ Kind = 'size'; Text = $tb; Px = $px; Pct = $pct; Axis = $item.Axis }
 
     $tb.Add_TextChanged({
             param($s, $e)
             if ($script:updating) { return }
             $c = $ctl[$s.Tag]
-            Set-Value $s.Tag ($s.Text.Trim() + $(if ($c.Pct.IsChecked) { '%' } else { '' }))
+            $t = $s.Text.Trim()
+            $n = 0.0
+            $bad = $t -ne '' -and -not [double]::TryParse($t, 'Float', [Globalization.CultureInfo]::InvariantCulture, [ref]$n)
+            Set-Invalid $s $bad
+            if ($bad) { return }
+            Set-Value $s.Tag ($t + $(if ($t -ne '' -and $c.Pct.IsChecked) { '%' } else { '' }))
         })
     # switching unit converts the number (on the main screen)
     foreach ($rb in $px, $pct) {
@@ -1448,16 +1544,17 @@ function New-SizeControl($item) {
 }
 
 function New-ColorControl([string]$key) {
-    $sp = New-Panel 'Horizontal'
+    # the swatch, then the field filling the control column
+    $sp = New-Grid @('Auto', '*')
     $sw = New-Button '' 'Swatch' 'Pick a colour'
     $sw.Background = New-ColorBrush "$($values[$key])" -Opaque
     $sw.Tag = $key
     $tb = New-Object System.Windows.Controls.TextBox
-    $tb.Width = 170
-    $tb.Margin = T 10 0 0 0
+    $tb.Margin = T $GAP.Control 0 0 0
     $tb.Tag = $key
     $tb.Text = "$($values[$key])"
-    [void](Add-To $sp $sw); [void](Add-To $sp $tb)
+    Set-Col $tb 1
+    [void]$sp.Children.Add($sw); [void]$sp.Children.Add($tb)
     $ctl[$key] = @{ Kind = 'color'; Swatch = $sw; Text = $tb }
     $sw.Add_Click({
             param($s, $e)
@@ -1472,10 +1569,10 @@ function New-ColorControl([string]$key) {
             $brush = New-ColorBrush $s.Text -Opaque
             if ($brush) {
                 $c.Swatch.Background = $brush
-                $s.ClearValue([System.Windows.Controls.Control]::BorderBrushProperty)
+                Set-Invalid $s $false
                 Set-Value $s.Tag $s.Text.Trim()
             } else {
-                $s.BorderBrush = Res 'DangerBrush'
+                Set-Invalid $s $true
             }
         })
     return $sp
@@ -1484,7 +1581,6 @@ function New-ColorControl([string]$key) {
 # Hidden text (the SteamGridDB key): shown as dots, saved encrypted
 function New-SecretControl([string]$key) {
     $pb = New-Object System.Windows.Controls.PasswordBox
-    $pb.Width = 300
     $pb.Tag = $key
     $pb.Password = Unprotect-Secret "$($values[$key])"
     $pb.Add_PasswordChanged({ param($s, $e) Set-Value $s.Tag (Protect-Secret $s.Password) })
@@ -1492,9 +1588,9 @@ function New-SecretControl([string]$key) {
     return $pb
 }
 
-function New-TextControl([string]$key, [double]$width = 300) {
+# text fields fill the control column
+function New-TextControl([string]$key) {
     $tb = New-Object System.Windows.Controls.TextBox
-    $tb.Width = $width
     $tb.Tag = $key
     $tb.Text = "$($values[$key])"
     $tb.Add_TextChanged({ param($s, $e) Set-Value $s.Tag $s.Text.Trim() })
@@ -1504,7 +1600,6 @@ function New-TextControl([string]$key, [double]$width = 300) {
 
 function New-FontControl([string]$key) {
     $cb = New-Object System.Windows.Controls.ComboBox
-    $cb.Width = 300
     $cb.IsEditable = $true
     $cb.Tag = $key
     foreach ($f in ([System.Windows.Media.Fonts]::SystemFontFamilies | ForEach-Object { $_.Source } | Sort-Object -Unique)) {
@@ -1519,7 +1614,6 @@ function New-FontControl([string]$key) {
 
 function New-CategoryControl([string]$key) {
     $cb = New-Object System.Windows.Controls.ComboBox
-    $cb.Width = 220
     $cb.Tag = $key
     $names = @(Get-CategoryFiles | ForEach-Object { $_.BaseName })
     if ($values[$key] -and $names -notcontains $values[$key]) { $names += $values[$key] }
@@ -1532,7 +1626,7 @@ function New-CategoryControl([string]$key) {
 
 function New-StoresControl([string]$key) {
     $wp = New-Object System.Windows.Controls.WrapPanel
-    $wp.MaxWidth = 470
+    $wp.MaxWidth = $FIELD.Wrap
     $wp.HorizontalAlignment = 'Right'
     $current = @("$($values[$key])" -split '\|' | ForEach-Object { $_.Trim() -replace '\.', '' })
     foreach ($store in $SOURCES) {
@@ -1555,7 +1649,7 @@ function New-StoresControl([string]$key) {
 
 function New-PadControl([string]$key) {
     $wp = New-Object System.Windows.Controls.WrapPanel
-    $wp.MaxWidth = 470
+    $wp.MaxWidth = $FIELD.Wrap
     $wp.HorizontalAlignment = 'Right'
     $current = @("$($values[$key])".ToUpperInvariant() -split '\s+')
     foreach ($b in $GAMEPAD_BUTTONS) {
@@ -1579,18 +1673,20 @@ function New-PadControl([string]$key) {
 # Key binding: click, then press the key (with the modifiers for 'combo')
 function New-KeyControl([string]$key, [bool]$combo = $false) {
     $sp = New-Panel 'Horizontal'
+    $sp.HorizontalAlignment = 'Right'
     $b = New-Button (Format-HotKey "$($values[$key])") 'KeyButton' 'Click, then press a key'
     $b.Tag = @{ Key = $key; Combo = $combo }
-    $clear = New-IconButton 0xE711 'No key'
+    $clear = New-ActionIcon $GLYPH.Clear 'Clear the key'
     $clear.Tag = $key
+    Set-ActionVisible $clear ("$($values[$key])".Trim() -ne '')
     [void](Add-To $sp $b); [void](Add-To $sp $clear)
-    $ctl[$key] = @{ Kind = $(if ($combo) { 'combo' } else { 'key' }); Button = $b }
+    $ctl[$key] = @{ Kind = $(if ($combo) { 'combo' } else { 'key' }); Button = $b; Clear = $clear }
     $keyButtons[$key] = $b
 
     $b.Add_Click({
             param($s, $e)
             $script:capturing = $s
-            $s.Content = 'Press a key' + [char]0x2026
+            $s.Content = 'Press a key...'
             [void]$s.Focus()
         })
     $b.Add_LostKeyboardFocus({
@@ -1617,7 +1713,7 @@ function New-KeyControl([string]$key, [bool]$combo = $false) {
                     # modifiers only so far: show them and wait for the key
                     $held = @()
                     if ($ctrl) { $held += 'CTRL' }; if ($alt) { $held += 'ALT' }; if ($shift) { $held += 'SHIFT' }; if ($winKey) { $held += 'LWIN' }
-                    if ($held.Count) { $s.Content = (Format-HotKey ($held -join ' ')) + ' + ' + [char]0x2026 }
+                    if ($held.Count) { $s.Content = (Format-HotKey ($held -join ' ')) + ' + ...' }
                     return
                 }
             } else {
@@ -1627,6 +1723,7 @@ function New-KeyControl([string]$key, [bool]$combo = $false) {
             $script:capturing = $null
             $s.Content = Format-HotKey $value
             Set-Value $s.Tag.Key $value
+            Set-ActionVisible $ctl[$s.Tag.Key].Clear $true
         })
     $clear.Add_Click({
             param($s, $e)
@@ -1644,15 +1741,15 @@ function New-ScreenControl {
     $area.HorizontalAlignment = 'Right'
     $mon = New-Object System.Windows.Controls.WrapPanel
     $mon.HorizontalAlignment = 'Right'
-    $mon.Margin = T 0 6 0 0
+    $mon.Margin = T 0 $GAP.Control 0 0
     foreach ($a in @(@('SCREENAREA', 'Whole screen'), @('WORKAREA', 'Work area'))) {
         $rb = New-Object System.Windows.Controls.RadioButton
         $rb.Style = Res 'Segment'; $rb.Content = $a[1]; $rb.GroupName = 'screen_area'; $rb.Tag = @('area', $a[0])
         $rb.IsChecked = ($sa.Area -eq $a[0])
         [void]$area.Children.Add($rb)
     }
-    $monLabel = New-Text 'Monitor' 12 (Res 'DimBrush')
-    $monLabel.Margin = T 0 0 10 0
+    $monLabel = New-Text 'Monitor' $FS.Help (Res 'DimBrush')
+    $monLabel.Margin = T 0 0 $GAP.Control 0
     $monLabel.VerticalAlignment = 'Center'
     [void](Add-To $mon $monLabel)
     foreach ($m in @(@('', 'Main'), @('1', '1'), @('2', '2'), @('3', '3'), @('4', '4'))) {
@@ -1681,6 +1778,7 @@ function New-ScreenControl {
 
 function New-ActionControl([string]$action, [string]$label) {
     $b = New-Button $label $(if ($action -eq 'Import') { 'AccentButton' } else { '' })
+    $b.HorizontalAlignment = 'Right'
     $b.Tag = $action
     $b.Add_Click({ param($s, $e) Invoke-Action $s.Tag })
     return $b
@@ -1689,11 +1787,9 @@ function New-ActionControl([string]$action, [string]$label) {
 # --- Rows, cards, pages -----------------------------------------------------------
 
 function New-ResetButton([string[]]$keys) {
-    $b = New-IconButton 0xE7A7 'Restore default'
-    $b.Margin = T 6 0 0 0
-    $b.VerticalAlignment = 'Center'
+    $b = New-ActionIcon $GLYPH.Reset 'Restore default'
     $b.Tag = $keys
-    $b.Visibility = 'Hidden'
+    Set-ActionVisible $b $false
     $b.Add_Click({
             param($s, $e)
             foreach ($k in $s.Tag) { if ($defaults.ContainsKey($k)) { $values[$k] = $defaults[$k] } }
@@ -1707,14 +1803,18 @@ function New-ResetButton([string[]]$keys) {
 }
 
 function New-Row([string]$label, [string]$help, $control, $reset) {
-    $g = New-Grid @('*', 'Auto', '34')
-    $g.Margin = T 0 11
+    # the control column has the same width on every page (Update-ControlColumn):
+    # fields and sliders fill it, the other controls end at its right edge, the
+    # action column follows
+    $g = New-Grid @('*', 'Auto', [string]$GAP.ActionColumn)
+    $g.ColumnDefinitions[1].SetResourceReference([System.Windows.Controls.ColumnDefinition]::WidthProperty, 'ControlColumn')
+    $g.Margin = T 0 $GAP.Row
     $left = New-Panel
     $left.VerticalAlignment = 'Center'
     $left.Margin = T 0 0 24 0
-    [void](Add-To $left (New-Text $label 13.5))
+    [void](Add-To $left (New-Text $label $FS.Label -Wrap))
     if ($help) {
-        $h = New-Text $help 12 (Res 'DimBrush') -Wrap
+        $h = New-Help $help
         $h.Margin = T 0 3 0 0
         [void](Add-To $left $h)
     }
@@ -1723,7 +1823,7 @@ function New-Row([string]$label, [string]$help, $control, $reset) {
         $control.VerticalAlignment = 'Center'
         Set-Col $control 1
         [void]$g.Children.Add($control)
-    }
+    } else { [System.Windows.Controls.Grid]::SetColumnSpan($left, 3) }   # text only: the whole row
     if ($reset) { Set-Col $reset 2; [void]$g.Children.Add($reset) }
     $b = New-Object System.Windows.Controls.Border
     $b.BorderBrush = Res 'LineBrush'
@@ -1738,13 +1838,13 @@ function New-Card([string]$title, [string]$help) {
     $sp = New-Panel
     $b.Child = $sp
     if ($title) {
-        $h = New-Text $title.ToUpperInvariant() 11.5 (Res 'DimBrush') -Bold
+        $h = New-SectionTitle $title
         $h.Margin = T 0 12 0 4
         [void](Add-To $sp $h)
     }
     if ($help) {
-        $x = New-Text $help 12 (Res 'DimBrush') -Wrap
-        $x.Margin = T 0 0 0 8
+        $x = New-Help $help
+        $x.Margin = T 0 0 0 $GAP.Control
         [void](Add-To $sp $x)
     }
     return $b
@@ -1765,10 +1865,11 @@ function New-ItemRow($item) {
                 # custom values (formulas, coordinates): plain fields
                 $sp = New-Panel
                 foreach ($sk in 'ScreenX', 'ScreenY', 'ScreenW', 'ScreenH') {
-                    $row = New-Panel 'Horizontal'
+                    $row = New-Grid @('64', '*')
                     $row.Margin = T 0 2
-                    $l = New-Text $sk 12 (Res 'DimBrush'); $l.Width = 64; $l.VerticalAlignment = 'Center'
-                    [void](Add-To $row $l); [void](Add-To $row (New-TextControl $sk 230))
+                    $l = New-Text $sk $FS.Help (Res 'DimBrush'); $l.VerticalAlignment = 'Center'
+                    $field = New-TextControl $sk; Set-Col $field 1
+                    [void]$row.Children.Add($l); [void]$row.Children.Add($field)
                     [void](Add-To $sp $row)
                 }
                 return (New-Row $item.Label 'Custom values: written as they are.' $sp (New-ResetButton @('ScreenX', 'ScreenY', 'ScreenW', 'ScreenH')))
@@ -1779,9 +1880,10 @@ function New-ItemRow($item) {
             $present = @($item.Pair | Where-Object { $values.ContainsKey($_) })
             if (-not $present.Count) { return $null }
             $sp = New-Panel 'Horizontal'
+            $sp.HorizontalAlignment = 'Right'
             foreach ($kk in $present) {
                 $kc = New-KeyControl $kk
-                $kc.Margin = T 6 0 0 0
+                $kc.Margin = T $GAP.Control 0 0 0
                 [void](Add-To $sp $kc)
             }
             return (New-Row $item.Label $item.Help $sp (New-ResetButton $present))
@@ -1818,6 +1920,7 @@ function New-SettingsPage($page) {
     # as wide as the window: the rows stretch and their help text wraps less
     $sp.Margin = T 36 4 36 24
     $sv.Content = $sp
+    Set-ScrollRoom $sv $sp
     $schemaKeys = Get-SchemaKeys
     foreach ($group in $page.Groups) {
         $card = New-Card $group.Title $group.Help
@@ -1883,10 +1986,10 @@ function New-ListEntry([string]$title, [string]$sub, $tag, [double]$thumbSize = 
     [void](Add-To $sp $thumb)
     $texts = New-Panel
     $texts.VerticalAlignment = 'Center'
-    $t = New-Text $title 13
-    $t.TextTrimming = 'CharacterEllipsis'
+    $t = New-Text $title $FS.Label
+    Set-Trimmed $t
     [void](Add-To $texts $t)
-    if ($sub) { [void](Add-To $texts (New-Text $sub 11 (Res 'DimBrush'))) }
+    if ($sub) { [void](Add-To $texts (New-Text $sub $FS.Help (Res 'DimBrush'))) }
     [void](Add-To $sp $texts)
     $item.Content = $sp
     $tag.Thumb = $thumb
@@ -2143,10 +2246,13 @@ function Show-CategoryDetails {
     $cat.CatCard.IsEnabled = [bool]$file
     $c = if ($file) { Get-CategorySection (Get-Model $file) } else { $null }
     foreach ($k in 'Name', 'NX', 'NY', 'IconSize') { $cat["cat.$k"].Text = if ($c) { Get-Key $c $k } else { '' } }
-    Set-Thumb $cat.CatIcon $(if ($c) { Get-CategoryIcon (Get-ListBase) $c } else { $null })
+    $icon = if ($c) { Get-CategoryIcon (Get-ListBase) $c } else { $null }
+    Set-Thumb $cat.CatIcon $icon
+    Set-ActionVisible $cat.CatIconDel ([bool]$icon)
     $cat.CatIconHint.Text = if ($file) { "Default: Images\$(Get-ListBase)\icon.png" } else { '' }
-    $cat.GridHint.Text = "Empty = default ($($values['NX']) " + [char]0xD7 + " $($values['NY']), from Layout)"
-    $cat.SizeHint.Text = "Pixels or %. Empty = default ($($values['IconSize']))"
+    $cat.GridHint.Text = "Empty = the default ($($values['NX']), from Layout)."
+    $cat.RowsHint.Text = "Empty = the default ($($values['NY']), from Layout)."
+    $cat.SizeHint.Text = "Pixels, or % of the screen height (e.g. 12%). Empty = the default ($($values['IconSize']), from Layout)."
     $script:loading = $false
 }
 
@@ -2232,7 +2338,9 @@ function Update-Framing {
     $bgFrame.Sync = $true
     $cat.ZoomSlider.Value = $bgFrame.Zoom
     $bgFrame.Sync = $false
-    $cat.ZoomText.Text = $bgFrame.Zoom.ToString('0.00', [Globalization.CultureInfo]::InvariantCulture) + [char]0xD7
+    # the value typed is left alone while its field has the focus
+    if (-not $cat.ZoomText.IsKeyboardFocused) { $cat.ZoomText.Text = $bgFrame.Zoom.ToString('0.00', [Globalization.CultureInfo]::InvariantCulture) }
+    Set-ActionVisible $cat.FrameReset ($bgFrame.Zoom -ne 1 -or $bgFrame.FX -ne 0.5 -or $bgFrame.FY -ne 0.5)
     if (-not $has) { return }
     $v = Get-FrameWindow
     $img.Width = $v.IW * $v.S; $img.Height = $v.IH * $v.S
@@ -2353,7 +2461,8 @@ function Update-LogoPlace {
     $logoPlace.Sync = $true
     $cat.LogoSlider.Value = $logoPlace.Scale
     $logoPlace.Sync = $false
-    $cat.LogoScaleText.Text = $logoPlace.Scale.ToString('0.00', [Globalization.CultureInfo]::InvariantCulture) + [char]0xD7
+    if (-not $cat.LogoScaleText.IsKeyboardFocused) { $cat.LogoScaleText.Text = $logoPlace.Scale.ToString('0.00', [Globalization.CultureInfo]::InvariantCulture) }
+    Set-ActionVisible $cat.LogoReset ($logoPlace.Scale -ne 1 -or $logoPlace.X -ne 0.5 -or $logoPlace.Y -ne 0.5)
     if (-not $has) { return }
     $r = Get-LogoRect
     $img.Width = $r.S; $img.Height = $r.S
@@ -2409,6 +2518,8 @@ function Update-TilePreview {
     Set-Thumb $cat.LogoThumb $logo
     $cat.BgPath.Text = if ($bg) { $bg } elseif ($s) { "None. Default: Images\$base\background\$($s.Name).jpg" } else { '' }
     $cat.LogoPath.Text = if ($logo) { $logo } elseif ($s) { "None. Default: Images\$base\logo\$($s.Name).png" } else { '' }
+    Set-ActionVisible $cat.BackgroundDel ([bool]$bg)
+    Set-ActionVisible $cat.LogoDel ([bool]$logo)
     $sw = New-ColorBrush $(if ($s) { Get-Key $s 'Color' } else { '' }) -Opaque
     $cat.ColorSwatch.Background = if ($sw) { $sw } else { Res 'FieldBg' }
     $sel = $cat.Tiles.SelectedItem
@@ -2476,20 +2587,31 @@ function Show-Tile {
     Update-TilePreview
 }
 
-function New-FormRow([string]$label, $control, [string]$hint = '', $hintBlock = $null) {
-    $g = New-Grid @('118', '*')
-    $g.Margin = T 0 7
-    $l = New-Text $label 13 (Res 'DimBrush')
-    $l.VerticalAlignment = 'Top'
-    $l.Margin = T 0 6 0 0
-    [void]$g.Children.Add($l)
+# A stacked row (docs/OptionsUI.md, 4): the label and its help on top, the control
+# below filling the column; on its right, always, the action column (its reset or
+# clear button, or nothing), so every control ends at the same edge; hintBlock
+# (current values that change) under the control
+function New-FormRow([string]$label, $control, [string]$hint = '', $hintBlock = $null, $action = $null) {
     $sp = New-Panel
-    [void](Add-To $sp $control)
-    if (-not $hintBlock -and $hint) { $hintBlock = New-Text $hint 11.5 (Res 'DimBrush') -Wrap }
+    $sp.Margin = T 0 $GAP.StackedRow
+    [void](Add-To $sp (New-Text $label $FS.Label -Wrap))
+    if ($hint) {
+        $h = New-Help $hint
+        $h.Margin = T 0 2 0 0
+        [void](Add-To $sp $h)
+    }
+    $line = New-Grid @('*', [string]$GAP.ActionColumn)
+    $line.Margin = T 0 6 0 0
+    [void]$line.Children.Add($control)
+    if ($action) {
+        $action.Margin = T $GAP.Icon 0 0 0
+        $action.VerticalAlignment = 'Center'
+        Set-Col $action 1
+        [void]$line.Children.Add($action)
+    }
+    [void](Add-To $sp $line)
     if ($hintBlock) { $hintBlock.Margin = T 0 4 0 0; [void](Add-To $sp $hintBlock) }
-    Set-Col $sp 1
-    [void]$g.Children.Add($sp)
-    return $g
+    return $sp
 }
 
 function New-ListColumn([string]$title, $list, [object[]]$buttons) {
@@ -2502,7 +2624,7 @@ function New-ListColumn([string]$title, $list, [object[]]$buttons) {
     $head = New-Grid @('*', 'Auto')
     $head.Margin = T 6 8 0 6
     [System.Windows.Controls.DockPanel]::SetDock($head, 'Top')
-    $h = New-Text $title.ToUpperInvariant() 11.5 (Res 'DimBrush') -Bold
+    $h = New-SectionTitle $title
     $h.VerticalAlignment = 'Center'
     [void]$head.Children.Add($h)
     $bar = New-Panel 'Horizontal'
@@ -2517,34 +2639,25 @@ function New-ListColumn([string]$title, $list, [object[]]$buttons) {
 # Categories page: the list of categories, to create, reorder and delete them
 function New-CategoryListPage {
     $grid = New-Grid @('440', '*')
-    $grid.Margin = T 36 4 36 20
-    $dp = New-Object System.Windows.Controls.DockPanel
-    $dp.Margin = T 0 0 16 0
-    [void]$grid.Children.Add($dp)
+    $grid.Margin = T 36 4 36 24
     $sv = New-Object System.Windows.Controls.ScrollViewer
     $sv.VerticalScrollBarVisibility = 'Auto'
     Set-Col $sv 1
     [void]$grid.Children.Add($sv)
     $side = New-Panel
     $sv.Content = $side
-    $bar = New-Panel 'Horizontal'
-    $bar.Margin = T 0 0 0 12
-    [System.Windows.Controls.DockPanel]::SetDock($bar, 'Top')
-    [void]$dp.Children.Add($bar)
-    $btnCatNew = New-Button 'New category' 'AccentButton'
-    $btnCatOpen = New-Button 'Open'
-    $btnCatUp = New-Button 'Move up'
-    $btnCatDown = New-Button 'Move down'
-    $btnCatDel = New-Button 'Delete'
-    $btnCatDel.Foreground = Res 'DangerBrush'
-    foreach ($b in $btnCatNew, $btnCatOpen, $btnCatUp, $btnCatDown, $btnCatDel) { $b.Margin = T 0 0 8 0; [void](Add-To $bar $b) }
-    $card = New-Object System.Windows.Controls.Border
-    $card.Style = Res 'Card'
-    $card.Padding = T 8
-    $card.Margin = T 0
+    # the list with its actions in its header, as the tiles list
+    $btnCatNew = New-IconButton $GLYPH.Add 'New category'
+    $btnCatOpen = New-Button 'Open' '' 'Its tiles (also a double click or Enter)'
+    $btnCatOpen.Margin = T 0 0 $GAP.Control 0
+    $btnCatOpen.VerticalAlignment = 'Center'
+    $btnCatUp = New-IconButton $GLYPH.Up 'Move up'
+    $btnCatDown = New-IconButton $GLYPH.Down 'Move down'
+    $btnCatDel = New-IconButton $GLYPH.Delete 'Delete category'
     $cat.Cats = New-Object System.Windows.Controls.ListBox
-    $card.Child = $cat.Cats
-    [void]$dp.Children.Add($card)
+    $card = New-ListColumn 'Categories' $cat.Cats @($btnCatOpen, $btnCatNew, $btnCatUp, $btnCatDown, $btnCatDel)
+    $card.Margin = T 0 0 $GAP.Card 0
+    [void]$grid.Children.Add($card)
 
     # Category card
     $card = New-Card 'Category' ''
@@ -2556,25 +2669,28 @@ function New-CategoryListPage {
         $tb.Tag = $k
         $cat["cat.$k"] = $tb
     }
-    $cat['cat.NX'].Width = 64; $cat['cat.NY'].Width = 64; $cat['cat.IconSize'].Width = 100
+    foreach ($k in 'NX', 'NY', 'IconSize') { $cat["cat.$k"].Width = $FIELD.S; $cat["cat.$k"].HorizontalAlignment = 'Left' }
+    # the fields keep their key in Uid (a UnitBox has its unit in Tag)
+    foreach ($k in 'Name', 'NX', 'NY', 'IconSize') { $cat["cat.$k"].Uid = $k }
     [void](Add-To $f (New-FormRow 'Name' $cat['cat.Name'] 'Text shown in the menu.'))
     $iconRow = New-Panel 'Horizontal'
     $cat.CatIcon = New-Thumb 36
-    $btnIcon = New-Button 'Choose...'
-    $btnIcon.Margin = T 10 0 0 0
-    $btnIconDel = New-Button 'Remove'
-    $btnIconDel.Margin = T 6 0 0 0
-    [void](Add-To $iconRow $cat.CatIcon); [void](Add-To $iconRow $btnIcon); [void](Add-To $iconRow $btnIconDel)
-    $cat.CatIconHint = New-Text '' 11.5 (Res 'DimBrush') -Wrap
-    [void](Add-To $f (New-FormRow 'Icon' $iconRow '' $cat.CatIconHint))
-    $gridRow = New-Panel 'Horizontal'
-    [void](Add-To $gridRow $cat['cat.NX'])
-    $x = New-Text ([string][char]0xD7) 13 (Res 'DimBrush'); $x.Margin = T 8 0 8 0; $x.VerticalAlignment = 'Center'
-    [void](Add-To $gridRow $x)
-    [void](Add-To $gridRow $cat['cat.NY'])
-    $cat.GridHint = New-Text '' 11.5 (Res 'DimBrush') -Wrap
-    [void](Add-To $f (New-FormRow 'Grid' $gridRow '' $cat.GridHint))
-    $cat.SizeHint = New-Text '' 11.5 (Res 'DimBrush') -Wrap
+    $btnIcon = New-Button 'Browse...'
+    $btnIcon.Margin = T $GAP.Control 0 0 0
+    # x: no icon (its file goes to the Recycle Bin, asked first)
+    $btnIconDel = New-ActionIcon $GLYPH.Clear 'Clear the icon'
+    $cat.CatIconDel = $btnIconDel
+    [void](Add-To $iconRow $cat.CatIcon); [void](Add-To $iconRow $btnIcon)
+    $cat.CatIconHint = New-Help ''
+    [void](Add-To $f (New-FormRow 'Icon' $iconRow 'In the menu, left of the name.' $cat.CatIconHint $btnIconDel))
+    # the grid as in Layout: columns and rows, each with its unit
+    foreach ($pair in @(@('NX', 'Columns', 'columns', 'GridHint'), @('NY', 'Rows', 'rows', 'RowsHint'))) {
+        $box = $cat["cat.$($pair[0])"]
+        $box.Style = Res 'UnitBox'; $box.Tag = $pair[2]
+        $cat[$pair[3]] = New-Help ''
+        [void](Add-To $f (New-FormRow $pair[1] $box '' $cat[$pair[3]]))
+    }
+    $cat.SizeHint = New-Help ''
     [void](Add-To $f (New-FormRow 'Logo size' $cat['cat.IconSize'] '' $cat.SizeHint))
 
 
@@ -2584,9 +2700,9 @@ function New-CategoryListPage {
                 param($s, $e)
                 if ($script:loading) { return }
                 $file = Get-ListFile; if (-not $file) { return }
-                Set-Key (Get-CategorySection (Get-Model $file)) $s.Tag $s.Text.Trim()
+                Set-Key (Get-CategorySection (Get-Model $file)) $s.Uid $s.Text.Trim()
                 Set-Changed $file
-                if ($s.Tag -eq 'Name') { Update-NavCategory $file }
+                if ($s.Uid -eq 'Name') { Update-NavCategory $file }
             })
     }
     $btnIcon.Add_Click({
@@ -2600,6 +2716,7 @@ function New-CategoryListPage {
             Set-Changed $file
             $icon = Get-CategoryIcon (Get-ListBase) (Get-CategorySection (Get-Model $file))
             Set-Thumb $cat.CatIcon $icon
+            Set-ActionVisible $cat.CatIconDel ([bool]$icon)
             Update-NavCategory $file
         })
     $btnIconDel.Add_Click({
@@ -2607,13 +2724,14 @@ function New-CategoryListPage {
             $c = Get-CategorySection (Get-Model $file)
             $icon = Get-CategoryIcon (Get-ListBase) $c
             if ($icon -and $icon.StartsWith($imagesRoot, [StringComparison]::OrdinalIgnoreCase)) {
-                $r = Show-Dialog 'Raintile' "Move $([IO.Path]::GetFileName($icon)) to the Recycle Bin?" @('Remove', 'Cancel')
-                if ($r.Button -ne 'Remove') { return }
+                $r = Show-Dialog 'Clear icon' "No icon for this category: $([IO.Path]::GetFileName($icon)) goes to the Recycle Bin." @('Clear', 'Cancel') -Danger
+                if ($r.Button -ne 'Clear') { return }
                 Remove-ToRecycleBin $icon
             }
             Set-Key $c 'Icon' ''
             Set-Changed $file
             Set-Thumb $cat.CatIcon $null
+            Set-ActionVisible $cat.CatIconDel $false
             Update-NavCategory $file
         })
 
@@ -2625,9 +2743,9 @@ function New-CategoryListPage {
             $r = Show-Dialog 'New category' 'Name of the new category (e.g. Emulators):' @('Create', 'Cancel') ''
             if ($r.Button -ne 'Create' -or -not $r.Text) { return }
             $file = ($r.Text -replace '[^A-Za-z0-9_-]', '')
-            if (-not $file) { [void](Show-Dialog 'Raintile' 'Use at least one letter or digit.'); return }
+            if (-not $file) { [void](Show-Dialog 'New category' 'Use at least one letter or digit.'); return }
             if (Test-Path -LiteralPath (Join-Path $categoriesDir "$file.ini")) {
-                [void](Show-Dialog 'Raintile' "The category '$file' already exists."); return
+                [void](Show-Dialog 'New category' "The category '$file' already exists."); return
             }
             [void](New-CategoryFile $file $r.Text)
             Refresh-Cats "$file.ini"
@@ -2636,7 +2754,7 @@ function New-CategoryListPage {
     $btnCatDel.Add_Click({
             if (-not $cat.Cats.SelectedItem) { return }
             $file = $cat.Cats.SelectedItem.Tag.File
-            $r = Show-Dialog 'Delete category' "Move the category $file to the Recycle Bin? Its images stay in Images." @('Delete', 'Cancel')
+            $r = Show-Dialog 'Delete category' "Move the category $file to the Recycle Bin? Its images stay in Images." @('Delete', 'Cancel') -Danger
             if ($r.Button -ne 'Delete') { return }
             Remove-ToRecycleBin (Join-Path $categoriesDir $file)
             $models.Remove($file); $changedFiles.Remove($file)
@@ -2667,15 +2785,16 @@ function New-CategoryListPage {
 # Page of one category (the same page for all: Show-Category fills it)
 function New-CategoryPage {
     $grid = New-Grid @('300', '*')
-    $grid.Margin = T 36 4 36 20
+    $grid.Margin = T 36 4 36 24
 
     # Column 1: tiles of the category
     $cat.Tiles = New-Object System.Windows.Controls.ListBox
-    $btnTileNew = New-IconButton 0xE710 'New tile'
-    $btnTileDel = New-IconButton 0xE74D 'Delete tile'
-    $btnTileUp = New-IconButton 0xE70E 'Move up'
-    $btnTileDown = New-IconButton 0xE70D 'Move down'
+    $btnTileNew = New-IconButton $GLYPH.Add 'New tile'
+    $btnTileDel = New-IconButton $GLYPH.Delete 'Delete tile'
+    $btnTileUp = New-IconButton $GLYPH.Up 'Move up'
+    $btnTileDown = New-IconButton $GLYPH.Down 'Move down'
     $col = New-ListColumn 'Tiles' $cat.Tiles @($btnTileNew, $btnTileUp, $btnTileDown, $btnTileDel)
+    $col.Margin = T 0 0 $GAP.Card 0
     [void]$grid.Children.Add($col)
 
     # Column 2: details
@@ -2691,7 +2810,7 @@ function New-CategoryPage {
     $cat.ImportedCard = $card
     $card.Visibility = 'Collapsed'
     [void](Add-To $details $card)
-    $txt = New-Text 'From the old automatic import (written below its marker line), so it cannot be edited here. Make it a normal tile to edit or move it: its images are copied to the category folders. Opening Import turns all of them into normal tiles.' 12.5 (Res 'DimBrush') -Wrap
+    $txt = New-Text 'From the old automatic import (written below its marker line), so it cannot be edited here. Make it a normal tile to edit or move it: its images are copied to the category folders. Opening Import turns all of them into normal tiles.' $FS.Help (Res 'DimBrush') -Wrap
     $txt.Margin = T 0 0 0 10
     [void](Add-To $card.Child $txt)
     $btnConvert = New-Button 'Make it a normal tile' 'AccentButton'
@@ -2711,8 +2830,8 @@ function New-CategoryPage {
     $cat.TileCard = $card
     [void](Add-To $details $card)
     $f = $card.Child
-    $cat.Note = New-Text '' 12.5 (Res 'AccentBrush') -Wrap
-    $cat.Note.Margin = T 0 0 0 8
+    $cat.Note = New-Help '' (Res 'AccentBrush')
+    $cat.Note.Margin = T 0 0 0 $GAP.Control
     [void](Add-To $f $cat.Note)
 
     # preview, as the tile looks in the launcher (sized by Update-Framing); the
@@ -2743,39 +2862,50 @@ function New-CategoryPage {
     $cat.Preview = $p
     [void](Add-To $f $p)
 
-    # framing: drag the preview, wheel or slider to zoom
-    $frameRow = New-Panel 'Horizontal'
-    $cat.ZoomSlider = New-Object System.Windows.Controls.Slider
-    $cat.ZoomSlider.Width = 180
-    $cat.ZoomSlider.Minimum = 1; $cat.ZoomSlider.Maximum = 4
-    $cat.ZoomSlider.SmallChange = 0.05; $cat.ZoomSlider.LargeChange = 0.25
-    $cat.ZoomSlider.VerticalAlignment = 'Center'
-    $cat.ZoomText = New-Text '' 12 (Res 'DimBrush')
-    $cat.ZoomText.Width = 48
-    $cat.ZoomText.Margin = T 10 0 0 0
-    $cat.ZoomText.VerticalAlignment = 'Center'
-    $btnFrameReset = New-Button 'Reset'
-    $btnFrameReset.Margin = T 6 0 0 0
-    [void](Add-To $frameRow $cat.ZoomSlider); [void](Add-To $frameRow $cat.ZoomText); [void](Add-To $frameRow $btnFrameReset)
-    $cat.FrameRow = $frameRow
-    [void](Add-To $f (New-FormRow 'Framing' $frameRow 'Drag the background in the preview to choose the part shown; zoom with the wheel or the slider. The preview has the size of this category''s tiles on this screen.'))
+    # framing and logo: slider filling the row, the value (typed too), its unit and
+    # the reset arrow (shown only when there is something to reset)
+    $newPlaceRow = {
+        param([double]$min, [double]$max, [string]$tip)
+        $g = New-Grid @('*', 'Auto')
+        $sl = New-Object System.Windows.Controls.Slider
+        $sl.Minimum = $min; $sl.Maximum = $max
+        $sl.SmallChange = 0.05; $sl.LargeChange = 0.25
+        $sl.VerticalAlignment = 'Center'
+        $tb = New-Object System.Windows.Controls.TextBox
+        $tb.Style = Res 'UnitBox'; $tb.Tag = [string][char]0xD7
+        $tb.Width = $FIELD.S; $tb.Margin = T 12 0 0 0; $tb.VerticalAlignment = 'Center'
+        $r = New-ActionIcon $GLYPH.Reset $tip
+        Set-Col $tb 1
+        foreach ($x in $sl, $tb) { [void]$g.Children.Add($x) }
+        return @{ Row = $g; Slider = $sl; Text = $tb; Reset = $r }
+    }
+    $fr = & $newPlaceRow 1 4 'Back to the centre, at zoom 1'
+    $cat.ZoomSlider = $fr.Slider; $cat.ZoomText = $fr.Text; $cat.FrameReset = $fr.Reset; $btnFrameReset = $fr.Reset
+    $cat.FrameRow = $fr.Row
+    [void](Add-To $f (New-FormRow 'Framing' $fr.Row 'Drag the background in the preview to choose the part shown; zoom with the wheel, the slider or the value. The preview has the size of this category''s tiles on this screen.' $null $fr.Reset))
 
-    # logo: drag it in the preview, wheel over it or slider to resize
-    $logoRow = New-Panel 'Horizontal'
-    $cat.LogoSlider = New-Object System.Windows.Controls.Slider
-    $cat.LogoSlider.Width = 180
-    $cat.LogoSlider.Minimum = 0.25; $cat.LogoSlider.Maximum = 3
-    $cat.LogoSlider.SmallChange = 0.05; $cat.LogoSlider.LargeChange = 0.25
-    $cat.LogoSlider.VerticalAlignment = 'Center'
-    $cat.LogoScaleText = New-Text '' 12 (Res 'DimBrush')
-    $cat.LogoScaleText.Width = 48
-    $cat.LogoScaleText.Margin = T 10 0 0 0
-    $cat.LogoScaleText.VerticalAlignment = 'Center'
-    $btnLogoReset = New-Button 'Reset'
-    $btnLogoReset.Margin = T 6 0 0 0
-    [void](Add-To $logoRow $cat.LogoSlider); [void](Add-To $logoRow $cat.LogoScaleText); [void](Add-To $logoRow $btnLogoReset)
-    $cat.LogoRow = $logoRow
-    [void](Add-To $f (New-FormRow 'Logo' $logoRow 'Drag the logo in the preview to move it; resize it with the wheel over it or the slider (times the category''s logo size). Independent of the framing.'))
+    # logo: drag it in the preview, wheel over it, slider or value to resize
+    $lr = & $newPlaceRow 0.25 3 'Back to the centre, at the normal size'
+    $cat.LogoSlider = $lr.Slider; $cat.LogoScaleText = $lr.Text; $cat.LogoReset = $lr.Reset; $btnLogoReset = $lr.Reset
+    $cat.LogoRow = $lr.Row
+    [void](Add-To $f (New-FormRow 'Logo' $lr.Row 'Drag the logo in the preview to move it; resize it with the wheel over it, the slider or the value (times the category''s logo size). Independent of the framing.' $null $lr.Reset))
+    # a value typed: applied as it is typed, red while it is not a number
+    $cat.ZoomText.Add_TextChanged({
+            param($s, $e)
+            if (-not $s.IsKeyboardFocused -or -not $bgFrame.Bitmap -or -not (Get-CurrentTile)) { return }
+            $n = 0.0
+            $ok = [double]::TryParse($s.Text.Trim(), 'Float', [Globalization.CultureInfo]::InvariantCulture, [ref]$n)
+            Set-Invalid $s (-not $ok)
+            if ($ok) { Set-FrameZoom $n }
+        })
+    $cat.LogoScaleText.Add_TextChanged({
+            param($s, $e)
+            if (-not $s.IsKeyboardFocused -or -not $cat.PreviewLogo.Source -or -not (Get-CurrentTile)) { return }
+            $n = 0.0
+            $ok = [double]::TryParse($s.Text.Trim(), 'Float', [Globalization.CultureInfo]::InvariantCulture, [ref]$n)
+            Set-Invalid $s (-not $ok)
+            if ($ok) { Set-LogoScale $n }
+        })
 
     # a press on the logo moves the logo, anywhere else the background
     $p.Add_MouseLeftButtonDown({
@@ -2871,53 +3001,50 @@ function New-CategoryPage {
     $cmdRow = New-Grid @('*', 'Auto')
     [void]$cmdRow.Children.Add($cat['tile.Command'])
     $btnCmd = New-Button 'Browse...'
-    $btnCmd.Margin = T 8 0 0 0
+    $btnCmd.Margin = T $GAP.Control 0 0 0
     Set-Col $btnCmd 1
     [void]$cmdRow.Children.Add($btnCmd)
     [void](Add-To $f (New-FormRow 'Command' $cmdRow 'A program, a .lnk/.url shortcut, a URL (also steam://...), a folder or a Rainmeter bang.'))
     [void](Add-To $f (New-FormRow 'Label' $cat['tile.Label'] 'Text at the bottom left. Empty = none (tiles without images show their name).'))
-    $colorRow = New-Panel 'Horizontal'
+    $colorRow = New-Grid @('Auto', '*')
     $cat.ColorSwatch = New-Button '' 'Swatch' 'Pick a colour'
-    $cat['tile.Color'].Width = 170
-    $cat['tile.Color'].Margin = T 10 0 0 0
-    [void](Add-To $colorRow $cat.ColorSwatch); [void](Add-To $colorRow $cat['tile.Color'])
+    $cat['tile.Color'].Margin = T $GAP.Control 0 0 0
+    Set-Col $cat['tile.Color'] 1
+    [void]$colorRow.Children.Add($cat.ColorSwatch); [void]$colorRow.Children.Add($cat['tile.Color'])
     [void](Add-To $f (New-FormRow 'Colour' $colorRow 'Used when there is no background image. Empty = from the logo, or the default tile colour.'))
-    $tagHint = New-Panel
-    [void](Add-To $tagHint (New-Text 'Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.' 11.5 (Res 'DimBrush') -Wrap))
     $cat.TagSuggestions = New-Object System.Windows.Controls.WrapPanel
-    $cat.TagSuggestions.Margin = T 0 4 0 0
-    [void](Add-To $tagHint $cat.TagSuggestions)
-    [void](Add-To $f (New-FormRow 'Tags' $cat['tile.Tags'] '' $tagHint))
+    [void](Add-To $f (New-FormRow 'Tags' $cat['tile.Tags'] 'Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.' $cat.TagSuggestions))
     [void](Add-To $f (New-FormRow 'Hot key' $cat['tile.HotKey'] 'Starts the tile also while the launcher is hidden: keys separated by spaces, e.g. CTRL ALT 1 (HotKey plugin names).'))
     $moveRow = New-Panel 'Horizontal'
     $cat.MoveTo = New-Object System.Windows.Controls.ComboBox
-    $cat.MoveTo.Width = 200
+    $cat.MoveTo.Width = $FIELD.M
     $btnMove = New-Button 'Move'
-    $btnMove.Margin = T 8 0 0 0
+    $btnMove.Margin = T $GAP.Control 0 0 0
     [void](Add-To $moveRow $cat.MoveTo); [void](Add-To $moveRow $btnMove)
     [void](Add-To $f (New-FormRow 'Move to' $moveRow 'Moves the tile and its images to another category. Both category files are saved at once.'))
     $btnMove.Add_Click({
             $t = Get-CurrentTile; if (-not $t) { return }
             $target = $cat.MoveTo.SelectedItem
-            if (-not $target) { [void](Show-Dialog 'Raintile' 'Choose the category to move the tile to.'); return }
+            if (-not $target) { [void](Show-Dialog 'Move tile' 'Choose the category to move the tile to.'); return }
             $r = Show-Dialog 'Move tile' "Move '$($t.Name)' to $($target.Content)?" @('Move', 'Cancel')
             if ($r.Button -ne 'Move') { return }
             $err = Move-TileToCategory (Get-CurrentFile) $t $target.Tag
-            if ($err) { [void](Show-Dialog 'Raintile' $err); return }
+            if ($err) { [void](Show-Dialog 'Move tile' $err); return }
             Refresh-Tiles ([Math]::Max(0, $cat.Tiles.SelectedIndex - 1))
         })
     foreach ($kind in 'Background', 'Logo') {
         $row = New-Panel 'Horizontal'
         $thumb = New-Thumb 44
-        $choose = New-Button 'Choose...'
-        $choose.Margin = T 10 0 0 0
+        $choose = New-Button 'Browse...'
+        $choose.Margin = T $GAP.Control 0 0 0
         $choose.Tag = $kind
-        $remove = New-Button 'Remove'
-        $remove.Margin = T 6 0 0 0
+        # x: no image (its file goes to the Recycle Bin, asked first)
+        $remove = New-ActionIcon $GLYPH.Clear "Clear the $($kind.ToLowerInvariant())"
         $remove.Tag = $kind
-        [void](Add-To $row $thumb); [void](Add-To $row $choose); [void](Add-To $row $remove)
-        $pathText = New-Text '' 11.5 (Res 'DimBrush') -Wrap
-        [void](Add-To $f (New-FormRow $kind $row '' $pathText))
+        $cat["${kind}Del"] = $remove
+        [void](Add-To $row $thumb); [void](Add-To $row $choose)
+        $pathText = New-Help ''
+        [void](Add-To $f (New-FormRow $kind $row '' $pathText $remove))
         $cat["${kind}Thumb".Replace('Background', 'Bg')] = $thumb
         $cat["${kind}Path".Replace('Background', 'Bg')] = $pathText
         $choose.Add_Click({
@@ -2935,8 +3062,9 @@ function New-CategoryPage {
                 $t = Get-CurrentTile; if (-not $t) { return }
                 $path = Get-TileImage (Get-CurrentBase) $t $s.Tag
                 if ($path -and $path.StartsWith($imagesRoot, [StringComparison]::OrdinalIgnoreCase)) {
-                    $r = Show-Dialog 'Raintile' "Move $([IO.Path]::GetFileName($path)) to the Recycle Bin?" @('Remove', 'Cancel')
-                    if ($r.Button -ne 'Remove') { return }
+                    $what = $s.Tag.ToLowerInvariant()
+                    $r = Show-Dialog "Clear $what" "No $what for this tile: $([IO.Path]::GetFileName($path)) goes to the Recycle Bin." @('Clear', 'Cancel') -Danger
+                    if ($r.Button -ne 'Clear') { return }
                     Remove-ToRecycleBin $path
                 }
                 Set-Key $t $s.Tag ''
@@ -2967,7 +3095,7 @@ function New-CategoryPage {
             if (-not $new -or $new -ceq $t.Name) { $s.Text = $t.Name; return }
             $m = Get-Model (Get-CurrentFile)
             if (($m.Sections | Where-Object { $_ -ne $t -and $_.Name -ieq $new }) -or ((Get-ImportedNames $m) -contains $new)) {
-                [void](Show-Dialog 'Raintile' "There is already a tile called '$new'.")
+                [void](Show-Dialog 'Rename tile' "There is already a tile called '$new'.")
                 $s.Text = $t.Name; return
             }
             if (-not (Get-Key $t 'Image') -and $new -ine $t.Name) { Rename-TileImages (Get-CurrentBase) $t.Name $new }
@@ -2994,7 +3122,7 @@ function New-CategoryPage {
             $name = Get-TileName "$($r.Text)"
             if ($r.Button -ne 'Create' -or -not $name) { return }
             if (($m.Sections | Where-Object { $_.Name -ieq $name }) -or ((Get-ImportedNames $m) -contains $name)) {
-                [void](Show-Dialog 'Raintile' "There is already a tile called '$name'."); return
+                [void](Show-Dialog 'New tile' "There is already a tile called '$name'."); return
             }
             $s = [pscustomobject]@{ Name = $name; Comments = @(); Keys = (New-Object System.Collections.ArrayList) }
             Set-Key $s 'Added' (Get-Date).ToString('yyyy-MM-dd')
@@ -3005,7 +3133,7 @@ function New-CategoryPage {
         })
     $btnTileDel.Add_Click({
             $t = Get-CurrentTile; if (-not $t) { return }
-            $r = Show-Dialog 'Delete tile' "Delete the tile '$($t.Name)'? Its images stay in Images." @('Delete', 'Cancel')
+            $r = Show-Dialog 'Delete tile' "Delete the tile '$($t.Name)'? Its images stay in Images." @('Delete', 'Cancel') -Danger
             if ($r.Button -ne 'Delete') { return }
             $file = Get-CurrentFile
             (Get-Model $file).Sections.Remove($t)
@@ -3171,7 +3299,7 @@ function New-FoundEntry($it, [string]$in) {
     $texts = New-Panel
     $texts.VerticalAlignment = 'Center'
     $title = New-Panel 'Horizontal'
-    $t = New-Text $it.Name 13.5
+    $t = New-Text $it.Name $FS.Label
     $t.TextTrimming = 'CharacterEllipsis'
     [void](Add-To $title $t)
     if ($it.New) {
@@ -3181,17 +3309,17 @@ function New-FoundEntry($it, [string]$in) {
         $badge.Padding = T 5 0 5 1
         $badge.Margin = T 8 0 0 0
         $badge.VerticalAlignment = 'Center'
-        $badge.Child = New-Text 'NEW' 10 (Res 'AccentBrush') -Bold
+        $badge.Child = New-Text 'NEW' $FS.Badge (Res 'AccentBrush') -Bold
         [void](Add-To $title $badge)
     }
     [void](Add-To $texts $title)
     $store = $STORE_LABELS["$($it.Store)"]
     if (-not $store) { $store = "$($it.Store)" }
-    [void](Add-To $texts (New-Text "$store   $([char]0xB7)   $(if ($it.Kind -eq 'game') { 'game' } else { 'app' })" 11.5 (Res 'DimBrush')))
+    [void](Add-To $texts (New-Text "$store   $([char]0xB7)   $(if ($it.Kind -eq 'game') { 'game' } else { 'app' })" $FS.Help (Res 'DimBrush')))
     Set-Col $texts 2
     [void]$g.Children.Add($texts)
     if ($in) {
-        $note = New-Text "in $in" 12 (Res 'DimBrush')
+        $note = New-Text "in $in" $FS.Help (Res 'DimBrush')
         $note.VerticalAlignment = 'Center'
         $note.Margin = T 12 0 4 0
         Set-Col $note 3
@@ -3223,7 +3351,7 @@ function Refresh-FoundList {
             if (-not $in -and $found.Selected.ContainsKey($it.Id)) { $item.IsSelected = $true }
         }
         $found.Empty.Visibility = if ($list.Items.Count) { 'Collapsed' } else { 'Visible' }
-        $found.Empty.Text = if ($script:scanProcess -and -not $script:scanProcess.HasExited) { 'Searching' + [char]0x2026 }
+        $found.Empty.Text = if ($script:scanProcess -and -not $script:scanProcess.HasExited) { 'Searching...' }
         elseif (-not $found.Items.Count) { 'Nothing found yet: press Search again.' }
         else { 'Nothing to show: everything is already in the launcher, or hidden by the filters.' }
     } finally { $script:foundBuilding = $false }
@@ -3249,7 +3377,7 @@ $scanTimer.Add_Tick({
 function Start-FoundScan {
     if ($script:scanProcess -and -not $script:scanProcess.HasExited) { return }
     $found.ScanButton.IsEnabled = $false
-    $found.Status.Text = 'Searching the stores and the Start menu' + [char]0x2026
+    $found.Status.Text = 'Searching the stores and the Start menu...'
     $exe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $argList = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"{0}"' -f (Join-Path $PSScriptRoot 'Scan.ps1')),
         '-Resources', ('"{0}"' -f $Resources), '-Data', ('"{0}"' -f $Data), '-Stores', ('"{0}"' -f $values['ImportStores']))
@@ -3278,7 +3406,7 @@ function Add-SelectedFound {
     try {
         for ($i = 0; $i -lt $sel.Count; $i++) {
             $it = $sel[$i]
-            $found.Status.Text = "Adding $($i + 1) of $($sel.Count): $($it.Name)" + [char]0x2026
+            $found.Status.Text = "Adding $($i + 1) of $($sel.Count): $($it.Name)..."
             $win.Dispatcher.Invoke([action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
             $found.Selected.Remove($it.Id)
             if (Get-PresentIn $it $present) { continue }
@@ -3330,7 +3458,7 @@ function New-FoundCard {
 
     $converted = Convert-OldImports
     if ($converted) {
-        $note = New-Text "$converted games of the old automatic import are now normal tiles: you can edit and move them." 12.5 (Res 'AccentBrush') -Wrap
+        $note = New-Text "$converted games of the old automatic import are now normal tiles: you can edit and move them." $FS.Help (Res 'AccentBrush') -Wrap
         $note.Margin = T 0 0 0 8
         [void](Add-To $f $note)
     }
@@ -3340,7 +3468,7 @@ function New-FoundCard {
     $head.Margin = T 0 2 0 10
     $found.ScanButton = New-Button 'Search again'
     [void]$head.Children.Add($found.ScanButton)
-    $found.Status = New-Text '' 12 (Res 'DimBrush') -Wrap
+    $found.Status = New-Help ''
     $found.Status.VerticalAlignment = 'Center'
     $found.Status.Margin = T 12 0 0 0
     Set-Col $found.Status 1
@@ -3384,7 +3512,7 @@ function New-FoundCard {
     $found.List = New-Object System.Windows.Controls.ListBox
     $found.List.SelectionMode = 'Multiple'
     [void]$grid.Children.Add($found.List)
-    $found.Empty = New-Text '' 13 (Res 'DimBrush') -Wrap
+    $found.Empty = New-Help ''
     $found.Empty.HorizontalAlignment = 'Center'
     $found.Empty.VerticalAlignment = 'Center'
     $found.Empty.IsHitTestVisible = $false
@@ -3521,46 +3649,54 @@ function Refresh-MissingList {
         $row.Margin = T 0 3
         $texts = New-Panel
         $texts.VerticalAlignment = 'Center'
-        $name = New-Text $t.Name 13.5
-        $name.TextTrimming = 'CharacterEllipsis'
+        $name = New-Text $t.Name $FS.Label
+        Set-Trimmed $name
         [void](Add-To $texts $name)
         $cmd = Get-Key $t.Section 'Command'
-        [void](Add-To $texts (New-Text "in $($names[$t.File])   $([char]0xB7)   $cmd" 11.5 (Res 'DimBrush')))
-        ($texts.Children[1]).TextTrimming = 'CharacterEllipsis'
+        # the command can be long: cut, the whole line in the tooltip
+        Set-Trimmed (Add-To $texts (New-Text "in $($names[$t.File])   $([char]0xB7)   $cmd" $FS.Help (Res 'DimBrush')))
         [void]$row.Children.Add($texts)
-        $remove = New-Button 'Remove' '' 'Takes the tile out of its category. Its images stay in the Images folder.'
-        $remove.Margin = T 10 0 0 0
+        $remove = New-Button 'Remove'
+        $remove.Margin = T $GAP.Control 0 0 0
         $remove.Tag = $t
-        $remove.Add_Click({ param($s, $e) Remove-MissingTiles @($s.Tag) })
+        $remove.Add_Click({ param($s, $e) if (Confirm-RemoveMissing 1) { Remove-MissingTiles @($s.Tag) } })
         Set-Col $remove 1
         [void]$row.Children.Add($remove)
-        $keepBtn = New-Button 'Keep' '' 'Keeps the tile as it is and stops reporting it.'
-        $keepBtn.Margin = T 6 0 0 0
+        $keepBtn = New-Button 'Keep'
+        $keepBtn.Margin = T $GAP.Control 0 0 0
         $keepBtn.Tag = $t
         $keepBtn.Add_Click({ param($s, $e) Keep-MissingTiles @($s.Tag) })
         Set-Col $keepBtn 2
         [void]$row.Children.Add($keepBtn)
         [void]$missingUi.List.Children.Add($row)
     }
-    $missingUi.Count.Text = "$($tiles.Count) tile$(if ($tiles.Count -ne 1) { 's' }) of games that are no longer installed, or whose program file is gone. In the launcher they are greyed out and do not start."
+    $missingUi.Count.Text = "$($tiles.Count) tile$(if ($tiles.Count -ne 1) { 's' }) of games that are no longer installed, or whose program file is gone. In the launcher they are greyed out and do not start. " +
+        'Remove takes a tile out of its category at once (its images stay in the Images folder); Keep leaves it as it is and stops reporting it.'
+}
+
+# Taking tiles out of their categories is written at once: asked first
+function Confirm-RemoveMissing([int]$count) {
+    $what = if ($count -eq 1) { 'Remove this tile from its category?' } else { "Remove these $count tiles from their categories?" }
+    $r = Show-Dialog 'Remove tiles' "$what Their images stay in the Images folder." @('Remove', 'Cancel') -Danger
+    return ($r.Button -eq 'Remove')
 }
 
 function New-MissingCard {
     $card = New-Card 'No longer installed' ''
     $missingUi.Card = $card
     $f = $card.Child
-    $missingUi.Count = New-Text '' 12 (Res 'DimBrush') -Wrap
-    $missingUi.Count.Margin = T 0 0 0 8
+    $missingUi.Count = New-Help ''
+    $missingUi.Count.Margin = T 0 0 0 $GAP.Control
     [void](Add-To $f $missingUi.Count)
     $missingUi.List = New-Panel
     [void](Add-To $f $missingUi.List)
     $bottom = New-Panel 'Horizontal'
     $bottom.Margin = T 0 10 0 6
     $all = New-Button 'Remove all'
-    $all.Add_Click({ Remove-MissingTiles @(Get-MissingList) })
+    $all.Add_Click({ $list = @(Get-MissingList); if ($list.Count -and (Confirm-RemoveMissing $list.Count)) { Remove-MissingTiles $list } })
     [void](Add-To $bottom $all)
     $keepAll = New-Button 'Keep all'
-    $keepAll.Margin = T 8 0 0 0
+    $keepAll.Margin = T $GAP.Control 0 0 0
     $keepAll.Add_Click({ Keep-MissingTiles @(Get-MissingList) })
     [void](Add-To $bottom $keepAll)
     [void](Add-To $f $bottom)
@@ -3645,9 +3781,9 @@ $refreshTimer.Add_Tick({
         $p = Get-PlannedProgress $script:progressPlan ([DateTime]::Now - $script:refreshStart).TotalMilliseconds
         $progressBar.Width = $p * $progressTrack.ActualWidth
         $progressPercent.Text = "$([int][Math]::Floor($p * 100))%"
-        $progressStage.Text = if ($p -lt 0.3) { 'Saving the settings' + [char]0x2026 }
-        elseif ($p -lt 0.85) { 'Refreshing the skin' + [char]0x2026 }
-        else { 'Opening the launcher' + [char]0x2026 }
+        $progressStage.Text = if ($p -lt 0.3) { 'Saving the settings...' }
+        elseif ($p -lt 0.85) { 'Refreshing the skin...' }
+        else { 'Opening the launcher...' }
         if ($p -ge 1) {
             $refreshTimer.Stop()
             $overlay.Visibility = 'Collapsed'
@@ -3668,7 +3804,7 @@ function Start-SaveAndRefresh {
     $script:progressPlan = New-ProgressPlan
     $progressBar.Width = 0
     $progressPercent.Text = '0%'
-    $progressStage.Text = 'Saving the settings' + [char]0x2026
+    $progressStage.Text = 'Saving the settings...'
     $overlay.Visibility = 'Visible'
     $script:refreshStart = [DateTime]::Now
     $refreshTimer.Start()
@@ -3676,7 +3812,7 @@ function Start-SaveAndRefresh {
 
 # Info > Back up: the data folder to a zip (unsaved changes are saved first)
 function Invoke-Backup {
-    if ($Data -eq $Resources) { [void](Show-Dialog 'Raintile' 'Your data folder is not ready yet: refresh the skin once, then try again.'); return }
+    if ($Data -eq $Resources) { [void](Show-Dialog 'Back up' 'Your data folder is not ready yet: refresh the skin once, then try again.'); return }
     if ($script:dirtySettings) { Save-All -NoRefresh }
     $dlg = New-Object Microsoft.Win32.SaveFileDialog
     $dlg.Filter = 'Raintile backup|*.zip'
@@ -3685,24 +3821,24 @@ function Invoke-Backup {
     if (-not $dlg.ShowDialog($win)) { return }
     try {
         New-DataBackup $Data $dlg.FileName
-        [void](Show-Dialog 'Raintile' "Backup saved:`r`n$($dlg.FileName)")
-    } catch { [void](Show-Dialog 'Raintile' "The backup could not be saved: $($_.Exception.Message)") }
+        [void](Show-Dialog 'Back up' "Backup saved:`r`n$($dlg.FileName)")
+    } catch { [void](Show-Dialog 'Back up' "The backup could not be saved: $($_.Exception.Message)") }
 }
 
 # Info > Restore: replaces the data folder with a backup, then the window
 # closes and the skin reloads
 function Invoke-Restore {
-    if ($Data -eq $Resources) { [void](Show-Dialog 'Raintile' 'Your data folder is not ready yet: refresh the skin once, then try again.'); return }
+    if ($Data -eq $Resources) { [void](Show-Dialog 'Restore backup' 'Your data folder is not ready yet: refresh the skin once, then try again.'); return }
     $zip = Select-File 'Raintile backup|*.zip|All files|*.*'
     if (-not $zip) { return }
     $problem = Test-DataBackup $zip
-    if ($problem) { [void](Show-Dialog 'Raintile' "This file can not be restored: $problem."); return }
+    if ($problem) { [void](Show-Dialog 'Restore backup' "This file cannot be restored: $problem."); return }
     $r = Show-Dialog 'Restore backup' ("Replace your settings, categories, images, favorites and usage with this backup?`r`n`r`n" +
         'Your current data is not deleted: it is kept in a folder next to it. Unsaved changes in this window are lost.') @('Restore', 'Cancel')
     if ($r.Button -ne 'Restore') { return }
     try { $kept = Restore-DataBackup $zip $Data }
-    catch { [void](Show-Dialog 'Raintile' "The backup could not be restored, nothing was changed: $($_.Exception.Message)"); return }
-    [void](Show-Dialog 'Raintile' "Backup restored. Your previous data is in:`r`n$kept")
+    catch { [void](Show-Dialog 'Restore backup' "The backup could not be restored, nothing was changed: $($_.Exception.Message)"); return }
+    [void](Show-Dialog 'Restore backup' "Backup restored. Your previous data is in:`r`n$kept")
     # the launcher shows itself once reloaded; nothing left to save here
     try { [IO.File]::WriteAllText((Join-Path $Resources 'Generated\ShowOnLoad'), '', $utf8) } catch { }
     $script:skipSavePrompt = $true
@@ -3754,7 +3890,7 @@ function New-NavItem([string]$id, [string]$title, [int]$glyph, [int]$level, [has
         $tag.Icon = $img
         $item.Padding = T 44 7 12 7
     }
-    $t = New-Text $title $(if ($level -eq 0) { 13.5 } else { 13 })
+    $t = New-Text $title $FS.Label
     $t.VerticalAlignment = 'Center'
     $t.TextTrimming = 'CharacterEllipsis'
     Set-Col $t 1
@@ -3925,7 +4061,7 @@ function Show-UpdateInfo {
 }
 
 function Invoke-CheckNow {
-    $upd.Status.Text = 'Checking' + [char]0x2026
+    $upd.Status.Text = 'Checking...'
     $win.Cursor = [System.Windows.Input.Cursors]::Wait
     $win.Dispatcher.Invoke([action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
     try { $info = Invoke-UpdateCheck } finally { $win.Cursor = $null }
@@ -3954,7 +4090,7 @@ function Install-Update {
     $folder = Join-Path $env:TEMP ('Raintile-update-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $dest = Join-Path $folder $(if ($version) { "Raintile_$version.rmskin" } else { 'Raintile_update.rmskin' })
-    $upd.Status.Text = 'Downloading' + [char]0x2026
+    $upd.Status.Text = 'Downloading...'
     $win.Cursor = [System.Windows.Input.Cursors]::Wait
     $win.Dispatcher.Invoke([action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
     try {
@@ -3981,13 +4117,13 @@ function New-UpdateCard {
     $card = New-Card 'Updates' ''
     $f = $card.Child
     foreach ($row in @(@('Installed', 'Installed'), @('Latest', 'Latest version'))) {
-        $v = New-Text '' 13 -Wrap
-        $v.MaxWidth = 460
+        $v = New-Text '' $FS.Help -Wrap
+        $v.MaxWidth = $FIELD.Wrap
         $v.TextAlignment = 'Right'
         $upd[$row[0]] = $v
         [void]$f.Children.Add((New-Row $row[1] '' $v $null))
     }
-    $upd.Status = New-Text '' 13.5 -Wrap
+    $upd.Status = New-Text '' $FS.Label -Wrap
     $upd.Status.Margin = T 0 12 0 6
     [void](Add-To $f $upd.Status)
     $notesBox = New-Object System.Windows.Controls.Border
@@ -3998,7 +4134,7 @@ function New-UpdateCard {
     $sv = New-Object System.Windows.Controls.ScrollViewer
     $sv.MaxHeight = 220
     $sv.VerticalScrollBarVisibility = 'Auto'
-    $upd.Notes = New-Text '' 12.5 (Res 'DimBrush') -Wrap
+    $upd.Notes = New-Help ''
     $sv.Content = $upd.Notes
     $notesBox.Child = $sv
     $upd.NotesBox = $notesBox
@@ -4028,6 +4164,7 @@ function New-InfoPage {
     # as wide as the window: the rows stretch and their help text wraps less
     $sp.Margin = T 36 4 36 24
     $sv.Content = $sp
+    Set-ScrollRoom $sv $sp
 
     $card = New-Card '' ''
     $card.Padding = T 24 20 24 20
@@ -4040,14 +4177,14 @@ function New-InfoPage {
         $badge.Padding = T 8 2 8 2
         $badge.Margin = T 12 4 0 0
         $badge.VerticalAlignment = 'Center'
-        $badge.Child = New-Text $version 12 (Res 'AccentBrush') -Bold
+        $badge.Child = New-Text $version $FS.Badge (Res 'AccentBrush') -Bold
         [void](Add-To $head $badge)
     }
     [void](Add-To $card.Child $head)
-    $about = New-Text $(if ($information) { $information } else { 'Full-screen tile launcher for Rainmeter.' }) 13.5 (Res 'DimBrush') -Wrap
+    $about = New-Text $(if ($information) { $information } else { 'Full-screen tile launcher for Rainmeter.' }) $FS.Label (Res 'DimBrush') -Wrap
     $about.Margin = T 0 8 0 0
     [void](Add-To $card.Child $about)
-    $more = New-Text 'Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, games and apps found on this PC. Every setting is described in the Guide, on GitHub.' 12.5 (Res 'DimBrush') -Wrap
+    $more = New-Text 'Categories in a menu at the top, tiles with background art and logo, mouse, keyboard and gamepad, search, games and apps found on this PC. Every setting is described in the Guide, on GitHub.' $FS.Help (Res 'DimBrush') -Wrap
     $more.Margin = T 0 6 0 0
     [void](Add-To $card.Child $more)
     [void](Add-To $sp $card)
@@ -4064,8 +4201,8 @@ function New-InfoPage {
             @('Categories', "$(@($entries).Count)"),
             @('Tiles', "$([int]$tiles) written by hand, $([int]$imported) imported")
         )) {
-        $v = New-Text $row[1] 13 -Wrap
-        $v.MaxWidth = 460
+        $v = New-Text $row[1] $FS.Help -Wrap
+        $v.MaxWidth = $FIELD.Wrap
         $v.TextAlignment = 'Right'
         [void]$card.Child.Children.Add((New-Row $row[0] '' $v $null))
     }
@@ -4077,8 +4214,9 @@ function New-InfoPage {
     [void]$card.Child.Children.Add((New-Row 'Settings' 'Settings.inc, in Notepad.' (New-ActionControl 'OpenSettings' 'Open Settings.inc') $null))
     [void]$card.Child.Children.Add((New-Row 'Your data' 'Settings, categories and images: updates never touch this folder.' (New-ActionControl 'OpenFolder' 'Open the folder') $null))
     $backupButtons = New-Panel 'Horizontal'
+    $backupButtons.HorizontalAlignment = 'Right'
     $b = New-ActionControl 'Backup' 'Back up...'
-    $b.Margin = T 0 0 8 0
+    $b.Margin = T 0 0 $GAP.Control 0
     [void](Add-To $backupButtons $b)
     [void](Add-To $backupButtons (New-ActionControl 'Restore' 'Restore...'))
     [void]$card.Child.Children.Add((New-Row 'Backup' 'Your data in a zip file, to keep it safe or move it to another PC (the SteamGridDB key only works for the same Windows user).' $backupButtons $null))
@@ -4171,7 +4309,7 @@ $win.Add_PreviewKeyDown({
 $win.Add_Closing({
         param($s, $e)
         if (-not $script:dirtySettings -or $script:skipSavePrompt) { return }
-        $r = Show-Dialog 'Raintile' 'Save the changes before closing?' @('Save', "Don't save", 'Cancel')
+        $r = Show-Dialog 'Unsaved changes' 'Save the changes before closing?' @('Save', "Don't save", 'Cancel')
         if ($r.Button -eq 'Save') { Save-All }
         elseif ($r.Button -ne "Don't save") { $e.Cancel = $true }
     })

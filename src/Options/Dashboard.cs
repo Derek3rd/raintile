@@ -17,14 +17,14 @@ namespace RaintileOptions
             var card = NewCard("Widgets", "Any tile can be a widget, in any category: processor, graphics card, memory, disks, network, temperatures, your skins. Pick Widget in the tile editor.");
             var f = CardPanel(card);
             bool has = File.Exists(Path.Combine(Core.CategoriesDir, "Dashboard.ini"));
-            AddTo(f, NewText(has
+            AddTo(f, NewHelp(has
                 ? "The example Dashboard is a normal category: find it under Categories."
-                : "The example Dashboard (system widgets on a 5 \u00D7 4 grid) is not among your categories.", 12.5, ResBrush("DimBrush"), false, true));
+                : "The example Dashboard (system widgets on a 5 \u00D7 4 grid) is not among your categories."));
             if (!has)
             {
                 var create = NewButton("Add the example Dashboard", "AccentButton");
                 create.HorizontalAlignment = HorizontalAlignment.Left;
-                create.Margin = T(0, 10, 0, 4);
+                create.Margin = T(0, Gap.Control, 0, 4);
                 create.Click += (s, e) => CreateDashboard();
                 AddTo(f, create);
             }
@@ -52,7 +52,7 @@ namespace RaintileOptions
             }
             catch (Exception ex)
             {
-                ShowDialog("Raintile", "The Dashboard could not be added: " + ex.Message);
+                ShowDialog("Add the example Dashboard", "The Dashboard could not be added: " + ex.Message);
                 return;
             }
             needsRefresh = true;

@@ -156,7 +156,7 @@ namespace RaintileOptions
         int PadSetting(string key, int fallback, int min, int max)
         {
             double n;
-            if (!TryNum(V(key), out n)) return fallback;
+            if (!Core.TryNumber(V(key), out n)) return fallback;
             return (int)Math.Max(min, Math.Min(max, n));
         }
 

@@ -37,12 +37,11 @@ namespace RaintileOptions
         <TextBlock x:Name=""PageDesc"" Foreground=""{StaticResource DimBrush}"" Margin=""0,5,0,0"" TextWrapping=""Wrap"" HorizontalAlignment=""Left""/>
       </StackPanel>
       <Grid x:Name=""PageHost"" Grid.Row=""1""/>
-      <Border Grid.Row=""2"" BorderBrush=""{StaticResource LineBrush}"" BorderThickness=""0,1,0,0"" Padding=""28,12"">
+      <Border Grid.Row=""2"" BorderBrush=""{StaticResource LineBrush}"" BorderThickness=""0,1,0,0"" Padding=""36,12"">
         <DockPanel>
           <StackPanel DockPanel.Dock=""Right"" Orientation=""Horizontal"">
-            <Button x:Name=""BtnClose"" Content=""Close"" MinWidth=""90""/>
-            <Button x:Name=""BtnSave"" Content=""Save and refresh"" Style=""{StaticResource AccentButton}"" Margin=""10,0,0,0""
-                    ToolTip=""Ctrl+S""/>
+            <Button x:Name=""BtnSave"" Content=""Save and refresh"" Style=""{StaticResource AccentButton}"" ToolTip=""Ctrl+S""/>
+            <Button x:Name=""BtnClose"" Content=""Close"" MinWidth=""90"" Margin=""8,0,0,0""/>
           </StackPanel>
           <TextBlock x:Name=""Status"" VerticalAlignment=""Center"" Foreground=""{StaticResource DimBrush}""/>
         </DockPanel>

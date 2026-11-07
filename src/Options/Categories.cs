@@ -39,6 +39,7 @@ namespace RaintileOptions
     public partial class OptionsApp
     {
         static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+        static readonly string Times = ((char)0xD7).ToString();   // unit of zoom and scale factors
         Dictionary<string, CategoryModel> models = new Dictionary<string, CategoryModel>(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, bool> changedFiles = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         Dictionary<string, string> logoColors = new Dictionary<string, string>();
@@ -48,15 +49,18 @@ namespace RaintileOptions
         // controls of the category pages
         ListBox catsList, tilesList;
         Border catCard, tileCard, importedCard, catIcon, bgThumb, logoThumb, preview;
-        TextBlock catIconHint, gridHint, sizeHint, tileNote, previewLabel, bgPath, logoPath, zoomText, logoScaleText;
+        TextBlock catIconHint, gridColsHint, gridRowsHint, sizeHint, tileOpacityHint, tileNote, previewLabel, bgPath, logoPath;
         Image previewBg, previewLogo;
         Panel frameRow, logoRow;
-        Slider zoomSlider, logoSlider;
-        Button tileKeyButton;
+        NumberField zoomField, logoField;
+        Button tileKeyButton, tileKeyClear, catIconDel, bgDel, logoDel, catColorClear, tileColorClear;
         TextBox catTileColor;
-        ComboBox catOpacity, tileOpacity;
+        NumberField catOpacity, tileOpacity, gridCols, gridRows, sizeCols, sizeRows;
+        SizeField catLogoSize;
+        Button catOpacityReset, tileOpacityReset, gridColsReset, gridRowsReset, catLogoSizeReset;
+        Button catNew, catOpen, catUp, catDown, catDel, tileNew, tileDel, tileUp, tileDown;
         Button catColorSwatch;
-        ComboBox widgetKind, sizeCols, sizeRows;
+        ComboBox widgetKind;
         TextBox widgetParam;
         TextBlock widgetHint, placementHint;
         FrameworkElement widgetRow, widgetParamRow, placementRow;
@@ -72,7 +76,6 @@ namespace RaintileOptions
         Button btnInfoReset;
         Panel infoRow;
         Panel previewColumn;
-        readonly Dictionary<string, TextBox> allFields = new Dictionary<string, TextBox>();
         BitmapSource placeholderBg, placeholderLogo;
 
         // Widgets: kind, label in the list, what Param= means
@@ -103,7 +106,7 @@ namespace RaintileOptions
             var item = widgetKind.SelectedItem as ComboBoxItem;
             string kind = item != null ? (string)item.Tag : "";
             string hint = WIDGET_KINDS.Where(k => k[0] == kind).Select(k => k[2]).FirstOrDefault() ?? "";
-            widgetHint.Text = hint;
+            SetFormHelp(widgetHint, hint);
             widgetParamRow.Visibility = hint != "" ? Visibility.Visible : Visibility.Collapsed;
         }
         Button colorSwatch;
@@ -148,10 +151,10 @@ namespace RaintileOptions
             AddTo(sp, thumb);
             var texts = NewPanel();
             texts.VerticalAlignment = VerticalAlignment.Center;
-            var t = NewText(title, 13);
-            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            var t = NewText(title, Fs.Label);
+            SetTrimmed(t);
             AddTo(texts, t);
-            if (!string.IsNullOrEmpty(sub)) AddTo(texts, NewText(sub, 11, ResBrush("DimBrush")));
+            if (!string.IsNullOrEmpty(sub)) AddTo(texts, NewText(sub, Fs.Help, ResBrush("DimBrush")));
             AddTo(sp, texts);
             item.Content = sp;
             tag.Thumb = thumb;
@@ -378,7 +381,7 @@ namespace RaintileOptions
             {
                 string count = e.Tiles + " tile" + (e.Tiles != 1 ? "s" : "");
                 if (e.Imported > 0) count += " + " + e.Imported + " imported";
-                var item = NewListEntry(e.Name, e.File + "   \u00B7   " + count, new ListTag { File = e.File }, 36);
+                var item = NewListEntry(e.Name, e.File + "   " + Dot + "   " + count, new ListTag { File = e.File }, 36);
                 SetThumb(((ListTag)item.Tag).Thumb, e.Icon);
                 item.Padding = T(12, 9);
                 catsList.Items.Add(item);
@@ -444,15 +447,15 @@ namespace RaintileOptions
                 Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = ResBrush("CardBg"),
                 Margin = T(4, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
                 Visibility = Visibility.Collapsed, ToolTip = "Pinned: at the start of the category",
-                Child = NewGlyph(0xE718, 11),
+                Child = NewGlyph(Glyph.Pin, Fs.Badge),
             };
             ((TextBlock)pin.Child).HorizontalAlignment = HorizontalAlignment.Center;
             g.Children.Add(pin);
             AddTo(sp, g);
-            var t = NewText(title, 12);
-            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            // a caption under a thumbnail: help size, the full name when it is cut
+            var t = NewText(title, Fs.Help);
             t.Margin = T(2, 6, 2, 0);
-            t.ToolTip = title;
+            SetTrimmed(t);
             AddTo(sp, t);
             item.Content = sp;
             tag.Thumb = thumb; tag.Title = t; tag.Dot = dot; tag.Pin = pin;
@@ -479,7 +482,6 @@ namespace RaintileOptions
             var s = tag.Section;
             string bg = Core.GetTileImage(b, s, "Background"), logo = Core.GetTileImage(b, s, "Logo");
             tag.Title.Text = s.Name;
-            tag.Title.ToolTip = s.Name;
             SetStripThumb(tag, GetBitmap(bg, 264), GetBitmap(logo, 160), GetTileBrush(b, s, bg, logo));
             tag.Dot.Visibility = !tag.Imported && HasOwnValues(s) ? Visibility.Visible : Visibility.Collapsed;
             tag.Pin.Visibility = !tag.Imported && IsPinned(s) ? Visibility.Visible : Visibility.Collapsed;
@@ -624,25 +626,15 @@ namespace RaintileOptions
             var c = file != null ? Core.GetCategorySection(GetModel(file)) : null;
             catFields["Name"].Text = c != null ? Core.GetKey(c, "Name") : "";
             catShown.IsChecked = c == null || Core.GetKey(c, "Hidden").Trim() != "1";
-            SetThumb(catIcon, c != null ? Core.GetCategoryIcon(GetListBase(), c) : null);
+            string icon = c != null ? Core.GetCategoryIcon(GetListBase(), c) : null;
+            SetThumb(catIcon, icon);
+            SetActionVisible(catIconDel, icon != null);
             catIconHint.Text = file != null ? "Default: Images\\" + GetListBase() + "\\icon.png" : "";
+            int i = catsList.SelectedIndex;
+            catOpen.IsEnabled = catDel.IsEnabled = file != null;
+            catUp.IsEnabled = file != null && i > 0;
+            catDown.IsEnabled = file != null && i < catsList.Items.Count - 1;
             loading = false;
-        }
-
-        // Opacity of the tile background (colour and image): "" = the default, then 100% to 0%
-        static ComboBox NewOpacityBox(string defaultLabel)
-        {
-            var box = new ComboBox();
-            box.Items.Add(new ComboBoxItem { Content = defaultLabel, Tag = "" });
-            for (int n = 100; n >= 0; n -= 10) box.Items.Add(new ComboBoxItem { Content = n + "%" + (n == 0 ? " (none)" : ""), Tag = n.ToString() });
-            return box;
-        }
-
-        static void SelectOpacity(ComboBox box, string value)
-        {
-            int v;
-            string tag = int.TryParse((value ?? "").Trim(), out v) ? (Math.Max(0, Math.Min(100, (int)Math.Round(v / 10.0) * 10))).ToString() : "";
-            box.SelectedItem = box.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == tag) ?? box.Items[0];
         }
 
         // A new category file and its image folders
@@ -675,13 +667,13 @@ namespace RaintileOptions
         {
             public string Path; public BitmapSource Bitmap;
             public double FX = 0.5, FY = 0.5, Zoom = 1.0, TW = 16, TH = 9;
-            public bool Dragging, Moved, Sync;
+            public bool Dragging, Moved;
             public Point DragPoint; public double DragFX, DragFY;
         }
         class LogoState
         {
             public double X = 0.5, Y = 0.5, Scale = 1.0, Box = 96.0;
-            public bool Dragging, Moved, Sync;
+            public bool Dragging, Moved;
             public Point DragPoint; public double DragX, DragY;
         }
         // X, Y: InfoPos (0-1); DragX, DragY: where the line was, in preview pixels
@@ -842,15 +834,14 @@ namespace RaintileOptions
             bool frameOwn = has(t, "BgFocus", "BgZoom"), logoOwn = has(t, "LogoPos", "LogoScale");
             SetChip(frameChip, all ? null : (bool?)frameOwn);
             SetChip(logoChip, all ? null : (bool?)logoOwn);
-            // the icon buttons have no disabled look of their own
-            Action<Button, bool> enable = (b, on) => { b.IsEnabled = on; b.Opacity = on ? 1 : 0.35; };
-            enable(btnFrameReset, all ? has(c, "BgFocus", "BgZoom") : frameOwn);
-            enable(btnLogoReset, all ? has(c, "LogoPos", "LogoScale") : logoOwn);
+            // a reset that would change nothing is hidden (docs/OptionsUI.md, 2)
+            SetActionVisible(btnFrameReset, all ? has(c, "BgFocus", "BgZoom") : frameOwn);
+            SetActionVisible(btnLogoReset, all ? has(c, "LogoPos", "LogoScale") : logoOwn);
             btnFrameReset.ToolTip = all ? "Back to the centre, at zoom 1" : "Back to the framing of All tiles";
             btnLogoReset.ToolTip = all ? "Back to the centre, at the normal size" : "Back to the logo placement of All tiles";
             bool infoOwn = t != null && Core.GetKey(t, "InfoPos") != "";
             SetChip(infoChip, all ? null : (bool?)infoOwn);
-            enable(btnInfoReset, all ? c != null && Core.GetKey(c, "InfoPos") != "" : infoOwn);
+            SetActionVisible(btnInfoReset, all ? c != null && Core.GetKey(c, "InfoPos") != "" : infoOwn);
             btnInfoReset.ToolTip = all ? "Back to the top left" : "Back to the play time placement of All tiles";
         }
 
@@ -863,12 +854,11 @@ namespace RaintileOptions
             text.Text = own.Value ? "Own" : "From All tiles";
             text.Foreground = own.Value ? ResBrush("AccentBrush") : ResBrush("DimBrush");
             chip.Background = own.Value ? ResBrush("AccentSoftBrush") : ResBrush("FieldBg");
-            chip.ToolTip = own.Value ? "This tile has its own; the x on its row gives it back the one of All tiles" : "Follows All tiles; move it to give this tile its own";
         }
 
         Border NewChip()
         {
-            var t = NewText("", 11);
+            var t = NewText("", Fs.Badge);
             return new Border { CornerRadius = new CornerRadius(9), Padding = T(8, 1, 8, 2), Margin = T(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = t };
         }
 
@@ -877,8 +867,8 @@ namespace RaintileOptions
         {
             var model = GetModel(file);
             var tiles = Core.GetTiles(model);
-            var r = ShowDialog("Raintile", "Reset the " + what + " of all " + tiles.Count + " tiles of " + GetCategoryName(file) +
-                "? They go back to " + back + ".", new[] { "Reset", "Cancel" });
+            var r = ShowDialog("Reset every tile", "Reset the " + what + " of all " + tiles.Count + " tiles of " + GetCategoryName(file) +
+                "? They go back to " + back + ".", new[] { "Reset", "Cancel" }, null, true);
             if (r.Button != "Reset") return;
             foreach (var s in new[] { Core.GetCategorySection(model) }.Concat(tiles)) foreach (var k in keys) Core.SetKey(s, k, "");
             SetChanged(file);
@@ -900,20 +890,19 @@ namespace RaintileOptions
                 // a run of another category is still going: its bar and text stay there
                 if (!autoArtBusy) { autoArtStatus.Visibility = Visibility.Collapsed; autoArtTrack.Visibility = Visibility.Collapsed; }
             }
-            if (file == null) { SetLabelHint(placementHint, ""); return; }
+            if (file == null) { SetFormHelp(placementHint, ""); return; }
             var model = GetModel(file);
             var tiles = Core.GetTiles(model);
             // size null: a point only (InfoPos)
             Func<string, string, string> describe = (pos, size) =>
             {
                 string p = GetCategoryPlace(model, pos), z = size != null ? GetCategoryPlace(model, size) : "1";
-                string text = (p == "50,50" ? "centre" : p == "0,0" ? "top left" : p + "%") + (z == "1" ? "" : ", " + z + "\u00D7");
+                string text = (p == "50,50" ? "centre" : p == "0,0" ? "top left" : p + "%") + (z == "1" ? "" : ", " + z + Times);
                 int own = tiles.Count(t => Core.GetKey(t, pos) != "" || (size != null && Core.GetKey(t, size) != ""));
                 return text + (own > 0 ? " (" + own + (own == 1 ? " tile has its own)" : " tiles have their own)") : "");
             };
-            SetLabelHint(placementHint, "Logos: " + describe("LogoPos", "LogoScale") + ". Framing: " + describe("BgFocus", "BgZoom") +
-                ". Play time: " + describe("InfoPos", null) +
-                ". These buttons put every tile back at the default place (the centre, the top left for the play time), the ones with their own included.");
+            SetFormHelp(placementHint, "Puts every tile back at the default place (the centre, the top left for the play time), the ones with their own included. Now: logos " +
+                describe("LogoPos", "LogoScale") + "; framing " + describe("BgFocus", "BgZoom") + "; play time " + describe("InfoPos", null) + ".");
         }
 
         void ReadFraming(IniSection section)
@@ -961,10 +950,7 @@ namespace RaintileOptions
             bool has = bgFrame.Bitmap != null;
             frameRow.IsEnabled = has;
             preview.Cursor = has || previewLogo.Source != null || previewInfo.Visibility == Visibility.Visible ? Cursors.SizeAll : null;
-            bgFrame.Sync = true;
-            zoomSlider.Value = bgFrame.Zoom;
-            bgFrame.Sync = false;
-            zoomText.Text = bgFrame.Zoom.ToString("0.00", Inv) + "\u00D7";
+            zoomField.Show(bgFrame.Zoom.ToString("0.00", Inv), bgFrame.Zoom);
             if (!has) return;
             var v = GetFrameWindow();
             previewBg.Width = v.IW * v.S;
@@ -1073,10 +1059,7 @@ namespace RaintileOptions
         {
             bool has = previewLogo.Source != null;
             logoRow.IsEnabled = has;
-            logoPlace.Sync = true;
-            logoSlider.Value = logoPlace.Scale;
-            logoPlace.Sync = false;
-            logoScaleText.Text = logoPlace.Scale.ToString("0.00", Inv) + "\u00D7";
+            logoField.Show(logoPlace.Scale.ToString("0.00", Inv), logoPlace.Scale);
             if (!has) return;
             var r = GetLogoRect();
             previewLogo.Width = r.S;
@@ -1228,9 +1211,13 @@ namespace RaintileOptions
             if (all) return;
             SetThumb(bgThumb, bg);
             SetThumb(logoThumb, logo);
-            SetLabelHint(bgPath, bg ?? (s != null ? "None. Default: Images\\" + b + "\\background\\" + s.Name + ".jpg" : ""));
-            SetLabelHint(logoPath, logo ?? (s != null ? "None. Default: Images\\" + b + "\\logo\\" + s.Name + ".png" : ""));
+            // where the image comes from, shown under the row
+            SetFormHelp(bgPath, bg ?? (s != null ? "None. Default: Images\\" + b + "\\background\\" + s.Name + ".jpg" : ""));
+            SetFormHelp(logoPath, logo ?? (s != null ? "None. Default: Images\\" + b + "\\logo\\" + s.Name + ".png" : ""));
+            SetActionVisible(bgDel, bg != null);
+            SetActionVisible(logoDel, logo != null);
             SetSwatch(colorSwatch, s != null ? Core.GetKey(s, "Color") : "");
+            SetActionVisible(tileColorClear, s != null && Core.GetKey(s, "Color").Trim() != "");
             var sel = tilesList.SelectedItem as ListBoxItem;
             if (sel != null && ((ListTag)sel.Tag).Section != null) UpdateTileEntry(sel);
         }
@@ -1300,7 +1287,9 @@ namespace RaintileOptions
             foreach (var k in new[] { "Command", "Label", "Color", "Tags" }) tileFields[k].Text = s != null ? Core.GetKey(s, k) : "";
             UpdateTagSuggestions();
             ShowPinned(s);
-            tileKeyButton.Content = Schema.FormatHotKey(s != null ? Core.GetKey(s, "HotKey") : "");
+            string hotKey = s != null ? Core.GetKey(s, "HotKey") : "";
+            tileKeyButton.Content = Schema.FormatHotKey(hotKey);
+            SetActionVisible(tileKeyClear, hotKey.Trim() != "");
             // every tile can be a widget
             widgetRow.Visibility = Visibility.Visible;
             string kind = s != null ? Core.GetKey(s, "Widget").Trim().ToLowerInvariant() : "";
@@ -1310,12 +1299,13 @@ namespace RaintileOptions
             var size = Regex.Match(s != null ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
             int sc = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[1].Value))) : 1;
             int sr = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[2].Value))) : 1;
-            sizeCols.SelectedItem = sc.ToString();
-            SelectOpacity(tileOpacity, s != null ? Core.GetKey(s, "Opacity") : "");
-            sizeRows.SelectedItem = sr.ToString();
+            sizeCols.Show(sc.ToString(), 1);
+            sizeRows.Show(sr.ToString(), 1);
+            ShowTileOpacity(s);
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
             tileNote.Visibility = tileNote.Text != "" ? Visibility.Visible : Visibility.Collapsed;
+            UpdateTileButtons();
             // a widget: no background framing or logo to place
             bool dash = !all && IsWidget(s);
             frameRow.Visibility = logoRow.Visibility = dash ? Visibility.Collapsed : Visibility.Visible;
@@ -1323,16 +1313,57 @@ namespace RaintileOptions
             UpdateTilePreview();
         }
 
+        // Opacity of a tile; empty = the one of All tiles, where the slider rests
+        void ShowTileOpacity(IniSection s)
+        {
+            string own = s != null ? Core.GetKey(s, "Opacity").Trim() : "";
+            string inherited = currentFile != null ? Core.GetKey(Core.GetCategorySection(GetModel(currentFile)), "TileOpacity").Trim() : "";
+            double inh;
+            if (!Core.TryNumber(inherited, out inh)) inh = 100;
+            tileOpacity.Show(own, inh);
+            SetActionVisible(tileOpacityReset, own != "");
+            SetFormHelp(tileOpacityHint, "Opacity of the colour and the image of the tile: 0 leaves only the logo, the label or the widget (a skin over the tile, without a box behind it). Empty = the one of All tiles (" +
+                Core.FormatNumber(inh, 1) + "%).");
+        }
+
+        // The buttons of the tiles strip that can act on the selection (docs/OptionsUI.md, 2)
+        void UpdateTileButtons()
+        {
+            if (tileDel == null) return;
+            var t = GetCurrentTile();
+            var tiles = currentFile != null ? Core.GetTiles(GetModel(currentFile)) : new List<IniSection>();
+            int i = t != null ? tiles.IndexOf(t) : -1;
+            // a category that keeps an order moves only its pinned tiles
+            bool movable = t != null && (GetKeptSort(currentFile) == null || IsPinned(t));
+            tileNew.IsEnabled = currentFile != null;
+            tileDel.IsEnabled = t != null;
+            tileUp.IsEnabled = movable && i > 0;
+            tileDown.IsEnabled = movable && i >= 0 && i < tiles.Count - 1;
+        }
+
         // All tiles: the settings of the category (its [Category] section)
         void ShowAllTiles()
         {
             var c = currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null;
-            foreach (var kv in allFields) kv.Value.Text = c != null ? Core.GetKey(c, kv.Key) : "";
-            SetLabelHint(gridHint, "Columns \u00D7 rows. Empty = default (" + V("NX") + " \u00D7 " + V("NY") + ", from Layout)");
-            SetLabelHint(sizeHint, "Pixels or % of the screen height. Empty = default (" + V("IconSize") + ")");
-            catTileColor.Text = c != null ? Core.GetKey(c, "TileColor") : "";
+            Func<string, string> key = k => c != null ? Core.GetKey(c, k).Trim() : "";
+            double nx, ny;
+            if (!Core.TryNumber(V("NX"), out nx)) nx = 1;
+            if (!Core.TryNumber(V("NY"), out ny)) ny = 1;
+            // empty = the default of Layout, where the slider rests
+            gridCols.Show(key("NX"), nx);
+            gridRows.Show(key("NY"), ny);
+            catLogoSize.Show(key("IconSize"));
+            SetActionVisible(gridColsReset, key("NX") != "");
+            SetActionVisible(gridRowsReset, key("NY") != "");
+            SetActionVisible(catLogoSizeReset, key("IconSize") != "");
+            SetFormHelp(gridColsHint, "Empty = the default (" + V("NX") + ", from Layout).");
+            SetFormHelp(gridRowsHint, "Empty = the default (" + V("NY") + ", from Layout).");
+            SetFormHelp(sizeHint, "Pixels or % of the screen height. Empty = the default (" + V("IconSize") + ", from Layout).");
+            catTileColor.Text = key("TileColor");
             SetSwatch(catColorSwatch, catTileColor.Text);
-            SelectOpacity(catOpacity, c != null ? Core.GetKey(c, "TileOpacity") : "");
+            SetActionVisible(catColorClear, catTileColor.Text.Trim() != "");
+            catOpacity.Show(key("TileOpacity"), 100);
+            SetActionVisible(catOpacityReset, key("TileOpacity") != "");
             int count = currentFile != null ? Core.GetTiles(GetModel(currentFile)).Count : 0;
             allNote.Text = count == 0 ? "No tiles yet: add one with the + button." : "";
             allNote.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1349,10 +1380,6 @@ namespace RaintileOptions
             previewOn.SelectedItem = previewOn.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag == keepTile) ?? previewOn.Items[0];
             UpdatePlacementHint();
         }
-
-        // Every field of a form fills the column, so all of them share both edges; a
-        // button after it (Browse..., the clear button) takes its room from the field.
-        const double PairGap = 32;
 
         // Every field of a form is as high as a button (Choose...), so all the rows
         // have the same height: text boxes, lists, buttons, swatches, thumbnails
@@ -1383,60 +1410,59 @@ namespace RaintileOptions
             if (p != null) foreach (UIElement c in p.Children) FitFieldHeight(c);
         }
 
-        Grid NewFormRow(string label, UIElement control, string hint = "", FrameworkElement hintBlock = null)
+        // A stacked row (docs/OptionsUI.md, 4): the label and its help on top, the
+        // control below filling the column, then hintBlock (current values, buttons).
+        // On the right of the control, always, the action column: its reset or clear
+        // button, or nothing, so every control ends at the same edge. The help can
+        // change later: SetFormHelp(FormHelp(row), ...).
+        Grid NewFormRow(string label, UIElement control, string hint = "", FrameworkElement hintBlock = null, FrameworkElement action = null)
         {
-            var g = NewGrid("118", "*");
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            g.Margin = T(0, 7);
-            // centred on the control, not on the hint below it
-            var l = NewText(label, 13, ResBrush("DimBrush"));
-            l.VerticalAlignment = VerticalAlignment.Center;
-            g.Children.Add(l);
-            // A fixed hint is the tooltip of the label (dotted underline), to keep the form short;
-            // hintBlock stays below the control: it shows current values or holds buttons.
-            if (!string.IsNullOrEmpty(hint)) SetLabelHint(l, hint);
+            var g = NewGrid("*", Gap.ActionColumn.ToString(Inv));
+            g.Margin = T(0, Gap.StackedRow);
+            for (int i = 0; i < 4; i++) g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            g.Children.Add(NewText(label, Fs.Label, null, false, true));
+            var help = NewHelp("");
+            help.Margin = T(0, 2, 0, 0);
+            SetFormHelp(help, hint);
+            Grid.SetRow(help, 1);
+            g.Children.Add(help);
+            g.Tag = help;
             // a field with its own width starts at the left edge (stretched, it would be centred)
             var fe = control as FrameworkElement;
             if (fe != null && !double.IsNaN(fe.Width)) fe.HorizontalAlignment = HorizontalAlignment.Left;
             FitFieldHeight(control);
-            SetCol(control, 1);
-            g.Children.Add(control);
+            var holder = new Border { Margin = T(0, 6, 0, 0), Child = control };
+            Grid.SetRow(holder, 2);
+            g.Children.Add(holder);
+            if (action != null)
+            {
+                action.Margin = T(Gap.Icon, 6, 0, 0);
+                action.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetRow(action, 2);
+                SetCol(action, 1);
+                g.Children.Add(action);
+            }
             if (hintBlock != null)
             {
                 hintBlock.Margin = T(0, 4, 0, 0);
-                SetCol(hintBlock, 1);
-                Grid.SetRow(hintBlock, 1);
+                Grid.SetRow(hintBlock, 3);
                 g.Children.Add(hintBlock);
             }
             return g;
         }
 
-        // Two fields split the column around a dimmed x (grid, size)
-        Grid NewPairRow(FrameworkElement a, FrameworkElement b)
+        static TextBlock FormHelp(Grid formRow) { return (TextBlock)formRow.Tag; }
+
+        static void SetFormHelp(TextBlock help, string text)
         {
-            var g = NewGrid("*", PairGap.ToString(System.Globalization.CultureInfo.InvariantCulture), "*");
-            var by = NewText(((char)0xD7).ToString(), 13, ResBrush("DimBrush"));
-            by.VerticalAlignment = VerticalAlignment.Center;
-            by.HorizontalAlignment = HorizontalAlignment.Center;
-            SetCol(by, 1); SetCol(b, 2);
-            g.Children.Add(a); g.Children.Add(by); g.Children.Add(b);
-            return g;
+            help.Text = text ?? "";
+            help.Visibility = help.Text != "" ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // A colour swatch shows its field: empty = the field background, as an empty field
         void SetSwatch(Button swatch, string value)
         {
             swatch.Background = (Brush)NewColorBrush(value, true) ?? ResBrush("FieldBg");
-        }
-
-        // The one button that empties a field (hot key, image, icon); the trash is for
-        // deleting a tile or a category
-        Button NewClearButton(string tip)
-        {
-            var b = NewIconButton(0xE711, tip);
-            b.Margin = T(6, 0, 0, 0);
-            return b;
         }
 
         // A field that fills the column between an optional element before it
@@ -1462,29 +1488,6 @@ namespace RaintileOptions
             return g;
         }
 
-        static TextDecorationCollection hintUnderline;
-
-        void SetLabelHint(TextBlock label, string hint)
-        {
-            if (string.IsNullOrEmpty(hint)) { label.TextDecorations = null; label.ClearValue(FrameworkElement.CursorProperty); label.ToolTip = null; return; }
-            if (hintUnderline == null)
-            {
-                var dim = ResBrush("DimBrush") as SolidColorBrush;
-                var brush = new SolidColorBrush(dim != null ? dim.Color : Colors.Gray) { Opacity = 0.6 };
-                // 1 px dots 2 px apart (DashStyles.Dot has zero-length dashes: invisible with flat caps)
-                var pen = new Pen(brush, 1) { DashStyle = new DashStyle(new double[] { 1, 2 }, 0) };
-                pen.Freeze();
-                hintUnderline = new TextDecorationCollection { new TextDecoration(TextDecorationLocation.Underline, pen, 2, TextDecorationUnit.FontRecommended, TextDecorationUnit.Pixel) };
-                hintUnderline.Freeze();
-            }
-            label.TextDecorations = hintUnderline;
-            label.Cursor = Cursors.Help;
-            // the default tooltip neither wraps nor stays long enough for two lines of text
-            label.ToolTip = new TextBlock { Text = hint, TextWrapping = TextWrapping.Wrap, MaxWidth = 340 };
-            ToolTipService.SetInitialShowDelay(label, 250);
-            ToolTipService.SetShowDuration(label, 60000);
-        }
-
         Border NewListColumn(string title, UIElement list, params UIElement[] buttons)
         {
             var b = new Border { Style = ResStyle("Card"), Padding = T(8, 4, 8, 8), Margin = T(0, 0, 14, 0) };
@@ -1493,7 +1496,7 @@ namespace RaintileOptions
             var head = NewGrid("*", "Auto");
             head.Margin = T(6, 8, 0, 6);
             DockPanel.SetDock(head, Dock.Top);
-            var h = NewText(title.ToUpperInvariant(), 11.5, ResBrush("DimBrush"), true);
+            var h = NewSectionTitle(title);
             h.VerticalAlignment = VerticalAlignment.Center;
             head.Children.Add(h);
             var bar = NewPanel(Orientation.Horizontal);
@@ -1587,7 +1590,7 @@ namespace RaintileOptions
                 var tile = (ListBoxItem)e.Data.GetData("RaintileItem");
                 int index = tilesList.Items.IndexOf(tile);
                 string err = MoveTileToCategory(currentFile, ((ListTag)tile.Tag).Section, to);
-                if (err != null) { ShowDialog("Raintile", err); return; }
+                if (err != null) { ShowDialog("Move tile", err); return; }
                 RefreshTiles(Math.Max(0, index - 2));   // the tile before it (All tiles is entry 0)
             };
         }
@@ -1634,29 +1637,25 @@ namespace RaintileOptions
         UIElement NewCategoryListPage()
         {
             var grid = NewGrid("440", "*");
-            grid.Margin = T(36, 4, 36, 20);
-            var dp = new DockPanel { Margin = T(0, 0, 16, 0) };
-            grid.Children.Add(dp);
+            grid.Margin = Gap.Page;
             var sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
             SetCol(sv, 1);
             grid.Children.Add(sv);
             var side = NewPanel();
             sv.Content = side;
-            var bar = NewPanel(Orientation.Horizontal);
-            bar.Margin = T(0, 0, 0, 12);
-            DockPanel.SetDock(bar, Dock.Top);
-            dp.Children.Add(bar);
-            var btnNew = NewButton("New category", "AccentButton");
-            var btnOpen = NewButton("Open");
-            var btnUp = NewButton("Move up");
-            var btnDown = NewButton("Move down");
-            var btnDel = NewButton("Delete");
-            btnDel.Foreground = ResBrush("DangerBrush");
-            foreach (var b in new[] { btnNew, btnOpen, btnUp, btnDown, btnDel }) { b.Margin = T(0, 0, 8, 0); AddTo(bar, b); }
-            var listCard = new Border { Style = ResStyle("Card"), Padding = T(8), Margin = T(0) };
+            // the list with its actions in its header, as the tiles strip
+            catNew = NewIconButton(Glyph.Add, "New category");
+            catUp = NewIconButton(Glyph.Up, "Move up");
+            catDown = NewIconButton(Glyph.Down, "Move down");
+            catDel = NewIconButton(Glyph.Delete, "Delete category");
+            catOpen = NewButton("Open", "", "Its tiles (also a double click or Enter)");
+            catOpen.Margin = T(0, 0, Gap.Control, 0);
+            catOpen.VerticalAlignment = VerticalAlignment.Center;
             catsList = new ListBox();
-            listCard.Child = catsList;
-            dp.Children.Add(listCard);
+            var listCard = NewListColumn("Categories", catsList, catOpen, catNew, catUp, catDown, catDel);
+            listCard.Margin = T(0, 0, Gap.Card, 0);
+            grid.Children.Add(listCard);
+            var btnNew = catNew; var btnOpen = catOpen; var btnUp = catUp; var btnDown = catDown; var btnDel = catDel;
 
             // Category card
             catCard = NewCard("Category", "");
@@ -1675,12 +1674,14 @@ namespace RaintileOptions
                 SetChanged(file);
             };
             catIcon = NewThumb(FieldHeight);
-            var btnIcon = NewButton("Choose...");
-            var btnIconDel = NewClearButton("Remove the icon");
-            var iconRow = NewFieldRow(catIcon, btnIcon, btnIconDel);
-            catIconHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
-            AddTo(f, NewFormRow("Icon", iconRow, "", catIconHint));
-            var more = NewText("Grid, logo size, tile colour and background, framing and logo of all its tiles: open the category (double click) and choose All tiles, the first entry above its tiles.", 12, ResBrush("DimBrush"), false, true);
+            var btnIcon = NewButton("Browse...");
+            // x: no icon (its file goes to the Recycle Bin, asked first)
+            var btnIconDel = NewClearButton("Clear the icon");
+            catIconDel = btnIconDel;
+            var iconRow = NewFieldRow(catIcon, btnIcon, null);
+            catIconHint = NewHelp("");
+            AddTo(f, NewFormRow("Icon", iconRow, "In the menu, left of the name.", catIconHint, btnIconDel));
+            var more = NewHelp("Grid, logo size, tile colour and background, framing and logo of all its tiles: open the category (double click) and choose All tiles, the first entry above its tiles.");
             more.Margin = T(0, 6, 0, 10);
             AddTo(f, more);
 
@@ -1730,7 +1731,9 @@ namespace RaintileOptions
                 if (!string.Equals(Path.GetFullPath(dest), Path.GetFullPath(src), StringComparison.OrdinalIgnoreCase)) File.Copy(src, dest, true);
                 Core.SetKey(Core.GetCategorySection(GetModel(file)), "Icon", "");   // the default icon just copied applies
                 SetChanged(file);
-                SetThumb(catIcon, Core.GetCategoryIcon(GetListBase(), Core.GetCategorySection(GetModel(file))));
+                string now = Core.GetCategoryIcon(GetListBase(), Core.GetCategorySection(GetModel(file)));
+                SetThumb(catIcon, now);
+                SetActionVisible(catIconDel, now != null);
                 UpdateNavCategory(file);
             };
             btnIconDel.Click += (s, e) =>
@@ -1741,13 +1744,14 @@ namespace RaintileOptions
                 string icon = Core.GetCategoryIcon(GetListBase(), c);
                 if (icon != null && icon.StartsWith(Core.ImagesRoot, StringComparison.OrdinalIgnoreCase))
                 {
-                    var r = ShowDialog("Raintile", "Move " + Path.GetFileName(icon) + " to the Recycle Bin?", new[] { "Remove", "Cancel" });
-                    if (r.Button != "Remove") return;
+                    var r = ShowDialog("Clear icon", "No icon for this category: " + Path.GetFileName(icon) + " goes to the Recycle Bin.", new[] { "Clear", "Cancel" }, null, true);
+                    if (r.Button != "Clear") return;
                     RemoveToRecycleBin(icon);
                 }
                 Core.SetKey(c, "Icon", "");
                 SetChanged(file);
                 SetThumb(catIcon, null);
+                SetActionVisible(catIconDel, false);
                 UpdateNavCategory(file);
             };
 
@@ -1761,8 +1765,8 @@ namespace RaintileOptions
                 var r = ShowDialog("New category", "Name of the new category (e.g. Emulators):", new[] { "Create", "Cancel" }, "");
                 if (r.Button != "Create" || string.IsNullOrEmpty(r.Text)) return;
                 string file = Regex.Replace(r.Text, "[^A-Za-z0-9_-]", "");
-                if (file == "") { ShowDialog("Raintile", "Use at least one letter or digit."); return; }
-                if (File.Exists(Path.Combine(Core.CategoriesDir, file + ".ini"))) { ShowDialog("Raintile", "The category '" + file + "' already exists."); return; }
+                if (file == "") { ShowDialog("New category", "Use at least one letter or digit."); return; }
+                if (File.Exists(Path.Combine(Core.CategoriesDir, file + ".ini"))) { ShowDialog("New category", "The category '" + file + "' already exists."); return; }
                 NewCategoryFile(file, r.Text);
                 RefreshCats(file + ".ini");
                 BuildNav(navCurrent);
@@ -1772,7 +1776,7 @@ namespace RaintileOptions
                 var t = TagOf(catsList.SelectedItem);
                 if (t == null) return;
                 string file = t.File;
-                var r = ShowDialog("Delete category", "Move the category " + file + " to the Recycle Bin? Its images stay in Images.", new[] { "Delete", "Cancel" });
+                var r = ShowDialog("Delete category", "Move the category " + file + " to the Recycle Bin? Its images stay in Images.", new[] { "Delete", "Cancel" }, null, true);
                 if (r.Button != "Delete") return;
                 RemoveToRecycleBin(Path.Combine(Core.CategoriesDir, file));
                 models.Remove(file); changedFiles.Remove(file);
@@ -1807,7 +1811,7 @@ namespace RaintileOptions
         // framing and the logo on the left, the settings on the right.
         UIElement NewCategoryPage()
         {
-            var grid = new Grid { Margin = T(36, 4, 36, 20) };
+            var grid = new Grid { Margin = Gap.Page };
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(11, GridUnitType.Star), MinWidth = 260 });
@@ -1827,17 +1831,17 @@ namespace RaintileOptions
                 for (int n = 0; n < 2; n++) { if (e.Delta > 0) scroll.LineLeft(); else scroll.LineRight(); }
                 e.Handled = true;
             };
-            var btnTileNew = NewIconButton(0xE710, "New tile");
-            var btnTileDel = NewIconButton(0xE74D, "Delete tile");
-            var btnTileUp = NewIconButton(0xE76B, "Move left");
-            var btnTileDown = NewIconButton(0xE76C, "Move right");
+            var btnTileNew = tileNew = NewIconButton(Glyph.Add, "New tile");
+            var btnTileDel = tileDel = NewIconButton(Glyph.Delete, "Delete tile");
+            var btnTileUp = tileUp = NewIconButton(Glyph.Left, "Move left");
+            var btnTileDown = tileDown = NewIconButton(Glyph.Right, "Move right");
             var strip = NewListColumn("Tiles", tilesList, btnTileNew, btnTileUp, btnTileDown, btnTileDel);
-            strip.Margin = T(0, 0, 0, 14);
+            strip.Margin = T(0, 0, 0, Gap.Card);
             Grid.SetColumnSpan(strip, 2);
             grid.Children.Add(strip);
 
             // Row 1, left: the preview, as the tile looks in the launcher
-            var leftScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = T(0, 0, 14, 0) };
+            var leftScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = T(0, 0, Gap.Card, 0) };
             Grid.SetRow(leftScroll, 1);
             grid.Children.Add(leftScroll);
             previewCard = new Border { Style = ResStyle("Card"), Padding = T(20, 16, 20, 14), VerticalAlignment = VerticalAlignment.Top };
@@ -1851,10 +1855,10 @@ namespace RaintileOptions
             // All tiles: the tile whose images show the category's values
             var por = NewPanel(Orientation.Horizontal);
             por.Margin = T(0, 0, 0, 12);
-            var pol = NewText("Preview on", 13, ResBrush("DimBrush"));
+            var pol = NewText("Preview on", Fs.Label);
             pol.VerticalAlignment = VerticalAlignment.Center;
-            pol.Margin = T(0, 0, 10, 0);
-            previewOn = new ComboBox { MinWidth = 200, Height = FieldHeight };
+            pol.Margin = T(0, 0, Gap.Control, 0);
+            previewOn = new ComboBox { MinWidth = FieldWidth.M, Height = FieldHeight };
             AddTo(por, pol); AddTo(por, previewOn);
             previewOnRow = por;
             AddTo(left, por);
@@ -1893,74 +1897,64 @@ namespace RaintileOptions
             pg.Children.Add(canvas);
             pg.Children.Add(previewLabel);
             AddTo(left, preview);
-            var how = NewText("Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. The preview has the proportions of this category's tiles on this screen.", 11.5, ResBrush("DimBrush"), false, true);
-            how.Margin = T(0, 8, 0, 4);
+            var how = NewHelp("Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. The preview has the proportions of this category's tiles on this screen. " +
+                "A tile follows All tiles until you move something on it (Own); its reset gives it back the placement of All tiles.");
+            how.Margin = T(0, Gap.Control, 0, 4);
             AddTo(left, how);
 
-            // framing and logo: name and value, the chip on the right; below, the
-            // slider with its reset (x), as the fields with a clear button
-            Func<string, Slider, TextBlock, Border, Button, StackPanel> placeBlock = (title, slider, value, chip, reset) =>
+            // framing, logo, play time: the name and the chip (Own / From All tiles) on
+            // top; below, the slider with its value and unit, the reset in the action column
+            Func<string, FrameworkElement, Border, Button, StackPanel> placeBlock = (title, line, chip, reset) =>
             {
                 var block = NewPanel();
                 block.Margin = T(0, 12, 0, 0);
-                var head = NewGrid("Auto", "*", "Auto");
-                var name = NewText(title, 13, null, true);
+                var head = NewGrid("Auto", "*");
+                var name = NewText(title, Fs.Label);
                 name.VerticalAlignment = VerticalAlignment.Center;
                 head.Children.Add(name);
-                value.Margin = T(8, 0, 0, 0);
-                value.VerticalAlignment = VerticalAlignment.Center;
-                SetCol(value, 1);
-                head.Children.Add(value);
-                SetCol(chip, 2);
+                chip.HorizontalAlignment = HorizontalAlignment.Left;
+                SetCol(chip, 1);
                 head.Children.Add(chip);
                 AddTo(block, head);
-                var line = NewGrid("*", "Auto");
-                line.Margin = T(0, 4, 0, 0);
-                slider.VerticalAlignment = VerticalAlignment.Center;
-                line.Children.Add(slider);
-                reset.Margin = T(8, 0, 0, 0);
-                reset.VerticalAlignment = VerticalAlignment.Center;
-                SetCol(reset, 1);
-                line.Children.Add(reset);
-                AddTo(block, line);
+                var row = NewFieldRow(null, line, reset);
+                row.Margin = T(0, 4, 0, 0);
+                AddTo(block, row);
                 return block;
             };
-            zoomSlider = new Slider { Minimum = 1, Maximum = 4, SmallChange = 0.05, LargeChange = 0.25 };
-            zoomText = NewText("", 12, ResBrush("DimBrush"));
+            // the value typed is applied as it is typed; the slider and the wheel write it too
+            zoomField = NewNumberField(1, 4, 0.01, Times, t =>
+            {
+                double n;
+                if (bgFrame.Bitmap == null || GetPlaceTarget() == null || !Core.TryNumber(t, out n)) return;
+                SetFrameZoom(n);
+            }, true, 0.05);
+            FitFieldHeight(zoomField.Root);
             frameChip = NewChip();
-            btnFrameReset = NewIconButton(0xE711, "Reset the framing");
-            var frameBlock = placeBlock("Framing", zoomSlider, zoomText, frameChip, btnFrameReset);
+            btnFrameReset = NewResetIcon("Back to the framing of All tiles");
+            var frameBlock = placeBlock("Framing", zoomField.Root, frameChip, btnFrameReset);
             frameRow = frameBlock;
             AddTo(left, frameBlock);
-            logoSlider = new Slider { Minimum = 0.25, Maximum = 3, SmallChange = 0.05, LargeChange = 0.25 };
-            logoScaleText = NewText("", 12, ResBrush("DimBrush"));
+            logoField = NewNumberField(0.25, 3, 0.01, Times, t =>
+            {
+                double n;
+                if (previewLogo.Source == null || GetPlaceTarget() == null || !Core.TryNumber(t, out n)) return;
+                SetLogoScale(n);
+            }, true, 0.05);
+            FitFieldHeight(logoField.Root);
             logoChip = NewChip();
-            btnLogoReset = NewIconButton(0xE711, "Reset the logo");
-            var logoBlock = placeBlock("Logo", logoSlider, logoScaleText, logoChip, btnLogoReset);
+            btnLogoReset = NewResetIcon("Back to the logo placement of All tiles");
+            var logoBlock = placeBlock("Logo", logoField.Root, logoChip, btnLogoReset);
             logoRow = logoBlock;
             AddTo(left, logoBlock);
-            // play time line: only a place, so the reset sits on the name's line
-            infoPosText = NewText("", 12, ResBrush("DimBrush"));
-            infoChip = NewChip();
-            btnInfoReset = NewIconButton(0xE711, "Reset the play time line");
-            var infoBlock = NewPanel();
-            infoBlock.Margin = T(0, 12, 0, 0);
-            var infoHead = NewGrid("Auto", "*", "Auto", "Auto");
-            var infoName = NewText("Play time", 13, null, true);
-            infoName.VerticalAlignment = VerticalAlignment.Center;
-            infoName.ToolTip = "The line with the play time and the last launch (Appearance > Text): drag it in the preview";
-            infoHead.Children.Add(infoName);
-            infoPosText.Margin = T(8, 0, 0, 0);
+            // play time line: only a place, shown as text where the others have a slider
+            infoPosText = NewHelp("");
             infoPosText.VerticalAlignment = VerticalAlignment.Center;
-            SetCol(infoPosText, 1);
-            infoHead.Children.Add(infoPosText);
-            SetCol(infoChip, 2);
-            infoHead.Children.Add(infoChip);
-            btnInfoReset.Margin = T(8, 0, 0, 0);
-            btnInfoReset.VerticalAlignment = VerticalAlignment.Center;
-            SetCol(btnInfoReset, 3);
-            infoHead.Children.Add(btnInfoReset);
-            AddTo(infoBlock, infoHead);
+            infoChip = NewChip();
+            btnInfoReset = NewResetIcon("Back to the play time placement of All tiles");
+            var infoBlock = placeBlock("Play time", infoPosText, infoChip, btnInfoReset);
+            var infoHelp = NewHelp("The line with the play time and the last launch (Appearance > Text): drag it in the preview.");
+            infoHelp.Margin = T(0, 2, 0, 0);
+            infoBlock.Children.Insert(1, infoHelp);
             infoRow = infoBlock;
             AddTo(left, infoBlock);
 
@@ -2051,16 +2045,6 @@ namespace RaintileOptions
                 e.Handled = true;   // the page must not scroll
                 SetFrameZoom(bgFrame.Zoom * Math.Pow(1.1, e.Delta / 120.0), pt);
             };
-            logoSlider.ValueChanged += (s, e) =>
-            {
-                if (logoPlace.Sync || previewLogo.Source == null || GetPlaceTarget() == null) return;
-                SetLogoScale(logoSlider.Value);
-            };
-            zoomSlider.ValueChanged += (s, e) =>
-            {
-                if (bgFrame.Sync || bgFrame.Bitmap == null || GetPlaceTarget() == null) return;
-                SetFrameZoom(zoomSlider.Value);
-            };
             // Reset: a tile goes back to All tiles, All tiles to the centre
             Action<string[]> resetPlace = keys =>
             {
@@ -2087,7 +2071,7 @@ namespace RaintileOptions
             importedCard = NewCard("Imported game", "");
             importedCard.Visibility = Visibility.Collapsed;
             AddTo(details, importedCard);
-            var txt = NewText("From the old automatic import (written below its marker line), so it cannot be edited here. Make it a normal tile to edit or move it: its images are copied to the category folders. Opening Import turns all of them into normal tiles.", 12.5, ResBrush("DimBrush"), false, true);
+            var txt = NewHelp("From the old automatic import (written below its marker line), so it cannot be edited here. Make it a normal tile to edit or move it: its images are copied to the category folders. Opening Import turns all of them into normal tiles.");
             txt.Margin = T(0, 0, 0, 10);
             AddTo(CardPanel(importedCard), txt);
             var btnConvert = NewButton("Make it a normal tile", "AccentButton");
@@ -2107,34 +2091,41 @@ namespace RaintileOptions
             allCard.Visibility = Visibility.Collapsed;
             AddTo(details, allCard);
             var af = CardPanel(allCard);
-            allNote = NewText("", 12.5, ResBrush("AccentBrush"), false, true);
-            allNote.Margin = T(0, 0, 0, 8);
+            allNote = NewHelp("", ResBrush("AccentBrush"));
+            allNote.Margin = T(0, 0, 0, Gap.Control);
             AddTo(af, allNote);
-            foreach (var k in new[] { "NX", "NY", "IconSize" }) allFields[k] = new TextBox();
-            var gridRow = NewPairRow(allFields["NX"], allFields["NY"]);
-            // the hints of these rows change with the values: set on their labels by ShowAllTiles
-            var gridFormRow = AddTo(af, NewFormRow("Grid", gridRow));
-            gridHint = (TextBlock)gridFormRow.Children[0];
-            var sizeFormRow = AddTo(af, NewFormRow("Logo size", allFields["IconSize"]));
-            sizeHint = (TextBlock)sizeFormRow.Children[0];
-            foreach (var kv in allFields)
+            // a key of the category; the reset next to it shows while it has a value
+            Action<string, string, Button> setCatKey = (key, value, reset) =>
             {
-                string key = kv.Key;
-                var tb = kv.Value;
-                tb.TextChanged += (s, e) =>
-                {
-                    if (loading || currentFile == null) return;
-                    Core.SetKey(Core.GetCategorySection(GetModel(currentFile)), key, tb.Text.Trim());
-                    SetChanged(currentFile);
-                    UpdateTilePreview();   // the tile's proportions and logo size
-                };
-            }
+                if (loading || currentFile == null) return;
+                Core.SetKey(Core.GetCategorySection(GetModel(currentFile)), key, value);
+                SetChanged(currentFile);
+                SetActionVisible(reset, value != "");
+                UpdateTilePreview();   // the tile's proportions and logo size
+            };
+            // grid and logo size as in Layout; empty = the default of Layout (help set by ShowAllTiles)
+            gridColsReset = NewResetIcon("Back to the default (Layout)");
+            gridRowsReset = NewResetIcon("Back to the default (Layout)");
+            catLogoSizeReset = NewResetIcon("Back to the default (Layout)");
+            gridCols = NewNumberField(1, 12, 1, "columns", t => setCatKey("NX", t, gridColsReset));
+            gridRows = NewNumberField(1, 8, 1, "rows", t => setCatKey("NY", t, gridRowsReset));
+            catLogoSize = NewSizeField("H", v => setCatKey("IconSize", v, catLogoSizeReset));
+            var colsRow = AddTo(af, NewFormRow("Columns", gridCols.Root, "", null, gridColsReset));
+            gridColsHint = FormHelp(colsRow);
+            var rowsRow = AddTo(af, NewFormRow("Rows", gridRows.Root, "", null, gridRowsReset));
+            gridRowsHint = FormHelp(rowsRow);
+            var sizeFormRow = AddTo(af, NewFormRow("Logo size", catLogoSize.Root, "", null, catLogoSizeReset));
+            sizeHint = FormHelp(sizeFormRow);
+            Func<string, double> layout = k => { double n; return Core.TryNumber(V(k), out n) ? n : 1; };
+            gridColsReset.Click += (s, e) => { setCatKey("NX", "", gridColsReset); gridCols.Show("", layout("NX")); };
+            gridRowsReset.Click += (s, e) => { setCatKey("NY", "", gridRowsReset); gridRows.Show("", layout("NY")); };
+            catLogoSizeReset.Click += (s, e) => { setCatKey("IconSize", "", catLogoSizeReset); catLogoSize.Show(""); };
             catColorSwatch = NewButton("", "Swatch", "Pick a colour");
             catTileColor = new TextBox();
-            var catColorClear = NewClearButton("No colour: the default tile colour");
+            catColorClear = NewClearButton("Clear the colour: the default tile colour");
             catColorClear.Click += (s, e) => catTileColor.Text = "";   // TextChanged writes it
-            var catColorRow = NewFieldRow(catColorSwatch, catTileColor, catColorClear);
-            AddTo(af, NewFormRow("Colour", catColorRow, "Colour of the tiles without one of their own (their Colour), used when there is no background image. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent."));
+            var catColorRow = NewFieldRow(catColorSwatch, catTileColor, null);
+            AddTo(af, NewFormRow("Colour", catColorRow, "Colour of the tiles without one of their own (their Colour), used when there is no background image. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent.", null, catColorClear));
             catColorSwatch.Click += (s, e) =>
             {
                 if (currentFile == null) return;
@@ -2147,30 +2138,22 @@ namespace RaintileOptions
                 Core.SetKey(Core.GetCategorySection(GetModel(currentFile)), "TileColor", catTileColor.Text.Trim());
                 SetChanged(currentFile);
                 SetSwatch(catColorSwatch, catTileColor.Text);
+                SetActionVisible(catColorClear, catTileColor.Text.Trim() != "");
                 UpdateTileEntries();
                 UpdateTilePreview();
             };
-            catOpacity = NewOpacityBox("100% (default)");
-            AddTo(af, NewFormRow("Background", catOpacity, "Opacity of the colour and the image of the tiles without one of their own (their Background), e.g. lower for a Dashboard with skins over the tiles. Logos, texts and widgets stay as they are."));
-            catOpacity.SelectionChanged += (s, e) =>
-            {
-                if (loading || currentFile == null) return;
-                var item = catOpacity.SelectedItem as ComboBoxItem;
-                if (item == null) return;
-                Core.SetKey(Core.GetCategorySection(GetModel(currentFile)), "TileOpacity", (string)item.Tag);
-                SetChanged(currentFile);
-            };
+            // opacity in %, as written to the file; empty = 100
+            catOpacityReset = NewResetIcon("Restore default (100%)");
+            catOpacity = NewNumberField(0, 100, 1, "%", t => setCatKey("TileOpacity", t, catOpacityReset), true, 5);
+            catOpacityReset.Click += (s, e) => { setCatKey("TileOpacity", "", catOpacityReset); catOpacity.Show("", 100); };
+            AddTo(af, NewFormRow("Background", catOpacity.Root, "Opacity of the colour and the image of the tiles without one of their own (their Background), e.g. lower for a Dashboard with skins over the tiles. Logos, texts and widgets stay as they are. Empty = 100%.", null, catOpacityReset));
             // framing, logo and play time line of every tile back to their default place,
             // the ones with their own too; the buttons share the column
-            var placeButtons = NewGrid("*", "8", "*", "8", "*");
-            var btnResetLogos = NewButton("Logo");
+            var btnResetLogos = NewButton("Logos");
             var btnResetFraming = NewButton("Framing");
             var btnResetInfo = NewButton("Play time");
-            SetCol(btnResetFraming, 2);
-            SetCol(btnResetInfo, 4);
-            placeButtons.Children.Add(btnResetLogos); placeButtons.Children.Add(btnResetFraming); placeButtons.Children.Add(btnResetInfo);
-            var placeFormRow = NewFormRow("Reset", placeButtons);
-            placementHint = (TextBlock)placeFormRow.Children[0];   // its label: the summary is its tooltip
+            var placeFormRow = NewFormRow("Reset every tile", NewEqualButtons(btnResetLogos, btnResetFraming, btnResetInfo));
+            placementHint = FormHelp(placeFormRow);   // what the buttons do and the current placement
             placementRow = placeFormRow;
             AddTo(af, placementRow);
             autoArtRow = NewAutoArtRow();
@@ -2184,8 +2167,8 @@ namespace RaintileOptions
             tileCard = NewCard("Tile", "");
             AddTo(details, tileCard);
             var f = CardPanel(tileCard);
-            tileNote = NewText("", 12.5, ResBrush("AccentBrush"), false, true);
-            tileNote.Margin = T(0, 0, 0, 8);
+            tileNote = NewHelp("", ResBrush("AccentBrush"));
+            tileNote.Margin = T(0, 0, 0, Gap.Control);
             AddTo(f, tileNote);
 
             foreach (var k in new[] { "Name", "Command", "Label", "Color", "Tags" }) tileFields[k] = new TextBox();
@@ -2193,7 +2176,7 @@ namespace RaintileOptions
             var cmdRow = NewGrid("*", "Auto");
             cmdRow.Children.Add(tileFields["Command"]);
             var btnCmd = NewButton("Browse...");
-            btnCmd.Margin = T(8, 0, 0, 0);
+            btnCmd.Margin = T(Gap.Control, 0, 0, 0);
             SetCol(btnCmd, 1);
             cmdRow.Children.Add(btnCmd);
             AddTo(f, NewFormRow("Command", cmdRow, "A program, a .lnk/.url shortcut, a URL (also steam://...), a folder or a Rainmeter bang."));
@@ -2203,8 +2186,9 @@ namespace RaintileOptions
             widgetRow = NewFormRow("Widget", widgetKind, "What the tile shows instead of images. A click opens its Command, or the tool that fits.");
             AddTo(f, widgetRow);
             widgetParam = new TextBox();
-            widgetHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
-            widgetParamRow = NewFormRow("Widget option", widgetParam, "", widgetHint);
+            var paramRow = NewFormRow("Widget option", widgetParam);
+            widgetHint = FormHelp(paramRow);   // what the option means for the kind chosen
+            widgetParamRow = paramRow;
             AddTo(f, widgetParamRow);
             widgetKind.SelectionChanged += (s, e) =>
             {
@@ -2226,53 +2210,62 @@ namespace RaintileOptions
             };
             AddTo(f, NewFormRow("Label", tileFields["Label"], "Text at the bottom left. Empty = none (tiles without images show their name)."));
             colorSwatch = NewButton("", "Swatch", "Pick a colour");
-            var colorClear = NewClearButton("No colour of its own: the one of All tiles");
+            var colorClear = tileColorClear = NewClearButton("Clear the colour: the one of All tiles");
             colorClear.Click += (s, e) => { if (GetCurrentTile() != null) tileFields["Color"].Text = ""; };
-            var colorRow = NewFieldRow(colorSwatch, tileFields["Color"], colorClear);
-            AddTo(f, NewFormRow("Colour", colorRow, "Used when there is no background image. Empty = the Colour of All tiles, or taken from the logo, or the default tile colour."));
-            tileOpacity = NewOpacityBox("From All tiles");
-            AddTo(f, NewFormRow("Background", tileOpacity, "Opacity of the colour and the image of the tile: 0% leaves only the logo, the label or the widget (a skin over the tile, without a box behind it)."));
-            tileOpacity.SelectionChanged += (s, e) =>
+            var colorRow = NewFieldRow(colorSwatch, tileFields["Color"], null);
+            AddTo(f, NewFormRow("Colour", colorRow, "Used when there is no background image. Empty = the Colour of All tiles, or taken from the logo, or the default tile colour.", null, colorClear));
+            // opacity in %, as written to the file; empty = the one of All tiles (help set by ShowTile)
+            tileOpacityReset = NewResetIcon("Back to the value of All tiles");
+            tileOpacity = NewNumberField(0, 100, 1, "%", t =>
             {
                 if (loading) return;
-                var t = GetCurrentTile();
-                var item = tileOpacity.SelectedItem as ComboBoxItem;
-                if (t == null || item == null) return;
-                Core.SetKey(t, "Opacity", (string)item.Tag);
+                var tile = GetCurrentTile();
+                if (tile == null) return;
+                Core.SetKey(tile, "Opacity", t);
+                SetChanged(currentFile);
+                SetActionVisible(tileOpacityReset, t != "");
+                UpdateTileDots();
+            }, true, 5);
+            tileOpacityReset.Click += (s, e) =>
+            {
+                var tile = GetCurrentTile();
+                if (tile == null) return;
+                Core.SetKey(tile, "Opacity", "");
                 SetChanged(currentFile);
                 UpdateTileDots();
+                ShowTileOpacity(tile);
             };
-            // cells taken in the grid (Size=<columns>x<rows>)
-            sizeCols = new ComboBox();
-            sizeRows = new ComboBox();
-            for (int n = 1; n <= 8; n++) { sizeCols.Items.Add(n.ToString()); sizeRows.Items.Add(n.ToString()); }
-            var sizeRow = NewPairRow(sizeCols, sizeRows);
-            AddTo(f, NewFormRow("Size", sizeRow, "Cells the tile takes in the grid: columns \u00D7 rows (at most the grid of the category). The other tiles fill the space around it. Search, Favorites and Recent show it in one cell."));
-            SelectionChangedEventHandler sizeChanged = (s, e) =>
+            var opacityRow = AddTo(f, NewFormRow("Background", tileOpacity.Root, "", null, tileOpacityReset));
+            tileOpacityHint = FormHelp(opacityRow);
+            // cells taken in the grid (Size=<columns>x<rows>), as the grid of the category
+            Action<string> sizeChanged = x =>
             {
                 if (loading) return;
                 var t = GetCurrentTile();
                 if (t == null) return;
-                string c = (string)sizeCols.SelectedItem ?? "1", r = (string)sizeRows.SelectedItem ?? "1";
-                Core.SetKey(t, "Size", c == "1" && r == "1" ? "" : c + "x" + r);
+                double nc, nr;
+                int c = Core.TryNumber(sizeCols.Box.Text, out nc) ? Math.Max(1, Math.Min(8, (int)Math.Round(nc))) : 1;
+                int r = Core.TryNumber(sizeRows.Box.Text, out nr) ? Math.Max(1, Math.Min(8, (int)Math.Round(nr))) : 1;
+                Core.SetKey(t, "Size", c == 1 && r == 1 ? "" : c + "x" + r);
                 SetChanged(currentFile);
                 UpdateTilePreview();
             };
-            sizeCols.SelectionChanged += sizeChanged;
-            sizeRows.SelectionChanged += sizeChanged;
+            sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged);
+            sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged);
+            AddTo(f, NewFormRow("Width", sizeCols.Root, "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Search, Favorites and Recent show it in one cell."));
+            AddTo(f, NewFormRow("Height", sizeRows.Root));
             tagSuggestions = new WrapPanel();
             AddTo(f, NewFormRow("Tags", tileFields["Tags"], "Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", tagSuggestions));
             AddTo(f, NewPinRow());
-            // hot key: click, then press the combination (with modifiers)
-            tileKeyButton = NewButton("None", "KeyButton", "Click, then press the combination");
-            var keyClear = NewClearButton("No hot key");
-            var keyRow = NewFieldRow(null, tileKeyButton, keyClear);
-            AddTo(f, NewFormRow("Hot key", keyRow, "Starts the tile also while the launcher is hidden, e.g. Ctrl + Alt + 1. Hold the modifiers, then press the key."));
+            // hot key: click, then press the key with its modifiers (as the keys of Settings)
+            tileKeyButton = NewButton("None", "KeyButton", "Click, then press a key");
+            var keyClear = tileKeyClear = NewClearButton("Clear the key");
+            AddTo(f, NewFormRow("Hot key", tileKeyButton, "Starts the tile also while the launcher is hidden, e.g. Ctrl + Alt + 1. Hold the modifiers, then press the key.", null, keyClear));
             tileKeyButton.Click += (s, e) =>
             {
                 if (GetCurrentTile() == null) return;
                 capturing = tileKeyButton;
-                tileKeyButton.Content = "Press the keys\u2026";
+                tileKeyButton.Content = "Press a key...";
                 tileKeyButton.Focus();
             };
             tileKeyButton.LostKeyboardFocus += (s, e) =>
@@ -2298,7 +2291,7 @@ namespace RaintileOptions
                     if (alt) held.Add("ALT");
                     if (shift) held.Add("SHIFT");
                     if (winKey) held.Add("LWIN");
-                    if (held.Count > 0) tileKeyButton.Content = Schema.FormatHotKey(string.Join(" ", held)) + " + \u2026";
+                    if (held.Count > 0) tileKeyButton.Content = Schema.FormatHotKey(string.Join(" ", held)) + " + ...";
                     return;
                 }
                 capturing = null;
@@ -2308,11 +2301,12 @@ namespace RaintileOptions
                 if (other != null)
                 {
                     tileKeyButton.Content = Schema.FormatHotKey(Core.GetKey(t, "HotKey"));
-                    ShowDialog("Raintile", Schema.FormatHotKey(value) + " is already used by " + other + ".");
+                    ShowDialog("Hot key", Schema.FormatHotKey(value) + " is already used by " + other + ".");
                     return;
                 }
                 Core.SetKey(t, "HotKey", value);
                 tileKeyButton.Content = Schema.FormatHotKey(value);
+                SetActionVisible(tileKeyClear, true);
                 SetChanged(currentFile);
             };
             keyClear.Click += (s, e) =>
@@ -2321,23 +2315,25 @@ namespace RaintileOptions
                 if (t == null) return;
                 Core.SetKey(t, "HotKey", "");
                 tileKeyButton.Content = Schema.FormatHotKey("");
+                SetActionVisible(tileKeyClear, false);
                 SetChanged(currentFile);
             };
             foreach (var kind in new[] { "Background", "Logo" })
             {
                 var thumb = NewThumb(FieldHeight);
-                var choose = NewButton("Choose...");
-                var online = NewButton("Find online...", "", "Images of this game or app from Steam, SteamGridDB, Dashboard Icons or its website");
-                var remove = NewClearButton("Remove the " + kind.ToLowerInvariant());
+                var choose = NewButton("Browse...");
+                var online = NewButton("Find online...");
+                // x: no image (its file goes to the Recycle Bin, asked first)
+                var remove = NewClearButton("Clear the " + kind.ToLowerInvariant());
                 var buttons = NewPanel(Orientation.Horizontal);
-                online.Margin = T(8, 0, 0, 0);
+                online.Margin = T(Gap.Control, 0, 0, 0);
                 AddTo(buttons, choose); AddTo(buttons, online);
-                var row = NewFieldRow(thumb, buttons, remove);
-                // the path of the image is the tooltip of the label (set with the tile)
-                var imageRow = NewFormRow(kind, row);
+                var row = NewFieldRow(thumb, buttons, null);
+                // where the image comes from: the help of the row (set with the tile)
+                var imageRow = NewFormRow(kind, row, "", kind == "Logo" ? NewHelp("Find online...: images of this game or app from Steam, SteamGridDB, Dashboard Icons or its website.") : null, remove);
                 AddTo(f, imageRow);
-                var pathLabel = (TextBlock)imageRow.Children[0];
-                if (kind == "Background") { bgThumb = thumb; bgPath = pathLabel; } else { logoThumb = thumb; logoPath = pathLabel; }
+                var pathLabel = FormHelp(imageRow);
+                if (kind == "Background") { bgThumb = thumb; bgPath = pathLabel; bgDel = remove; } else { logoThumb = thumb; logoPath = pathLabel; logoDel = remove; }
                 string k = kind;
                 online.Click += (s, e) => FindTileArt(k);
                 choose.Click += (s, e) =>
@@ -2359,8 +2355,8 @@ namespace RaintileOptions
                     string path = Core.GetTileImage(GetCurrentBase(), t, k);
                     if (path != null && path.StartsWith(Core.ImagesRoot, StringComparison.OrdinalIgnoreCase))
                     {
-                        var r = ShowDialog("Raintile", "Move " + Path.GetFileName(path) + " to the Recycle Bin?", new[] { "Remove", "Cancel" });
-                        if (r.Button != "Remove") return;
+                        var r = ShowDialog("Clear " + k.ToLowerInvariant(), "No " + k.ToLowerInvariant() + " for this tile: " + Path.GetFileName(path) + " goes to the Recycle Bin.", new[] { "Clear", "Cancel" }, null, true);
+                        if (r.Button != "Clear") return;
                         RemoveToRecycleBin(path);
                     }
                     Core.SetKey(t, k, "");
@@ -2405,6 +2401,7 @@ namespace RaintileOptions
                     if (t == null) return;
                     Core.SetKey(t, key, tb.Text.Trim());
                     SetChanged(currentFile);
+                    if (key == "Color") SetActionVisible(tileColorClear, tb.Text.Trim() != "");
                     UpdateTilePreview();
                 };
             }
@@ -2419,7 +2416,7 @@ namespace RaintileOptions
                 var m = GetModel(currentFile);
                 if (m.Sections.Any(x => x != t && string.Equals(x.Name, n, StringComparison.OrdinalIgnoreCase)) || Core.GetImportedNames(m).Contains(n))
                 {
-                    ShowDialog("Raintile", "There is already a tile called '" + n + "'.");
+                    ShowDialog("Rename tile", "There is already a tile called '" + n + "'.");
                     tb.Text = t.Name;
                     return;
                 }
@@ -2456,7 +2453,7 @@ namespace RaintileOptions
                 var r = ShowDialog("New tile", "Name of the new tile (also the name of its images):", new[] { "Create", "Cancel" }, "");
                 string name = Core.GetTileName(r.Text ?? "");
                 if (r.Button != "Create" || name == "") return;
-                if (TestTileName(m, name)) { ShowDialog("Raintile", "There is already a tile called '" + name + "'."); return; }
+                if (TestTileName(m, name)) { ShowDialog("New tile", "There is already a tile called '" + name + "'."); return; }
                 var added = new IniSection { Name = name };
                 Core.SetKey(added, "Added", DateTime.Now.ToString("yyyy-MM-dd"));   // for Not played yet
                 m.Sections.Add(added);
@@ -2468,7 +2465,7 @@ namespace RaintileOptions
             {
                 var t = GetCurrentTile();
                 if (t == null) return;
-                var r = ShowDialog("Delete tile", "Delete the tile '" + t.Name + "'? Its images stay in Images.", new[] { "Delete", "Cancel" });
+                var r = ShowDialog("Delete tile", "Delete the tile '" + t.Name + "'? Its images stay in Images.", new[] { "Delete", "Cancel" }, null, true);
                 if (r.Button != "Delete") return;
                 GetModel(currentFile).Sections.Remove(t);
                 SetChanged(currentFile);
@@ -2480,12 +2477,8 @@ namespace RaintileOptions
                 pair.Item1.Click += (s, e) =>
                 {
                     var t = GetCurrentTile();
-                    if (t == null) return;
-                    if (GetKeptSort(currentFile) != null && !IsPinned(t))
-                    {
-                        ShowDialog("Raintile", "This category keeps its tiles sorted. To move a tile yourself, pin it (it goes to the start), or turn off Keep sorted under All tiles > Order.");
-                        return;
-                    }
+                    // disabled while the category keeps an order (only pinned tiles move)
+                    if (t == null || (GetKeptSort(currentFile) != null && !IsPinned(t))) return;
                     var m = GetModel(currentFile);
                     var tiles = Core.GetTiles(m);
                     int i = tiles.IndexOf(t), j = i + delta;

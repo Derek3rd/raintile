@@ -105,13 +105,14 @@ namespace RaintileOptions
 
         Border NewMarketCard()
         {
-            var card = NewCard("Widget gallery", "Widgets made for Raintile, from its repository and from other authors on GitHub. A widget can run programs like any Rainmeter skin: install only the ones you trust.");
+            var card = NewCard("Widget gallery", "Widgets made for Raintile, from its repository and from other authors on GitHub. A widget can run programs like any Rainmeter skin: install only the ones you trust. " +
+                "Add as a tile puts a tile with an installed widget at the end of a category you pick; Delete sends the widget's folder to the Recycle Bin.");
             var f = CardPanel(card);
             var head = NewGrid("Auto", "*");
             head.Margin = T(0, 2, 0, 10);
             var reload = NewButton("Load the list");
             head.Children.Add(reload);
-            marketStatus = NewText("", 12, ResBrush("DimBrush"), false, true);
+            marketStatus = NewHelp("");
             marketStatus.VerticalAlignment = VerticalAlignment.Center;
             marketStatus.Margin = T(12, 0, 0, 0);
             SetCol(marketStatus, 1);
@@ -121,7 +122,7 @@ namespace RaintileOptions
             AddTo(f, marketList);
             var folder = NewButton("Open the Widgets folder", "LinkButton");
             folder.HorizontalAlignment = HorizontalAlignment.Left;
-            folder.Margin = T(0, 8, 0, 6);
+            folder.Margin = T(0, Gap.Control, 0, 6);
             folder.Click += (s, e) => { Directory.CreateDirectory(WidgetsDir); System.Diagnostics.Process.Start("explorer.exe", "\"" + WidgetsDir + "\""); };
             AddTo(f, folder);
             reload.Click += (s, e) => LoadMarket();
@@ -131,7 +132,7 @@ namespace RaintileOptions
 
         async void LoadMarket()
         {
-            marketStatus.Text = "Loading\u2026";
+            marketStatus.Text = "Loading...";
             marketList.Children.Clear();
             string json;
             try
@@ -152,9 +153,9 @@ namespace RaintileOptions
             foreach (var g in entries.GroupBy(x => x.Category, StringComparer.OrdinalIgnoreCase)
                 .OrderBy(x => x.Key.Equals("General", StringComparison.OrdinalIgnoreCase) ? 0 : 1).ThenBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
             {
-                var head = NewText(g.First().Category, 12, ResBrush("AccentBrush"));
-                head.FontWeight = FontWeights.SemiBold;
-                head.Margin = T(0, marketList.Children.Count > 0 ? 14 : 2, 0, 2);
+                // a group: titled as a section
+                var head = NewSectionTitle(g.First().Category);
+                head.Margin = T(0, marketList.Children.Count > 0 ? Gap.Card : 2, 0, 4);
                 marketList.Children.Add(head);
                 foreach (var e in g) marketList.Children.Add(NewMarketRow(e));
             }
@@ -166,12 +167,12 @@ namespace RaintileOptions
             row.Margin = T(0, 6);
             var texts = NewPanel();
             texts.VerticalAlignment = VerticalAlignment.Center;
-            var title = NewPanel(Orientation.Horizontal);
-            AddTo(title, NewText(e.Name, 13.5));
-            string sub = (e.Kind == "skin" ? "skin" : "widget") + (e.Author != "" ? "   \u00B7   by " + e.Author : "") + (e.Version != "" ? "   \u00B7   " + e.Version : "");
+            var title = NewText(e.Name, Fs.Label);
+            SetTrimmed(title);
+            string sub = (e.Kind == "skin" ? "skin" : "widget") + (e.Author != "" ? "   " + Dot + "   by " + e.Author : "") + (e.Version != "" ? "   " + Dot + "   " + e.Version : "");
             AddTo(texts, title);
-            AddTo(texts, NewText(sub, 11.5, ResBrush("DimBrush")));
-            if (e.Description != "") AddTo(texts, NewText(e.Description, 12, ResBrush("DimBrush"), false, true));
+            AddTo(texts, NewText(sub, Fs.Help, ResBrush("DimBrush")));
+            if (e.Description != "") AddTo(texts, NewHelp(e.Description));
             row.Children.Add(texts);
             var bar = NewPanel(Orientation.Horizontal);
             bar.VerticalAlignment = VerticalAlignment.Center;
@@ -183,13 +184,13 @@ namespace RaintileOptions
                 if (e.Version != "" && installed != e.Version)
                 {
                     var update = NewButton("Update", "AccentButton");
-                    update.Margin = T(8, 0, 0, 0);
+                    update.Margin = T(Gap.Control, 0, 0, 0);
                     update.Click += async (s, a) => await InstallWidget(e, false);
                     AddTo(bar, update);
                 }
                 // a menu of the categories, the suggested one first
-                var add = NewButton("Add as a tile", "", "Add a tile with this widget to a category");
-                add.Margin = T(8, 0, 0, 0);
+                var add = NewButton("Add as a tile...");
+                add.Margin = T(Gap.Control, 0, 0, 0);
                 add.Click += (s, a) =>
                 {
                     var menu = new ContextMenu { PlacementTarget = add, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
@@ -202,18 +203,19 @@ namespace RaintileOptions
                         item.Click += (s2, a2) => AddWidgetTile(e, target, false);
                         menu.Items.Add(item);
                     }
-                    if (menu.Items.Count == 0) { ShowDialog("Raintile", "There are no categories yet: create one, then add the widget."); return; }
+                    if (menu.Items.Count == 0) { ShowDialog("Add widget", "There are no categories yet: create one, then add the widget."); return; }
                     menu.IsOpen = true;
                 };
                 AddTo(bar, add);
-                var remove = NewButton("Remove");
-                remove.Margin = T(8, 0, 0, 0);
+                // the folder goes to the Recycle Bin: Delete (docs/OptionsUI.md, 8)
+                var remove = NewButton("Delete");
+                remove.Margin = T(Gap.Control, 0, 0, 0);
                 remove.Click += (s, a) =>
                 {
-                    var r = ShowDialog("Raintile", "Remove the widget " + e.Name + "? Its folder goes to the Recycle Bin; tiles using it stay empty.", new[] { "Remove", "Cancel" });
-                    if (r.Button != "Remove") return;
+                    var r = ShowDialog("Delete widget", "Delete the widget " + e.Name + "? Its folder goes to the Recycle Bin; tiles using it stay empty.", new[] { "Delete", "Cancel" }, null, true);
+                    if (r.Button != "Delete") return;
                     try { Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(Path.Combine(WidgetsDir, e.Id), Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin); }
-                    catch (Exception ex) { ShowDialog("Raintile", ex.Message); }
+                    catch (Exception ex) { ShowDialog("Delete widget", ex.Message); }
                     LoadMarket();
                 };
                 AddTo(bar, remove);
@@ -221,7 +223,7 @@ namespace RaintileOptions
             else
             {
                 var install = NewButton("Install", "AccentButton");
-                install.Margin = T(8, 0, 0, 0);
+                install.Margin = T(Gap.Control, 0, 0, 0);
                 install.Click += async (s, a) =>
                 {
                     install.IsEnabled = false;
@@ -233,7 +235,7 @@ namespace RaintileOptions
             if (TestMarketUrl(e.Page))
             {
                 var page = NewButton("Page", "LinkButton");
-                page.Margin = T(8, 0, 0, 0);
+                page.Margin = T(Gap.Control, 0, 0, 0);
                 page.VerticalAlignment = VerticalAlignment.Center;
                 page.Click += (s, a) => OpenUrl(e.Page);
                 AddTo(bar, page);
@@ -249,7 +251,7 @@ namespace RaintileOptions
                 string folder = Path.Combine(Path.GetTempPath(), "Raintile-widget-" + Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(folder);
                 string dest = Path.Combine(folder, e.Id + ".rmskin");
-                marketStatus.Text = "Downloading " + e.Name + "\u2026";
+                marketStatus.Text = "Downloading " + e.Name + "...";
                 try { using (var wc = NewWebClient()) await wc.DownloadFileTaskAsync(new Uri(e.Package), dest); }
                 catch (Exception ex) { marketStatus.Text = "Download failed: " + ex.Message; return; }
                 if (!Core.TestRmskinPackage(dest)) { marketStatus.Text = "The downloaded file is not a Rainmeter package."; return; }
@@ -262,7 +264,7 @@ namespace RaintileOptions
             // then moved in place)
             string dir = Path.Combine(WidgetsDir, e.Id);
             string tmp = dir + ".download";
-            marketStatus.Text = "Downloading " + e.Name + "\u2026";
+            marketStatus.Text = "Downloading " + e.Name + "...";
             try
             {
                 if (Directory.Exists(tmp)) Directory.Delete(tmp, true);
@@ -317,12 +319,12 @@ namespace RaintileOptions
         {
             if (file == null)
             {
-                ShowDialog("Raintile", "There are no categories yet: create one, then add the widget.");
+                ShowDialog("Add widget", "There are no categories yet: create one, then add the widget.");
                 return;
             }
             if (ask)
             {
-                var r = ShowDialog("Raintile", "Add " + e.Name + " to " + GetCategoryName(file) + "? Another category: Add as a tile in the gallery; you can also drag the tile afterwards.", new[] { "Add", "Not now" });
+                var r = ShowDialog("Add widget", "Add " + e.Name + " to " + GetCategoryName(file) + "? Another category: Add as a tile in the gallery; you can also drag the tile afterwards.", new[] { "Add", "Cancel" });
                 if (r.Button != "Add") return;
             }
             var m = GetModel(file);

@@ -1,0 +1,49 @@
+# The GitHub wiki, written from docs/ (tools/build_wiki.py) whenever the docs
+# of a release reach main; by hand (Run workflow) from any branch. The wiki is
+# a copy: edit docs/, not the wiki. It needs the wiki on (Settings > Features)
+# with a first page. If GitHub refuses the workflow's own token, add a secret
+# WIKI_TOKEN: a fine-grained token with Contents: read and write on this
+# repository.
+
+name: Wiki
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', 'tools/build_wiki.py', '.github/workflows/wiki.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  wiki:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write the pages
+        run: python3 tools/build_wiki.py build/wiki "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME"
+
+      - name: Publish them
+        env:
+          TOKEN: ${{ secrets.WIKI_TOKEN || github.token }}
+        run: |
+          if ! git clone "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki; then
+            echo "::error::The wiki cannot be read: turn it on (Settings > Features > Wikis) and create a first page. If it is on, add a WIKI_TOKEN secret (fine-grained token, Contents: read and write)."
+            exit 1
+          fi
+          cp build/wiki/*.md wiki/
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The wiki is up to date."
+            exit 0
+          fi
+          git commit -m "Wiki from docs/ at ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
+          if ! git push; then
+            echo "::error::GitHub refused to write the wiki with the workflow's token: add a WIKI_TOKEN secret (fine-grained token, Contents: read and write on this repository)."
+            exit 1
+          fi

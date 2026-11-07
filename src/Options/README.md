@@ -27,5 +27,6 @@ The Options window of Raintile as a Windows program: C#, WPF, .NET Framework 4.8
 | `Save.cs` | saving, Save and refresh, backup and restore |
 | `Gamepad.cs` | the window with a controller (XInput): moving between controls, pressing, pages |
 | `Osk.cs` | on-screen keyboard for text fields, for the controller |
+| `PadPlace.cs` | framing, logo and play time line of the tile preview with the controller |
 | `TileAction.cs` | the tile menu's Run as administrator and Remove (`-Action`) |
 | `WidgetOptions.cs` | the settings of each installed widget (Widgets > the widget) |

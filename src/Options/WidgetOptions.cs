@@ -124,7 +124,6 @@ namespace RaintileOptions
             AddTo(sp, card);
             var defs = WidgetOptions(id);
             var values = ReadWidgetSettings(id);
-            if (defs.Count == 0) AddTo(f, NewText("This widget has no settings.", Fs.Help, ResBrush("DimBrush"), false, true));
             Action<string, string> save = (name, value) =>
             {
                 values[name] = value;

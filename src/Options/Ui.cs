@@ -219,7 +219,6 @@ namespace RaintileOptions
         // separator between the parts of a sub-line ("Steam   .   game")
         public static readonly string Dot = ((char)0xB7).ToString();
 
-        public object Res(string name) { return app.Resources[name]; }
         public Style ResStyle(string name) { return (Style)app.Resources[name]; }
         public Brush ResBrush(string name) { return (Brush)app.Resources[name]; }
 

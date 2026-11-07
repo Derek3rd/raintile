@@ -70,9 +70,9 @@ do
 end
 local osk = { open = false, sel = 1 }
 local tileKeys = {}  -- tile hot keys: { { key, id } }, in the order of their measures
-local widgets = {}   -- Dashboard widget tiles, in the order of their meters (t.widget.idx)
-local updateDashState -- defined with the Dashboard widgets
-local D = {}          -- functions and tables of the Dashboard widgets
+local widgets = {}   -- widget tiles of all categories, in the order of their meters (t.widget.idx)
+local updateDashState -- defined with the widgets
+local D = {}          -- functions and tables of the widgets (D for the Dashboard they began with)
 local M = {}          -- launcher modes: window, docked
 local renderOsk, oskMove -- defined with the keyboard (Search section)
 
@@ -2665,7 +2665,7 @@ function D.customWidgetText(t, i, w, h)
 end
 
 -- Skin tiles (Widget=skin, Param=<config>\<file>.ini): the skin is loaded
--- over the tile while the Dashboard is shown, and unloaded when it is left
+-- over the tile while its category is shown, and unloaded when it is left
 function D.syncSkins()
 	local wanted = dash.on and dash.skinsWanted or {}
 	for config, p in pairs(wanted) do
@@ -2953,7 +2953,7 @@ function D.dashActive()
 	return ready and visible and not searchCat and cats[active] ~= nil and cats[active].widgets == true
 end
 
--- The widgets of the Dashboard on screen, from dash.data
+-- The widgets on screen, from dash.data
 function D.fillShown()
 	local catW, catH = V.TileW, V.TileH
 	for _, t in ipairs(cats[active].tiles) do
@@ -3413,8 +3413,8 @@ end
 
 -- Click on a chip: All clears the filter, the others turn on and off. The
 -- grid starts again from the top, with the appear animation.
--- New data from the helper: the history of the graphs, then the widgets of
--- the Dashboard on screen
+-- New data from the helper: the history of the graphs, then the widgets on
+-- screen
 function DashTick()
 	if not D.dashActive() then
 		updateDashState()
@@ -3810,7 +3810,7 @@ end
 
 function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
-	-- a Dashboard left open by the previous load: the helper stops until shown
+	-- widgets left on screen by the previous load: the helper stops until shown
 	os.remove(resources .. 'Generated\\DashOn.txt')
 	-- and the Steam downloads, followed only while it is open
 	os.remove(resources .. 'Generated\\DownloadOn.txt')

@@ -41,6 +41,8 @@ namespace RaintileOptions
         public const int Up = 0xE74A, Down = 0xE74B, Left = 0xE72B, Right = 0xE72A;   // move an entry
         public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
         public const int Pin = 0xE718;      // marks a pinned tile (not a button)
+        // the pad button that presses a button, before its text while the pad is in use (AddPadHint)
+        public const int PadB = 0xF094, PadStart = 0xEDE3;
     }
 
     // Type sizes
@@ -599,6 +601,12 @@ namespace RaintileOptions
                 if (isDefault) b.IsDefault = true;
                 b.Click += (s, e) => { result = label; d.Close(); };
                 AddTo(bar, b);
+                // B closes the dialog as its last button (Cancel, or the only one)
+                if (i == buttons.Length - 1)
+                {
+                    var hint = AddPadHint(b, Glyph.PadB);
+                    d.Closed += (s, e) => RemovePadHint(hint);
+                }
             }
             d.KeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Escape) d.Close(); };
             if (tb != null) d.ContentRendered += (s, e) => { tb.Focus(); tb.SelectAll(); };

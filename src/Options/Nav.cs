@@ -119,6 +119,24 @@ namespace RaintileOptions
                 }
                 ShowNavTarget(tag);
             };
+            // Up and down go round the menu and pass over an open group: selected,
+            // it would go straight back to its first entry
+            foreach (var list in new[] { nav, navBottom })
+                list.PreviewKeyDown += (s, e) =>
+                {
+                    if ((e.Key != Key.Up && e.Key != Key.Down) || Keyboard.Modifiers != ModifierKeys.None) return;
+                    e.Handled = true;
+                    var next = NavStep(e.Key == Key.Down ? 1 : -1);
+                    if (next == null) return;
+                    next.Focus();
+                    // a closed group: the keys stay on its first page once the menu is rebuilt
+                    if (((NavTag)next.Tag).Type == "group")
+                        win.Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            var sel = nav.SelectedItem as ListBoxItem;
+                            if (sel != null) sel.Focus();
+                        }));
+                };
 
             btnSave.Click += (s, e) => StartSaveAndRefresh();
             ((Button)win.FindName("BtnClose")).Click += (s, e) => win.Close();
@@ -386,6 +404,37 @@ namespace RaintileOptions
                 UpdateNavDots();
             }
             finally { navBuilding = false; }
+        }
+
+        // The pages of the menu in order: an open group is left out (its entries
+        // follow it), a closed one counts as one and opens on its first page
+        List<ListBoxItem> NavEntries()
+        {
+            var entries = new List<ListBoxItem>();
+            foreach (ListBoxItem it in nav.Items)
+            {
+                var tag = (NavTag)it.Tag;
+                if (tag.Type == "group" && navOpen.ContainsKey(tag.Group) && navOpen[tag.Group]) continue;
+                entries.Add(it);
+            }
+            foreach (ListBoxItem it in navBottom.Items) entries.Add(it);
+            return entries;
+        }
+
+        // Selects the entry 'delta' steps from the selected one, round the end of
+        // the menu (keyboard arrows, D-pad, LB / RB). A group rebuilds the menu:
+        // the entry returned is then gone, and the selected one is its first page.
+        ListBoxItem NavStep(int delta)
+        {
+            var entries = NavEntries();
+            if (entries.Count == 0) return null;
+            int i = entries.IndexOf((nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem);
+            int n = i < 0 ? 0 : ((i + delta) % entries.Count + entries.Count) % entries.Count;
+            var next = entries[n];
+            if (navBottom.Items.Contains(next)) navBottom.SelectedItem = next;
+            else nav.SelectedItem = next;
+            if (nav.Items.Contains(next)) nav.ScrollIntoView(next);
+            return next;
         }
 
         // Goes to a menu entry (after the current event: the menu may be rebuilt)

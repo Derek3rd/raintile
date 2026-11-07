@@ -51,6 +51,9 @@ for a field with two values such as a pair of keys, right after each value); the
 acts on a whole entry of a list, in the list's header. A field never has a bin.
 
 - Chevrons (`0xE70D`, `0xE76C`) only open and close groups of the menu.
+- Pad glyphs (`Glyph.PadB` `0xF094`, `Glyph.PadStart` `0xEDE3`) only go before the text of a
+  button that a gamepad button presses, with `AddPadHint`: shown while the pad is in use,
+  never an icon button of their own.
 - An icon button that would do nothing (the value is already the default, the field
   is already empty) is hidden with `SetActionVisible`: `Visibility.Hidden`, so its
   room stays and nothing moves. Never dim it by hand.

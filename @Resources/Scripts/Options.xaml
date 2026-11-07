@@ -132,7 +132,7 @@
     </Setter>
   </Style>
 
-  <!-- Segmented choices and chips (RadioButton / ToggleButton) -->
+  <!-- Chips: several of a set (ToggleButton), the filters of a list (RadioButton); a single choice is a combo -->
   <Style x:Key="Segment" TargetType="ToggleButton">
     <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
     <Setter Property="Cursor" Value="Hand"/>

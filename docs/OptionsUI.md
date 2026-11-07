@@ -7,8 +7,8 @@ whose styles are in `@Resources/Scripts/Options.xaml`.
 Most rules are already code: the constants and helpers in `src/Options/Ui.cs`
 (`Glyph`, `Fs`, `Gap`, `FieldWidth`, `NewHelp`, `NewSectionTitle`, `NewLabelBlock`,
 `NewClearButton`, `NewDeleteButton`, `NewResetIcon`, `SetActionVisible`,
-`MarkInvalid`, `SetTrimmed`, `NewNumberField`, `NewSizeField`, `NewEqualButtons`,
-`ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
+`MarkInvalid`, `SetTrimmed`, `NewNumberField`, `NewSizeField`, `NewChoiceBox` with
+`SelectChoice` / `ChoiceValue`, `NumericOnly`, `NewEqualButtons`, `ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
 `SetFormHelp`. Build new UI with them: no glyph codes,
 font sizes or margins written by hand. When a page needs something the helpers do
 not have, add it to `Ui.cs` and to this page, not to the page's own file.
@@ -65,20 +65,27 @@ acts on a whole entry of a list, in the list's header. A field never has a bin.
 | Value | Control |
 |---|---|
 | On / off | Switch (`CheckBox`) |
-| One of up to ~5 choices | Segments (`Segment`) |
-| One of more choices, or a list read from disk | Combo |
-| Several of a fixed set | Switches with their labels |
+| One of a fixed set, however few | Combo (`NewChoiceBox`) |
+| One of a list read from disk | Combo |
+| Several of a fixed set | Switches with their labels, or chips (`Segment` toggles) for short names (gamepad buttons) |
 | A number in a range worth dragging (counts, ms, pt, zoom, opacity) | Slider + text box with its unit (`NewNumberField`) |
-| A length that can be pixels or a share of the screen | `size`: text box + px / % (`NewSizeField`) |
+| A length that can be pixels or a share of the screen | `size`: text box + px / % combo (`NewSizeField`) |
 | An identifier or a huge range (a port) | Text box with its unit (`NoSlider` in the schema) |
 | A colour | Swatch + text box |
 | A key | Key button + clear |
 | Text, path | Text box (paths: + "Browse...") |
 
-- The unit is always shown (px, pt, ms, s, %, ×, steps, columns, rows), inside the
+- No row of chips for a single choice: it wraps and clutters the page. Chips stay for
+  several of a set and for the filters of a list (Import: All / Games / Apps).
+- A unit of measure is always shown (px, pt, ms, s, %, ×, / 255, steps), inside the
   number's box on its right (the `UnitBox` style of `Options.xaml`: the unit is the
-  box's `Tag`). Every number box is `FieldWidth.S` wide, so the boxes line up and the
-  sliders before them take the rest of the row.
+  box's `Tag`). A count has no unit when its label already says what it counts
+  (Columns, Rows, Tiles in Recent); it keeps it when the label does not (a tile's
+  Width in columns). Every number box is `FieldWidth.S` wide, so the boxes line up and
+  the sliders before them take the rest of the row.
+- Number boxes take only numbers (`NumericOnly`, already in `NewNumberField` and
+  `NewSizeField`): letters and spaces are not typed or pasted, a comma becomes the
+  decimal point, the minus sign only where the value can be negative.
 - The same kind of value gets the same control on every page (a grid size, an
   opacity, a zoom look the same in Settings and in the category editor).
 - A value that is not valid gets the red border (`MarkInvalid`) and is not saved
@@ -105,11 +112,12 @@ not scroll, so cards and columns are in the same place on every page. In it:
 
 - text fields, combos, colours, folder lists and sliders **fill** the column (no
   width of their own), so their left and right edges line up;
-- switches, segments, sizes, keys and buttons keep their size and **end at the right
-  edge** of the column.
+- switches, chips, sizes, keys and buttons keep their size and **end at the right
+  edge** of the column; two combos of one value (the screen's area and monitor) share
+  it in equal parts (`NewEqualButtons`).
 
-Widths: number and size boxes `FieldWidth.S` (120); panels of segments or switches
-wrap within `FieldWidth.Wrap` (470); `FieldWidth.M` / `L` only for fields outside rows
+Widths: number and size boxes `FieldWidth.S` (120), the px / % combo after a size box
+`FieldWidth.Unit` (72); panels of chips or switches wrap within `FieldWidth.Wrap` (470); `FieldWidth.M` / `L` only for fields outside rows
 (the Import filter and target). No other widths.
 - A row of buttons is either all `Auto` and aligned to the start, or all the same
   width filling the row (`UniformGrid`): never mixed.

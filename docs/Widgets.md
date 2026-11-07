@@ -46,7 +46,7 @@ The `.ini` is written like a Rainmeter skin, but it is not a skin of its own: Ra
 - `[Rainmeter]` and `[Metadata]` are left out.
 - **Section names get a prefix** (`[Read]` becomes `[CW11_Read]`): references written as `[Section]`, `[Section:...]` and `MeasureName=` are renamed by themselves; anywhere else (in bangs) write [`#WIDGET:Read#`](#variables-raintile-fills-in), or `#CURRENTSECTION#` in a section's own actions.
 - **Its `[Variables]`** are written in place of `#Name#` before the widget is added (so `!SetVariable` on one of them does not change the meters). Prefer names of your own (`MyClockColor`).
-- The launcher has no update cycle (`Update=-1`): measures do not update on their own. Run them from [OnShow](#onshow-and-onhide), or with `!CommandMeasure` / `!UpdateMeasure` from an action. Raintile's system data (CPU...) is collected only for its own widgets.
+- The launcher has no update cycle of its own (`Update=-1`): while the widget is on screen, Raintile updates its measures and meters every `DashInterval` ms (1 s by default), and not at all while it is hidden. Work that should not run that often (reading files, starting a script) goes in [OnShow](#onshow-and-onhide), or in a RunCommand measure started with `!CommandMeasure` (updating it does not run it).
 - The file must be UTF-8 (or ANSI), not UTF-16.
 - When the file changes, refresh the skin: Raintile writes the launcher's widgets again.
 

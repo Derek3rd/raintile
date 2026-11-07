@@ -3,7 +3,11 @@
 // every 16 ms only while a window of this program is active and Gamepad
 // support is on. A ring marks the control the pad is on; it goes away when the
 // mouse moves or a key is pressed, and the first pad input brings it back
-// without acting.
+// without acting. In the menu there is no ring: up and down select the entry
+// (its page shows at once, its background marks it), round the end of the menu;
+// right goes to the first control of the page. While the pad is in use the
+// buttons a pad button presses show its glyph (Start on Save and refresh, B on
+// Close and on the last button of a dialog).
 //
 //   D-pad / left stick   move between controls (on a slider: left/right change it)
 //   A                    press, switch, open a list, or type in a field (OskOpen)
@@ -21,6 +25,7 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
@@ -106,6 +111,7 @@ namespace RaintileOptions
         Win32.Point padCursor;
         ComboBox padCombo;            // list opened with A
         int padComboStart;
+        readonly List<TextBlock> padHints = new List<TextBlock>();   // glyphs of the pad buttons on buttons
         readonly uint padProcess = (uint)Process.GetCurrentProcess().Id;
 
         static readonly MethodInfo buttonOnClick = typeof(ButtonBase).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -122,6 +128,39 @@ namespace RaintileOptions
             // a click or a key: mouse and keyboard take over
             EventManager.RegisterClassHandler(typeof(Window), UIElement.PreviewMouseDownEvent, new MouseButtonEventHandler((s, e) => PadModeOff(true)));
             EventManager.RegisterClassHandler(typeof(Window), UIElement.PreviewKeyDownEvent, new KeyEventHandler((s, e) => PadModeOff(true)));
+            AddPadHint(btnSave, Glyph.PadStart);
+            AddPadHint((Button)win.FindName("BtnClose"), Glyph.PadB);
+        }
+
+        // The glyph of the pad button that presses b, before its text, shown only
+        // while the pad is in use. Returns it, to drop it with RemovePadHint.
+        TextBlock AddPadHint(Button b, int glyph)
+        {
+            string text = b.Content as string ?? "";
+            var g = NewGlyph(glyph, Fs.Label);
+            g.Margin = T(0, 0, Gap.Text, 0);
+            g.Visibility = padMode ? Visibility.Visible : Visibility.Collapsed;
+            var sp = NewPanel(Orientation.Horizontal);
+            AddTo(sp, g);
+            AddTo(sp, new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
+            b.Content = sp;
+            AutomationProperties.SetName(b, text);
+            padHints.Add(g);
+            return g;
+        }
+
+        void RemovePadHint(TextBlock g) { padHints.Remove(g); }
+
+        void SetPadHints(bool on)
+        {
+            foreach (var g in padHints) g.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // An entry of the menu on the left
+        bool InMenu(FrameworkElement fe)
+        {
+            var list = fe is ListBoxItem ? ItemsControl.ItemsControlFromItemContainer(fe) : null;
+            return list != null && (list == nav || list == navBottom);
         }
 
         void StartPad()
@@ -151,6 +190,7 @@ namespace RaintileOptions
             if (!padMode) return;
             padMode = false;
             HideRing();
+            SetPadHints(false);
         }
 
         int PadSetting(string key, int fallback, int min, int max)
@@ -285,6 +325,7 @@ namespace RaintileOptions
             if (!padMode)
             {
                 padMode = true;
+                SetPadHints(true);
                 EnsurePadFocus(root);
                 ShowRing();
                 if ((fire & (PadDirs | PadA)) != 0) return;
@@ -370,7 +411,11 @@ namespace RaintileOptions
 
         void ShowRing()
         {
-            if (!padMode || padFocus == null || (padRing != null && padRing.AdornedElement == padFocus)) return;
+            if (!padMode || padFocus == null) return;
+            // in the menu the background of the selected entry is enough (the
+            // ring would be cut by the list at its sides)
+            if (InMenu(padFocus)) { HideRing(); return; }
+            if (padRing != null && padRing.AdornedElement == padFocus) return;
             HideRing();
             var layer = AdornerLayer.GetAdornerLayer(padFocus);
             if (layer == null) return;
@@ -538,10 +583,45 @@ namespace RaintileOptions
                 (dir == PadRight ? Slider.IncreaseSmall : Slider.DecreaseSmall).Execute(null, slider);
                 return;
             }
+            // the menu: up and down select (round its end), right goes into the page
+            if (root == win && InMenu(padFocus))
+            {
+                if (dir == PadUp || dir == PadDown)
+                {
+                    var entry = NavStep(dir == PadDown ? 1 : -1);
+                    if (entry != null) PadSetFocus(entry);
+                }
+                else if (dir == PadRight) PadPageStart();
+                return;
+            }
             var item = padFocus as ListBoxItem;
             if (item != null && PadListStep(item, dir)) return;
             var next = PadFind(root, dir);
+            // back into the menu: on the page shown, not on the entry nearest
+            if (next != null && root == win && InMenu(next)) next = (nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem ?? next;
             if (next != null) PadSetFocus(next);
+        }
+
+        // The first control of the page: the top one, the left one of a row (also
+        // when the page is scrolled down)
+        void PadPageStart()
+        {
+            var all = new List<FrameworkElement>();
+            CollectPadTargets(pageHost, all);
+            FrameworkElement best = null;
+            Rect bestRect = Rect.Empty;
+            foreach (var c in all)
+            {
+                var r = PadRect(c, win);
+                if (r.IsEmpty) continue;
+                // a row: what is level with the best counts as the same row
+                if (best == null || r.Top < bestRect.Top - 4 || (Math.Abs(r.Top - bestRect.Top) <= 4 && r.Left < bestRect.Left))
+                {
+                    best = c;
+                    bestRect = r;
+                }
+            }
+            if (best != null) PadSetFocus(best);
         }
 
         // --- Acting ------------------------------------------------------------------
@@ -593,26 +673,12 @@ namespace RaintileOptions
             if (sel != null) PadSetFocus(sel);
         }
 
-        // LB / RB: the pages of the menu in order (a closed group counts as one:
-        // it opens on its first page)
+        // LB / RB: the previous / next page of the menu (NavStep)
         void PadPage(int delta)
         {
-            var entries = new List<ListBoxItem>();
-            foreach (ListBoxItem it in nav.Items)
-            {
-                var tag = (NavTag)it.Tag;
-                if (tag.Type == "group" && navOpen.ContainsKey(tag.Group) && navOpen[tag.Group]) continue;
-                entries.Add(it);
-            }
-            foreach (ListBoxItem it in navBottom.Items) entries.Add(it);
-            int i = entries.IndexOf((nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem);
-            int n = i + delta;
-            if (i < 0 || n < 0 || n >= entries.Count) return;
-            var next = entries[n];
-            if (navBottom.Items.Contains(next)) navBottom.SelectedItem = next;
-            else nav.SelectedItem = next;
             // a group rebuilds the menu: the pad goes to its new entry on the next read
-            PadSetFocus(next);
+            var next = NavStep(delta);
+            if (next != null) PadSetFocus(next);
         }
 
         void PadComboInput(int fire)

@@ -1,4 +1,4 @@
-// The main window (copied from Scripts\Options.ps1: the same layout).
+// The main window: its layout (menu, page, buttons); the styles are in Scripts\Options.xaml.
 namespace RaintileOptions
 {
     static class WindowXaml

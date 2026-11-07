@@ -145,7 +145,7 @@ Right click on a tile adds, after Raintile's own entries, the ones that apply to
 | **Run as administrator** | starts the program as administrator; Windows asks for confirmation (only for `.exe`, `.lnk`, `.bat`, `.cmd`) |
 | **Remove from \<category\>...** | removes the tile from its category file, after asking; its images stay in `Images\` |
 
-*Run as administrator* and *Remove* go through `Scripts\TileAction.ps1`, which reads the tile's command from its category file.
+*Run as administrator* and *Remove* go through the Options program (`Bin\RaintileOptions.exe`, without its window), which reads the tile's command from its category file.
 
 ## Favorites and Recent
 
@@ -413,7 +413,7 @@ Reported tiles are **greyed out** in the launcher, say **Not installed** and do 
 
 ## Options window
 
-The **gear** next to the X, or right click > **Options...**, opens the Options window: the program `Bin\RaintileOptions.exe` (C#, WPF, .NET Framework 4.8, included in Windows 10/11), in the packages of the releases; a copy of the repository without it opens the same window from `Scripts\Options.ps1` with PowerShell, a little slower. Both look the same: their look is in `Scripts\Options.xaml`. Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
+The **gear** next to the X, or right click > **Options...**, opens the Options window: the program `Bin\RaintileOptions.exe` (C#, WPF, .NET Framework 4.8, included in Windows 10/11), in the packages of the releases (a copy of the repository builds it with `tools\dev-build.ps1`; without it the launcher says it is missing). Its look is in `Scripts\Options.xaml`. Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
 
 The sections are in the menu on the left; **Keybindings** and **Categories** open into sub-entries (click them again to close them):
 
@@ -445,7 +445,7 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
     - **Pinned tiles** (the tile's **Pinned** box, or right click on the tile in the launcher > **Pin to the start**) come first, in the order you drag them to, with a pin on their small tile; sorting moves only the others.
   - **Moving a tile to another category**: drag it from the strip onto that category in the menu on the left (the entry is outlined when it can take it). The tile and its images move, and both category files are saved at once. Imported games move only once they are normal tiles.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
-- **Gamepad** (the program only, not `Options.ps1`; off with `Gamepad=0`): while the window is in the foreground the controller moves a ring between the controls. D-pad / left stick move (on a slider left and right change the value, the field next to it is skipped), `A` presses a button, flips a switch, picks a choice or a list entry, opens a drop-down list (up/down choose, `LB`/`RB` jump by 10, `A` keeps, `B` puts back) or types into a text field, `B` goes back to the menu (in the menu it closes the window, in a dialog it cancels), `LB` / `RB` go to the previous / next page, `Start` alone saves and refreshes, the right stick scrolls. The ring goes away when you move the mouse or press a key; the next pad input brings it back without acting.
+- **Gamepad** (off with `Gamepad=0`): while the window is in the foreground the controller moves a ring between the controls. D-pad / left stick move (on a slider left and right change the value, the field next to it is skipped), `A` presses a button, flips a switch, picks a choice or a list entry, opens a drop-down list (up/down choose, `LB`/`RB` jump by 10, `A` keeps, `B` puts back) or types into a text field, `B` goes back to the menu (in the menu it closes the window, in a dialog it cancels), `LB` / `RB` go to the previous / next page, `Start` alone saves and refreshes, the right stick scrolls. The ring goes away when you move the mouse or press a key; the next pad input brings it back without acting.
   - **On-screen keyboard** (`A` on a text field): the launcher's layout with lower case, **Shift** for capitals and a page of symbols (`#+=`) for paths and commands; the text shows above the keys. `A` types the key, `X` deletes, `Y` adds a space, `LB` / `RB` move the cursor, `LT` is Shift, `RT` the symbols, `Start` (or *Done*) keeps the text, `B` puts back what was there. The keys can be clicked too.
   - Still mouse or keyboard: key bindings (they wait for a key), colour and file pickers (Windows dialogs), framing the background and placing the logo by dragging (the zoom and logo size sliders work with the pad).
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
@@ -755,7 +755,6 @@ TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated whi
   Images/<category>/         their icons, backgrounds and logos
   Icons/                     icons of Favorites and Recent
   Scripts/Data.ps1           prepares the data folder
-  Scripts/TileAction.ps1     tile menu: run as administrator, remove
   Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic
   Scripts/Thumbs.ps1         thumbnail creation
@@ -764,7 +763,6 @@ TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated whi
   Scripts/GameUpdates.ps1    Steam games with an update waiting
   Scripts/Helper.ps1         gamepad and focus-loss helper
   Bin/RaintileOptions.exe    Options window (built from src/Options by the release workflow)
-  Scripts/Options.ps1        Options window with PowerShell, when the program is missing
   Scripts/Options.xaml       look of the Options window
   Generated/Grid.inc         generated meters
   Generated/Sizes.inc        the launcher's rectangle (LauncherMode), percentage sizes and #hex colours converted for Rainmeter

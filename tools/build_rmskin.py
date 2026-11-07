@@ -87,7 +87,7 @@ def build(version, out_dir, stamp=None):
                 sys.exit('missing ' + dll)
             z.write(dll, 'Plugins/%s/HotKey.dll' % bits)
     if not os.path.isfile(os.path.join(ROOT, '@Resources', 'Bin', 'RaintileOptions.exe')):
-        print('note: @Resources/Bin/RaintileOptions.exe not built: the package opens the PowerShell Options window')
+        print('note: @Resources/Bin/RaintileOptions.exe not built: the package has no Options window')
     payload = data.getvalue()
     os.makedirs(out_dir, exist_ok=True)
     out = os.path.join(out_dir, '%s_%s.rmskin' % (SKIN, version))

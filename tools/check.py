@@ -13,10 +13,10 @@
 Checks on the files: scripts and .ini/.inc ASCII only without BOM, every .ps1
 parses with Windows PowerShell 5.1 (so no PowerShell 7 syntax), XAML and
 JSON load, Raintile.lua compiles with Lua 5.1, the widget gallery points to
-files that exist, every setting of Settings.inc is in the Options schema and
-SchemaData.cs is up to date, GRID_VERSION is bumped when writeGrid() changes,
-every page of docs/ goes to the wiki, the Options window takes its glyphs, type
-sizes and spacing from Ui.cs / $GLYPH, $FS, $GAP (docs/OptionsUI.md).
+files that exist, every setting of Settings.inc is in the Options schema
+(src/Options/SchemaData.cs) and back, GRID_VERSION is bumped when writeGrid()
+changes, every page of docs/ goes to the wiki, the Options window takes its
+glyphs, type sizes and spacing from Ui.cs (docs/OptionsUI.md).
 
 Tests: tests/ps (PowerShell scripts run on temporary folders) and tests/lua
 (Raintile.lua run against a fake Rainmeter, tests/lua/rainmeter.lua).
@@ -219,21 +219,10 @@ def check_settings_schema():
             fail('Settings.inc: %s is there twice' % key)
         seen.add(key)
         if key not in covered:
-            fail('Settings.inc: %s is not in the schema of Options.ps1 (and SchemaData.cs)' % key)
+            fail('Settings.inc: %s is not in the Options schema (src/Options/SchemaData.cs)' % key)
     for key in sorted(set(re.findall(r'Key = "([^"]+)"', schema)) - seen):
         fail('the Options schema has %s, which is not in Settings.inc' % key)
     print('  %d settings' % len(settings))
-    # gen_options_schema.py needs pwsh (Windows PowerShell prints the schema
-    # in the console's code page); the package check runs it on every PR
-    if not shutil.which('pwsh'):
-        print('  SchemaData.cs not compared with Options.ps1: needs pwsh (the package check does it)')
-        return
-    out = subprocess.run([sys.executable, os.path.join(ROOT, 'tools', 'gen_options_schema.py'), '--check'],
-                         capture_output=True, text=True, encoding='utf-8', errors='replace')
-    if out.returncode != 0:
-        fail((out.stderr or out.stdout).strip())
-    else:
-        print('  SchemaData.cs is up to date')
 
 
 def lua_runtime():
@@ -301,43 +290,30 @@ def check_wiki_pages():
     print('  %d pages' % len(docs))
 
 
-# docs/OptionsUI.md: glyphs come from Glyph / $GLYPH, type sizes from Fs / $FS and
-# margins and paddings from Gap / $GAP, so the same action keeps the same icon and
+# docs/OptionsUI.md: glyphs come from Glyph, type sizes from Fs and margins and
+# paddings from Gap, so the same action keeps the same icon and
 # text the same size and spacing on every page. A line that has to differ (a
 # drawing, the menu chrome, the on-screen keyboard) says why with "ui-exempt: <why>".
 UI_GLYPH = re.compile(r'0x[Ee][0-9A-Fa-f]{3}\b|\\u[Ee][0-9A-Fa-f]{3}')
-UI_RULES = {
-    'cs': [
-        (UI_GLYPH, 'glyph code: use Glyph'),
-        (re.compile(r'\bFontSize\s*=\s*\d'), 'font size: use Fs'),
-        (re.compile(r'\bNew(?:Text|Glyph)\((?:"[^"]*"|[^,()"]+),\s*\d'), 'font size: use Fs'),
-    ],
-    'ps1': [
-        (UI_GLYPH, 'glyph code: use $GLYPH'),
-        (re.compile(r'\.FontSize\s*=\s*\d'), 'font size: use $FS'),
-        (re.compile(r"\bNew-(?:Text|Glyph)\s+(?:'[^']*'|\"[^\"]*\"|\S+)\s+\d"), 'font size: use $FS'),
-    ],
-}
+UI_RULES = [
+    (UI_GLYPH, 'glyph code: use Glyph'),
+    (re.compile(r'\bFontSize\s*=\s*\d'), 'font size: use Fs'),
+    (re.compile(r'\bNew(?:Text|Glyph)\((?:"[^"]*"|[^,()"]+),\s*\d'), 'font size: use Fs'),
+]
 
 
 # A margin or padding: what is assigned to it may hold no number but 0 once the
-# Gap / $GAP names are taken out (C#: up to the end of the call or of the property
-# in an initializer; PowerShell: up to the end of the statement). XAML attributes
-# (Margin="...") are the window's chrome and styles, not checked.
-UI_SPACING = {
-    'cs': re.compile(r'\b(?:Margin|Padding)\s*=\s*(?!")'),
-    'ps1': re.compile(r'\.(?:Margin|Padding)\s*=\s*'),
-}
-UI_GAP_NAME = re.compile(r'\bGap\.\w+(?:\.\w+)?|\$GAP\.\w+')
+# Gap names are taken out (up to the end of the call or of the property in an
+# initializer). XAML attributes (Margin="...") are the window's chrome and
+# styles, not checked.
+UI_SPACING = re.compile(r'\b(?:Margin|Padding)\s*=\s*(?!")')
+UI_GAP_NAME = re.compile(r'\bGap\.\w+(?:\.\w+)?')
 UI_NUMBER = re.compile(r'(?<![\w.])(?:[1-9]\d*(?:\.\d+)?|0\.\d*[1-9])')
 
 
-def spacing_values(line, kind):
-    for m in UI_SPACING[kind].finditer(line):
+def spacing_values(line):
+    for m in UI_SPACING.finditer(line):
         rest = line[m.end():]
-        if kind == 'ps1':
-            yield re.split(r';|#', rest)[0]
-            continue
         depth, end = 0, len(rest)
         for i, c in enumerate(rest):
             if c in '([{':
@@ -353,37 +329,23 @@ def spacing_values(line, kind):
         yield rest[:end]
 
 
-def spacing_by_hand(line, kind):
-    if line.lstrip().startswith('//' if kind == 'cs' else '#'):
+def spacing_by_hand(line):
+    if line.lstrip().startswith('//'):
         return False
-    return any(UI_NUMBER.search(UI_GAP_NAME.sub('', v)) for v in spacing_values(line, kind))
+    return any(UI_NUMBER.search(UI_GAP_NAME.sub('', v)) for v in spacing_values(line))
 
 
 def check_options_ui():
-    section('Options window: glyphs, type sizes and spacing from Ui.cs / $GLYPH, $FS, $GAP (docs/OptionsUI.md)')
+    section('Options window: glyphs, type sizes and spacing from Ui.cs (docs/OptionsUI.md)')
     files = [f for f in glob.glob(os.path.join(ROOT, 'src', 'Options', '*.cs'))
              if os.path.basename(f) not in ('Ui.cs', 'SchemaData.cs')]
-    files.append(os.path.join(ROOT, '@Resources', 'Scripts', 'Options.ps1'))
     for path in files:
-        kind = 'cs' if path.endswith('.cs') else 'ps1'
-        in_glyphs = False
         for i, line in enumerate(open(path, encoding='utf-8'), 1):
             if 'ui-exempt:' in line:
                 continue
-            if kind == 'ps1':
-                # where the rules are defined: the $GLYPH table, the helpers'
-                # defaults, and the menu icon of each page in the schema
-                stripped = line.strip()
-                if stripped.startswith('$GLYPH = @{'):
-                    in_glyphs = True
-                if in_glyphs:
-                    in_glyphs = stripped != '}'
-                    continue
-                if stripped.startswith('function ') or re.search(r'\bIcon = 0x', line):
-                    continue
-            what = next((w for rx, w in UI_RULES[kind] if rx.search(line)), None)
-            if what is None and spacing_by_hand(line, kind):
-                what = 'margin or padding: use ' + ('Gap' if kind == 'cs' else '$GAP')
+            what = next((w for rx, w in UI_RULES if rx.search(line)), None)
+            if what is None and spacing_by_hand(line):
+                what = 'margin or padding: use Gap'
             if what:
                 fail('%s:%d %s (docs/OptionsUI.md), or say why with "ui-exempt: ..."' % (rel(path), i, what))
     print('  %d files' % len(files))

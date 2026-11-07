@@ -1,6 +1,5 @@
 // Raintile Options: files and data, without user interface.
-// A C# port of the first part of Scripts\Options.ps1 (and of the helpers it
-// used from Scan.ps1 and Update.ps1): Settings.inc, category files, images,
+// (Some helpers are ports of Scan.ps1 and Update.ps1.) Settings.inc, category files, images,
 // the encrypted SteamGridDB key, backups, the lists written by the scan and
 // the update check.
 

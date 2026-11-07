@@ -4550,26 +4550,30 @@ function M.checkHwAccel()
 	end
 end
 
--- Options window: the native program (@Resources\Bin\RaintileOptions.exe,
--- in the packages of the releases) when it is there, otherwise
--- Scripts\Options.ps1 with PowerShell (a copy of the repository has no
--- program). page: '', 'import', 'tile' or 'info'. The launcher hides first.
+-- Options window: the program @Resources\Bin\RaintileOptions.exe, in the
+-- packages of the releases. page: '', 'import', 'tile' or 'info'. The
+-- launcher hides first.
 function OpenOptions(page)
 	Hide()
+	if not M.optionsExe() then return end
 	page = page or ''
 	-- "<dir>\." keeps the trailing backslash from escaping the closing quote
 	local args = string.format(' -Resources "%s." -Data "%sRaintile" -Config "%s"', resources,
 		SKIN:ReplaceVariables('#SETTINGSPATH#'), SKIN:ReplaceVariables('#ROOTCONFIG#'))
 	if page ~= '' then args = args .. ' -Page ' .. page end
+	SKIN:Bang('["' .. M.optionsExe() .. '"' .. args .. ']')
+end
+
+-- The Options program, or nil after saying it is missing: a copy of the
+-- repository has none until tools\dev-build.ps1 builds it (a message box of
+-- Windows, through PowerShell: the skin has none of its own)
+function M.optionsExe()
 	local exe = resources .. 'Bin\\RaintileOptions.exe'
-	if fileExists(exe) then
-		dbg('options: ' .. exe)
-		SKIN:Bang('["' .. exe .. '"' .. args .. ']')
-	else
-		-- conhost --headless starts PowerShell without any console window
-		SKIN:Bang('["conhost.exe" --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File "'
-			.. resources .. 'Scripts\\Options.ps1"' .. args .. ']')
-	end
+	if fileExists(exe) then return exe end
+	print('Raintile: ' .. exe .. ' not found')
+	SKIN:Bang('["conhost.exe" --headless powershell.exe -NoProfile -NonInteractive -Command "$null = (New-Object -ComObject WScript.Shell).Popup(\'The Options program is missing: '
+		.. 'Bin\\RaintileOptions.exe in the skin folder. Reinstall Raintile, or in a copy of the repository build it with tools\\dev-build.ps1.\', 0, \'Raintile\', 48)"]')
+	return nil
 end
 
 -- Context menu > Edit this tile: the Options window opens on the tile the
@@ -4757,9 +4761,9 @@ function TileMenu(kind)
 		local path = commandTarget(t.command)
 		if path then SKIN:Bang('explorer.exe /select,"' .. path .. '"') end
 	elseif kind == 'admin' or kind == 'remove' then
-		-- TileAction.ps1: run as administrator (UAC asks), or remove the tile
+		-- the Options program (TileAction.cs): run as administrator (UAC asks), or remove the tile
 		-- from its category file (after a confirmation)
-		if writeTileFile('TileAction.txt', t) then
+		if M.optionsExe() and writeTileFile('TileAction.txt', t) then
 			SKIN:Bang(SKIN:GetVariable(kind == 'admin' and 'TileRunAsAction' or 'TileRemoveAction'))
 		end
 	end

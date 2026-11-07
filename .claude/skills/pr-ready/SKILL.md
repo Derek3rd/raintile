@@ -14,9 +14,7 @@ passed, what failed and what was not verified.
 2. Anything under `src/Options/` changed: `dotnet build src/Options/RaintileOptions.csproj -c Release`
    (0 errors), then `powershell -NoProfile -ExecutionPolicy Bypass -File tools\dev-build.ps1`
    so the live test runs the new program (close the Options window first).
-3. The schema of `Options.ps1` changed: `python tools/gen_options_schema.py --check` when
-   `pwsh` exists; otherwise say the `package` check will do it.
-4. The layout of the Options window changed: `powershell -NoProfile -ExecutionPolicy Bypass
+3. The layout of the Options window changed: `powershell -NoProfile -ExecutionPolicy Bypass
    -File tools\options-shots.ps1 -Base origin/nightly`, then look at the changed pages in
    `build\options-shots\diff\`. Only for such changes: it takes a few minutes.
 
@@ -31,12 +29,12 @@ passed, what failed and what was not verified.
 ## 3. Review pass (large changes)
 For a change over many files or several sessions, look for duplicated code, dead code
 (fields, helpers, branches no longer reached) and changes made on one side only (the
-Options program but not `Options.ps1`). Use `/simplify` or `/code-review`, fix, check
+launcher but not the Options program, the code but not the docs). Use `/simplify` or `/code-review`, fix, check
 again. Do not restructure code that is not part of the change.
 
 ## 4. Hand over
 - Commit on the branch (`feature/<name>` or `fix/<name>`, base `nightly`) and push.
-- Ask the user to test live, saying what to try (pages, modes, the fallback window).
+- Ask the user to test live, saying what to try (pages, modes).
 - Open the PR only when asked. Base `nightly`, in English:
   - one `##` heading per change (several changes in one PR only when the user asked);
   - `## Docs`: the docs changed;

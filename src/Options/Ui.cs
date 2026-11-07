@@ -153,12 +153,13 @@ namespace RaintileOptions
 
     static class Program
     {
-        // Arguments as in Options.ps1: -Resources <dir> -Data <dir> -Config <name> -Page <page>
+        // Arguments: -Resources <dir> -Data <dir> -Config <name> -Page <page>, or
+        // -Action runas|remove for the tile menu (TileAction.cs, no window)
         [STAThread]
         static int Main(string[] args)
         {
             var clock = Stopwatch.StartNew();
-            string resources = null, data = "", config = "Raintile", page = "";
+            string resources = null, data = "", config = "Raintile", page = "", action = "";
             for (int i = 0; i + 1 < args.Length; i++)
             {
                 string a = args[i].TrimStart('-', '/').ToLowerInvariant();
@@ -166,6 +167,7 @@ namespace RaintileOptions
                 else if (a == "data") data = args[++i];
                 else if (a == "config") config = args[++i];
                 else if (a == "page" || a == "openpage") page = args[++i];
+                else if (a == "action") action = args[++i].ToLowerInvariant();
             }
             if (resources == null)
             {
@@ -176,6 +178,7 @@ namespace RaintileOptions
             try
             {
                 Core.Init(resources, data, config);
+                if (action == "runas" || action == "remove") return TileAction.Run(action);
                 Core.DeleteOldUpdateFiles();
                 var app = new OptionsApp(page, clock);
                 return app.Run();

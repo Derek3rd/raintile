@@ -14,5 +14,8 @@ tile and whose round bottom cuts its lower border; around each drop the tile
 (border and inside) is cut away, so the background shows there. The name is
 Inter: RAIN ExtraBold, TILE Medium, LAUNCHER Medium, spaced.
 
-PNGs and the `.ico` are made from these files at the size needed (any SVG
-renderer: a browser, Inkscape, `rsvg-convert`); they are not kept here.
+PNGs are made from these files at the size needed (any SVG renderer: a
+browser, Inkscape, `rsvg-convert`); they are not kept here. The icon of the
+Options program, `src/Options/raintile.ico`, is the symbol at 16 to 256 px.
+
+The README shows `raintile-logo.svg` at the top.

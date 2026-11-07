@@ -5,8 +5,8 @@
 #   - the last ones unlocked;
 #   - the locked ones most players have.
 # The game is -Game (a Steam app id), or the one played last. The key is
-# SteamApiKey in Raintile's Settings.inc, encrypted with DPAPI by the Options
-# window. The Steam account is the one that signed in to Steam last on this
+# ApiKey in the widget's settings.inc (-Settings), encrypted with DPAPI by
+# Raintile's Options window (Widgets > Steam achievements). The Steam account is the one that signed in to Steam last on this
 # PC. The API is asked at most every 5 minutes for the same game; icons are
 # kept in the widget's folder (icons\).
 
@@ -35,7 +35,7 @@ function Write-List([string[]]$rows) {
 $key = ''
 if (Test-Path -LiteralPath $Settings) {
     foreach ($line in [IO.File]::ReadAllLines($Settings)) {
-        if ($line -match '^\s*SteamApiKey\s*=\s*(.*?)\s*$') { $key = $Matches[1] }
+        if ($line -match '^\s*ApiKey\s*=\s*(.*?)\s*$') { $key = $Matches[1] }
     }
 }
 if ($key.StartsWith('dpapi:')) {
@@ -48,7 +48,7 @@ if ($key.StartsWith('dpapi:')) {
     catch { $key = '' }
 }
 if ($key -notmatch '^[0-9A-Fa-f]{32}$') {
-    Write-List @(Row 'Add your Steam Web API key' 'Options > Widgets > Steam' '' 'https://steamcommunity.com/dev/apikey')
+    Write-List @(Row 'Add your Steam Web API key' 'Options > Widgets > Steam achievements' '' 'https://steamcommunity.com/dev/apikey')
     exit 0
 }
 

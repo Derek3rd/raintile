@@ -4,7 +4,7 @@ A widget is a tile that shows something or offers more than one thing to start, 
 
 Raintile itself holds no logic for a particular widget: what a widget needs that Rainmeter alone cannot give, Raintile offers to every widget through the [Raintile section](#the-raintile-section).
 
-Examples in this repository: [`widgets/BigClock`](../widgets/BigClock) (meters only), [`widgets/Modrinth`](../widgets/Modrinth) (a script reading a program's database into a list) and [`widgets/SteamAchievements`](../widgets/SteamAchievements) (a web API with the user's key, a setting per tile).
+Examples in this repository: [`widgets/BigClock`](../widgets/BigClock) (meters only), [`widgets/Modrinth`](../widgets/Modrinth) (a script reading a program's database into a list) and [`widgets/SteamAchievements`](../widgets/SteamAchievements) (a web API with the user's key in its settings, a setting per tile).
 
 ## Contents
 
@@ -15,8 +15,10 @@ Examples in this repository: [`widgets/BigClock`](../widgets/BigClock) (meters o
   - [OnShow and OnHide](#onshow-and-onhide)
   - [Lists](#lists)
   - [WidgetChanged()](#widgetchanged)
+- [Settings of a widget](#settings-of-a-widget)
 - [Parts of a tile](#parts-of-a-tile)
 - [Getting data: scripts](#getting-data-scripts)
+  - [Keys of the user's](#keys-of-the-users)
 - [Rules](#rules)
 - [Testing](#testing)
 - [Publishing in the gallery](#publishing-in-the-gallery)
@@ -26,6 +28,7 @@ Examples in this repository: [`widgets/BigClock`](../widgets/BigClock) (meters o
 ```
 Widgets\<Id>\<Id>.ini      the widget (required; the name is its Param=)
 Widgets\<Id>\...           anything else it needs: scripts, images, its data
+Widgets\<Id>\settings.inc  its settings, written by the Options window (see Settings of a widget)
 ```
 
 `Widgets\` is in the data folder (`%APPDATA%\Rainmeter\Raintile\Widgets\`). A tile uses it with:
@@ -44,7 +47,7 @@ WidgetOption=     ; optional: a setting of this tile for the widget (#WIDGETOPTI
 The `.ini` is written like a Rainmeter skin, but it is not a skin of its own: Raintile copies its sections into the launcher (into `@Resources\Generated\Grid.inc`), inside a container as large as the tile. So:
 
 - Coordinates start at the top left corner of the tile.
-- `[Rainmeter]` and `[Metadata]` are left out.
+- `[Rainmeter]`, `[Metadata]` and the `[Option:...]` sections are left out. `Name=` and `Information=` of `[Metadata]` are shown in the Options window.
 - **Section names get a prefix** (`[Read]` becomes `[CW11_Read]`): references written as `[Section]`, `[Section:...]` and `MeasureName=` are renamed by themselves; anywhere else (in bangs) write [`#WIDGET:Read#`](#variables-raintile-fills-in), or `#CURRENTSECTION#` in a section's own actions.
 - **Its `[Variables]`** are written in place of `#Name#` before the widget is added (so `!SetVariable` on one of them does not change the meters). Prefer names of your own (`MyClockColor`).
 - The launcher has no update cycle of its own (`Update=-1`): while the widget is on screen, Raintile updates its measures and meters every `DashInterval` ms (1 s by default), and not at all while it is hidden. Work that should not run that often (reading files, starting a script) goes in [OnShow](#onshow-and-onhide), or in a RunCommand measure started with `!CommandMeasure` (updating it does not run it).
@@ -59,6 +62,7 @@ The `.ini` is written like a Rainmeter skin, but it is not a skin of its own: Ra
 | `#WIDGETPATH#` | the widget's folder, with a backslash at the end: `#WIDGETPATH#icon.png`, `"#WIDGETPATH#read.ps1"` |
 | `#WIDGET:<Section>#` | the name a section of the widget has in the launcher: `[!CommandMeasure #WIDGET:Read# "Run"]` |
 | `#WIDGETOPTION#` | the tile's `WidgetOption=` (Options: the tile's *Widget setting*), empty without one: e.g. which game. Two tiles of the same widget can have different ones: give files that depend on it its value in their name (`List=list_#WIDGETOPTION#.txt`) |
+| `#OPTION:<Name>#` | the value of one of [its settings](#settings-of-a-widget) (not of a `secret` one: empty) |
 | `#SETTINGSPATH#` | (Rainmeter's) the folder of Rainmeter's settings: Raintile's own are in `#SETTINGSPATH#Raintile\Settings.inc` |
 | `#CURRENTSECTION#` | (Rainmeter's) the section the action belongs to |
 
@@ -106,6 +110,35 @@ When its data changed, the widget calls:
 
 and Raintile reads its list again and draws the tile. The usual place is the `FinishAction` of the RunCommand measure that wrote the file. Raintile also reads the list when the category comes on screen, so the last one shows at once while the new one is read.
 
+## Settings of a widget
+
+A widget can have settings of its own, the same for all its tiles: Options > Widgets shows one entry per installed widget, with its settings. Each one is an `[Option:<Name>]` section (`<Name>`: letters, digits, `_`):
+
+```ini
+[Option:ApiKey]
+Label=Steam Web API key
+Kind=secret
+Help=Free, from steamcommunity.com/dev/apikey.
+
+[Option:Rows]
+Label=Rows
+Kind=choice
+Choices=3|6|10
+Default=6
+```
+
+| Key | |
+| --- | --- |
+| `Label` | the name shown (default: `<Name>`) |
+| `Kind` | `text` (default), `secret` (a key or password: hidden, saved encrypted), `bool` (`1`/`0`), `number`, `choice` |
+| `Choices` | for `choice`: the values, separated by `\|` |
+| `Default` | the value until the user sets one |
+| `Help` | a line under it |
+
+The values are saved in the widget's folder, `settings.inc`, one `<Name>=<value>` per line (an update from the gallery keeps the file). The launcher writes them in place of `#OPTION:<Name>#` in the `.ini` (the file is read again when the settings change), and scripts read the file: pass it as `-Settings "#WIDGETPATH#settings.inc"`. A `secret` is never written into the launcher; see [Keys of the user's](#keys-of-the-users).
+
+Settings of one tile only (which game, which folder) go in its `WidgetOption=` instead ([`#WIDGETOPTION#`](#variables-raintile-fills-in)).
+
 ## Parts of a tile
 
 A meter with `Part=1` is a part of the tile: pointed at and clicked on its own, with Raintile's highlight (the same animation, colours and rounded corners as between tiles). Give it a `LeftMouseUpAction`:
@@ -148,7 +181,7 @@ FinishAction=[!CommandMeasure MeasureScript "WidgetChanged()"]
 
 ### Keys of the user's
 
-A widget that needs an account key reads it from Raintile's settings instead of asking for its own. Raintile has `SteamApiKey` (Options > Widgets > Steam); a widget needing another one asks for it to be added there in the same pull request. Keys are saved encrypted with Windows DPAPI for the current user: `SteamApiKey=dpapi:<base64>` in `Settings.inc`, with the entropy `Raintile SteamGridDB key` (UTF-8). In PowerShell:
+A widget that needs an account key asks for it as a `secret` [setting](#settings-of-a-widget). The Options window saves it encrypted with Windows DPAPI for the current user, `<Name>=dpapi:<base64>` in `settings.inc`, with the entropy `Raintile SteamGridDB key` (UTF-8). In PowerShell:
 
 ```powershell
 Add-Type -AssemblyName System.Security

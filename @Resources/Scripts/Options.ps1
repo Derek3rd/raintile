@@ -442,9 +442,6 @@ $schema = @(
                     (Num 'SensorPort' 'LibreHardwareMonitor port' 1 65535 1 '' 'The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).'),
                     (S 'info' '' 'Custom widgets' 'Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>.')
                 ) }
-            @{ Title = 'Steam'; Items = @(
-                    (S 'secret' 'SteamApiKey' 'Steam Web API key' 'For widgets that read your Steam data (e.g. Steam achievements). Free, from steamcommunity.com/dev/apikey (any domain name). Saved encrypted: only your Windows user on this PC can read it.')
-                ) }
             @{ Market = $true; Items = @() }
         )
     }
@@ -542,7 +539,7 @@ $defaults = @{
     SearchW = '320'; SearchPlaceholder = 'Search'; SearchHover = '1'
     ShowClock = '1'; ShowDate = '1'; ClockFormat = '%H:%M'; DateFormat = '%A %#d %B'; ClockFontSize = '18'
     ImportCategory = 'Games'; AppsCategory = 'Apps'; ImportStores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps'; ImportFolders = ''; ImportFoldersKind = 'Game'
-    ScanOnStart = '1'; SteamGridDBKey = ''; SteamApiKey = ''
+    ScanOnStart = '1'; SteamGridDBKey = ''
     CheckUpdates = '1'; UpdateChannel = 'Release'; DebugLog = '0'; ShowLabels = '1'; FontFace = 'Segoe UI'; MenuFontSize = '12'; LabelFontSize = '14'
     BgColor = '8,8,12,200'; TileColor = '36,36,44,255'; TileRadius = '0'; EdgeFade = '1'; AutoTileColor = '1'; HoverColor = '255,255,255,25'
     AccentColor = '0,210,180,255'; ActiveCategoryColor = '0,210,180,70'; HoverCategoryColor = '255,255,255,20'
@@ -1200,17 +1197,15 @@ $settings = Read-Settings $settingsFile
 $fileValues = @{}   # as in Settings.inc
 $values = @{}       # as in the window
 foreach ($item in $settings) { $fileValues[$item.Key] = $item.Value; $values[$item.Key] = $item.Value }
-# a key (SteamGridDB, Steam) written in clear (by hand, or by an older
-# version) is encrypted in Settings.inc right away
-foreach ($secret in @('SteamGridDBKey', 'SteamApiKey')) {
-    if ($values[$secret] -and -not "$($values[$secret])".StartsWith($SECRET_PREFIX)) {
-        try {
-            $encrypted = Protect-Secret $values[$secret]
-            Write-Settings $settingsFile @{ $secret = $encrypted }
-            $values[$secret] = $encrypted
-            $fileValues[$secret] = $encrypted
-        } catch { }
-    }
+# a SteamGridDB key written in clear (by hand, or by an older version) is
+# encrypted in Settings.inc right away
+if ($values['SteamGridDBKey'] -and -not "$($values['SteamGridDBKey'])".StartsWith($SECRET_PREFIX)) {
+    try {
+        $encrypted = Protect-Secret $values['SteamGridDBKey']
+        Write-Settings $settingsFile @{ SteamGridDBKey = $encrypted }
+        $values['SteamGridDBKey'] = $encrypted
+        $fileValues['SteamGridDBKey'] = $encrypted
+    } catch { }
 }
 $ctl = @{}          # key -> controls of that setting
 $resets = New-Object System.Collections.ArrayList # @{ KeyList; Button }

@@ -1260,13 +1260,17 @@ local function signature()
 		-- a changed custom widget file writes Grid.inc again
 		if t.widget.kind == 'custom' then
 			local path = D.customWidgetFile(t.widget.param)
-			local f = path and io.open(path, 'rb')
-			if f then
-				local text = f:read('*a')
-				f:close()
-				local sum = 0
-				for k = 1, #text, 7 do sum = (sum * 31 + text:byte(k)) % 1000000007 end
-				s[#s + 1] = '#' .. #text .. '.' .. sum
+			-- (and its settings, Options > Widgets: #OPTION:Name#)
+			local dir = path and path:match('^(.*[\\/])')
+			for _, file in ipairs({ path, dir and dir .. 'settings.inc' }) do
+				local f = io.open(file, 'rb')
+				if f then
+					local text = f:read('*a')
+					f:close()
+					local sum = 0
+					for k = 1, #text, 7 do sum = (sum * 31 + text:byte(k)) % 1000000007 end
+					s[#s + 1] = '#' .. #text .. '.' .. sum
+				end
 			end
 		end
 	end
@@ -2513,7 +2517,31 @@ function D.customWidgetText(t, i, w, h)
 			if k and trim(k) ~= '' then vars[trim(k):lower()] = trim(v) end
 		end
 	end
+	-- its settings (Options > Widgets > <widget>): [Option:<Name>] sections
+	-- with their Default=, the values in settings.inc of its folder; secrets
+	-- stay out of the skin (its scripts read them from the file)
+	local opts, optSec, secret = {}, nil, {}
+	for _, line in ipairs(lines) do
+		local sec = line:match('^%s*%[([^%]]+)%]%s*$')
+		if sec then optSec = trim(sec):match('^[Oo][Pp][Tt][Ii][Oo][Nn]:%s*([%w_]+)$')
+			if optSec then optSec = optSec:lower(); opts[optSec] = '' end
+		elseif optSec then
+			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
+			if k and trim(k):lower() == 'default' then opts[optSec] = trim(v) end
+			if k and trim(k):lower() == 'kind' and trim(v):lower() == 'secret' then secret[optSec] = true end
+		end
+	end
+	local sf = io.open(dir .. 'settings.inc', 'rb')
+	if sf then
+		for line in (sf:read('*a'):gsub('^\239\187\191', '') .. '\n'):gmatch('([^\n]*)\n') do
+			local k, v = line:match('^%s*([%w_]+)%s*=(.*)$')
+			if k and opts[k:lower()] then opts[k:lower()] = trim((v:gsub('\r$', ''))) end
+		end
+		sf:close()
+	end
+	for n in pairs(secret) do opts[n] = '' end
 	local function own(v)
+		v = v:gsub('#[Oo][Pp][Tt][Ii][Oo][Nn]:([%w_]+)#', function(n) return opts[n:lower()] end)
 		for _ = 1, 3 do
 			local changed = false
 			v = v:gsub('#([%w_]+)#', function(n)
@@ -2571,7 +2599,7 @@ function D.customWidgetText(t, i, w, h)
 			sec = trim(sec)
 			local low = sec:lower()
 			raintile = low == 'raintile'
-			skip = low == 'rainmeter' or low == 'metadata' or raintile
+			skip = low == 'rainmeter' or low == 'metadata' or raintile or low:match('^option:') ~= nil
 			kind = nil
 			section = sec
 			if low == 'variables' then

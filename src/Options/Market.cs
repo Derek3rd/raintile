@@ -215,6 +215,7 @@ namespace RaintileOptions
                     try { Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(Path.Combine(WidgetsDir, e.Id), Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin); }
                     catch (Exception ex) { ShowDialog("Raintile", ex.Message); }
                     LoadMarket();
+                    BuildNav(navCurrent);
                 };
                 AddTo(bar, remove);
             }
@@ -278,6 +279,9 @@ namespace RaintileOptions
                 }
                 if (!File.Exists(Path.Combine(tmp, e.Id + ".ini"))) throw new Exception("the widget has no " + e.Id + ".ini");
                 File.WriteAllText(Path.Combine(tmp, ".version"), e.Version, Core.Utf8);
+                // an update keeps the user's settings of the widget (Options > Widgets > <widget>)
+                string keep = Path.Combine(dir, "settings.inc");
+                if (File.Exists(keep)) File.Copy(keep, Path.Combine(tmp, "settings.inc"), true);
                 if (Directory.Exists(dir)) Directory.Delete(dir, true);
                 Directory.Move(tmp, dir);
             }
@@ -292,6 +296,7 @@ namespace RaintileOptions
             marketStatus.Text = e.Name + " installed: save and refresh to see it.";
             if (offerTile) AddWidgetTile(e, SuggestedCategory(e), true);
             LoadMarket();
+            BuildNav(navCurrent); // its entry under Widgets
         }
 
         // The category a widget's tile goes to by default: the one of its

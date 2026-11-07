@@ -355,6 +355,13 @@ namespace RaintileOptions
                     {
                         var page = Schema.ById(node.Page);
                         nav.Items.Add(NewNavItem("page:" + node.Page, page.Title, page.Icon, 0, new NavTag { Type = "page", Page = page }));
+                        // Widgets: one entry per installed widget, its settings
+                        if (node.Page == "dashboard")
+                            foreach (var id in InstalledWidgets())
+                            {
+                                string name = WidgetInfo(id, "Name");
+                                nav.Items.Add(NewNavItem("widget:" + id, name != "" ? name : id, 0, 1, new NavTag { Type = "widget", File = id }));
+                            }
                     }
                 }
                 foreach (ListBoxItem it in nav.Items) if (((NavTag)it.Tag).Id == selectId) nav.SelectedItem = it;
@@ -448,6 +455,7 @@ namespace RaintileOptions
             {
                 case "page": ShowPage(tag.Page); break;
                 case "category": ShowCategoryPage(tag.File); break;
+                case "widget": ShowWidgetPage(tag.File); break;
                 default: return;
             }
             navCurrent = tag.Id;

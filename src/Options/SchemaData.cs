@@ -235,10 +235,6 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "SensorPort", Label = "LibreHardwareMonitor port", Help = "The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).", Min = 1.0, Max = 65535.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "info", Key = "", Label = "Custom widgets", Help = "Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>." },
                 } },
-                new Group { Title = "Steam", Help = null, Items = new List<Item>
-                {
-                    new Item { Kind = "secret", Key = "SteamApiKey", Label = "Steam Web API key", Help = "For widgets that read your Steam data (e.g. Steam achievements). Free, from steamcommunity.com/dev/apikey (any domain name). Saved encrypted: only your Windows user on this PC can read it." },
-                } },
                 new Group { Title = null, Help = null, Market = true, Items = new List<Item>
                 {
                 } },
@@ -447,7 +443,6 @@ namespace RaintileOptions
             { "ShowUnplayed", "1" },
             { "ShowZPos", "1" },
             { "StartHidden", "0" },
-            { "SteamApiKey", "" },
             { "SteamGridDBKey", "" },
             { "TextColor", "240,240,245,255" },
             { "TextDimColor", "150,150,160,255" },

@@ -486,6 +486,16 @@ With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest r
 - Either way your data is not touched, and only files of this repository's releases on GitHub (https) are downloaded, into a new temporary folder, and checked to be a Rainmeter package before they are used. Without the Options program (a copy of the repository) the PowerShell window only has the installer.
 - **Check now** asks GitHub again; **Release page** opens the release on GitHub.
 
+### Checks and tests
+
+`python tools/check.py` checks a copy of the repository before a commit; the **checks** job of the **Release package** workflow runs it on every pull request, on Windows. It needs Python 3, Windows PowerShell and `lupa` (`pip install lupa`, which brings Lua 5.1, the version of Rainmeter). It takes a few seconds.
+
+- **Checks on the files**: scripts and `.ini`/`.inc` files ASCII only and without BOM; every `.ps1` parses with Windows PowerShell 5.1 (so no PowerShell 7 syntax); `Options.xaml` and the JSON files load; `Raintile.lua` compiles with Lua 5.1 (also the limit of 200 locals); the widget gallery points to files that exist; every setting of `Settings.inc` is in the Options schema; `GRID_VERSION` is bumped when `writeGrid()` changes; every page of `docs\` goes to the wiki.
+- **PowerShell tests** (`tests\ps\`): `Data.ps1` run on temporary folders (first run, a second run that changes nothing, your values kept through an update, the backup of the installer), and the cleaning of tile names (`Get-TileName` of `Scan.ps1`), which must never lead out of their folder.
+- **Lua tests** (`tests\lua\`): `Raintile.lua` runs against a small fake Rainmeter (`tests\lua\rainmeter.lua`), which reads `Raintile.ini` with its include files, keeps meters, measures and variables, runs the bangs and the ActionTimer lists and reloads the skin on `!Refresh`. The launcher is loaded full screen, in a window and docked, and used as a person would (categories, scrolling, hover, keyboard, search, the menus, launching a tile, hiding it). A test fails on anything Rainmeter would log as an error (a bang on a meter that does not exist, a script error) and on what the project does not allow: text that is not ASCII, a value on more than one line, a skin that keeps refreshing itself, an animation that never stops or a timer still running once the launcher is hidden. Sizes are estimated, not drawn: layouts can be checked (entries one under the other), pixels cannot. `python tools/check.py --tests` runs only the tests.
+
+What the fake Rainmeter cannot show (drawing, the order of the layers, real mouse moves, the Options window) is still tested live.
+
 ### Publishing a release
 
 The work goes to the branch **`nightly`** (pull requests included); **`main`** only gets what is released:
@@ -500,7 +510,7 @@ For the update check the tag must hold the version (if it has no number, the num
 
 **Nightly builds.** On every push to the branch `nightly` the **Nightly** workflow (`.github/workflows/nightly.yml`) builds the Options program and the `.rmskin` and publishes them as the pre-release **`nightly`** (replacing the previous one). Its version is the last release plus the number of commits since it: after `v1.2.1`, `1.2.1.1`, `1.2.1.2`, ... until the next release; it is written into the package's `Raintile.ini` (`tools/build_rmskin.py --nightly-version`). So the work merged into `nightly` reaches the skins on the nightly channel at once, the others with the next release.
 
-The package holds the skin only (with the HotKey plugin from `tools/plugins/`): `README.md`, `docs\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
+The package holds the skin only (with the HotKey plugin from `tools/plugins/`): `README.md`, `docs\`, `tests\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
 
 In the package no *VariableFiles* are needed (settings are in the data folder) and the installer's default backup should be kept: the first update to this version recovers the user's categories and images from that backup.
 

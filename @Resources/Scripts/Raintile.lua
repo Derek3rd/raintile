@@ -3631,14 +3631,22 @@ function M.evalSetting(raw, default)
 end
 
 function M.launcherRect(get)
-	local mx, my = M.evalSetting(get('screenx'), 0), M.evalSetting(get('screeny'), 0)
-	local mw, mh = M.evalSetting(get('screenw'), 1920), M.evalSetting(get('screenh'), 1080)
+	local mode = trim(get('launchermode') or ''):lower()
+	-- a window never covers the taskbar (covering it is what full screen and
+	-- docked are for): on the whole screen of a monitor its area is the work
+	-- area of that monitor, so 100% fills the space the taskbar leaves
+	local function area(key)
+		local raw = get(key)
+		if mode == 'window' and raw then raw = raw:gsub('#SCREENAREA', '#WORKAREA') end
+		return raw
+	end
+	local mx, my = M.evalSetting(area('screenx'), 0), M.evalSetting(area('screeny'), 0)
+	local mw, mh = M.evalSetting(area('screenw'), 1920), M.evalSetting(area('screenh'), 1080)
 	local function px(raw, total, default)
 		local p = trim(raw or ''):match('^([%d%.]+)%s*%%$')
 		if p then return math.floor((tonumber(p) or 0) * total / 100 + 0.5) end
 		return M.evalSetting(raw, default)
 	end
-	local mode = trim(get('launchermode') or ''):lower()
 	local x, y, w, h = mx, my, mw, mh
 	if mode == 'window' then
 		w = math.max(320, math.min(mw, px(get('windoww'), mw, math.floor(mw * 0.6))))
@@ -4413,6 +4421,14 @@ function PlaceWindow()
 		if num('WindowPlaced', 0) ~= 1 then
 			SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
 			SKIN:Bang('!WriteKeyValue', 'Variables', 'WindowPlaced', '1', data .. 'State.inc')
+		else
+			-- as wide (or tall) as the work area: on it, whatever position it
+			-- had at another size (KeepOnScreen alone would leave it over the
+			-- taskbar)
+			local x, y = SKIN:GetX(), SKIN:GetY()
+			local nx = V.ScreenW >= (V.MonW or V.ScreenW) and V.ScreenX or x
+			local ny = V.ScreenH >= (V.MonH or V.ScreenH) and V.ScreenY or y
+			if nx ~= x or ny ~= y then SKIN:Bang('!Move', tostring(nx), tostring(ny)) end
 		end
 	else
 		SKIN:Bang('!Draggable', '0')

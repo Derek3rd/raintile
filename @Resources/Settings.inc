@@ -13,7 +13,8 @@ ScreenH=#SCREENAREAHEIGHT#
 ;               move it; it stays open when you click elsewhere
 ;   Dock        on a side of the screen (DockSide: Left, Right, Top, Bottom),
 ;               DockSize wide (or tall): it comes in from that side
-; Sizes in pixels or % of the area.
+; Sizes in pixels or % of the area. A window never covers the taskbar: on
+; the whole screen its area is the work area, so 100% leaves the taskbar free.
 LauncherMode=Fullscreen
 WindowW=60%
 WindowH=70%

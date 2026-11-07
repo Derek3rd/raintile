@@ -64,7 +64,7 @@ Without the HotKey plugin you can toggle it from a Windows shortcut: create a sh
 `LauncherMode` (Options > General > Screen) sets how the launcher shows on its area (`ScreenX/Y/W/H`, a monitor or its work area):
 
 - **Fullscreen** (default): all of the area.
-- **Window**: a window of `WindowW` x `WindowH` (pixels or % of the area), centred the first time. Drag an empty part of it (the background, the space around the menu) to move it: it stays where you put it. It does not hide when another program gets the focus; close it with the X, `Esc` or the shortcut.
+- **Window**: a window of `WindowW` x `WindowH` (pixels or % of the area), centred the first time. It never covers the taskbar: on the whole screen its area is the work area of that monitor, so `100%` fills the space the taskbar leaves (full screen and docked are the modes that cover it). Drag an empty part of it (the background, the space around the menu) to move it: it stays where you put it. It does not hide when another program gets the focus; close it with the X, `Esc` or the shortcut.
 - **Dock**: on a side of the screen (`DockSide`: `Left`, `Right`, `Top`, `Bottom`), `DockSize` wide (left and right) or tall (top and bottom). It comes in from that side, sliding and fading, and goes back the same way; it hides when you click outside it (`AutoHide`). With `DockEdge=1` it also opens when the mouse rests on that edge of the screen for `DockEdgeDelay` ms, but not while a full-screen program (a game, a video) is in front; move the mouse away from the edge to open it again from there.
 
 Sizes in percent (margins, menu, fonts) are of the area, not of the window, so they stay the same in every mode.
@@ -526,7 +526,7 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | --- | --- | --- |
 | `ScreenX`, `ScreenY`, `ScreenW`, `ScreenH` | `#SCREENAREA...#` | area of the launcher. Use `#WORKAREA...#` to keep the taskbar free, or `#SCREENAREAWIDTH@2#` (etc.) for another monitor |
 | `LauncherMode` | `Fullscreen` | `Fullscreen`, `Window` or `Dock`: see [Full screen, window or docked](#full-screen-window-or-docked) |
-| `WindowW`, `WindowH` | `60%`, `70%` | size of the window (pixels or % of the area) |
+| `WindowW`, `WindowH` | `60%`, `70%` | size of the window (pixels or % of the area; for the window the whole screen counts as its work area, without the taskbar) |
 | `DockSide` | `Left` | side it is docked on: `Left`, `Right`, `Top`, `Bottom` |
 | `DockSize` | `30%` | width when docked left or right, height when docked at the top or bottom (pixels or % of the area) |
 | `DockEdge` | `1` | docked: it also opens when the mouse rests on that edge of the screen |

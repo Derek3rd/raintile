@@ -999,6 +999,7 @@ $GLYPH = @{
     Clear = 0xE711    # a field emptied (its image or icon file to the Recycle Bin, asked)
     Delete = 0xE74D   # an entry of a list goes away (list header only): always asked
     Add = 0xE710; Up = 0xE74A; Down = 0xE74B; Left = 0xE72B; Right = 0xE72A
+    GroupOpen = 0xE70D; GroupClosed = 0xE76C   # menu groups only
 }
 $FS = @{ Title = 24; Section = 11.5; Label = 13.5; Help = 12; Badge = 11 }
 $GAP = @{ Control = 8; Icon = 6; Card = 16; Row = 11; StackedRow = 8; ActionColumn = 34; ScrollBar = 9; Page = 36; CardPadding = 20 }
@@ -1136,7 +1137,7 @@ function Show-Dialog([string]$title, [string]$message, [string[]]$buttons = @('O
     $d.Background = Res 'CardBg'
     $d.Foreground = Res 'TextBrush'
     $d.FontFamily = New-Object System.Windows.Media.FontFamily('Segoe UI')
-    $d.FontSize = 13
+    $d.FontSize = 13   # ui-exempt: base size of a window, as the main window
     $d.Tag = @{ Result = $null }
     $d.Add_SourceInitialized({ param($s, $e) Set-DarkTitle $s })
 
@@ -2852,7 +2853,7 @@ function New-CategoryPage {
     $cat.PreviewLogo = New-Object System.Windows.Controls.Image
     $cat.PreviewLogo.Stretch = 'Uniform'
     [void]$canvas.Children.Add($cat.PreviewLogo)
-    $cat.PreviewLabel = New-Text '' 14 (New-ColorBrush "$($values['TextColor'])")
+    $cat.PreviewLabel = New-Text '' 14 (New-ColorBrush "$($values['TextColor'])")   # ui-exempt: preview of the launcher
     $cat.PreviewLabel.HorizontalAlignment = 'Left'; $cat.PreviewLabel.VerticalAlignment = 'Bottom'
     $cat.PreviewLabel.Margin = T 12 0 0 10
     $cat.PreviewLabel.Effect = New-Object System.Windows.Media.Effects.DropShadowEffect -Property @{ BlurRadius = 6; ShadowDepth = 1; Opacity = 0.8 }
@@ -3876,7 +3877,7 @@ function New-NavItem([string]$id, [string]$title, [int]$glyph, [int]$level, [has
     $item = New-Object System.Windows.Controls.ListBoxItem
     $g = New-Grid @('Auto', '*', 'Auto')
     if ($level -eq 0) {
-        $gl = New-Glyph $glyph 15
+        $gl = New-Glyph $glyph 15   # ui-exempt: menu chrome
         $gl.Width = 22
         $gl.Margin = T 0 0 10 0
         [void]$g.Children.Add($gl)
@@ -3896,7 +3897,7 @@ function New-NavItem([string]$id, [string]$title, [int]$glyph, [int]$level, [has
     Set-Col $t 1
     [void]$g.Children.Add($t)
     if ($null -ne $open) {
-        $ch = New-Glyph $(if ($open) { 0xE70D } else { 0xE76C }) 9
+        $ch = New-Glyph $(if ($open) { $GLYPH.GroupOpen } else { $GLYPH.GroupClosed }) 9   # ui-exempt: menu chrome
         $ch.Foreground = Res 'DimBrush'
         $ch.Margin = T 8 0 0 0
         Set-Col $ch 2
@@ -4169,7 +4170,7 @@ function New-InfoPage {
     $card = New-Card '' ''
     $card.Padding = T 24 20 24 20
     $head = New-Panel 'Horizontal'
-    [void](Add-To $head (New-Text 'Raintile' 26 -Bold))
+    [void](Add-To $head (New-Text 'Raintile' $FS.Title -Bold))
     if ($version) {
         $badge = New-Object System.Windows.Controls.Border
         $badge.Background = Res 'AccentSoftBrush'

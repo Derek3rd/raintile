@@ -66,7 +66,7 @@ namespace RaintileOptions
             foreach (var k in oskKeys)
             {
                 var key = k;
-                k.Label = NewText("", 15, null, true);
+                k.Label = NewText("", 15, null, true);   // ui-exempt: on-screen keyboard
                 k.Label.HorizontalAlignment = HorizontalAlignment.Center;
                 k.Label.VerticalAlignment = VerticalAlignment.Center;
                 k.Box = new Border { CornerRadius = new CornerRadius(6), Margin = T(3), Child = k.Label, Cursor = Cursors.Hand };
@@ -77,7 +77,7 @@ namespace RaintileOptions
                 grid.Children.Add(k.Box);
             }
 
-            var text = new TextBlock { FontSize = 15, TextWrapping = TextWrapping.Wrap };
+            var text = new TextBlock { FontSize = 15, TextWrapping = TextWrapping.Wrap };   // ui-exempt: on-screen keyboard
             oskBefore = new Run();
             oskAfter = new Run();
             text.Inlines.Add(oskBefore);

@@ -3,13 +3,15 @@
 Tile launcher skin for Rainmeter 4.5+ (Windows 10/11), full screen, in a window or docked on a side: Lua for the launcher, Windows PowerShell 5.1 for the background jobs, C# (WPF, .NET Framework 4.8) for the Options window.
 User-facing docs: `README.md` and `docs/Guide.md`.
 
-This file is shared by everyone who works on Raintile (people and Claude sessions). Personal notes, facts about one machine and dated analyses do not go here: keep them in `CLAUDE.local.md`, in `.claude/` or in `docs/analysis/`, excluded through `.git/info/exclude` (never through `.gitignore`, which is published).
+This file is shared by everyone who works on Raintile (people and Claude sessions). Personal notes, facts about one machine and dated analyses do not go here: keep them in `CLAUDE.local.md`, in `.claude/` (outside `skills/` and `rules/`, which are shared) or in `docs/analysis/`, excluded through `.git/info/exclude` (never through `.gitignore`, which is published).
 
 ## Git and ownership
 - The repository is `Derek3rd/raintile`. `nightly` is the default and working branch; `main` only gets releases, through a PR `nightly` -> `main`.
 - One branch per change, cut from an up-to-date `nightly` and named after it: `feature/<name>` or `fix/<name>`, with the author's prefix where useful (e.g. `claude/feature-tile-pin`). Never commit straight to `main` or `nightly`.
+- Several changes in one PR only when the user asks for it; the PR then has one heading per change.
+- Sessions working at the same time each have their own worktree (`.claude/worktrees/`), never a checkout another session is using, and commit only the files of their change: uncommitted edits left in a shared folder end up in someone else's commit.
 - Every change reaches `nightly` as a PR with base `nightly`: every push to `nightly` publishes a nightly build, so only finished, tested work goes there. The `package` check must pass before merging.
-- Merged branches are deleted (GitHub does it automatically after the merge); the next change gets a new branch.
+- Merged branches are deleted (GitHub does it automatically after the merge); the next change gets a new branch. Delete also what GitHub does not: the local branch, the worktree, and branches folded into another PR (local and `origin`) once their commits are in it.
 - Commits on your own branch are always pushed, unless the user says otherwise (so the branch can be tested from any machine). Open PRs only when asked. Changes the user has not verified live stay on their branch: the user tests the branch, then the PR is merged.
 - A tag is also called `nightly` (the pre-release): in git commands that take a revision write the branch as `refs/heads/nightly` or `origin/nightly`.
 - No history rewrites of shared branches (force push, rebase, reset of `main` or `nightly`), no deleting releases or other people's branches.
@@ -24,6 +26,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - `@Resources/Generated/`: written by the skin (git-ignored). Never edit or commit it.
 - `widgets/`: the widget gallery (`index.json`) and the widgets hosted here (`widgets/<Id>/`). `docs/Widgets.md`: how to write widgets and the widget API.
 - `tests/`: `ps/` (PowerShell tests, `run.ps1`) and `lua/` (`Raintile.lua` against a fake Rainmeter, `rainmeter.lua`), run by `tools/check.py`. No `.ini` files there: Rainmeter would list the folder as a skin.
+- `.claude/skills/` and `.claude/rules/`: shared Claude Code skills (`pr-ready`: checks, builds, docs and PR text before handing a branch over) and rules loaded with the files they cover (`options-ui.md` for the Options window). The rest of `.claude/` (worktrees, local settings) stays local.
 - `tools/build_rmskin.py`: builds the `.rmskin`. `tools/dev-build.ps1`: builds the Options program into the repository's `@Resources\Bin\` (git-ignored), for testing. `.github/workflows/`: `release.yml` (tag `vX.Y.Z`), `nightly.yml` (every push to `nightly`), `sync-nightly.yml` (merges `main` back into `nightly` after a release), `wiki.yml` (writes the GitHub wiki from `docs/` with `tools/build_wiki.py` when the docs reach `main`).
 
 ## Conventions
@@ -68,7 +71,8 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - Release: bump `Version=` on `nightly`, PR `nightly` -> `main`, tag `vX.Y.Z` on `main`; the workflows attach the `.rmskin` and merge `main` back into `nightly` (see "Publishing a release" in the Guide). Release notes in English.
 
 ## Verifying changes
-- `python tools/check.py` passes before every commit (needs `pip install lupa`): it runs the checks below that can be automated and the tests in `tests/`; the `checks` job runs it on every PR, and `python tools/check.py --install-hook` makes it run before every push (a failure stops the push: fix, commit, push again; never `--no-verify`). A fixed bug gets a test that fails without the fix, where the fake Rainmeter or a PowerShell test can show it; when the fake lacks a Rainmeter behaviour the change relies on, add it to `tests/lua/rainmeter.lua`.
+- `python tools/check.py` passes before every commit (needs `pip install lupa`): it runs the checks below that can be automated and the tests in `tests/`; the `checks` job runs it on every PR, and `python tools/check.py --install-hook` makes it run before every push (a failure stops the push: fix, commit, push again; never `--no-verify`). A fixed bug gets a test that fails without the fix, where the fake Rainmeter or a PowerShell test can show it; when the fake lacks a Rainmeter behaviour the change relies on, add it to `tests/lua/rainmeter.lua`. It also rejects glyph codes and font sizes written by hand in the Options window (`docs/OptionsUI.md`; a line that must differ says why with `ui-exempt: <why>`).
+- Before asking the user to test a branch or opening a PR, go through `pr-ready` (`.claude/skills/pr-ready/SKILL.md`): checks, builds, docs in sync, a review pass for duplicated and dead code on large changes, the PR text with what was not verified.
 - Every changed `.ps1` parses without errors (`[System.Management.Automation.Language.Parser]::ParseFile`), and `Options.xaml` loads as `[xml]`.
 - Changed scripts are still ASCII only and without BOM.
 - Lua: `tools/check.py` compiles it with Lua 5.1 and runs it in the fake Rainmeter; that does not replace a live test.

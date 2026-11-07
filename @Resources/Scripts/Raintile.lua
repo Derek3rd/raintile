@@ -1267,8 +1267,9 @@ local function signature()
 				if f then
 					local text = f:read('*a')
 					f:close()
+					-- (every byte: a change of the same length, a setting 1 -> 4, must show)
 					local sum = 0
-					for k = 1, #text, 7 do sum = (sum * 31 + text:byte(k)) % 1000000007 end
+					for k = 1, #text do sum = (sum * 31 + text:byte(k)) % 1000000007 end
 					s[#s + 1] = '#' .. #text .. '.' .. sum
 				end
 			end

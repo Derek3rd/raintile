@@ -93,6 +93,8 @@ def generate(d):
                     extra.append('Unit = %s' % q(it['Unit']))
                 if 'Axis' in it:
                     extra.append('Axis = %s' % q(it['Axis']))
+                if it.get('NoSlider'):
+                    extra.append('NoSlider = true')
                 w('                    new Item { Kind = %s, Key = %s, Label = %s, Help = %s%s },' % (
                     q(it['Kind']), q(it['Key']), q(it['Label']), q(it.get('Help') or ''),
                     (', ' + ', '.join(extra)) if extra else ''))

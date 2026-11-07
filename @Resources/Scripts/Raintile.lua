@@ -237,13 +237,16 @@ end
 local function lookupImage(dir, name)
 	local path = unquote(trim(SKIN:ReplaceVariables(name)))
 	if not isAbsolute(path) then path = dir .. path end
-	if path:match('%.%w+$') then
-		return fileExists(path) and path or nil
+	-- a file named in full; otherwise the name plus an image extension (a dot
+	-- in the name is not an extension: Battle.net -> Battle.net.png)
+	local ext = (path:match('(%.%w+)$') or ''):lower()
+	for _, e in ipairs(IMAGE_EXTS) do
+		if e == ext and fileExists(path) then return path end
 	end
-	for _, ext in ipairs(IMAGE_EXTS) do
-		if fileExists(path .. ext) then return path .. ext end
+	for _, e in ipairs(IMAGE_EXTS) do
+		if fileExists(path .. e) then return path .. e end
 	end
-	return nil
+	return fileExists(path) and path or nil
 end
 
 -- Image of a tile/category: 'value' if given (logged if missing), otherwise
@@ -565,9 +568,12 @@ local function loadCategory(file)
 	local catLabel = trim(catKeys.name or '')
 	if catLabel ~= '' then c.label = catLabel end
 	c.order = tonumber(catKeys.order or '') or math.huge
-	c.dashboard = trim(catKeys.type or ''):lower() == 'dashboard'
-	-- Hidden=1: kept in the file but not in the menu (e.g. the Dashboard turned off)
+	-- Hidden=1: kept in the file but not in the menu
 	c.hidden = trim(catKeys.hidden or '') == '1'
+	-- Sort=: the order of its tiles (name, name-desc, added, recent, played,
+	-- playtime), worked out by the launcher; empty = the order of the file
+	local sortKey = trim(catKeys.sort or ''):lower()
+	if M.SORTS[sortKey] then c.sort = sortKey end
 	-- background of its tiles: TileColor= and TileOpacity= (0-100, % of the
 	-- colour and image), when a tile has no Color= / Opacity= of its own
 	c.tileColor = parseColor(catKeys.tilecolor)
@@ -630,11 +636,20 @@ local function loadCategory(file)
 			t.file = file -- for "Edit this tile"
 			t.store, t.steamId = tileStore(command, trim(k.store or ''), trim(k.source or ''))
 			t.added = trim(k.added or '') -- YYYY-MM-DD, for Not played yet
+			-- pinned: at the start of the category, in the order of the file
+			t.pinned = trim(k.pinned or '') == '1' or nil
+			if t.pinned then c.anyPinned = true end
 			t.hotkey = trim(k.hotkey or '') -- e.g. CTRL ALT 1
-			if c.dashboard and trim(k.widget or '') ~= '' then
+			-- a widget (Widget=): a tile of any category that shows data or a
+			-- skin instead of images; c.widgets: the category has some
+			if trim(k.widget or '') ~= '' then
+				c.widgets = true
 				local param = trim(k.param or '')
 				t.widget = { kind = trim(k.widget):lower(), param = param, parts = { Title = true, Value = true },
-					title = label ~= '' and label or nil }
+					title = label ~= '' and label or nil,
+					-- WidgetOption=: a setting of this tile for its custom widget
+					-- (#WIDGETOPTION#), e.g. which game
+					option = trim(k.widgetoption or '') }
 				-- a drive written as C, C: or C:\
 				local letter = param:match('^(%a):?\\?$')
 				t.widget.drive = letter and (letter:upper() .. ':') or param:upper()
@@ -754,47 +769,133 @@ end
 
 -- Steam games with an update waiting: GameUpdates.ps1 lists them in
 -- Generated\GameUpdates.txt ("<appid>|<bytes to download>|<bytes downloaded>|
--- <scheduled, unix time or 0>")
-local gameUpdates = {} -- steam app id -> { size, done, when }
+-- <scheduled, unix time or 0>|<new install 0/1>|<appmanifest>")
+local gameUpdates = {} -- steam app id -> { size, done, when, new, manifest }
 
 local function readGameUpdates()
 	gameUpdates = {}
 	for _, line in ipairs(readLines(resources .. 'Generated\\GameUpdates.txt')) do
-		local id, size, done, when = line:match('^(%d+)|(%d+)|(%d+)|(%d+)$')
-		if id then gameUpdates[id] = { size = tonumber(size), done = tonumber(done), when = tonumber(when) } end
+		local id, size, done, when, rest = line:match('^(%d+)|(%d+)|(%d+)|(%d+)(.*)$')
+		if id then
+			local new, manifest = rest:match('^|([01])|(.+)$')
+			gameUpdates[id] = { size = tonumber(size), done = tonumber(done), when = tonumber(when),
+				new = new == '1', manifest = manifest or rest:match('^|(.+)$') }
+		end
 	end
 end
 
--- Line of a Steam tile with an update waiting (GameUpdates), as Steam's
--- downloads page: "Update 5.4 GB - Sat 06:27" (GB of 1024 MB, like Steam),
--- "Updating 40%" while it downloads
-local function updateInfo(t)
-	local u = V.GameUpdates and t.steamId and gameUpdates[t.steamId]
-	if not u then return nil end
-	if u.done > 0 and u.done < u.size then
-		return 'Updating ' .. math.floor(u.done * 100 / u.size) .. '%'
+-- Downloads followed live (Helper.ps1, DownloadStep): while the launcher is
+-- open, Generated\DownloadOn.txt lists the games with an update (maybe none:
+-- the helper also finds the downloads started meanwhile in Steam's log) and
+-- the helper writes their progress to Generated\Downloads.txt ("<appid>|
+-- <phase>|<done>|<total>|<bytes per second>|<seconds left>|<new install>"),
+-- calling OnDownloads().
+-- M.dl.f counts the frames since the launcher opened: the progress fills up
+-- and the border of the tiles with an update turns, for a few seconds.
+M.dl = { live = {}, f = 0, anim = false }
+M.FILL_FRAMES = 30 -- about half a second
+
+function M.writeDownloadFlag()
+	local lines = {}
+	if V.GameUpdates then
+		for id, u in pairs(gameUpdates) do
+			if u.manifest then lines[#lines + 1] = id .. '|' .. u.manifest end
+		end
 	end
-	local text = 'Update'
-	if u.size >= 1024 ^ 3 then
-		text = text .. string.format(' %.1f GB', u.size / 1024 ^ 3):gsub('%.0 GB$', ' GB')
-	elseif u.size > 0 then
-		text = text .. ' ' .. math.max(1, math.floor(u.size / 1024 ^ 2 + 0.5)) .. ' MB'
+	local flag = resources .. 'Generated\\DownloadOn.txt'
+	if not V.GameUpdates then os.remove(flag) return end
+	table.sort(lines)
+	writeLines(flag, lines)
+end
+
+function M.readDownloads()
+	M.dl.live = {}
+	for _, line in ipairs(readLines(resources .. 'Generated\\Downloads.txt')) do
+		local id, phase, done, total, rate, left, new = line:match('^(%d+)|(%a+)|(%d+)|(%d+)|(%d+)|(%-?%d+)|?([01]?)$')
+		if id then
+			M.dl.live[id] = { phase = phase, done = tonumber(done), total = tonumber(total),
+				rate = tonumber(rate), left = tonumber(left), new = new == '1' }
+		end
 	end
+end
+
+-- 5.4 GB (GB of 1024 MB, like Steam), 540 MB
+function M.bytes(n)
+	if n >= 1024 ^ 3 then return (string.format('%.1f GB', n / 1024 ^ 3):gsub('%.0 GB$', ' GB')) end
+	return math.max(1, math.floor(n / 1024 ^ 2 + 0.5)) .. ' MB'
+end
+
+-- State of the update of tile t: nil without one, otherwise { phase
+-- (download, paused, install, waiting), part (0-1, nil if not known), new
+-- (a game being installed, not updated), and the data for the line }
+function M.updateState(t)
+	if not (V.GameUpdates and t.steamId) then return nil end
+	local u, l = gameUpdates[t.steamId], M.dl.live[t.steamId]
+	-- a download started while the launcher is open: only the helper knows it
+	if not u then
+		if not (l and l.phase ~= 'idle') then return nil end
+		u = { when = 0, new = l.new, size = l.total, done = l.done }
+	end
+	if l and l.total > 0 then
+		-- finished while the launcher was open
+		if l.phase == 'idle' and l.done >= l.total then return nil end
+		return { phase = l.phase == 'idle' and 'waiting' or l.phase, part = l.done / l.total, done = l.done,
+			total = l.total, rate = l.rate, left = l.left, when = u.when, new = u.new or l.new }
+	end
+	local part = u.size > 0 and u.done > 0 and math.min(1, u.done / u.size) or nil
+	return { phase = part and part < 1 and 'download' or 'waiting', part = part, done = u.done, total = u.size,
+		rate = 0, left = -1, when = u.when, new = u.new }
+end
+
+-- When Steam will download it: "Sat 06:27", "today 06:27"
+function M.scheduled(when)
 	local now = os.time()
-	if u.when > now then
-		-- days between the two midnights (rounded: a day can last 23 or 25 h)
-		local today, that = os.date('*t', now), os.date('*t', u.when)
-		today.hour, today.min, today.sec = 0, 0, 0
-		that.hour, that.min, that.sec = 0, 0, 0
-		local days = math.floor((os.time(that) - os.time(today)) / 86400 + 0.5)
-		local day
-		if days == 0 then day = 'today'
-		elseif days == 1 then day = 'tomorrow'
-		elseif days < 7 then day = os.date('%a', u.when)
-		else day = os.date('%d %b', u.when) end
-		text = text .. ' - ' .. day .. ' ' .. os.date('%H:%M', u.when)
+	if when <= now then return nil end
+	-- days between the two midnights (rounded: a day can last 23 or 25 h)
+	local today, that = os.date('*t', now), os.date('*t', when)
+	today.hour, today.min, today.sec = 0, 0, 0
+	that.hour, that.min, that.sec = 0, 0, 0
+	local days = math.floor((os.time(that) - os.time(today)) / 86400 + 0.5)
+	local day
+	if days == 0 then day = 'today'
+	elseif days == 1 then day = 'tomorrow'
+	elseif days < 7 then day = os.date('%a', when)
+	else day = os.date('%d %b', when) end
+	return day .. ' ' .. os.date('%H:%M', when)
+end
+
+-- Time left as Steam shows it: 0:54, 12:05, 1:05:00
+function M.timeLeft(s)
+	local h, m, sec = math.floor(s / 3600), math.floor((s % 3600) / 60), s % 60
+	if h > 0 then return string.format('%d:%02d:%02d left', h, m, sec) end
+	return string.format('%d:%02d left', m, sec)
+end
+
+-- First line of a Steam tile with an update (above the play time), with the
+-- parts of DownloadInfo: "Downloading 40% - 540 MB / 1.3 GB - 25.3 MB/s -
+-- 2 min left", "Update 5.4 GB - Sat 06:27" while it waits
+function M.updateInfo(t)
+	local st = M.updateState(t)
+	if not st then return nil end
+	local show = V.DownloadInfo
+	local parts = {}
+	local function add(s) if s then parts[#parts + 1] = s end end
+	-- a game being installed for the first time says so instead of "update"
+	if st.phase == 'install' then return st.new and 'Installing' or 'Installing update' end
+	if st.phase == 'waiting' then
+		add((st.new and 'Install' or 'Update') .. (show.size and st.total > 0 and (' ' .. M.bytes(st.total)) or ''))
+		if show.schedule then add(M.scheduled(st.when)) end
+		return table.concat(parts, ' - ')
 	end
-	return text
+	local head = st.phase == 'paused' and 'Paused' or st.new and 'Installing' or 'Downloading'
+	if show.percent and st.part then head = head .. ' ' .. math.floor(st.part * 100) .. '%' end
+	add(head)
+	if show.size and st.total > 0 then add(M.bytes(st.done) .. ' / ' .. M.bytes(st.total)) end
+	if st.phase == 'download' then
+		if show.speed and st.rate > 0 then add(string.format('%.1f MB/s', st.rate / 1024 ^ 2)) end
+		if show.eta and st.left >= 0 and st.rate > 0 then add(M.timeLeft(st.left)) end
+	end
+	return table.concat(parts, ' - ')
 end
 
 -- Play time of the other tiles (not Steam), measured by the helper while the
@@ -809,6 +910,94 @@ local function readTimePlayed()
 	end
 end
 
+-- Sorted categories (Sort= in [Category]) --------------------------------------
+-- The tiles in the order chosen in Options > the category > All tiles >
+-- Order; ties keep the order of the file. Name and Added are fixed; Recent,
+-- Played and Playtime change while you play, so they are worked out again
+-- each time the launcher opens.
+M.SORTS = { name = true, ['name-desc'] = true, added = true, recent = true, played = true, playtime = true }
+M.DYNAMIC_SORTS = { recent = true, played = true, playtime = true }
+
+function M.sortValue(t, key)
+	local id = tileId(t)
+	if key == 'added' then return t.added or '' end
+	if key == 'played' then return usage[id] and usage[id].count or 0 end
+	if key == 'recent' then
+		local last = usage[id] and usage[id].last or 0
+		local steam = t.steamId and playtime[t.steamId]
+		if steam and steam.last > last then last = steam.last end
+		if timePlayed[id] and timePlayed[id].last > last then last = timePlayed[id].last end
+		return last
+	end
+	if key == 'playtime' then
+		local steam = t.steamId and playtime[t.steamId]
+		return (steam and steam.minutes or 0) + (timePlayed[id] and timePlayed[id].minutes or 0)
+	end
+	return t.name:lower()
+end
+
+-- Line (row, or column when horizontal) of the i-th tile of category c
+function M.tileLine(c, i)
+	if c.pack then return c.pack.at[i] and c.pack.at[i][1] or 0 end
+	return math.floor((i - 1) / (V.Horizontal and c.ny or c.nx))
+end
+
+local function indexOf(list, item)
+	for i, v in ipairs(list) do if v == item then return i end end
+end
+
+function M.sortTiles(c)
+	local key = c.sort
+	-- the remembered position follows the tiles: the one last launched or
+	-- selected here (otherwise the first of the remembered line) keeps its
+	-- place on screen, as far as the order allows
+	local anchor, before
+	if c.offset then
+		local i = c.focusTile and indexOf(c.tiles, c.focusTile)
+		-- (only while it is on screen at the remembered position)
+		local shown = V.Horizontal and c.nx or c.ny
+		if i and (M.tileLine(c, i) < c.offset or M.tileLine(c, i) >= c.offset + shown) then i = nil end
+		if not i then
+			for j = 1, #c.tiles do
+				if M.tileLine(c, j) >= c.offset then i = j break end
+			end
+		end
+		if i then anchor, before = c.tiles[i], M.tileLine(c, i) end
+	end
+	for i, t in ipairs(c.tiles) do
+		t.fileOrder = t.fileOrder or i
+		t.sortValue = M.sortValue(t, key)
+	end
+	table.sort(c.tiles, function(a, b)
+		-- pinned tiles first, as you put them; sorting moves only the others
+		if (a.pinned or false) ~= (b.pinned or false) then return a.pinned or false end
+		if key and not a.pinned and a.sortValue ~= b.sortValue then
+			-- names A-Z; everything else the largest (newest, most) first
+			if key == 'name' then return a.sortValue < b.sortValue end
+			return a.sortValue > b.sortValue
+		end
+		return a.fileOrder < b.fileOrder
+	end)
+	if c.pack then packTiles(c) end -- tiles of more cells: placed again
+	if anchor then
+		local o = math.max(0, c.offset + M.tileLine(c, indexOf(c.tiles, anchor)) - before)
+		if o ~= c.offset then
+			c.offset = o
+			SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(o), data .. 'State.inc')
+		end
+	end
+end
+
+-- dynamicOnly: only the sorts that change while playing (when it opens)
+function M.sortCategories(dynamicOnly)
+	for _, c in ipairs(cats) do
+		local wanted = dynamicOnly and M.DYNAMIC_SORTS[c.sort] or not dynamicOnly and (c.sort or c.anyPinned)
+		if wanted and not c.virtual then
+			M.sortTiles(c)
+		end
+	end
+end
+
 local function ago(time)
 	local today = os.date('*t')
 	today.hour, today.min, today.sec = 0, 0, 0
@@ -820,13 +1009,12 @@ local function ago(time)
 	return os.date('%d %b %Y', time)
 end
 
--- Line shown on the tile (TileInfo): play time and last launch, or a Steam
--- update waiting. The second value is true for the line shown whatever
--- TileInfo says: "Not installed".
+-- Line shown on the tile (TileInfo): play time and last launch (a Steam
+-- update goes on a line of its own above it, M.updateInfo). The second value
+-- is true for the line shown whatever TileInfo says: "Not installed".
 local function tileInfo(t)
-	if t.missing then return 'Not installed', true end
-	local update = updateInfo(t)
-	if update then return update end
+	-- (being installed again: its download says so instead)
+	if t.missing and not M.updateState(t) then return 'Not installed', true end
 	-- Steam's own play time, otherwise the one measured by the helper
 	local p = t.steamId and playtime[t.steamId] or timePlayed[tileId(t)]
 	local u = usage[tileId(t)]
@@ -868,10 +1056,14 @@ end
 local function fillVirtual()
 	local byId, all = {}, {}
 	for _, c in ipairs(cats) do
-		if not c.virtual and not c.dashboard then
+		if not c.virtual then
+			-- (widgets are not launched like the other tiles: not in Favorites,
+			-- Recent, Not played yet)
 			for _, t in ipairs(c.tiles) do
-				byId[tileId(t)] = t
-				all[#all + 1] = t
+				if not t.widget then
+					byId[tileId(t)] = t
+					all[#all + 1] = t
+				end
 			end
 		end
 	end
@@ -940,6 +1132,7 @@ local function loadCategories(files)
 		readPlaytime()
 		readGameUpdates()
 		readTimePlayed()
+		M.sortCategories(false)
 		fillVirtual()
 	end
 	-- Filter bar: stores (when there are at least two) and tags of the tiles
@@ -947,12 +1140,13 @@ local function loadCategories(files)
 	if V.FilterBar then
 		local stores, tags, storeList, tagList = {}, {}, {}, {}
 		for _, c in ipairs(cats) do
-			for _, t in ipairs((c.virtual or c.dashboard) and {} or c.tiles) do
-				if t.store and not stores[t.store] then
+			for _, t in ipairs(c.virtual and {} or c.tiles) do
+				-- (widgets are not in the search results the bar filters)
+				if t.store and not t.widget and not stores[t.store] then
 					stores[t.store] = true
 					storeList[#storeList + 1] = t.store
 				end
-				for _, tag in ipairs(t.tags or {}) do
+				for _, tag in ipairs(t.widget and {} or t.tags or {}) do
 					if not tags[tag:lower()] then
 						tags[tag:lower()] = tag
 						tagList[#tagList + 1] = tag:lower()
@@ -980,10 +1174,10 @@ local function loadCategories(files)
 			end
 		end
 	end
-	-- Dashboard widgets: their meters are numbered in this order
+	-- Widgets, of every category: their meters are numbered in this order
 	widgets = {}
 	for _, c in ipairs(cats) do
-		if c.dashboard then
+		if c.widgets and not c.virtual then
 			for _, t in ipairs(c.tiles) do
 				if t.widget then
 					widgets[#widgets + 1] = t
@@ -994,10 +1188,21 @@ local function loadCategories(files)
 					if t.widget.kind == 'custom' then
 						local path = D.customWidgetFile(t.widget.param)
 						local f = path and io.open(path, 'rb')
+						-- why it is not shown, for the tile: the file looked for, or
+						-- what is wrong with it
+						t.widget.why = 'Looked for ' .. data .. 'Widgets\\' .. t.widget.param .. '\\' .. t.widget.param .. '.ini'
 						if f then
 							local text = f:read('*a')
 							f:close()
+							-- (meters of its own, or rows from a List=)
 							t.widget.boxed = ('\n' .. text):lower():find('\n%s*meter%s*=') ~= nil
+								or ('\n' .. text):lower():find('\n%s*list%s*=') ~= nil
+							t.widget.why = path .. ': no meters in it (no Meter= line) and no List='
+							-- (copied into Grid.inc as it is: it must be UTF-8 or ANSI)
+							if text:find('%z') then
+								t.widget.boxed = false
+								t.widget.why = path .. ' is saved as UTF-16: save it as UTF-8'
+							end
 						end
 					end
 				end
@@ -1037,7 +1242,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 10
+local GRID_VERSION = 16
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1051,17 +1256,21 @@ local function signature()
 	if V.TileKeysOpen then s[#s + 1] = 'keys:open' end
 	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
 	for _, t in ipairs(widgets) do
-		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param .. ':' .. t.cols .. 'x' .. t.rows
+		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param .. ':' .. t.cols .. 'x' .. t.rows .. ':' .. (t.widget.option or '')
 		-- a changed custom widget file writes Grid.inc again
 		if t.widget.kind == 'custom' then
 			local path = D.customWidgetFile(t.widget.param)
-			local f = path and io.open(path, 'rb')
-			if f then
-				local text = f:read('*a')
-				f:close()
-				local sum = 0
-				for k = 1, #text, 7 do sum = (sum * 31 + text:byte(k)) % 1000000007 end
-				s[#s + 1] = '#' .. #text .. '.' .. sum
+			-- (and its settings, Options > Widgets: #OPTION:Name#)
+			local dir = path and path:match('^(.*[\\/])')
+			for _, file in ipairs({ path, dir and dir .. 'settings.inc' }) do
+				local f = io.open(file, 'rb')
+				if f then
+					local text = f:read('*a')
+					f:close()
+					local sum = 0
+					for k = 1, #text, 7 do sum = (sum * 31 + text:byte(k)) % 1000000007 end
+					s[#s + 1] = '#' .. #text .. '.' .. sum
+				end
 			end
 		end
 	end
@@ -1181,6 +1390,20 @@ local function writeGrid(path, sig, files)
 		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ')"]')
 		w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(' .. slot .. ')"]')
 		w('')
+		-- Steam update: the coloured part of a greyscale background, the
+		-- progress bar and the border over it (M.placeUpdate)
+		w('[TileReveal' .. slot .. ']')
+		w('Meter=Image')
+		w('MeterStyle=StyleTileReveal')
+		w('')
+		w('[TileBar' .. slot .. ']')
+		w('Meter=Shape')
+		w('MeterStyle=StyleTileGlow')
+		w('')
+		w('[TileGlow' .. slot .. ']')
+		w('Meter=Shape')
+		w('MeterStyle=StyleTileGlow')
+		w('')
 		w('[TileIcon' .. slot .. ']')
 		w('Meter=Image')
 		w('MeterStyle=StyleTileIcon')
@@ -1188,6 +1411,10 @@ local function writeGrid(path, sig, files)
 		w('[TileLabel' .. slot .. ']')
 		w('Meter=String')
 		w('MeterStyle=StyleTileLabel')
+		w('')
+		w('[TileUpd' .. slot .. ']')
+		w('Meter=String')
+		w('MeterStyle=StyleTileInfo')
 		w('')
 		w('[TileInfo' .. slot .. ']')
 		w('Meter=String')
@@ -1211,20 +1438,47 @@ local function writeGrid(path, sig, files)
 			if part == 'Value' then w('FontWeight=600') end
 			w('')
 		end
+		-- a widget with List=: its rows, each a part of the tile (D.placeList)
+		if t.widget.kind == 'custom' and M.widgetInfo(t).list then
+			for k = 1, M.LIST_ROWS do
+				w('[W' .. i .. 'RowHit' .. k .. ']')
+				w('Meter=Shape')
+				w('MeterStyle=StyleWidgetShape')
+				w('MouseOverAction=[!CommandMeasure MeasureScript "HoverPart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
+				w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeavePart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
+				w('LeftMouseUpAction=[!CommandMeasure MeasureScript "WidgetRowClick(' .. i .. ',' .. k .. ')"]')
+				w('')
+				w('[W' .. i .. 'RowIcon' .. k .. ']')
+				w('Meter=Image')
+				w('Container=GridClip')
+				w('PreserveAspectRatio=1')
+				w('Hidden=1')
+				w('')
+				for _, part in ipairs({ 'RowName', 'RowSub' }) do
+					w('[W' .. i .. part .. k .. ']')
+					w('Meter=String')
+					w('MeterStyle=StyleWidgetText')
+					if part == 'RowName' then w('FontWeight=600') end
+					w('')
+				end
+			end
+		end
 		-- a custom widget: its sections, in a container over the tile
 		-- (only when its file is there: a container without meters would be
 		-- drawn as it is, a white box)
 		if t.widget.boxed then
 			local cc = t.widget.cat
 			local text = D.customWidgetText(t, i, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
+			-- its container only with meters in it; its measures in any case (a
+			-- widget of only a List= has its measure that reads the data)
 			if text and text:find('Container=CW' .. i .. 'Box', 1, true) then
 				w('[CW' .. i .. 'Box]')
 				w('Meter=Shape')
 				w('Shape=Rectangle 0,0,1,1 | Fill Color 255,255,255,255 | StrokeWidth 0')
 				w('Hidden=1')
 				w('')
-				w(text)
 			end
+			if text and text:find('%S') then w(text) end
 		end
 	end
 
@@ -1930,16 +2184,176 @@ local function fillSlots()
 	end
 end
 
--- Dashboard widgets -------------------------------------------------------------
--- A category with Type=Dashboard holds widgets: tiles with Widget= (cpu, gpu,
--- ram, disk, network, processes, system, temps, fans) and Param=. Their
--- meters (W<i>Title, Value, Sub, Bar, Graph, List) are written in Grid.inc and
--- placed over the tile's slot. The data comes from the helper (Helper.ps1),
--- only while a Dashboard is shown: Generated\DashOn.txt asks for it, and
--- DashTick() reads Generated\DashData.txt.
+-- Widgets ------------------------------------------------------------------------
+-- Tiles of any category with Widget= (cpu, gpu, ram, disk, network, processes,
+-- system, temps, fans, skin, custom) and Param= (the Dashboard of the skin is
+-- an example category of them). Their meters (W<i>Title, Value, Sub, Bar,
+-- Graph, List) are written in Grid.inc and placed over the tile's slot. The
+-- data comes from the helper (Helper.ps1), only while a category with widgets
+-- is shown: Generated\DashOn.txt asks for it, and DashTick() reads
+-- Generated\DashData.txt.
 local dash = { data = nil, hist = { cpu = {}, gpu = {}, ram = {}, down = {}, up = {} }, on = false, shown = {}, barCount = {},
 	skinsWanted = {}, skinsActive = {}, customShown = {} }
 D.DASH_HISTORY = 60 -- samples kept for the graphs
+
+-- Widget API ---------------------------------------------------------------------
+-- What a custom widget can ask of Raintile, in a [Raintile] section of its file
+-- (read by D.customWidgetText into t.widget.api):
+--   OnShow=, OnHide=  bangs run when its category comes on screen and when it
+--                     leaves it (never while the launcher is hidden)
+--   List=<file>       rows Raintile draws in the tile (D.placeList), one per
+--                     line of the file, in the widget's folder:
+--                     "<title>|<subtitle>|<icon>|<command>"; each row is a part
+--                     of the tile (the highlight goes onto it), a click runs its
+--                     command (a bang, or a program, file or address)
+-- In any of its values #WIDGET:<Section># is the name that section of the
+-- widget has in the launcher. When its data changed (e.g. in the FinishAction
+-- of its RunCommand measure) the widget calls
+-- [!CommandMeasure MeasureScript "WidgetChanged()"].
+M.LIST_ROWS = 10
+
+-- The [Raintile] section and the parts of widget t: read from its file once
+-- per load (D.customWidgetText also does it when it writes Grid.inc)
+function M.widgetInfo(t)
+	local w = t.widget
+	if not w.api then
+		w.api, w.partsAt = {}, {}
+		if w.kind == 'custom' and w.boxed and w.cat then
+			local cc = w.cat
+			D.customWidgetText(t, w.idx, t.cols * (cc.tw + V.Gap) - V.Gap, t.rows * (cc.th + V.Gap) - V.Gap)
+		end
+	end
+	return w.api
+end
+
+function M.readWidgetList(t)
+	local api = M.widgetInfo(t)
+	if not api.list then return end
+	local items = {}
+	for _, line in ipairs(readLines(api.list)) do
+		local title, sub, icon, cmd = line:match('^([^|]*)|([^|]*)|([^|]*)|(.*)$')
+		if title and trim(title) ~= '' then
+			items[#items + 1] = { name = trim(title), sub = trim(sub), icon = trim(icon), cmd = trim(cmd) }
+		end
+	end
+	t.widget.items = items
+end
+
+-- The category whose widgets are on screen (OnShow run), or nil: c comes,
+-- the one before goes (OnHide)
+function M.widgetHooks(c)
+	if M.hookCat == c then return end
+	local function run(cat, key)
+		for _, t in ipairs(cat and cat.tiles or {}) do
+			if t.widget and t.widget.kind == 'custom' then
+				local api = M.widgetInfo(t)
+				if key == 'onShow' then M.readWidgetList(t) end
+				if api[key] and api[key] ~= '' then SKIN:Bang(api[key]) end
+			end
+		end
+	end
+	run(M.hookCat, 'onHide')
+	M.hookCat = c
+	run(c, 'onShow')
+end
+
+-- New data from a widget: its rows read again
+function WidgetChanged()
+	if not ready then return end
+	for _, t in ipairs(widgets) do
+		if t.widget.api and t.widget.api.list then M.readWidgetList(t) end
+	end
+	base = -1
+	if visible and M.frame then M.frame() end
+end
+
+function D.hideRows(i, from)
+	for k = from, M.LIST_ROWS do
+		for _, part in ipairs({ 'RowHit', 'RowIcon', 'RowName', 'RowSub' }) do show('W' .. i .. part .. k, false) end
+	end
+end
+
+-- The rows of widget t (List=) in its tile at x, y: as many as fit under
+-- the title; each row a part (t.widget.partsAt: x, y, w, h in the tile)
+function D.placeList(t, x, y, alpha)
+	local w = t.widget
+	local i = w.idx
+	local W, H, pad = V.TileW, V.TileH, V.LabelPad
+	local small, valueSize, line = D.sizes()
+	-- (the widget draws its own title, if any: the rows start at the top, or at its ListY=)
+	local top = math.max(0, math.floor(M.widgetInfo(t).listY or math.floor(pad / 2)))
+	local rowH = math.max(36, math.floor(line * 2.4))
+	local fit = math.max(0, math.min(M.LIST_ROWS, math.floor((H - top - math.floor(pad / 2)) / rowH)))
+	if not w.items then M.readWidgetList(t) end
+	local items = w.items or {}
+	-- (the parts of the widget's own meters stay)
+	for k = 1, M.LIST_ROWS do w.partsAt['W' .. i .. 'RowHit' .. k] = nil end
+	local shown = 0
+	for k = 1, math.min(fit, #items) do
+		local it = items[k]
+		local ry = top + (k - 1) * rowH
+		local hit, icon, name, sub = 'W' .. i .. 'RowHit' .. k, 'W' .. i .. 'RowIcon' .. k, 'W' .. i .. 'RowName' .. k, 'W' .. i .. 'RowSub' .. k
+		local hx, hw = math.floor(pad / 2), W - 2 * math.floor(pad / 2)
+		set(hit, 'X', tostring(x + hx))
+		set(hit, 'Y', tostring(y + ry))
+		-- (not fully transparent: Rainmeter gives the mouse only to pixels that are not)
+		set(hit, 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,1 | StrokeWidth 0', hw, rowH))
+		show(hit, alpha >= 1)
+		w.partsAt[hit] = { hx, ry, hw, rowH }
+		local size = rowH - 10
+		local tx = pad
+		if it.icon ~= '' and fileExists(it.icon) then
+			set(icon, 'ImageName', it.icon)
+			set(icon, 'X', tostring(x + pad))
+			set(icon, 'Y', tostring(y + ry + 5))
+			set(icon, 'W', tostring(size))
+			set(icon, 'H', tostring(size))
+			set(icon, 'ImageAlpha', tostring(math.floor(255 * alpha + 0.5)))
+			show(icon, true)
+			tx = pad + size + 10
+		else
+			show(icon, false)
+		end
+		set(name, 'Text', D.text(it.name))
+		set(name, 'X', tostring(x + tx))
+		set(name, 'Y', tostring(y + ry + math.floor(rowH / 2) - math.floor(small * 1.5)))
+		set(name, 'W', tostring(math.max(1, W - tx - pad)))
+		set(name, 'FontSize', tostring(small + 1))
+		set(name, 'FontColor', fade(V.TextColor, alpha))
+		show(name, true)
+		set(sub, 'Text', D.text(it.sub))
+		set(sub, 'X', tostring(x + tx))
+		set(sub, 'Y', tostring(y + ry + math.floor(rowH / 2) + 1))
+		set(sub, 'W', tostring(math.max(1, W - tx - pad)))
+		set(sub, 'FontSize', tostring(small))
+		set(sub, 'FontColor', fade(V.TextDimColor, alpha))
+		show(sub, true)
+		shown = k
+	end
+	D.hideRows(i, shown + 1)
+	-- nothing to list: say so on the first row
+	if #items == 0 then
+		local name = 'W' .. i .. 'RowName1'
+		set(name, 'Text', 'Nothing to show yet')
+		set(name, 'X', tostring(x + pad))
+		set(name, 'Y', tostring(y + top))
+		set(name, 'W', tostring(math.max(1, W - 2 * pad)))
+		set(name, 'FontSize', tostring(small))
+		set(name, 'FontColor', fade(V.TextDimColor, alpha))
+		show(name, true)
+	end
+end
+
+-- Click on row k of widget i: runs its command (a bang as it is; anything
+-- else is opened like a tile's command)
+function WidgetRowClick(i, k)
+	local t = widgets[i]
+	if not ready or launching or not t or M.menuOverGrid() then return end
+	local it = (t.widget.items or {})[k]
+	if not it or it.cmd == '' then return end
+	if it.cmd:match('^%[') then SKIN:Bang(it.cmd) else SKIN:Bang('["' .. it.cmd:gsub('"', '') .. '"]') end
+	if V.CloseOnLaunch then Hide() end
+end
 
 D.WIDGET_TITLES = {
 	cpu = 'CPU', gpu = 'GPU', ram = 'Memory', disk = 'Disks', network = 'Network',
@@ -2092,17 +2506,92 @@ function D.customWidgetText(t, i, w, h)
 	local out, section, kind = {}, nil, nil
 	local lines = {}
 	for line in (text .. '\n'):gmatch('([^\n]*)\n') do lines[#lines + 1] = (line:gsub('\r$', '')) end
+	-- its [Variables]: Grid.inc is included in a section of the skin, where a
+	-- [Variables] section does not define variables for the skin, so their
+	-- values are written in place of #Name# (a variable may use another one)
+	local vars, inVars = {}, false
+	for _, line in ipairs(lines) do
+		local sec = line:match('^%s*%[([^%]]+)%]%s*$')
+		if sec then inVars = trim(sec):lower() == 'variables'
+		elseif inVars then
+			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
+			if k and trim(k) ~= '' then vars[trim(k):lower()] = trim(v) end
+		end
+	end
+	-- its settings (Options > Widgets > <widget>): [Option:<Name>] sections
+	-- with their Default=, the values in settings.inc of its folder; secrets
+	-- stay out of the skin (its scripts read them from the file)
+	local opts, optSec, secret = {}, nil, {}
+	for _, line in ipairs(lines) do
+		local sec = line:match('^%s*%[([^%]]+)%]%s*$')
+		if sec then optSec = trim(sec):match('^[Oo][Pp][Tt][Ii][Oo][Nn]:%s*([%w_]+)$')
+			if optSec then optSec = optSec:lower(); opts[optSec] = '' end
+		elseif optSec then
+			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
+			if k and trim(k):lower() == 'default' then opts[optSec] = trim(v) end
+			if k and trim(k):lower() == 'kind' and trim(v):lower() == 'secret' then secret[optSec] = true end
+		end
+	end
+	local sf = io.open(dir .. 'settings.inc', 'rb')
+	if sf then
+		for line in (sf:read('*a'):gsub('^\239\187\191', '') .. '\n'):gmatch('([^\n]*)\n') do
+			local k, v = line:match('^%s*([%w_]+)%s*=(.*)$')
+			if k and opts[k:lower()] then opts[k:lower()] = trim((v:gsub('\r$', ''))) end
+		end
+		sf:close()
+	end
+	for n in pairs(secret) do opts[n] = '' end
+	local function own(v)
+		v = v:gsub('#[Oo][Pp][Tt][Ii][Oo][Nn]:([%w_]+)#', function(n) return opts[n:lower()] end)
+		for _ = 1, 3 do
+			local changed = false
+			v = v:gsub('#([%w_]+)#', function(n)
+				local r = vars[n:lower()]
+				if r then changed = true end
+				return r
+			end)
+			if not changed then break end
+		end
+		return v
+	end
 	local skip = false
 	local pending = {}
+	-- Part=1 on a meter: a part of the tile with Raintile's own highlight; the
+	-- mouse actions telling the script about it go before the meter's own
+	local part, over, leave = false, nil, nil
+	local px, py -- its X, Y (from the tile's top left corner)
+	-- where the parts are in the tile, by meter name (HoverPart): from their
+	-- X= and Y= (Rainmeter's GetX/GetY of a meter in a container depend on
+	-- where the container is)
+	t.widget.partsAt = {}
+	t.widget.api = {}
+	local api = t.widget.api
+	local raintile = false -- in its [Raintile] section (M.widgetInfo)
+	local function at(v)
+		v = trim(v or '0')
+		if v == '' then return 0 end
+		if v:match('[rR]$') then return nil end -- relative to the meter before
+		return tonumber(v) or tonumber(SKIN:ParseFormula(v:match('^%(') and v or '(' .. v .. ')'))
+	end
 	local function flush()
 		if section and not skip then
 			if kind == 'meter' then
 				pending[#pending + 1] = 'Container=CW' .. i .. 'Box'
+				local name = prefix .. section
+				if part then
+					local ax, ay = at(px), at(py)
+					if ax and ay then t.widget.partsAt[name] = { ax, ay } end
+					over = '[!CommandMeasure MeasureScript "HoverPart(\'' .. name .. '\')"]' .. (over or '')
+					leave = '[!CommandMeasure MeasureScript "LeavePart(\'' .. name .. '\')"]' .. (leave or '')
+				end
 			end
+			if over then pending[#pending + 1] = 'MouseOverAction=' .. over end
+			if leave then pending[#pending + 1] = 'MouseLeaveAction=' .. leave end
 			for _, l in ipairs(pending) do out[#out + 1] = l end
 			out[#out + 1] = ''
 		end
 		pending = {}
+		part, over, leave, px, py = false, nil, nil, nil, nil
 	end
 	for _, line in ipairs(lines) do
 		local sec = line:match('^%s*%[([^%]]+)%]%s*$')
@@ -2110,7 +2599,8 @@ function D.customWidgetText(t, i, w, h)
 			flush()
 			sec = trim(sec)
 			local low = sec:lower()
-			skip = low == 'rainmeter' or low == 'metadata'
+			raintile = low == 'raintile'
+			skip = low == 'rainmeter' or low == 'metadata' or raintile or low:match('^option:') ~= nil
 			kind = nil
 			section = sec
 			if low == 'variables' then
@@ -2118,16 +2608,43 @@ function D.customWidgetText(t, i, w, h)
 			else
 				pending[#pending + 1] = '[' .. prefix .. sec .. ']'
 			end
+		elseif raintile then
+			-- what the widget asks of Raintile (see M.widgetInfo)
+			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
+			if k and trim(k) ~= '' then
+				local key = trim(k):lower()
+				v = trim(own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETOPTION#', ((t.widget.option or ''):gsub('%%', '%%%%')))
+					:gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
+					:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end))
+				if key == 'onshow' then api.onShow = v
+				elseif key == 'onhide' then api.onHide = v
+				elseif key == 'listy' and v ~= '' then
+					-- where the rows start, from the top of the tile (under a
+					-- title of the widget's own)
+					api.listY = tonumber(v) or tonumber(SKIN:ParseFormula(v:match('^%(') and v or '(' .. v .. ')'))
+				elseif key == 'list' and v ~= '' then
+					-- (a file of the widget, in its folder)
+					api.list = (v:match('^%a:') or v:match('^\\')) and v or dir .. v
+				end
+			end
 		elseif section and not skip then
 			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
 			if k and k ~= '' then
 				local key = trim(k):lower()
-				v = v:gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
+				v = own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
+					:gsub('#WIDGETOPTION#', ((t.widget.option or ''):gsub('%%', '%%%%')))
+				-- #WIDGET:<Section>#: that section's name in the launcher
+				v = v:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end)
 				-- [Section] and [Section:...] references
 				v = v:gsub('%[([^%]%[:]+)(:?[^%]%[]*)%]', function(n, rest) return '[' .. ref(n) .. rest .. ']' end)
 				if key:match('^measurename%d*$') then v = ref(trim(v)) end
 				if key == 'meter' then kind = 'meter' end
 				if key == 'container' then line = nil end
+				if key == 'part' then part, line = trim(v) ~= '' and trim(v) ~= '0', nil end
+				if key == 'x' then px = v end
+				if key == 'y' then py = v end
+				if key == 'mouseoveraction' then over, line = v, nil end
+				if key == 'mouseleaveaction' then leave, line = v, nil end
 				if line then
 					if key == 'group' then
 						pending[#pending + 1] = trim(k) .. '=' .. v .. ' | CW' .. i
@@ -2213,6 +2730,7 @@ function D.placeWidget(t, x, y, alpha)
 			math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))))
 		show('CW' .. i .. 'Box', inside)
 		dash.customShown[i] = inside or nil
+		if M.widgetInfo(t).list then D.placeList(t, x, y, alpha) end
 	end
 	local W, H, pad = V.TileW, V.TileH, V.LabelPad
 	local a = math.floor(255 * alpha + 0.5)
@@ -2226,7 +2744,9 @@ function D.placeWidget(t, x, y, alpha)
 	local small, valueSize, line = D.sizes()
 	local L = D.layout(small, valueSize, line)
 	txt('W' .. i .. 'Title', pad, pad, small, V.TextDimColor)
-	txt('W' .. i .. 'Value', pad, L.value, valueSize, V.TextColor)
+	-- (the message of a custom widget not found: in small letters, whatever
+	-- the size of the tile)
+	txt('W' .. i .. 'Value', pad, L.value, (w.kind == 'custom' and not w.boxed) and math.floor(small * 1.4) or valueSize, V.TextColor)
 	txt('W' .. i .. 'Sub', pad, L.sub, small, V.TextDimColor)
 	txt('W' .. i .. 'List', pad, w.list and L.top or L.list, small, V.TextColor)
 	set('W' .. i .. 'Bar', 'X', tostring(x))
@@ -2304,12 +2824,13 @@ function D.fillWidget(t)
 	if w.kind == 'custom' and not w.boxed then
 		-- its file is missing (or has no meters): say where it goes
 		text(m .. 'Value', 'Widget not found')
-		text(m .. 'Sub', 'Widgets\\' .. w.param .. '\\' .. w.param .. '.ini in the data folder')
+		text(m .. 'Sub', w.why or ('Widgets\\' .. w.param .. '\\' .. w.param .. '.ini in the data folder'))
 		w.parts.Value, w.parts.Sub = true, true
 		return
 	end
+	-- (a custom widget writes its own title, if it wants one)
 	if w.kind == 'skin' or w.kind == 'custom' then
-		w.parts.Title = w.title ~= nil
+		w.parts.Title = w.kind == 'skin' and w.title ~= nil
 		return
 	end
 	if not d then
@@ -2426,10 +2947,10 @@ function D.fillWidget(t)
 	end
 end
 
--- The active category is a Dashboard on screen: the helper is asked for the
--- data (Generated\DashOn.txt: "<interval>|<processes>|<sensors>")
+-- The active category has widgets and is on screen: the helper is asked
+-- for the data (Generated\DashOn.txt: "<interval>|<processes>|<sensors>")
 function D.dashActive()
-	return ready and visible and not searchCat and cats[active] ~= nil and cats[active].dashboard == true
+	return ready and visible and not searchCat and cats[active] ~= nil and cats[active].widgets == true
 end
 
 -- The widgets of the Dashboard on screen, from dash.data
@@ -2446,6 +2967,8 @@ end
 
 updateDashState = function()
 	local on = D.dashActive()
+	-- the widgets' OnShow / OnHide (also between two categories with widgets)
+	M.widgetHooks(on and cats[active] or nil)
 	if on == dash.on then return end
 	dash.on = on
 	D.syncSkins()
@@ -2474,6 +2997,93 @@ end
 -- Colour matrices (rows 1-3) of a normal image and of a greyed-out one
 local IDENTITY_ROWS = { '1;0;0;0;0', '0;1;0;0;0', '0;0;1;0;0' }
 local GREY_ROWS = { '0.3;0.3;0.3;0;0', '0.59;0.59;0.59;0;0', '0.11;0.11;0.11;0;0' }
+
+-- Size of a line whose text changes often (the download line): only its last
+-- text is kept, not one size per text like infoSize
+M.lineSizes = {}
+function M.lineSize(meter, text)
+	local s = M.lineSizes[meter]
+	if not s or s.text ~= text then
+		show(meter, true)
+		SKIN:Bang('!UpdateMeter', meter)
+		local m = SKIN:GetMeter(meter)
+		s = { text = text, w = m and m:GetW() or 0, h = m and m:GetH() or 0 }
+		M.lineSizes[meter] = s
+	end
+	return s.w, s.h
+end
+
+-- A Steam tile with an update (st, M.updateState), in the slot at x,y (the
+-- size of the tile in V.TileW/H), f its appear fade, op its opacity:
+--   - a border in DownloadColor1 and 2 that turns for UpdateGlowTime seconds
+--     when the launcher opens (the gradient's angle), then stays still;
+--   - while downloading (DownloadStyle): a bar along the bottom in
+--     DownloadColor1 and/or the background in greyscale, coloured again from
+--     the left as far as it got; both fill up when the launcher opens.
+-- st nil: nothing (the slot shows another tile, or none).
+M.GLOW_TURN = 90 -- frames of 16 ms for a full turn
+
+-- The background of a downloading tile shown in greyscale (DownloadStyle):
+-- the tile's window on its image, or nil
+function M.greyWindow(t, st, x, y)
+	if not (st and st.part and (V.DownloadGrey or t.missing) and t.background) then return nil end
+	if st.phase ~= 'download' and st.phase ~= 'paused' and st.phase ~= 'install' then return nil end
+	return bgWindow(t, x, y)
+end
+function M.placeUpdate(slot, t, st, x, y, f, op)
+	local glow, bar, reveal = 'TileGlow' .. slot, 'TileBar' .. slot, 'TileReveal' .. slot
+	if not st then
+		show(glow, false) show(bar, false) show(reveal, false)
+		return
+	end
+	local w, h = V.TileW, V.TileH
+	local sw = 3
+	local turn = math.min(M.dl.f, M.dl.glowFrames or 0)
+	local angle = math.floor(360 * turn / M.GLOW_TURN) % 360
+	set(glow, 'X', tostring(x))
+	set(glow, 'Y', tostring(y))
+	set(glow, 'Glow', angle .. ' | ' .. fade(V.DownloadColor1, f) .. ' ; 0.0 | ' .. fade(V.DownloadColor2, f) .. ' ; 1.0')
+	set(glow, 'Shape', string.format('Rectangle %g,%g,%d,%d,%d | Fill Color 0,0,0,0 | StrokeWidth %d | Stroke LinearGradient Glow',
+		sw / 2, sw / 2, w - sw, h - sw, math.max(0, V.TileRadius - sw / 2), sw))
+	set(glow, 'Shape2', '')
+	show(glow, true)
+	-- how far it got, filling up when the launcher opens
+	local active = st.part and (st.phase == 'download' or st.phase == 'paused' or st.phase == 'install')
+	local part = active and math.min(1, st.part) * easeOut(math.min(1, M.dl.f / M.FILL_FRAMES)) or 0
+	if active and V.DownloadBar then
+		local bh = math.max(3, math.floor(h / 40 + 0.5))
+		set(bar, 'X', tostring(x))
+		set(bar, 'Y', tostring(y + h - bh))
+		set(bar, 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color %s | StrokeWidth 0', w, bh, fade('0,0,0,140', f)))
+		set(bar, 'Shape2', string.format('Rectangle 0,0,%d,%d | Fill Color %s | StrokeWidth 0',
+			math.max(1, math.floor(w * part + 0.5)), bh, fade(V.DownloadColor1, f)))
+		show(bar, true)
+	else
+		show(bar, false)
+	end
+	-- greyscale background, coloured up to 'part' from the left: the tile in
+	-- grey, its coloured copy cut to that width over it (the same part of
+	-- the image: the left of the tile's window on it)
+	local win = M.greyWindow(t, st, x, y)
+	if win then
+		local cx, cy, cw, ch = win:match('^(%-?%d+),(%-?%d+),(%d+),(%d+)$')
+		local rw = math.floor(w * part + 0.5)
+		if cx and rw > 0 then
+			set(reveal, 'ImageName', t.background)
+			set(reveal, 'X', tostring(x))
+			set(reveal, 'Y', tostring(y))
+			set(reveal, 'W', tostring(rw))
+			set(reveal, 'H', tostring(h))
+			set(reveal, 'ImageCrop', string.format('%s,%s,%d,%s', cx, cy, math.max(1, math.floor(tonumber(cw) * rw / w + 0.5)), ch))
+			set(reveal, 'ImageAlpha', tostring(math.floor(255 * f * (op or 1) + 0.5)))
+			show(reveal, true)
+		else
+			show(reveal, false)
+		end
+	else
+		show(reveal, false)
+	end
+end
 
 -- Position, opacity and visibility of the slots (also on every animation step).
 -- Rounded corners (TileRadius > 0): the grid container (GridClip) takes the
@@ -2564,7 +3174,12 @@ local function placeSlots()
 			set(tile, 'W', tostring(V.TileW))
 			set(tile, 'H', tostring(V.TileH))
 			-- a game no longer installed: greyed out and dimmed
-			local dim = t.missing and 0.45 or 1
+			-- Steam update or install (also of a game no longer installed:
+			-- being installed again, it is not greyed out but coloured again
+			-- as the download goes)
+			local st = not t.widget and M.updateState(t)
+			local missing = t.missing and not (st and st.part)
+			local dim = missing and 0.45 or 1
 			local op = t.opacity or 1
 			set(tile, 'ImageAlpha', tostring(math.floor(255 * f * dim * op + 0.5)))
 			-- never fully transparent: Rainmeter gives the mouse only to
@@ -2573,7 +3188,9 @@ local function placeSlots()
 			local sr, sg, sb, sa = solid:match('^(%d+),(%d+),(%d+),(%d+)$')
 			if sa and tonumber(sa) < 1 then solid = sr .. ',' .. sg .. ',' .. sb .. ',1' end
 			set(tile, 'SolidColor', solid)
-			local tileRows = t.missing and GREY_ROWS or IDENTITY_ROWS
+			-- Steam update: the border, the progress, the first line (always
+			-- shown), the background in greyscale while it downloads
+			local tileRows = (missing or M.greyWindow(t, st, x, y)) and GREY_ROWS or IDENTITY_ROWS
 			set(tile, 'ColorMatrix1', tileRows[1])
 			set(tile, 'ColorMatrix2', tileRows[2])
 			set(tile, 'ColorMatrix3', tileRows[3])
@@ -2589,7 +3206,9 @@ local function placeSlots()
 				set(icon, 'W', tostring(size))
 				set(icon, 'H', tostring(size))
 				set(icon, 'ImageAlpha', tostring(math.floor(255 * f * dim + 0.5)))
-				local rows = t.missing and GREY_ROWS or (V.LogoGreyscale and saturationRows(t.zoom or 0)) or IDENTITY_ROWS
+				-- a game not installed or downloading: always in greyscale
+				local busy = st and (st.phase == 'download' or st.phase == 'paused' or st.phase == 'install')
+				local rows = (t.missing or busy) and GREY_ROWS or (V.LogoGreyscale and saturationRows(t.zoom or 0)) or IDENTITY_ROWS
 				set(icon, 'ColorMatrix1', rows[1])
 				set(icon, 'ColorMatrix2', rows[2])
 				set(icon, 'ColorMatrix3', rows[3])
@@ -2602,6 +3221,8 @@ local function placeSlots()
 				set(label, 'FontColor', fade(V.TextColor, f))
 				set(label, 'FontEffectColor', fade('0,0,0,200', f))
 			end
+			local updText = st and M.updateInfo(t)
+			M.placeUpdate(slot, t, st, x, y, f, op)
 			-- play time / last launch: always, only on the highlighted tile
 			-- (fading with the highlight) or never; "Not installed" always
 			local infoAlpha = f
@@ -2615,20 +3236,38 @@ local function placeSlots()
 					infoText = nil
 				end
 			end
-			if infoText and infoAlpha > 0.01 then
-				set(infoMeter, 'Text', infoText)
-				-- InfoPos: in the room the line leaves inside the margins
-				local ix, iy = x + V.LabelPad, y + V.LabelPad
-				if (t.infoX > 0 or t.infoY > 0) and not t.widget then
-					local iw, ih = infoSize(infoMeter, infoText)
-					ix = ix + math.floor(t.infoX * math.max(0, V.TileW - 2 * V.LabelPad - iw) + 0.5)
-					iy = iy + math.floor(t.infoY * math.max(0, V.TileH - 2 * V.LabelPad - ih) + 0.5)
+			local hasInfo = infoText ~= nil and infoAlpha > 0.01
+			if hasInfo or updText then
+				-- the lines as a block: the update above, the play time below;
+				-- InfoPos places the block in the room it leaves inside the
+				-- margins, and each line inside it (on the right with 100,y)
+				local updMeter = 'TileUpd' .. slot
+				if hasInfo then set(infoMeter, 'Text', infoText) end
+				if updText then set(updMeter, 'Text', updText) end
+				local uw, uh, iw, ih = 0, 0, 0, 0
+				local placed = (t.infoX > 0 or t.infoY > 0) and not t.widget
+				if updText then uw, uh = M.lineSize(updMeter, updText) end
+				if hasInfo and (placed or updText) then iw, ih = infoSize(infoMeter, infoText) end
+				local bw, bh = math.max(uw, iw), uh + ih
+				local bx, by = x + V.LabelPad, y + V.LabelPad
+				if placed then
+					bx = bx + math.floor(t.infoX * math.max(0, V.TileW - 2 * V.LabelPad - bw) + 0.5)
+					by = by + math.floor(t.infoY * math.max(0, V.TileH - 2 * V.LabelPad - bh) + 0.5)
 				end
-				set(infoMeter, 'X', tostring(ix))
-				set(infoMeter, 'Y', tostring(iy))
-				set(infoMeter, 'FontColor', fade(V.TextColor, infoAlpha))
-				set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
+				if updText then
+					set(updMeter, 'X', tostring(bx + math.floor(t.infoX * (bw - uw) + 0.5)))
+					set(updMeter, 'Y', tostring(by))
+					set(updMeter, 'FontColor', fade(V.TextColor, f))
+					set(updMeter, 'SolidColor', fade('0,0,0,150', f))
+				end
+				if hasInfo then
+					set(infoMeter, 'X', tostring(bx + math.floor(t.infoX * (bw - iw) + 0.5)))
+					set(infoMeter, 'Y', tostring(by + uh))
+					set(infoMeter, 'FontColor', fade(V.TextColor, infoAlpha))
+					set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
+				end
 			end
+			show('TileUpd' .. slot, updText ~= nil and updText ~= false)
 			show(tile, true)
 			show(icon, t.logo ~= nil and not t.widget)
 			show(label, hasLabel and not t.widget)
@@ -2664,6 +3303,8 @@ local function placeSlots()
 			show(icon, false)
 			show(label, false)
 			show(infoMeter, false)
+			show('TileUpd' .. slot, false)
+			M.placeUpdate(slot, nil)
 		end
 	end
 	roundClip(rects)
@@ -2714,6 +3355,7 @@ local function placeSlots()
 		local n = t.widget.idx
 		if not dash.shown[n] then
 			for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List', 'Bar', 'Graph' }) do show('W' .. n .. part, false) end
+			if t.widget.api and t.widget.api.list then D.hideRows(n, 1) end
 		end
 		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
@@ -2925,6 +3567,14 @@ local function advance()
 	pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth)
 	busy = busy or moving or fadeMoving
 
+	-- Steam updates, when the launcher opens: progress filling up, borders turning
+	if M.dl.anim then
+		M.dl.f = M.dl.f + M.animScale
+		M.animFast = true
+		if M.dl.f >= math.max(M.FILL_FRAMES, M.dl.glowFrames or 0) then M.dl.anim = false end
+		busy = true
+	end
+
 	if appear then
 		appear = appear + M.animScale
 		M.animFast = true
@@ -3021,14 +3671,22 @@ function M.evalSetting(raw, default)
 end
 
 function M.launcherRect(get)
-	local mx, my = M.evalSetting(get('screenx'), 0), M.evalSetting(get('screeny'), 0)
-	local mw, mh = M.evalSetting(get('screenw'), 1920), M.evalSetting(get('screenh'), 1080)
+	local mode = trim(get('launchermode') or ''):lower()
+	-- a window never covers the taskbar (covering it is what full screen and
+	-- docked are for): on the whole screen of a monitor its area is the work
+	-- area of that monitor, so 100% fills the space the taskbar leaves
+	local function area(key)
+		local raw = get(key)
+		if mode == 'window' and raw then raw = raw:gsub('#SCREENAREA', '#WORKAREA') end
+		return raw
+	end
+	local mx, my = M.evalSetting(area('screenx'), 0), M.evalSetting(area('screeny'), 0)
+	local mw, mh = M.evalSetting(area('screenw'), 1920), M.evalSetting(area('screenh'), 1080)
 	local function px(raw, total, default)
 		local p = trim(raw or ''):match('^([%d%.]+)%s*%%$')
 		if p then return math.floor((tonumber(p) or 0) * total / 100 + 0.5) end
 		return M.evalSetting(raw, default)
 	end
-	local mode = trim(get('launchermode') or ''):lower()
 	local x, y, w, h = mx, my, mw, mh
 	if mode == 'window' then
 		w = math.max(320, math.min(mw, px(get('windoww'), mw, math.floor(mw * 0.6))))
@@ -3154,6 +3812,8 @@ function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
 	-- a Dashboard left open by the previous load: the helper stops until shown
 	os.remove(resources .. 'Generated\\DashOn.txt')
+	-- and the Steam downloads, followed only while it is open
+	os.remove(resources .. 'Generated\\DownloadOn.txt')
 	local userData = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Raintile\\'
 	data = fileExists(userData .. 'Settings.inc') and userData or resources
 	V.NeedsSetup = data ~= userData or settingsOutdated(userData .. 'Settings.inc')
@@ -3214,6 +3874,16 @@ function Initialize()
 	V.ShowPower = num('ShowPower', 1) ~= 0
 	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
 	V.GameUpdates = num('GameUpdates', 1) ~= 0
+	-- Steam downloads: what the update line says, the colours of the border
+	-- and the bar, how the progress shows, how long the border turns
+	V.DownloadInfo = {}
+	for word in SKIN:GetVariable('DownloadInfo', 'percent speed eta size schedule'):lower():gmatch('%a+') do V.DownloadInfo[word] = true end
+	V.DownloadColor1 = parseColor(SKIN:GetVariable('DownloadColor1', '')) or '0,210,180,255'
+	V.DownloadColor2 = parseColor(SKIN:GetVariable('DownloadColor2', '')) or '120,90,255,255'
+	local dstyle = SKIN:GetVariable('DownloadStyle', 'Bar'):lower()
+	V.DownloadBar = dstyle ~= 'greyscale'
+	V.DownloadGrey = dstyle == 'greyscale' or dstyle == 'both'
+	M.dl.glowFrames = math.max(0, num('UpdateGlowTime', 3)) * 1000 / 16
 	V.DashInterval = math.max(250, math.floor(num('DashInterval', 1000)))
 	-- port of LibreHardwareMonitor's web server (its Options > Remote Web Server)
 	V.SensorPort = math.floor(num('SensorPort', 8085))
@@ -3508,6 +4178,9 @@ function M.renderMore()
 	local x = m0 and math.floor(m0:GetX()) or math.floor(V.PadX)
 	local y = math.floor(V.PadY + V.MenuH + 6)
 	local header = V.ShowClock and more.open
+	-- shown before being measured: a hidden meter measures 0, and the
+	-- entries of the first opening would all pile up on the first one
+	show('MeterMoreItem0', header)
 	if header then
 		local t = SKIN:GetMeasure('MeasureClockTime')
 		local d = SKIN:GetMeasure('MeasureClockDate')
@@ -3519,10 +4192,10 @@ function M.renderMore()
 		local h = SKIN:GetMeter('MeterMoreItem0')
 		y = y + (h and h:GetH() or 40) + 2
 	end
-	show('MeterMoreItem0', header)
 	for n = 1, 8 do
 		local m = 'MeterMoreItem' .. n
 		local it = more.open and more.items[n]
+		show(m, it and true or false)
 		if it then
 			set(m, 'Text', it.text)
 			set(m, 'X', tostring(x))
@@ -3532,7 +4205,6 @@ function M.renderMore()
 			local h = SKIN:GetMeter(m)
 			y = y + (h and h:GetH() or 40) + 2
 		end
-		show(m, it and true or false)
 	end
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	SKIN:Bang('!Redraw')
@@ -3629,6 +4301,12 @@ function Show()
 	zooming = {}
 	-- play time measured by the helper while the launcher was hidden
 	readTimePlayed()
+	-- categories sorted by play: the order of now
+	M.sortCategories(true)
+	if not cats[active].virtual then
+		offset = normalizeOffset(cats[active].offset)
+		pos = offset
+	end
 	virtualDirty = true
 	base = -1
 	if virtualDirty then
@@ -3642,6 +4320,11 @@ function Show()
 	end
 	updateEmptyHint()
 	if V.AnimOpen then appear = 0 end
+	-- Steam updates: the progress fills up and the borders turn (M.placeUpdate),
+	-- and the helper follows the downloads while the launcher is open
+	M.dl.f = 0
+	M.dl.anim = V.GameUpdates and next(gameUpdates) ~= nil
+	M.writeDownloadFlag()
 	frame() -- first frame drawn before showing the window
 	if M.dockAnimated() then
 		-- from where it is (it may be still going out)
@@ -3652,7 +4335,7 @@ function Show()
 	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
 	SKIN:Bang('!Show')
 	hotKey(true)
-	if appear or M.dock.dir ~= 0 then startTicker() end
+	if appear or M.dock.dir ~= 0 or M.dl.anim then startTicker() end
 	ReadPlaytime(60)
 	ClockTick(0)
 	updateDashState()
@@ -3664,6 +4347,10 @@ function Hide()
 	visible = false
 	stopTyping()
 	stopTicker()
+	-- the tile with the focus, for a sorted category (its remembered position
+	-- follows it when the order changes)
+	-- (hover.idx is the index of the tile in the category, not a slot)
+	if not searchCat and hover.on and hover.idx > 0 then cur().focusTile = cur().tiles[hover.idx] or cur().focusTile end
 	leaveSearch() -- next time it opens on the category
 	pos = offset -- a half-done scroll restarts already finished
 	saveScroll()
@@ -3676,6 +4363,9 @@ function Hide()
 	closePower()
 	M.closeMore()
 	updateDashState()
+	-- the downloads are followed only while it is open
+	os.remove(resources .. 'Generated\\DownloadOn.txt')
+	M.dl.live = {}
 	if M.dockAnimated() then
 		-- goes out first; M.finishHide() hides the window at the end
 		M.dock.dir = -1
@@ -3771,6 +4461,14 @@ function PlaceWindow()
 		if num('WindowPlaced', 0) ~= 1 then
 			SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
 			SKIN:Bang('!WriteKeyValue', 'Variables', 'WindowPlaced', '1', data .. 'State.inc')
+		else
+			-- as wide (or tall) as the work area: on it, whatever position it
+			-- had at another size (KeepOnScreen alone would leave it over the
+			-- taskbar)
+			local x, y = SKIN:GetX(), SKIN:GetY()
+			local nx = V.ScreenW >= (V.MonW or V.ScreenW) and V.ScreenX or x
+			local ny = V.ScreenH >= (V.MonH or V.ScreenH) and V.ScreenY or y
+			if nx ~= x or ny ~= y then SKIN:Bang('!Move', tostring(nx), tostring(ny)) end
 		end
 	else
 		SKIN:Bang('!Draggable', '0')
@@ -3910,7 +4608,7 @@ end
 
 -- Context menu entries for tile t, in the order shown (Rainmeter stops at the
 -- first empty one, so only those that apply are listed)
-local TILE_MENU_SLOTS = 5
+local TILE_MENU_SLOTS = 6
 local function setPointed(t)
 	if pointed == t then return end
 	pointed = t
@@ -3918,8 +4616,12 @@ local function setPointed(t)
 	if t then
 		-- & would underline the next letter in a menu
 		items[#items + 1] = { 'Edit ' .. t.name:gsub('&', '&&') .. '...', 'edit' }
-		if V.ShowFavorites and t.file and t.file ~= '' then
+		if V.ShowFavorites and t.file and t.file ~= '' and not t.widget then
 			items[#items + 1] = { favorites.set[tileId(t)] and 'Remove from Favorites' or 'Add to Favorites', 'favorite' }
+		end
+		local home = t.file and t.file ~= '' and M.catOf(t)
+		if home then
+			items[#items + 1] = { t.pinned and 'Unpin' or 'Pin to the start', 'pin' }
 		end
 		local path, args = commandTarget(t.command)
 		if path and path:match('^%a:[\\/]') and fileExists(path) then items[#items + 1] = { 'Open file location', 'folder' } end
@@ -3948,6 +4650,63 @@ function MouseInSkin(on)
 	-- left the skin in the same moment as a tile: the menu opening on it
 	if not inSkin and not pointed and left and os.time() - left.at <= 1 then setPointed(left.t) end
 	left = nil
+end
+
+-- Pinned=1 written into (or taken out of) the tile's section of its category
+-- file, as it is (UTF-8, the other lines untouched)
+function M.writeTileKey(file, section, key, value)
+	local path = data .. 'Categories\\' .. file
+	local f = io.open(path, 'rb')
+	if not f then return false end
+	local text = f:read('*a')
+	f:close()
+	local nl = text:find('\r\n') and '\r\n' or '\n'
+	local lines, out, inside, last = {}, {}, false, nil
+	for line in (text .. (text:sub(-1) == '\n' and '' or '\n')):gmatch('(.-)\r?\n') do lines[#lines + 1] = line end
+	local want, lkey = section:lower(), key:lower()
+	for _, line in ipairs(lines) do
+		local head = line:match('^%s*%[(.-)%]%s*$')
+		if head then
+			if inside and value ~= '' then table.insert(out, last + 1, key .. '=' .. value) end
+			inside = head:lower() == want
+			if inside then last = #out + 1 end
+			out[#out + 1] = line
+		elseif inside and (line:match('^%s*([^=;]-)%s*=') or ''):lower() == lkey then
+			-- (the old value: left out)
+		else
+			out[#out + 1] = line
+			if inside and line:match('%S') then last = #out end
+		end
+	end
+	if inside and value ~= '' then table.insert(out, last + 1, key .. '=' .. value) end
+	f = io.open(path, 'wb')
+	if not f then return false end
+	f:write(table.concat(out, nl), nl)
+	f:close()
+	return true
+end
+
+-- Pin or unpin a tile: it goes to the start of its category (or back among
+-- the others) at once
+function M.catOf(t)
+	for _, x in ipairs(cats) do
+		if not x.virtual and x.file == t.file then return x end
+	end
+end
+
+function M.togglePin(t)
+	local c = M.catOf(t)
+	if not c or not M.writeTileKey(t.file, t.name, 'Pinned', t.pinned and '' or '1') then return end
+	t.pinned = not t.pinned or nil
+	c.anyPinned = nil
+	for _, x in ipairs(c.tiles) do if x.pinned then c.anyPinned = true end end
+	M.sortTiles(c)
+	if not searchCat and cats[active] == c then
+		offset = normalizeOffset(c.offset or offset)
+		pos, base = offset, -1
+		hover.idx, hover.on, hover.a = 0, false, 0
+		render(true)
+	end
 end
 
 -- Favorites: add or remove; the category shows the change at once
@@ -3992,6 +4751,8 @@ function TileMenu(kind)
 		if writeTileFile('EditTile.txt', t) then SKIN:Bang(SKIN:GetVariable('OptionsTileAction')) end
 	elseif kind == 'favorite' then
 		toggleFavorite(t)
+	elseif kind == 'pin' then
+		M.togglePin(t)
 	elseif kind == 'folder' then
 		local path = commandTarget(t.command)
 		if path then SKIN:Bang('explorer.exe /select,"' .. path .. '"') end
@@ -4062,13 +4823,14 @@ end
 -- waiting (GameUpdates.ps1) are read at the same moments.
 local playtimeRead = nil -- os.time() of the last reading
 function ReadPlaytime(minAge)
-	if not ready or V.TileInfo == 'never' then return end
+	-- (the Steam updates are shown whatever TileInfo says)
+	if not ready or (V.TileInfo == 'never' and not V.GameUpdates) then return end
 	if minAge and playtimeRead and os.time() - playtimeRead < minAge then return end
 	playtimeRead = os.time()
 	for _, c in ipairs(cats) do
 		for _, t in ipairs(c.tiles) do
 			if t.steamId then
-				SKIN:Bang('!CommandMeasure', 'MeasurePlaytime', 'Run')
+				if V.TileInfo ~= 'never' then SKIN:Bang('!CommandMeasure', 'MeasurePlaytime', 'Run') end
 				if V.GameUpdates then SKIN:Bang('!CommandMeasure', 'MeasureGameUpdates', 'Run') end
 				return
 			end
@@ -4084,6 +4846,15 @@ end
 
 function OnGameUpdates()
 	readGameUpdates()
+	if visible then M.writeDownloadFlag() end
+	base = -1
+	render(false)
+end
+
+-- New progress of the Steam downloads (Helper.ps1, while the launcher is open)
+function OnDownloads()
+	if not ready or not visible then return end
+	M.readDownloads()
 	base = -1
 	render(false)
 end
@@ -4141,10 +4912,12 @@ end
 -- the tile under the mouse grows.
 -- Moves the highlight (mouse or keyboard) to tile t, index idx, at grid
 -- coordinates tx, ty.
-local function focus(t, idx, tx, ty)
-	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty then return end
+-- (w, h: the size of a part of the tile, M.hoverPart; otherwise the tile's)
+local function focus(t, idx, tx, ty, w, h)
+	if not w then w, h = tileSize(t) end
+	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty and hover.tw == w and hover.th == h then return end
 	hover.tx, hover.ty = tx, ty
-	hover.tw, hover.th = tileSize(t)
+	hover.tw, hover.th = w, h
 	if hover.a < 0.05 or not V.AnimHover then
 		-- it was off: appear directly on the new tile
 		hover.gx, hover.gy = hover.tx, hover.ty
@@ -4179,20 +4952,80 @@ function HoverTile(slot)
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
 	setPointed(t)
+	-- a widget with parts: never the whole tile (the mouse is in the gap
+	-- between two parts, or comes back from one): the highlight stays on the
+	-- last part, or waits for one
+	if t.widget and next(M.widgetParts(t)) then
+		hover.part = nil
+		local last = hover.lastPart
+		if last and last.t == t then M.focusPart(t, slot, last.name) end
+		return
+	end
 	local tx, ty = slotToGrid(slot)
 	hover.anchor = V.Horizontal and ty or tx
+	hover.part = nil
 	focus(t, indexAt(slot), tx, ty)
 end
 
 function LeaveTile(slot)
 	if ready then leavePointed(tileAt(slot)) end
 	if not ready or not tileAt(slot) or indexAt(slot) ~= hover.idx or not hover.on then return end
+	-- the mouse went onto a part of it (a meter of its widget with Part=1)
+	if hover.part then return end
 	hover.on = false
 	local animate = next(zooming) ~= nil
 	if V.TileHover then
 		if V.AnimHover then animate = true else hover.a = 0 end
 	end
 	if animate then startTicker() else frame() end
+end
+
+-- Parts of a widget (Part=1 on one of its meters, see D.customWidgetText):
+-- the highlight goes onto the part under the mouse, with the same animation
+-- as between tiles. The meters of a widget are placed in its container, at
+-- the tile: their X, Y are from its top left corner.
+function HoverPart(name)
+	if not ready or launching or M.more.open or power.open then return end
+	local n = tonumber(name:match('^CW(%d+)_') or name:match('^W(%d+)RowHit%d+$') or '')
+	local t = n and widgets[n]
+	local m = t and SKIN:GetMeter(name)
+	if not m then return end
+	local slot
+	for s = 1, V.Slots do
+		if tileAt(s) == t then slot = s break end
+	end
+	if not slot then return end
+	M.picked = nil
+	setPointed(t)
+	hover.part = name
+	hover.lastPart = { t = t, name = name }
+	M.focusPart(t, slot, name)
+end
+
+-- Where the parts of widget tile t are (its meters with Part=1, and its rows)
+function M.widgetParts(t)
+	M.widgetInfo(t)
+	return t.widget.partsAt
+end
+
+-- The highlight onto part 'name' of widget tile t, in 'slot'
+function M.focusPart(t, slot, name)
+	local m = SKIN:GetMeter(name)
+	if not m then return end
+	local tx, ty = slotToGrid(slot)
+	hover.anchor = V.Horizontal and ty or tx
+	local p = M.widgetParts(t)[name]
+	local px, py = p and p[1] or m:GetX(), p and p[2] or m:GetY()
+	focus(t, indexAt(slot), tx + px / V.StepX, ty + py / V.StepY, p and p[3] or m:GetW(), p and p[4] or m:GetH())
+end
+
+function LeavePart(name)
+	-- (back on the tile, or on another part, already: nothing to do)
+	if not ready or hover.part ~= name then return end
+	hover.part = nil
+	if not hover.on then return end
+	hover.on = false
+	if V.TileHover and V.AnimHover then startTicker() else hover.a = 0 frame() end
 end
 
 -- Re-centres the menu (also called by OnRefreshAction, once the skin is drawn).
@@ -4362,6 +5195,12 @@ local function startTile(t)
 end
 
 local function launchTile(t, x, y)
+	-- the tile launched keeps the focus of its category (M.sortTiles)
+	if t then
+		for _, c in ipairs(cats) do
+			if not c.virtual and c.file == t.file then c.focusTile = t end
+		end
+	end
 	if t and t.widget then
 		-- a widget opens its own command, or the tool that goes with it
 		local cmd = t.command or D.WIDGET_COMMANDS[t.widget.kind]
@@ -4674,10 +5513,11 @@ local function runSearch(text)
 
 	local results = {}
 	for _, c in ipairs(cats) do
-		for _, t in ipairs((c.virtual or c.dashboard) and {} or c.tiles) do
+		for _, t in ipairs(c.virtual and {} or c.tiles) do
+			-- (widgets are not launched like the other tiles: not searched)
 			local hay = (t.name .. ' ' .. (t.label or '') .. ' ' .. t.catLabel .. ' ' .. (t.store or '')
 				.. ' #' .. table.concat(t.tags or {}, ' #')):lower()
-			local ok = true
+			local ok = not t.widget
 			for _, w in ipairs(words) do
 				if not hay:find(w, 1, true) then ok = false break end
 			end
@@ -4848,6 +5688,14 @@ end
 
 function PadX()
 	if osk.open and typing then TypeKey('BACK') end
+end
+
+-- GamepadOptions (RS): the Options window, as the gear. Only while the
+-- launcher is shown, like the other buttons, so it never fires in a game.
+-- OpenOptions hides the launcher, which closes the search and the keyboard.
+function PadOptions()
+	if not ready or launching or not visible then return end
+	OpenOptions('')
 end
 
 -- Moves the selection: left / right in the row, up / down to the key of the

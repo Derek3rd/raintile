@@ -16,7 +16,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Tags and filter bar](#tags-and-filter-bar)
 - [Play time](#play-time)
 - [Launching a tile](#launching-a-tile)
-- [Dashboard](#dashboard)
+- [Widgets and the Dashboard](#widgets-and-the-dashboard)
   - [Widgets](#widgets)
   - [Temperatures and fans](#temperatures-and-fans)
   - [Skins in a tile](#skins-in-a-tile)
@@ -64,7 +64,7 @@ Without the HotKey plugin you can toggle it from a Windows shortcut: create a sh
 `LauncherMode` (Options > General > Screen) sets how the launcher shows on its area (`ScreenX/Y/W/H`, a monitor or its work area):
 
 - **Fullscreen** (default): all of the area.
-- **Window**: a window of `WindowW` x `WindowH` (pixels or % of the area), centred the first time. Drag an empty part of it (the background, the space around the menu) to move it: it stays where you put it. It does not hide when another program gets the focus; close it with the X, `Esc` or the shortcut.
+- **Window**: a window of `WindowW` x `WindowH` (pixels or % of the area), centred the first time. It never covers the taskbar: on the whole screen its area is the work area of that monitor, so `100%` fills the space the taskbar leaves (full screen and docked are the modes that cover it). Drag an empty part of it (the background, the space around the menu) to move it: it stays where you put it. It does not hide when another program gets the focus; close it with the X, `Esc` or the shortcut.
 - **Dock**: on a side of the screen (`DockSide`: `Left`, `Right`, `Top`, `Bottom`), `DockSize` wide (left and right) or tall (top and bottom). It comes in from that side, sliding and fading, and goes back the same way; it hides when you click outside it (`AutoHide`). With `DockEdge=1` it also opens when the mouse rests on that edge of the screen for `DockEdgeDelay` ms, but not while a full-screen program (a game, a video) is in front; move the mouse away from the edge to open it again from there.
 
 Sizes in percent (margins, menu, fonts) are of the area, not of the window, so they stay the same in every mode.
@@ -112,12 +112,15 @@ Xbox and compatible controllers (XInput):
 | `LB` / `RB` | previous / next category |
 | `Y` (`GamepadSearch`) | search with the on-screen keyboard |
 | `LT` / `RT` | with search results: the previous / next filter chip, alone |
+| `RS`, the right stick click (`GamepadOptions`) | open the [Options window](#options-window), as the gear |
 
 **On-screen keyboard**: `GamepadSearch` opens the search with a keyboard at the bottom of the screen (letters, digits, `-` and `.`, Delete, Space, Done). The D-pad or stick moves on it, `A` types the key, `X` deletes, `Start` (or *Done*) closes it and keeps the results (the first one highlighted, `A` launches it), `B` closes the search. The keys can be clicked with the mouse too. `Start` is also part of `GamepadToggle`: alone it counts when released, so `Back` + `Start` still opens and closes the launcher.
 
 Rainmeter cannot read controllers, so a small background helper does it (`Scripts\Helper.ps1`: C# compiled by PowerShell on first start). It polls the controllers every 16 ms at below-normal priority and sends commands to Rainmeter through a Windows message (`WM_COPYDATA`), without starting processes. Only one copy runs: refreshing the skin replaces it, and it exits by itself when Rainmeter is closed. While the launcher is hidden, commands other than open/close are ignored, so it does not interfere with games.
 
-Settings: `Gamepad=0` turns it off; `GamepadSearch` (one or more buttons), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
+The [Options window](#options-window) can be used with the controller too.
+
+Settings: `Gamepad=0` turns it off (in the Options window too); `GamepadSearch` and `GamepadOptions` (one or more buttons, or none; on `X`, `LT` or `RT` they take their place, and `GamepadOptions` does nothing on a button of `GamepadSearch` or `GamepadToggle`), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
 
 ## Search
 
@@ -137,6 +140,7 @@ Right click on a tile adds, after Raintile's own entries, the ones that apply to
 | --- | --- |
 | **Edit \<tile\>...** | opens the tile in the Options window |
 | **Add to / Remove from Favorites** | see [Favorites and Recent](#favorites-and-recent) |
+| **Pin to the start / Unpin** | keeps the tile at the start of its category, before the others, also when the category is sorted (`Pinned=1`) |
 | **Open file location** | opens the folder of the program, with the file selected (only for commands that are a file on this PC) |
 | **Run as administrator** | starts the program as administrator; Windows asks for confirmation (only for `.exe`, `.lnk`, `.bat`, `.cmd`) |
 | **Remove from \<category\>...** | removes the tile from its category file, after asking; its images stay in `Images\` |
@@ -172,7 +176,14 @@ A small line on the tile (at the top left unless you move it) tells how long you
 - Before any time is measured: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
 - `TileInfo=Hover` (default) shows it only on the highlighted tile (mouse, keyboard or gamepad), `Always` on every tile, `Never` hides it. Size: `InfoFontSize`. Options > Appearance > Text.
 - Tiles of [games no longer installed](#games-no-longer-installed) always show **Not installed**.
-- **Steam updates** (`GameUpdates=1`): a Steam game with an update to download shows it on the same line, in place of the play time (shown as `TileInfo` says, like the play time): `Update 5.4 GB - Sat 06:27` (its size and when Steam scheduled it; `today` / `tomorrow` when close), `Updating 40%` while it downloads. It is read from Steam's `steamapps\appmanifest_<id>.acf` of every library (`Scripts\GameUpdates.ps1`) at the same moments as the play time, so it is what Steam knew last: Steam finds new updates only while it runs. `GameUpdates=0` turns it off (Options > Appearance > Text).
+- **Steam updates** (`GameUpdates=1`): a Steam game with an update to download says so on a line of its own above the play time, always shown (whatever `TileInfo` says), and its tile gets a border in `DownloadColor1` and `DownloadColor2` that turns for `UpdateGlowTime` seconds when the launcher opens (`0`: it stays still), under the highlight of the mouse.
+  - Waiting: `Update 5.4 GB - Sat 06:27` (its size and when Steam scheduled it; `today` / `tomorrow` when close).
+  - Downloading: `Downloading 40% - 540 MB / 1.3 GB - 25.3 MB/s - 2:35 left`, then `Installing update`; `Paused 40%` when paused in Steam.
+  - A game installed for the first time says `Install 1.3 GB` while it waits and `Installing 40% - ...` while it downloads. A tile of a game no longer installed that Steam is installing again is not greyed out any more: its background is coloured again from the left as the download goes, and the line shows the download instead of *Not installed* (back to *Not installed* only if it is still missing at the next scan). `DownloadInfo` chooses the parts, in any order: `percent`, `size`, `speed`, `eta` (time left), `schedule`.
+  - The logo of a game downloading (or no longer installed) stays in greyscale, also under the mouse.
+  - The progress shows on the tile as `DownloadStyle` says: `Bar` (a bar along the bottom in `DownloadColor1`), `Greyscale` (the background in greyscale, coloured again from the left as far as it got; tiles without a background image show nothing) or `Both`. It fills up when the launcher opens.
+  - Where it comes from: Steam's `steamapps\appmanifest_<id>.acf` of every library (`Scripts\GameUpdates.ps1`), read at the same moments as the play time, so it is what Steam knew last (Steam finds new updates only while it runs). While the launcher is open the background helper follows the downloads every second: Steam's log (`logs\content_log.txt`: its state at once, the speed every few seconds) and the appmanifest when Steam rewrites it; between the two the bytes downloaded are worked out from the speed and the time of each line of the log (also for the part of the download before the launcher opened), so the line moves every second while Steam gives the speed every 10-15 seconds. A download started while the launcher is open shows up within a second, from the log. Nothing is followed while the launcher is hidden.
+  - `GameUpdates=0` turns it all off (Options > Appearance > Text; the rest under Appearance > Steam updates).
 - **Where**: the top left by default. To move it, drag the sample line in the tile's preview (Options > *the category* > *the tile*), or under **All tiles** for the whole category; the **x** on the **Play time** row gives it back the place of All tiles. It is saved as `InfoPos=X,Y`: where the line goes in the room it leaves inside the margins (`LabelPad`), in %: `0,0` top left, `100,0` top right, `50,50` centre, `100,100` bottom right. The line changes width with what it says, so it stays inside the tile whatever the text.
 
 ## Launching a tile
@@ -189,20 +200,24 @@ On click the tile expands to full screen (with background and logo at full resol
 | `LaunchLogoSize` | `33%` | final logo size |
 | `LaunchFontSize` | `48` | centre text for tiles without a logo |
 
-## Dashboard
+## Widgets and the Dashboard
 
-A **Dashboard** is a category whose tiles are widgets that watch the PC: processor, graphics card, memory, disks, network, processes, temperatures. The default one (`Categories\Dashboard.ini`, added once to existing data too) is a 5 x 4 grid: CPU, GPU and temperatures of 2 x 2 cells, memory and processes of 1 x 2, network and disks.
+A **widget** is a tile that shows something instead of starting a game: processor, graphics card, memory, disks, network, processes, temperatures, a skin of yours. Any tile of any category can be a widget, next to the games: e.g. a clock among your apps.
 
-- In the Options window the Dashboard has a page of its own, apart from the categories: **Dashboard** turns it on and off (`Hidden=1` in its `[Category]`), names it and sets its grid; **Dashboard > Widgets** edits its widgets like the tiles of a category. *Create the Dashboard* brings the default one back if you deleted it.
-- Any category with `Type=Dashboard` in its `[Category]` section is a Dashboard; `Hidden=1` keeps any category out of the menu.
+The **Dashboard** (`Categories\Dashboard.ini`, added once to existing data too) is a normal category kept as an example: a 5 x 4 grid of system widgets, CPU, GPU and temperatures of 2 x 2 cells, memory and processes of 1 x 2, network and disks.
 
-- The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a Dashboard is on screen, every `DashInterval` ms (default 1000): with the Dashboard closed nothing is measured.
-- Widgets are left out of search, Favorites, Recent and the filters.
+- In the Options window it is among the categories like the others: name, icon, grid, **Show in the menu** (`Hidden=1` in its `[Category]` keeps any category out of the menu). Options > **Widgets** > *Add the example Dashboard* brings it back if you deleted it.
+- The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a category with widgets is on screen, every `DashInterval` ms (default 1000): with it closed nothing is measured.
+- **Modrinth instances** (widget gallery, under Games): the instances of [Modrinth App](https://modrinth.com/app), the last played first, with their icons; a click starts one. Its script reads Modrinth App's database (read only) when the category comes on screen. More cells for the tile (`Size=1x2`), more rows. Widgets can do the same for anything: see *What Raintile does for a widget* in `widgets/README.md`.
+- **Steam achievements** (widget gallery, under Games): the achievements of the Steam game played last, or of the game in the tile's *Widget setting* (its Steam app id, `WidgetOption=570`): how many are unlocked, the last ones unlocked, the locked ones most players have. A click opens the game's achievements in Steam. It needs your Steam Web API key (free, from [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)) in Options > Widgets > Steam achievements (the widget's own settings), and your profile's game details public; it asks Steam at most every 5 minutes for the same game.
+- Installed widgets with settings of their own (a key, a colour) have an entry each under Options > **Widgets**, in the menu on the left (click *Widgets* again to open or close the list); the settings are kept in the widget's folder (`settings.inc`) and survive its updates. What a single tile shows (e.g. which game) is its *Widget setting* in the tile editor instead.
+- A custom widget can have parts (`Part=1` on its meters): the highlight goes onto the part under the mouse and a click runs the part's own action (see `widgets/README.md`).
+- Widgets are left out of search, Favorites, Recent and the filters. In a sorted category they are sorted like the other tiles (by name, by when they were added...); pin them to keep them first.
 - Clicking a widget runs its `Command=`, or by default opens what fits: Task Manager (CPU, GPU, RAM, processes), the disk in Explorer, network or system settings.
 
 ### Widgets
 
-A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options > Dashboard > Widgets pick **Widget** and **Widget option** in the tile editor. `Label=` is the title shown on the widget (by default the name of the kind), `Size=2x1` makes it larger (see [Tiles of more cells](#tiles-of-more-cells)).
+A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Options > Categories > *the category* > *the tile* pick **Widget** and **Widget option**. `Label=` is the title shown on the widget (by default the name of the kind; custom widgets draw their own title, if any), `Size=2x1` makes it larger (see [Tiles of more cells](#tiles-of-more-cells)).
 
 | `Widget=` | Shows | `Param=` |
 | --- | --- | --- |
@@ -222,7 +237,7 @@ A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Optio
 
 Windows does not give temperatures to programs without a driver, so Raintile reads them from a sensor program that runs beside it:
 
-- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (free, open source; looked at first): download it, start it (it asks to run as administrator, to read the sensors) and keep it running: in its menu *Options* turn on *Start Minimized*, *Minimize To Tray*, *Run On Windows Startup* and **Remote Web Server > Run**. Raintile reads its sensors from that web server, on this PC only (`http://localhost:8085/data.json`; another port: `SensorPort`, Options > Dashboard); Windows may ask about the firewall: it is not needed for this. Older versions also publish them through WMI, which Raintile reads too.
+- **[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)** (free, open source; looked at first): download it, start it (it asks to run as administrator, to read the sensors) and keep it running: in its menu *Options* turn on *Start Minimized*, *Minimize To Tray*, *Run On Windows Startup* and **Remote Web Server > Run**. Raintile reads its sensors from that web server, on this PC only (`http://localhost:8085/data.json`; another port: `SensorPort`, Options > Widgets); Windows may ask about the firewall: it is not needed for this. Older versions also publish them through WMI, which Raintile reads too.
 - **[HWiNFO](https://www.hwinfo.com/)** (free), when LibreHardwareMonitor is not running: start it (sensors only is enough), open **Settings** and turn on **Shared Memory Support**. Its free version turns the shared memory off after 12 hours: start it again then.
 
 - Without `Param=`, `temps` shows the CPU and GPU temperatures it finds (package, die, hot spot, ...), `fans` the first fans.
@@ -231,23 +246,15 @@ Windows does not give temperatures to programs without a driver, so Raintile rea
 
 ### Skins in a tile
 
-`Widget=skin` with `Param=<config>\<file>.ini` loads a skin you already have in Rainmeter, places it over the tile while the Dashboard is open and unloads it when the launcher hides. The skin keeps its own size: pick one that fits the tile, or change the grid of the Dashboard (`NX`, `NY`).
+`Widget=skin` with `Param=<config>\<file>.ini` loads a skin you already have in Rainmeter, places it over the tile while its category is open and unloads it when the launcher hides. The skin keeps its own size: pick one that fits the tile, or change the grid of the category (`NX`, `NY`).
 
 ### Custom widgets
 
-A custom widget is a Rainmeter `.ini` drawn inside the tile, as part of the launcher (no separate skin). Put it in the data folder, `Widgets\<name>\<name>.ini` (or `Widgets\<name>.ini`), and use `Widget=custom`, `Param=<name>`. Write it like a skin, with these differences:
-
-- `#WIDGETW#` and `#WIDGETH#` are the size of the tile in pixels, `#WIDGETPATH#` the folder of the widget (for images: `#WIDGETPATH#bar.png`). Coordinates start at the top left of the tile.
-- `[Rainmeter]` and `[Metadata]` are ignored; `[Variables]` are added to the launcher's, so give them names of your own (`MyWidgetColor`, not `Color`).
-- Measures update every `DashInterval` ms, while the widget is visible.
-- Section names get a prefix (`CW3_MeterTime`): references as `[MeterTime]`, `[MeasureCPU:%]` and `MeasureName=` are renamed by themselves, names written bare in a bang are not. In a meter's own actions use `#CURRENTSECTION#`: `LeftMouseUpAction=[!SetOption #CURRENTSECTION# FontColor 255,0,0]`.
-- Plugins work as in any skin, but heavy ones slow the launcher down.
-
-The widget is read again when its file changes (refresh the skin).
+A custom widget is a Rainmeter `.ini` drawn inside the tile, as part of the launcher (no separate skin), with scripts of its own if it needs data: put it in the data folder, `Widgets\<name>\<name>.ini`, and use `Widget=custom`, `Param=<name>`; the gallery does it for you. How to write one, and what Raintile offers to widgets (lists of things to start, parts of a tile, `OnShow` / `OnHide`): [Writing Raintile widgets](Widgets.md).
 
 ### Widget gallery
 
-Options > Dashboard > **Widget gallery** lists widgets made for Raintile: **Install** downloads one to the `Widgets` folder (and offers to add it to the Dashboard), **Update** appears when a newer version is out, **Remove** sends it to the Recycle Bin. A widget can run programs like any Rainmeter skin: install only the ones you trust.
+Options > Widgets > **Widget gallery** lists widgets made for Raintile, grouped by where they fit (General, Games...): **Install** downloads one to the `Widgets` folder (and offers to add it as a tile to its category: e.g. Games for a games widget; General ones to the category open last, or the Dashboard), **Add as a tile** adds it to any category, picked from a menu (the suggested one first). With nightly builds (`UpdateChannel=Nightly`) the gallery is the list of the `nightly` branch, with the widgets not released yet; **Update** appears when a newer version is out, **Remove** sends it to the Recycle Bin. A widget can run programs like any Rainmeter skin: install only the ones you trust.
 
 The list is [`widgets/index.json`](../widgets/index.json) in this repository; the widgets themselves can be here (`widgets/<id>/`) or in their authors' repositories. To publish one, see [widgets/README.md](../widgets/README.md).
 
@@ -265,8 +272,8 @@ Order=1            ; position in the menu (default: alphabetical)
 NX=4               ; grid of this category (default: NX/NY from Settings.inc)
 NY=1
 IconSize=12%       ; logo size in this category's tiles (pixels or %)
-Type=              ; Dashboard = a category of widgets (see Dashboard)
 Hidden=            ; 1 = not in the menu (the file and its tiles stay)
+Sort=              ; keep the tiles in an order (see Sorting the tiles): name, name-desc, added, recent, played, playtime
 TileColor=         ; colour of its tiles without a Color= of their own
 TileOpacity=       ; opacity of their background, 0-100 (tiles without Opacity=)
 LogoPos=           ; logo placement of its tiles without their own (e.g. 85,50: on the right)
@@ -302,6 +309,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
 | `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
 | `HotKey` | key combination that starts the tile, also while the launcher is hidden: HotKey plugin names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
+| `Pinned` | `1` = at the start of the category, in the order of the file, whatever the category's `Sort=`: see [Sorting the tiles](#options-window) |
 | `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
 
 ### Tiles of more cells
@@ -360,8 +368,8 @@ The placement is saved in the tile as `LogoPos` (where the centre of the logo go
 Logo placement, framing and the place of the [play time](#play-time) line can also be set once for all the tiles of a category, e.g. every logo on the right, every background framed on its top part or the play time at the top right. The page of a category in Options shows its tiles side by side at the top, with **All tiles** first: it holds the settings of the whole category.
 
 - **All tiles**: the large preview shows the category's framing, logo placement and play time line (a sample text) on placeholder images, or on the images of a tile chosen in **Preview on**; drag and zoom them as on a tile. They are saved in `[Category]` with the same keys (`BgFocus`, `BgZoom`, `LogoPos`, `LogoScale`, `InfoPos`), and every tile without its own follows them, the tiles added later too. The framing is relative to each image, so on other backgrounds it frames the same relative part. On the right: the grid, the logo size, the tile colour and background of the category.
-- On a tile, a chip next to **Framing**, **Logo** and **Play time** says **From All tiles** or **Own**; a dot on the small tile in the strip marks the tiles with something of their own instead of the one of All tiles (colour, background opacity, framing, logo or play time line). Moving a tile's logo, background or play time line gives it its own; the **x** on the row gives it back the one of All tiles. To change every tile at once, use All tiles.
-- **Logo** / **Framing** / **Play time** (All tiles > **Reset**): every tile of the category back to the centre at the normal size (the play time line to the top left), the category's placement included. The row also says how many tiles have a placement of their own.
+- On a tile, a chip next to **Framing**, **Logo** and **Play time** says **From All tiles** or **Own**; a dot on the small tile in the strip marks the tiles with something of their own instead of the one of All tiles (colour, background opacity, framing, logo or play time line). Moving a tile's logo, background or play time line gives it its own; the reset arrow on the row gives it back the one of All tiles. To change every tile at once, use All tiles.
+- **Logos** / **Framing** / **Play time** (All tiles > **Reset every tile**, asked first): every tile of the category back to the centre at the normal size (the play time line to the top left), the category's placement included. The row also says the current placement and how many tiles have one of their own.
 
 ## Adding games and apps
 
@@ -426,12 +434,20 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
 | Categories > *each category* | its tiles side by side, **All tiles** first (grid, logo size, tile colour and background, framing and logo of every tile); a large preview to frame the background and place the logo; edit, drag a tile onto another category in the menu to move it there, turn imported games into normal tiles |
 | Info (at the bottom) | version and updates, your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide |
 
-- Every setting has a fitting control: switches, sliders (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen).
+- Every setting has a fitting control: switches, sliders with their unit (you can also type the value), choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit converts the number for the main screen). The same kind of value has the same control everywhere, in the category editor too. A value that is not valid is outlined in red and not saved until it is fixed.
+- What each setting or field does is written under its name.
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
-- The arrow next to a setting appears when it differs from the default, and restores it.
+- The arrow next to a setting appears when it differs from the default (in the category editor: from All tiles), and restores it. The **x** empties a field (an image or an icon goes to the Recycle Bin, asked first); the bin in the header of a list deletes the entry selected (a tile, a category), asked first.
 - **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
+  - **Sorting the tiles**: under **All tiles**, **Order** picks an order: *Name A–Z*, *Name Z–A*, *Recently added* (the date the tile was added, `Added=`; tiles without one go last), *Recently played* (the last launch: counted by Raintile, Steam's, or measured), *Most launched* (launches counted by Raintile) or *Most play time* (Steam's play time plus the one measured for the other games). Ties keep the order they had.
+    - **Sort now** puts the tiles in that order once; you can still drag them afterwards.
+    - **Keep sorted** keeps them in it (`Sort=` in `[Category]`): new and renamed tiles go to their place, and the launcher works the order out again each time it loads and opens, so the orders by play follow what you play. The remembered scroll position follows the tiles: the tile you launched (or had selected) stays in view where it moved. Dragging and the move buttons are off while it is on, except for pinned tiles.
+    - **Pinned tiles** (the tile's **Pinned** box, or right click on the tile in the launcher > **Pin to the start**) come first, in the order you drag them to, with a pin on their small tile; sorting moves only the others.
   - **Moving a tile to another category**: drag it from the strip onto that category in the menu on the left (the entry is outlined when it can take it). The tile and its images move, and both category files are saved at once. Imported games move only once they are normal tiles.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
+- **Gamepad** (the program only, not `Options.ps1`; off with `Gamepad=0`): while the window is in the foreground the controller moves a ring between the controls. D-pad / left stick move (on a slider left and right change the value, the field next to it is skipped), `A` presses a button, flips a switch, picks a choice or a list entry, opens a drop-down list (up/down choose, `LB`/`RB` jump by 10, `A` keeps, `B` puts back) or types into a text field, `B` goes back to the menu (in the menu it closes the window, in a dialog it cancels), `LB` / `RB` go to the previous / next page, `Start` alone saves and refreshes, the right stick scrolls. The ring goes away when you move the mouse or press a key; the next pad input brings it back without acting.
+  - **On-screen keyboard** (`A` on a text field): the launcher's layout with lower case, **Shift** for capitals and a page of symbols (`#+=`) for paths and commands; the text shows above the keys. `A` types the key, `X` deletes, `Y` adds a space, `LB` / `RB` move the cursor, `LT` is Shift, `RT` the symbols, `Start` (or *Done*) keeps the text, `B` puts back what was there. The keys can be clicked too.
+  - Still mouse or keyboard: key bindings (they wait for a key), colour and file pickers (Windows dialogs), framing the background and placing the logo by dragging (the zoom and logo size sliders work with the pad).
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 
 The window hides the launcher while open. You can always keep editing the files by hand.
@@ -447,7 +463,7 @@ Settings.inc      your settings (every key, with its comments)
 State.inc         last category and scroll positions
 Categories\*.ini  your categories and tiles
 Images\           their icons, backgrounds and logos
-Widgets\          custom widgets (Dashboard), installed from the gallery or by hand
+Widgets\          custom widgets, installed from the gallery or by hand
 Favorites.txt     your favorite tiles
 Usage.txt         how many times and when each tile was launched (Recent)
 Seen.txt          games and apps already shown in the Import list
@@ -473,17 +489,33 @@ With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest r
 - Either way your data is not touched, and only files of this repository's releases on GitHub (https) are downloaded, into a new temporary folder, and checked to be a Rainmeter package before they are used. Without the Options program (a copy of the repository) the PowerShell window only has the installer.
 - **Check now** asks GitHub again; **Release page** opens the release on GitHub.
 
+### Checks and tests
+
+`python tools/check.py` checks a copy of the repository before a commit; the **checks** job of the **Release package** workflow runs it on every pull request, on Windows. It needs Python 3, Windows PowerShell and `lupa` (`pip install lupa`, which brings Lua 5.1, the version of Rainmeter). It takes a few seconds.
+
+- **Checks on the files**: scripts and `.ini`/`.inc` files ASCII only and without BOM; every `.ps1` parses with Windows PowerShell 5.1 (so no PowerShell 7 syntax); `Options.xaml` and the JSON files load; `Raintile.lua` compiles with Lua 5.1 (also the limit of 200 locals); the widget gallery points to files that exist; every setting of `Settings.inc` is in the Options schema; `GRID_VERSION` is bumped when `writeGrid()` changes; every page of `docs\` goes to the wiki.
+- **PowerShell tests** (`tests\ps\`): `Data.ps1` run on temporary folders (first run, a second run that changes nothing, your values kept through an update, the backup of the installer), and the cleaning of tile names (`Get-TileName` of `Scan.ps1`), which must never lead out of their folder.
+- **Lua tests** (`tests\lua\`): `Raintile.lua` runs against a small fake Rainmeter (`tests\lua\rainmeter.lua`), which reads `Raintile.ini` with its include files, keeps meters, measures and variables, runs the bangs and the ActionTimer lists and reloads the skin on `!Refresh`. The launcher is loaded full screen, in a window and docked, and used as a person would (categories, scrolling, hover, keyboard, search, the menus, launching a tile, hiding it). A test fails on anything Rainmeter would log as an error (a bang on a meter that does not exist, a script error) and on what the project does not allow: text that is not ASCII, a value on more than one line, a skin that keeps refreshing itself, an animation that never stops or a timer still running once the launcher is hidden. Sizes are estimated, not drawn: layouts can be checked (entries one under the other), pixels cannot. `python tools/check.py --tests` runs only the tests.
+
+What the fake Rainmeter cannot show (drawing, the order of the layers, real mouse moves, the Options window) is still tested live.
+
+**Before every push**: `python tools/check.py --install-hook` installs a local `pre-push` hook (in `.git\hooks`, next to any you have). From then on every commit you push is checked first, in a temporary copy of that commit (a git worktree), so uncommitted changes do not count; if a check fails the push stops: fix, commit, push again. Branches without `tools\check.py` are pushed unchecked.
+
 ### Publishing a release
 
-1. Set the new version in `Version=` in the `[Metadata]` of `Raintile.ini` and merge it.
+The work goes to the branch **`nightly`** (pull requests included); **`main`** only gets what is released:
+
+1. Set the new version in `Version=` in the `[Metadata]` of `Raintile.ini` on `nightly`, then open a pull request **`nightly` → `main`** and merge it.
 2. On GitHub, **Releases > Draft a new release**: tag with the same number, like **`v1.0.3`**, on `main`; write the notes and publish.
 3. The **Release package** workflow (`.github/workflows/release.yml`) builds the `.rmskin` with `tools/build_rmskin.py` and attaches it to the release by itself, within a minute or two. If the tag and `Version=` differ, it stops and attaches nothing.
 
 For the update check the tag must hold the version (if it has no number, the number in the release title is used, e.g. "1.0.1 - ..."), and the `.rmskin` must be attached (otherwise the update buttons open the release page). The package can also be built by hand: `python tools/build_rmskin.py` writes it to `dist\`; *Actions > Release package > Run workflow* builds it as a downloadable artifact.
 
-**Nightly builds.** On every push to `main` the **Nightly** workflow (`.github/workflows/nightly.yml`) builds the Options program and the `.rmskin` and publishes them as the pre-release **`nightly`** (replacing the previous one). Its version is the last release plus the number of commits since it: after `v1.2.1`, `1.2.1.1`, `1.2.1.2`, ... until the next release; it is written into the package's `Raintile.ini` (`tools/build_rmskin.py --nightly-version`). So merging to `main` and publishing a release are separate steps: changes reach the skins on the nightly channel at once, the others with the next release.
+**After a release** the **Sync nightly** workflow (`.github/workflows/sync-nightly.yml`) merges `main` into `nightly` by itself, so `nightly` has the release tag (the nightly builds count from it) and any fix made on `main` for the release. If the merge has conflicts it stops without pushing: merge `main` into `nightly` by hand. (A tag is also called `nightly`, the pre-release below: in git commands write the branch as `refs/heads/nightly` when it matters.)
 
-The package holds the skin only (with the HotKey plugin from `tools/plugins/`): `README.md`, `docs\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
+**Nightly builds.** On every push to the branch `nightly` the **Nightly** workflow (`.github/workflows/nightly.yml`) builds the Options program and the `.rmskin` and publishes them as the pre-release **`nightly`** (replacing the previous one). Its version is the last release plus the number of commits since it: after `v1.2.1`, `1.2.1.1`, `1.2.1.2`, ... until the next release; it is written into the package's `Raintile.ini` (`tools/build_rmskin.py --nightly-version`). So the work merged into `nightly` reaches the skins on the nightly channel at once, the others with the next release.
+
+The package holds the skin only (with the HotKey plugin from `tools/plugins/`): `README.md`, `docs\`, `tests\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
 
 In the package no *VariableFiles* are needed (settings are in the data folder) and the installer's default backup should be kept: the first update to this version recovers the user's categories and images from that backup.
 
@@ -497,7 +529,7 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | --- | --- | --- |
 | `ScreenX`, `ScreenY`, `ScreenW`, `ScreenH` | `#SCREENAREA...#` | area of the launcher. Use `#WORKAREA...#` to keep the taskbar free, or `#SCREENAREAWIDTH@2#` (etc.) for another monitor |
 | `LauncherMode` | `Fullscreen` | `Fullscreen`, `Window` or `Dock`: see [Full screen, window or docked](#full-screen-window-or-docked) |
-| `WindowW`, `WindowH` | `60%`, `70%` | size of the window (pixels or % of the area) |
+| `WindowW`, `WindowH` | `60%`, `70%` | size of the window (pixels or % of the area; for the window the whole screen counts as its work area, without the taskbar) |
 | `DockSide` | `Left` | side it is docked on: `Left`, `Right`, `Top`, `Bottom` |
 | `DockSize` | `30%` | width when docked left or right, height when docked at the top or bottom (pixels or % of the area) |
 | `DockEdge` | `1` | docked: it also opens when the mouse rests on that edge of the screen |
@@ -616,7 +648,7 @@ Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Contai
 
 ### Gamepad
 
-See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms).
+See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadSearch`, `GamepadOptions`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms).
 
 ### Search
 
@@ -626,11 +658,11 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadDeadZone` (0-32767)
 | `SearchPlaceholder` | `Search` | text shown in the empty search bar |
 | `SearchHover` | `1` | `1` = only the magnifier until the mouse is over it, `0` = always open |
 
-### Dashboard
+### Widgets
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `DashInterval` | `1000` | ms between two updates of the [Dashboard](#dashboard) widgets (250-5000), only while one is on screen |
+| `DashInterval` | `1000` | ms between two updates of the [widgets](#widgets-and-the-dashboard) (250-5000), only while a category with widgets is on screen |
 | `SensorPort` | `8085` | port of LibreHardwareMonitor's web server (its Options > Remote Web Server), read for the [sensors](#temperatures-and-fans) |
 
 ### Clock
@@ -669,7 +701,11 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFold
 | `ShowLabels` | `1` | show tile labels |
 | `TileInfo` | `Hover` | [play time](#play-time) line on the tiles: `Hover` (highlighted tile), `Always` or `Never` |
 | `InfoFontSize` | `10` | its font size (points) |
-| `GameUpdates` | `1` | Steam games with an [update waiting](#play-time) say so on that line; `0` turns it off |
+| `GameUpdates` | `1` | Steam games with an [update waiting](#play-time) say so on a line above the play time, with a border on their tile; `0` turns it off |
+| `DownloadInfo` | `percent speed eta size schedule` | parts of the update line: `percent`, `size`, `speed`, `eta`, `schedule` |
+| `DownloadStyle` | `Bar` | progress of a download on its tile: `Bar`, `Greyscale` or `Both` |
+| `DownloadColor1` / `DownloadColor2` | `0,210,180,255` / `120,90,255,255` | the border of a tile with an update (gradient from 1 to 2) and the bar (1) |
+| `UpdateGlowTime` | `3` | seconds the border turns when the launcher opens; `0` = still |
 | `FontFace` | `Segoe UI` | font |
 | `MenuFontSize`, `LabelFontSize` | `12`, `14` | font sizes (points) |
 | `BgColor` | `8,8,12,200` | launcher background |
@@ -741,8 +777,10 @@ TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated whi
   Generated/Missing.txt      tiles of games no longer installed (last search)
   Generated/Playtime.txt     play time of the Steam games
   Generated/GameUpdates.txt  Steam games with an update waiting
-  Generated/DashOn.txt       present while a Dashboard is on screen: the helper collects its data
-  Generated/DashData.txt     the data of the Dashboard widgets (written by the helper)
+  Generated/DownloadOn.txt   while the launcher is open: the downloads for the helper to follow
+  Generated/Downloads.txt    their progress, speed and time left (Helper.ps1)
+  Generated/DashOn.txt       present while a category with widgets is on screen: the helper collects their data
+  Generated/DashData.txt     the data of the widgets (written by the helper)
   Generated/DockEdge.txt     docked with DockEdge=1: the edge the helper watches to open it
   Generated/LauncherSize.txt size of the launcher, for the helper to find its window
   Generated/TileKeys.inc     the measures of the TileKeys mini-skin

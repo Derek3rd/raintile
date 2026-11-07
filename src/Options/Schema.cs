@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 namespace RaintileOptions
 {
     // Kinds: bool, choice (Choices = value, label), int / float (slider: Min,
-    // Max, Step, Unit), size (pixels or % of the screen: Axis W/H), color,
+    // Max, Step, Unit; NoSlider: a text box only), size (pixels or % of the screen: Axis W/H), color,
     // text, font, category, stores, pad (gamepad buttons), key, combo (key with
     // modifiers), keys (two keys for one action: Pair), screen (ScreenX/Y/W/H),
     // info (text only), action (button), secret (hidden, saved encrypted).
@@ -19,6 +19,7 @@ namespace RaintileOptions
         public string[] Pair;
         public double Min, Max, Step = 1;
         public string Unit = "", Axis = "H";
+        public bool NoSlider;
     }
 
     public class Group

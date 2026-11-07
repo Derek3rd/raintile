@@ -34,10 +34,10 @@ namespace RaintileOptions
             {
                 new Group { Title = "Grid", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "int", Key = "NX", Label = "Columns", Help = "", Min = 1.0, Max = 12.0, Step = 1.0, Unit = "" },
-                    new Item { Kind = "int", Key = "NY", Label = "Rows", Help = "", Min = 1.0, Max = 8.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "int", Key = "NX", Label = "Columns", Help = "", Min = 1.0, Max = 12.0, Step = 1.0, Unit = "columns" },
+                    new Item { Kind = "int", Key = "NY", Label = "Rows", Help = "", Min = 1.0, Max = 8.0, Step = 1.0, Unit = "rows" },
                     new Item { Kind = "choice", Key = "ScrollDir", Label = "Scroll direction", Help = "", Choices = new List<string[]> { new[] { "V", "Vertical" }, new[] { "H", "Horizontal" } } },
-                    new Item { Kind = "int", Key = "ScrollStep", Label = "Rows per mouse wheel notch", Help = "", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "int", Key = "ScrollStep", Label = "Rows per mouse wheel notch", Help = "", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "rows" },
                     new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last row the first one comes back (only when the tiles do not all fit)." },
                 } },
                 new Group { Title = "Spacing", Help = "In pixels, or as a percentage of the screen.", Items = new List<Item>
@@ -61,16 +61,16 @@ namespace RaintileOptions
                     new Item { Kind = "size", Key = "MenuItemPad", Label = "Entry padding", Help = "", Axis = "W" },
                     new Item { Kind = "size", Key = "MenuGap", Label = "Space between entries", Help = "", Axis = "W" },
                     new Item { Kind = "size", Key = "MenuRadius", Label = "Corner radius", Help = "", Axis = "H" },
-                    new Item { Kind = "int", Key = "MenuIconDimAlpha", Label = "Opacity of inactive icons", Help = "", Min = 0.0, Max = 255.0, Step = 5.0, Unit = "" },
+                    new Item { Kind = "int", Key = "MenuIconDimAlpha", Label = "Opacity of inactive icons", Help = "0 = invisible, 255 = as the active one.", Min = 0.0, Max = 255.0, Step = 5.0, Unit = "/ 255" },
                 } },
                 new Group { Title = "Favorites, Recent, Not played yet", Help = "Categories made of the tiles of the others: the icon buttons right of the clock.", Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "ShowFavorites", Label = "Favorites", Help = "Right click a tile > Add to Favorites." },
                     new Item { Kind = "bool", Key = "ShowRecent", Label = "Recent", Help = "" },
                     new Item { Kind = "choice", Key = "RecentOrder", Label = "Recent shows", Help = "", Choices = new List<string[]> { new[] { "Recent", "Last launched" }, new[] { "MostUsed", "Most used" } } },
-                    new Item { Kind = "int", Key = "RecentCount", Label = "Tiles in Recent", Help = "", Min = 1.0, Max = 48.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "int", Key = "RecentCount", Label = "Tiles in Recent", Help = "", Min = 1.0, Max = 48.0, Step = 1.0, Unit = "tiles" },
                     new Item { Kind = "bool", Key = "ShowUnplayed", Label = "Not played yet", Help = "Tiles never launched, the ones added last first." },
-                    new Item { Kind = "int", Key = "UnplayedCount", Label = "Tiles in Not played yet", Help = "", Min = 1.0, Max = 96.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "int", Key = "UnplayedCount", Label = "Tiles in Not played yet", Help = "", Min = 1.0, Max = 96.0, Step = 1.0, Unit = "tiles" },
                 } },
                 new Group { Title = "Filter bar", Help = "Chips above the search results, one per tag (Tags of the tiles) and per store: a click shows only the results that have it.", Items = new List<Item>
                 {
@@ -91,7 +91,7 @@ namespace RaintileOptions
                 } },
                 new Group { Title = "Buttons", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "int", Key = "CloseSize", Label = "Size of the X and gear buttons", Help = "", Min = 8.0, Max = 40.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "int", Key = "CloseSize", Label = "Size of the X and gear buttons", Help = "", Min = 8.0, Max = 40.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "bool", Key = "ShowPower", Label = "Power button", Help = "Left of the gear: Lock, Sleep, Restart, Shut down. Restart and Shut down want a second click." },
                 } },
             } },
@@ -106,7 +106,15 @@ namespace RaintileOptions
                     new Item { Kind = "choice", Key = "TileInfo", Label = "Play time and last launch", Help = "A line on the tile, at the top left unless moved in the preview of the tile: hours played (Steam games) and when it was last launched. Tiles of games no longer installed always say so.", Choices = new List<string[]> { new[] { "Hover", "On the highlighted tile" }, new[] { "Always", "Always" }, new[] { "Never", "Never" } } },
                     new Item { Kind = "int", Key = "InfoFontSize", Label = "Play time font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "bool", Key = "TrackPlaytime", Label = "Measure play time outside Steam", Help = "The background helper looks for the game a tile starts and counts how long it runs." },
-                    new Item { Kind = "bool", Key = "GameUpdates", Label = "Steam updates waiting", Help = "Steam games with an update to download say so on the play time line, with its size and when Steam scheduled it." },
+                    new Item { Kind = "bool", Key = "GameUpdates", Label = "Steam updates waiting", Help = "Steam games with an update to download say so on a line above the play time, always shown, and their tile gets a border. While it downloads the line follows it live." },
+                } },
+                new Group { Title = "Steam updates", Help = null, Items = new List<Item>
+                {
+                    new Item { Kind = "text", Key = "DownloadInfo", Label = "What the update line says", Help = "Any of: percent, size (downloaded / total), speed, eta (time left), schedule (when Steam will download it), separated by spaces." },
+                    new Item { Kind = "choice", Key = "DownloadStyle", Label = "Download on the tile", Help = "How the progress of a download shows on its tile.", Choices = new List<string[]> { new[] { "Bar", "A bar along the bottom" }, new[] { "Greyscale", "Background in greyscale, coloured again as it goes" }, new[] { "Both", "Both" } } },
+                    new Item { Kind = "color", Key = "DownloadColor1", Label = "Colour 1", Help = "Border of a tile with an update (a gradient from 1 to 2) and the bar." },
+                    new Item { Kind = "color", Key = "DownloadColor2", Label = "Colour 2", Help = "Other end of the border gradient." },
+                    new Item { Kind = "int", Key = "UpdateGlowTime", Label = "Border turning", Help = "Seconds the border turns when the launcher opens. 0 = it stays still.", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "s" },
                 } },
                 new Group { Title = "Tiles", Help = null, Items = new List<Item>
                 {
@@ -200,7 +208,7 @@ namespace RaintileOptions
                 {
                     new Item { Kind = "bool", Key = "Gamepad", Label = "Gamepad support", Help = "" },
                     new Item { Kind = "pad", Key = "GamepadToggle", Label = "Open / close", Help = "Buttons to hold together." },
-                    new Item { Kind = "int", Key = "GamepadDeadZone", Label = "Stick dead zone", Help = "", Min = 0.0, Max = 32767.0, Step = 500.0, Unit = "" },
+                    new Item { Kind = "int", Key = "GamepadDeadZone", Label = "Stick dead zone", Help = "How far the stick moves before it counts.", Min = 0.0, Max = 32767.0, Step = 500.0, Unit = "/ 32767" },
                     new Item { Kind = "int", Key = "GamepadRepeatDelay", Label = "Repeat delay", Help = "Holding a direction: wait before it repeats.", Min = 50.0, Max = 1000.0, Step = 10.0, Unit = "ms" },
                     new Item { Kind = "int", Key = "GamepadRepeatRate", Label = "Repeat interval", Help = "", Min = 30.0, Max = 500.0, Step = 10.0, Unit = "ms" },
                 } },
@@ -212,18 +220,19 @@ namespace RaintileOptions
                     new Item { Kind = "info", Key = "", Label = "LB / RB", Help = "Previous / next category" },
                     new Item { Kind = "pad", Key = "GamepadSearch", Label = "Search with the on-screen keyboard", Help = "D-pad/stick move on it, A types, X deletes, Start keeps the results, B closes." },
                     new Item { Kind = "info", Key = "", Label = "LT / RT", Help = "Filter chips of the search results" },
+                    new Item { Kind = "pad", Key = "GamepadOptions", Label = "Open these options", Help = "As the gear. RS is the right stick click. Not on a button of the search or of Open / close." },
                 } },
             } },
-            new Page { Id = "dashboard", Title = "Dashboard", Icon = 0xE9D2, Desc = "Categories of widgets: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>
+            new Page { Id = "dashboard", Title = "Widgets", Icon = 0xE9D2, Desc = "Tiles that show something instead of starting it, in any category: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>
             {
                 new Group { Title = null, Help = null, Dash = true, Items = new List<Item>
                 {
                 } },
-                new Group { Title = "Widgets", Help = "The tiles of the Dashboard are widgets: pick their kind, size and background under Dashboard > Widgets.", Items = new List<Item>
+                new Group { Title = "Data", Help = "Any tile becomes a widget with Widget in the tile editor (Categories > the category > the tile), with its size and background.", Items = new List<Item>
                 {
-                    new Item { Kind = "int", Key = "DashInterval", Label = "Update every", Help = "Only while a Dashboard is on screen.", Min = 250.0, Max = 5000.0, Step = 250.0, Unit = "ms" },
+                    new Item { Kind = "int", Key = "DashInterval", Label = "Update every", Help = "Only while a category with widgets is on screen.", Min = 250.0, Max = 5000.0, Step = 250.0, Unit = "ms" },
                     new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours)." },
-                    new Item { Kind = "int", Key = "SensorPort", Label = "LibreHardwareMonitor port", Help = "The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).", Min = 1.0, Max = 65535.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "int", Key = "SensorPort", Label = "LibreHardwareMonitor port", Help = "The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).", Min = 1.0, Max = 65535.0, Step = 1.0, Unit = "", NoSlider = true },
                     new Item { Kind = "info", Key = "", Label = "Custom widgets", Help = "Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>." },
                 } },
                 new Group { Title = null, Help = null, Market = true, Items = new List<Item>
@@ -339,6 +348,10 @@ namespace RaintileOptions
             { "DockEdgeDelay", "300" },
             { "DockSide", "Left" },
             { "DockSize", "30%" },
+            { "DownloadColor1", "0,210,180,255" },
+            { "DownloadColor2", "120,90,255,255" },
+            { "DownloadInfo", "percent speed eta size schedule" },
+            { "DownloadStyle", "Bar" },
             { "EdgeFade", "1" },
             { "FadeDuration", "0" },
             { "FilterBar", "1" },
@@ -351,6 +364,7 @@ namespace RaintileOptions
             { "FrameRate", "Auto" },
             { "Gamepad", "1" },
             { "GamepadDeadZone", "12000" },
+            { "GamepadOptions", "RS" },
             { "GamepadRepeatDelay", "350" },
             { "GamepadRepeatRate", "110" },
             { "GamepadSearch", "Y" },
@@ -441,6 +455,7 @@ namespace RaintileOptions
             { "TrackPlaytime", "1" },
             { "UnplayedCount", "24" },
             { "UpdateChannel", "Release" },
+            { "UpdateGlowTime", "3" },
             { "WindowH", "70%" },
             { "WindowW", "60%" },
         };

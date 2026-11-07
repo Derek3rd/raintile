@@ -48,7 +48,7 @@ namespace RaintileOptions
             changedFiles.Clear();
             if (!noRefresh) needsRefresh = false;
             UpdateDirty();
-            status.Text = "Saved";
+            status.Text = "Saved.";
             if (!noRefresh) InvokeRainmeter("!Refresh \"" + Core.Config + "\"");
         }
 
@@ -69,7 +69,7 @@ namespace RaintileOptions
                 double p = PlannedProgress((DateTime.Now - refreshStart).TotalMilliseconds);
                 progressBar.Width = p * progressTrack.ActualWidth;
                 progressPercent.Text = (int)Math.Floor(p * 100) + "%";
-                progressStage.Text = p < 0.3 ? "Saving the settings\u2026" : p < 0.85 ? "Refreshing the skin\u2026" : "Opening the launcher\u2026";
+                progressStage.Text = p < 0.3 ? "Saving the settings..." : p < 0.85 ? "Refreshing the skin..." : "Opening the launcher...";
                 if (p >= 1)
                 {
                     refreshTimer.Stop();
@@ -136,7 +136,7 @@ namespace RaintileOptions
             NewProgressPlan();
             progressBar.Width = 0;
             progressPercent.Text = "0%";
-            progressStage.Text = "Saving the settings\u2026";
+            progressStage.Text = "Saving the settings...";
             overlay.Visibility = Visibility.Visible;
             refreshStart = DateTime.Now;
             refreshTimer.Start();
@@ -145,7 +145,7 @@ namespace RaintileOptions
         // Info > Back up: the data folder to a zip (unsaved changes are saved first)
         void InvokeBackup()
         {
-            if (Core.Data == Core.Resources) { ShowDialog("Raintile", "Your data folder is not ready yet: refresh the skin once, then try again."); return; }
+            if (Core.Data == Core.Resources) { ShowDialog("Back up", "Your data folder is not ready yet: refresh the skin once, then try again."); return; }
             if (dirtySettings) SaveAll(true);
             var dlg = new Microsoft.Win32.SaveFileDialog
             {
@@ -157,27 +157,27 @@ namespace RaintileOptions
             try
             {
                 Core.NewDataBackup(Core.Data, dlg.FileName);
-                ShowDialog("Raintile", "Backup saved:\r\n" + dlg.FileName);
+                ShowDialog("Back up", "Backup saved:\r\n" + dlg.FileName);
             }
-            catch (Exception e) { ShowDialog("Raintile", "The backup could not be saved: " + e.Message); }
+            catch (Exception e) { ShowDialog("Back up", "The backup could not be saved: " + e.Message); }
         }
 
         // Info > Restore: replaces the data folder with a backup, then the window
         // closes and the skin reloads
         void InvokeRestore()
         {
-            if (Core.Data == Core.Resources) { ShowDialog("Raintile", "Your data folder is not ready yet: refresh the skin once, then try again."); return; }
+            if (Core.Data == Core.Resources) { ShowDialog("Restore backup", "Your data folder is not ready yet: refresh the skin once, then try again."); return; }
             string zip = SelectFile("Raintile backup|*.zip|All files|*.*");
             if (zip == null) return;
             string problem = Core.TestDataBackup(zip);
-            if (problem != null) { ShowDialog("Raintile", "This file can not be restored: " + problem + "."); return; }
+            if (problem != null) { ShowDialog("Restore backup", "This file cannot be restored: " + problem + "."); return; }
             var r = ShowDialog("Restore backup", "Replace your settings, categories, images, favorites and usage with this backup?\r\n\r\n" +
                 "Your current data is not deleted: it is kept in a folder next to it. Unsaved changes in this window are lost.", new[] { "Restore", "Cancel" });
             if (r.Button != "Restore") return;
             string kept;
             try { kept = Core.RestoreDataBackup(zip, Core.Data); }
-            catch (Exception e) { ShowDialog("Raintile", "The backup could not be restored, nothing was changed: " + e.Message); return; }
-            ShowDialog("Raintile", "Backup restored. Your previous data is in:\r\n" + kept);
+            catch (Exception e) { ShowDialog("Restore backup", "The backup could not be restored, nothing was changed: " + e.Message); return; }
+            ShowDialog("Restore backup", "Backup restored. Your previous data is in:\r\n" + kept);
             // the launcher shows itself once reloaded; nothing left to save here
             WriteShowOnLoad();
             skipSavePrompt = true;
@@ -200,7 +200,7 @@ namespace RaintileOptions
                     case "OpenGuide": OpenUrl("https://github.com/Derek3rd/raintile/blob/main/docs/Guide.md"); break;
                 }
             }
-            catch (Exception e) { ShowDialog("Raintile", e.Message); }
+            catch (Exception e) { ShowDialog("Open", e.Message); }
         }
     }
 }

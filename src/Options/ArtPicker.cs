@@ -30,20 +30,20 @@ namespace RaintileOptions
                 Title = kind + " for " + name, Owner = win, WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Width = 820, Height = 600, ShowInTaskbar = false,
                 Background = ResBrush("CardBg"), Foreground = ResBrush("TextBrush"),
-                FontFamily = new FontFamily("Segoe UI"), FontSize = 13,
+                FontFamily = new FontFamily("Segoe UI"), FontSize = 13,   // ui-exempt: base size of a window, as the main window
             };
             d.SourceInitialized += (s, e) => SetDarkTitle(d);
-            var root = new DockPanel { Margin = T(20, 16, 20, 16) };
+            var root = new DockPanel { Margin = Gap.Dialog };
             d.Content = root;
 
-            var status = NewText("Searching\u2026", 13, ResBrush("DimBrush"), false, true);
-            status.Margin = T(0, 0, 0, 10);
+            var status = NewHelp("Searching...");
+            status.Margin = T(0, 0, 0, Gap.Text);
             DockPanel.SetDock(status, Dock.Top);
             root.Children.Add(status);
 
             var bar = NewPanel(Orientation.Horizontal);
             bar.HorizontalAlignment = HorizontalAlignment.Right;
-            bar.Margin = T(0, 12, 0, 0);
+            bar.Margin = T(0, Gap.DialogBar, 0, 0);
             DockPanel.SetDock(bar, Dock.Bottom);
             root.Children.Add(bar);
             var use = NewButton("Use it", "AccentButton");
@@ -51,7 +51,7 @@ namespace RaintileOptions
             use.IsEnabled = false;
             var cancel = NewButton("Cancel");
             cancel.MinWidth = 90;
-            cancel.Margin = T(8, 0, 0, 0);
+            cancel.Margin = T(Gap.Control, 0, 0, 0);
             cancel.Click += (s, e) => d.Close();
             AddTo(bar, use);
             AddTo(bar, cancel);
@@ -67,10 +67,10 @@ namespace RaintileOptions
             {
                 if (list.Count == 0)
                 {
-                    status.Text = "Nothing found for " + name + "." + (key == "" ? " With a SteamGridDB key (Options > Import) more games and apps are found." : "");
+                    status.Text = "Nothing found for " + name + "." + (key == "" ? " A SteamGridDB key (Options > Import) finds more." : "");
                     return;
                 }
-                status.Text = list.Count + " found: click one, then Use it." + (key == "" ? " With a SteamGridDB key (Options > Import) there are more." : "");
+                status.Text = list.Count + " found: click one, then Use it." + (key == "" ? " A SteamGridDB key (Options > Import) finds more." : "");
                 foreach (var c in list)
                 {
                     var img = new Image { Stretch = Stretch.Uniform, Width = w, Height = h - 22 };
@@ -87,12 +87,12 @@ namespace RaintileOptions
                     catch { }
                     var panel = NewPanel();
                     AddTo(panel, img);
-                    var label = NewText(c.Source, 11, ResBrush("DimBrush"));
+                    var label = NewText(c.Source, Fs.Badge, ResBrush("DimBrush"));
                     label.HorizontalAlignment = HorizontalAlignment.Center;
                     AddTo(panel, label);
                     var box = new Border
                     {
-                        Child = panel, Padding = T(6), Margin = T(0, 0, 10, 10), CornerRadius = new CornerRadius(6),
+                        Child = panel, Padding = T(Gap.Icon), Margin = T(0, 0, Gap.Text, Gap.Text), CornerRadius = new CornerRadius(6),
                         BorderThickness = T(2), BorderBrush = Brushes.Transparent, Background = ResBrush("FieldBg"),
                         Cursor = System.Windows.Input.Cursors.Hand,
                     };
@@ -113,10 +113,10 @@ namespace RaintileOptions
             {
                 if (chosen == null) return;
                 use.IsEnabled = false;
-                status.Text = "Downloading\u2026";
+                status.Text = "Downloading...";
                 string url = chosen.Url, file = null;
                 try { file = await Task.Run(() => Art.Download(url)); }
-                catch (Exception ex) { status.Text = "The download failed: " + ex.Message; use.IsEnabled = true; return; }
+                catch (Exception ex) { status.Text = "Download failed: " + ex.Message; use.IsEnabled = true; return; }
                 try
                 {
                     Core.CopyTileImage(b, kind.ToLowerInvariant(), name, file);

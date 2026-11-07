@@ -13,7 +13,8 @@ ScreenH=#SCREENAREAHEIGHT#
 ;               move it; it stays open when you click elsewhere
 ;   Dock        on a side of the screen (DockSide: Left, Right, Top, Bottom),
 ;               DockSize wide (or tall): it comes in from that side
-; Sizes in pixels or % of the area.
+; Sizes in pixels or % of the area. A window never covers the taskbar: on
+; the whole screen its area is the work area, so 100% leaves the taskbar free.
 LauncherMode=Fullscreen
 WindowW=60%
 WindowH=70%
@@ -234,6 +235,10 @@ GamepadRepeatRate=110
 ; on it, A types, X deletes, Start keeps the results, B closes. LT/RT pick
 ; the filter chips of the results.
 GamepadSearch=Y
+; Button that opens the Options window, as the gear (RS = right stick click).
+; It does nothing on a button of GamepadSearch or GamepadToggle; on X, LT or
+; RT it takes their place. Empty = no button.
+GamepadOptions=RS
 
 ; --- Search ---------------------------------------------------------------------
 ; Bar at the top left, after the clock and the Favorites / Recent buttons (or
@@ -245,12 +250,12 @@ SearchPlaceholder=Search
 ; type and while a search is shown), 0 = always open
 SearchHover=1
 
-; --- Dashboard ------------------------------------------------------------------
-; A category with Type=Dashboard holds widgets (CPU, GPU, memory, disks,
+; --- Widgets --------------------------------------------------------------------
+; Any tile of any category can be a widget (Widget=: CPU, GPU, memory, disks,
 ; network, processes, system, temperatures, skins, custom ones): see
-; Categories\Dashboard.ini. They update every DashInterval ms, only while the
-; Dashboard is on screen. Temperatures and fans: HWiNFO running with "Shared
-; Memory Support" on.
+; Categories\Dashboard.ini, the example. They update every DashInterval ms,
+; only while their category is on screen. Temperatures and fans:
+; LibreHardwareMonitor's web server, or HWiNFO with "Shared Memory Support" on.
 DashInterval=1000
 ; Port of LibreHardwareMonitor's web server (in it: Options > Remote Web
 ; Server > Run), for temperatures, fans and the other sensors
@@ -321,10 +326,25 @@ InfoFontSize=10
 ; background helper looks for the game started by the tile and counts how
 ; long it runs (TimePlayed.txt in the data folder)
 TrackPlaytime=1
-; 1 = Steam games with an update waiting say so on the TileInfo line, in place
-; of the play time: "Update 5.4 GB - Sat 06:27" (size and time Steam
-; scheduled it), read from Steam's appmanifest files
+; 1 = Steam games with an update waiting say so on a line above the play
+; time, always shown: "Update 5.4 GB - Sat 06:27" (size and time Steam
+; scheduled it), "Downloading 40% - 25.3 MB/s - 2:35 left" while it
+; downloads (followed live while the launcher is open). Their tile gets a
+; border in DownloadColor1 and DownloadColor2.
 GameUpdates=1
+; What the update line says, in any order: percent, size (downloaded / total),
+; speed, eta (time left), schedule (when Steam will download it)
+DownloadInfo=percent speed eta size schedule
+; How a download shows on its tile: Bar (a bar along the bottom), Greyscale
+; (the background in greyscale, coloured again from the left as it goes) or
+; Both
+DownloadStyle=Bar
+; Colours of the border of a tile with an update (a gradient from 1 to 2) and
+; of the bar (1)
+DownloadColor1=0,210,180,255
+DownloadColor2=120,90,255,255
+; Seconds the border turns when the launcher opens (0 = it stays still)
+UpdateGlowTime=3
 FontFace=Segoe UI
 MenuFontSize=12
 LabelFontSize=14

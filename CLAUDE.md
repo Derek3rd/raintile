@@ -22,7 +22,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - `src/Options/`: the Options window (`RaintileOptions.exe`, C# 7.3, WPF), one file per page or feature. The workflows build it into `@Resources/Bin/`. `@Resources/Scripts/Options.ps1` + `Options.xaml` stay as the fallback when the program is missing, as the library of `TileAction.ps1`, and as the source of the settings schema (`$schema`): after changing it run `python tools/gen_options_schema.py` (needs `pwsh`), which writes `src/Options/SchemaData.cs`; the workflows stop if it is out of date.
 - `@Resources/Settings.inc`, `State.inc`, `Categories/`, `Images/`: the defaults, copied to the user data folder on first run.
 - `@Resources/Generated/`: written by the skin (git-ignored). Never edit or commit it.
-- `widgets/`: the Dashboard widget gallery (`index.json`).
+- `widgets/`: the widget gallery (`index.json`) and the widgets hosted here (`widgets/<Id>/`). `docs/Widgets.md`: how to write widgets and the widget API.
 - `tools/build_rmskin.py`: builds the `.rmskin`. `tools/dev-build.ps1`: builds the Options program into the repository's `@Resources\Bin\` (git-ignored), for testing. `.github/workflows/`: `release.yml` (tag `vX.Y.Z`), `nightly.yml` (every push to `nightly`), `sync-nightly.yml` (merges `main` back into `nightly` after a release).
 
 ## Conventions
@@ -44,6 +44,12 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - The Options window: `RaintileOptions.exe` when present, otherwise `conhost.exe --headless powershell.exe -STA` with `Options.ps1`, so it has no console window and survives skin refreshes.
 - File writes: UTF-8 without BOM, atomic (write `.tmp`, then `Move-Item`).
 - Comments explain why, at the density of the surrounding code.
+
+## Widgets
+- Every tile that is not a normal tile or one of the system widgets (cpu, gpu, ram, disk, network, processes, system, temps, fans) is an installable custom widget in `widgets/<Id>/`, listed in `widgets/index.json` with its `category`: no widget-specific logic in `Raintile.lua` or `Helper.ps1`.
+- What a widget needs that Rainmeter does not give goes into the generic widget API (the `[Raintile]` section, `#WIDGET:Name#`, `Part=1`, `List=`, `OnShow`/`OnHide`, `WidgetChanged()`), documented in `docs/Widgets.md` in the same PR.
+- Widget scripts follow the project's rules: PowerShell 5.1, ASCII, work only from `OnShow` (never at rest), exit early when nothing changed, other programs' data read only (SQLite: `winsqlite3.dll`, `mode=ro`), whole-file writes in the widget's folder.
+- A new widget is tried from the gallery of the `nightly` branch first (relative `base` in `index.json`); a widget meant for versions before the API keeps an absolute `base`.
 
 ## Security
 - Data from outside (GitHub API, SteamGridDB, Steam, Dashboard Icons, store manifests, files in the data folder) is untrusted: `https` only, check hosts before use, never pass it unchecked to `Start-Process`, `Invoke-WebRequest` or a path.

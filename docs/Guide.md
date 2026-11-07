@@ -245,15 +245,7 @@ Windows does not give temperatures to programs without a driver, so Raintile rea
 
 ### Custom widgets
 
-A custom widget is a Rainmeter `.ini` drawn inside the tile, as part of the launcher (no separate skin). Put it in the data folder, `Widgets\<name>\<name>.ini` (or `Widgets\<name>.ini`), and use `Widget=custom`, `Param=<name>`. Write it like a skin, with these differences:
-
-- `#WIDGETW#` and `#WIDGETH#` are the size of the tile in pixels, `#WIDGETPATH#` the folder of the widget (for images: `#WIDGETPATH#bar.png`). Coordinates start at the top left of the tile.
-- `[Rainmeter]` and `[Metadata]` are ignored; `[Variables]` are added to the launcher's, so give them names of your own (`MyWidgetColor`, not `Color`).
-- Measures update every `DashInterval` ms, while the widget is visible.
-- Section names get a prefix (`CW3_MeterTime`): references as `[MeterTime]`, `[MeasureCPU:%]` and `MeasureName=` are renamed by themselves, names written bare in a bang are not. In a meter's own actions use `#CURRENTSECTION#`: `LeftMouseUpAction=[!SetOption #CURRENTSECTION# FontColor 255,0,0]`.
-- Plugins work as in any skin, but heavy ones slow the launcher down.
-
-The widget is read again when its file changes (refresh the skin).
+A custom widget is a Rainmeter `.ini` drawn inside the tile, as part of the launcher (no separate skin), with scripts of its own if it needs data: put it in the data folder, `Widgets\<name>\<name>.ini`, and use `Widget=custom`, `Param=<name>`; the gallery does it for you. How to write one, and what Raintile offers to widgets (lists of things to start, parts of a tile, `OnShow` / `OnHide`): [Writing Raintile widgets](Widgets.md).
 
 ### Widget gallery
 

@@ -6,9 +6,11 @@
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\options-shots.ps1 -Base origin/nightly
 #
-# Output in build\options-shots\ (git-ignored): current\ and base\ (program\,
-# one PNG per page and screen), diff\ (the current shot dimmed, the
-# changed pixels red) and report.txt. The windows use a copy of the data folder and
+# Output in build\options-shots\ (git-ignored): current\ and base\ (one PNG per page
+# and screen), diff\ (the current shot dimmed, the changed pixels red) and
+# report.txt. Both programs are built here from their sources (current-bin\,
+# base-bin\), never taken from @Resources\Bin: that one may be older than the
+# sources, or locked by an open Options window. The windows use a copy of the data folder and
 # the skin name RaintileShots, so nothing is saved and no bang reaches the skin.
 # Pages are reached with UI Automation: every entry of the menu, every screen of a
 # page scrolled, and on a category page also its first tile. Dialogs are not shot.
@@ -211,25 +213,20 @@ function Build-Program([string]$tree, [string]$bin) {
 # Shoots the window of a source tree whose @Resources (Options.xaml) and program
 # are given
 function Save-Tree([string]$label, [string]$exe, [string]$tree) {
-    $res = Join-Path $tree '@Resources'
-    if ($exe -and (Test-Path -LiteralPath $exe)) { Save-Window $exe $res (Join-Path $Out "$label\program") }
-    else { Write-Output "  $label\program: no RaintileOptions.exe (no .NET SDK?), not shot" }
+    Save-Window $exe (Join-Path $tree '@Resources') (Join-Path $Out $label)
 }
 
-foreach ($d in @('current', 'base', 'diff', 'base-bin')) {
+foreach ($d in @('current', 'base', 'diff', 'current-bin', 'base-bin')) {
     $p = Join-Path $Out $d
     if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force }
 }
 New-Item -ItemType Directory -Force $Out | Out-Null
-$hasDotnet = [bool](Get-Command dotnet -ErrorAction SilentlyContinue)
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+    throw 'the .NET SDK (dotnet) is needed: the programs are built from their sources'
+}
 
 Write-Output 'Shooting this checkout...'
-$exe = Join-Path $repo '@Resources\Bin\RaintileOptions.exe'
-if ($hasDotnet) {
-    # rebuilds only when a source is newer than the program
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'dev-build.ps1') | Out-Null
-}
-Save-Tree 'current' $exe $repo
+Save-Tree 'current' (Build-Program $repo (Join-Path $Out 'current-bin')) $repo
 
 if ($Base) {
     Write-Output "Shooting $Base..."
@@ -247,39 +244,33 @@ if ($Base) {
         # what the skin found (games, icons) for the Import page, as in this checkout
         $gen = Join-Path $repo '@Resources\Generated'
         if (Test-Path -LiteralPath $gen) { Copy-Item -Path (Join-Path $gen '*') -Destination (Join-Path $tree '@Resources\Generated') -Recurse -Force }
-        $baseExe = ''
-        if ($hasDotnet) { $baseExe = Build-Program $tree (Join-Path $Out 'base-bin') }
-        Save-Tree 'base' $baseExe $tree
+        Save-Tree 'base' (Build-Program $tree (Join-Path $Out 'base-bin')) $tree
     }
     finally { [void](Invoke-Git worktree remove --force $tree) }
 
     $report = New-Object System.Collections.Generic.List[string]
     $report.Add("Options window: this checkout against $Base (changed pixels, area x0,y0-x1,y1;")
     $report.Add('changes on 2 rows or fewer, the edges of a scrolled view, count as the same)')
-    foreach ($kind in @('program')) {
-        $a = Join-Path $Out "base\$kind"
-        $b = Join-Path $Out "current\$kind"
-        if (-not ((Test-Path -LiteralPath $a) -and (Test-Path -LiteralPath $b))) { continue }
-        $diffDir = Join-Path $Out "diff\$kind"
-        New-Item -ItemType Directory -Force $diffDir | Out-Null
-        $report.Add('')
-        $report.Add("== $kind")
-        $names = @(@(Get-ChildItem $a -Filter *.png) + @(Get-ChildItem $b -Filter *.png) | ForEach-Object { $_.Name } | Sort-Object -Unique)
-        $same = 0
-        foreach ($f in $names) {
-            $fa = Join-Path $a $f
-            $fb = Join-Path $b $f
-            if (-not (Test-Path -LiteralPath $fa)) { $report.Add(('  {0,-34} only in this checkout' -f $f)); continue }
-            if (-not (Test-Path -LiteralPath $fb)) { $report.Add(('  {0,-34} only in {1}' -f $f, $Base)); continue }
-            $r = [ShotsDiff]::Compare($fa, $fb, (Join-Path $diffDir $f))
-            if ($r[0] -lt 0) { $report.Add(('  {0,-34} another size' -f $f)) }
-            # on 2 rows at most: a border cut at the edge of a scrolled view, drawn a
-            # pixel apart from one run to the next
-            elseif ($r[0] -eq 0 -or $r[5] -le 2) { $same++ }
-            else { $report.Add(('  {0,-34} {1,7} px  {2},{3}-{4},{5}' -f $f, $r[0], $r[1], $r[2], $r[3], $r[4])) }
-        }
-        $report.Add(('  {0} of {1} the same' -f $same, $names.Count))
+    $report.Add('')
+    $a = Join-Path $Out 'base'
+    $b = Join-Path $Out 'current'
+    $diffDir = Join-Path $Out 'diff'
+    New-Item -ItemType Directory -Force $diffDir | Out-Null
+    $names = @(@(Get-ChildItem $a -Filter *.png) + @(Get-ChildItem $b -Filter *.png) | ForEach-Object { $_.Name } | Sort-Object -Unique)
+    $same = 0
+    foreach ($f in $names) {
+        $fa = Join-Path $a $f
+        $fb = Join-Path $b $f
+        if (-not (Test-Path -LiteralPath $fa)) { $report.Add(('  {0,-34} only in this checkout' -f $f)); continue }
+        if (-not (Test-Path -LiteralPath $fb)) { $report.Add(('  {0,-34} only in {1}' -f $f, $Base)); continue }
+        $r = [ShotsDiff]::Compare($fa, $fb, (Join-Path $diffDir $f))
+        if ($r[0] -lt 0) { $report.Add(('  {0,-34} another size' -f $f)) }
+        # on 2 rows at most: a border cut at the edge of a scrolled view, drawn a
+        # pixel apart from one run to the next
+        elseif ($r[0] -eq 0 -or $r[5] -le 2) { $same++ }
+        else { $report.Add(('  {0,-34} {1,7} px  {2},{3}-{4},{5}' -f $f, $r[0], $r[1], $r[2], $r[3], $r[4])) }
     }
+    $report.Add(('  {0} of {1} the same' -f $same, $names.Count))
     [System.IO.File]::WriteAllLines((Join-Path $Out 'report.txt'), $report)
     $report
     Write-Output ''

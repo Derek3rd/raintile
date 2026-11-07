@@ -124,7 +124,7 @@ namespace RaintileOptions
             AddTo(sp, card);
             var defs = WidgetOptions(id);
             var values = ReadWidgetSettings(id);
-            if (defs.Count == 0) AddTo(f, NewText("This widget has no settings.", 12.5, ResBrush("DimBrush"), false, true));
+            if (defs.Count == 0) AddTo(f, NewText("This widget has no settings.", Fs.Help, ResBrush("DimBrush"), false, true));
             Action<string, string> save = (name, value) =>
             {
                 values[name] = value;
@@ -179,7 +179,7 @@ namespace RaintileOptions
             }
             var folder = NewButton("Open its folder", "LinkButton");
             folder.HorizontalAlignment = HorizontalAlignment.Left;
-            folder.Margin = T(0, 8, 0, 4);
+            folder.Margin = T(0, Gap.Control, 0, Gap.Line);
             folder.Click += (s, e) => System.Diagnostics.Process.Start("explorer.exe", "\"" + Path.Combine(WidgetsDir, id) + "\"");
             AddTo(f, folder);
             return sp;

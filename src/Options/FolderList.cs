@@ -22,9 +22,7 @@ namespace RaintileOptions
         UIElement NewFoldersControl(string key)
         {
             var root = NewPanel();
-            root.MinWidth = FieldWidth.L;
-            root.MaxWidth = FieldWidth.Wrap;
-            root.HorizontalAlignment = HorizontalAlignment.Right;
+            // fills the control column, as the text fields
             var rows = NewPanel();
             AddTo(root, rows);
             var add = NewButton("Add folder...");

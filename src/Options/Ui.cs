@@ -34,9 +34,9 @@ namespace RaintileOptions
     // One glyph per action (Segoe MDL2 Assets)
     static class Glyph
     {
-        public const int Reset = 0xE7A7;    // back to the default or to the value of All tiles
-        public const int Clear = 0xE711;    // empty a field, take an entry out of a list: no file is deleted
-        public const int Delete = 0xE74D;   // goes away or to the Recycle Bin: always confirmed
+        public const int Reset = 0xE7A7;    // a field back to its default or to the value of All tiles
+        public const int Clear = 0xE711;    // a field emptied (its image or icon file to the Recycle Bin, asked)
+        public const int Delete = 0xE74D;   // an entry of a list goes away (list header only): always asked
         public const int Add = 0xE710;
         public const int Up = 0xE74A, Down = 0xE74B, Left = 0xE72B, Right = 0xE72A;   // move an entry
         public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
@@ -68,10 +68,14 @@ namespace RaintileOptions
     // Widths of fields
     static class FieldWidth
     {
-        public const double S = 80;      // numbers, sizes
-        public const double M = 220;     // colours, combos, short text
-        public const double L = 300;     // text, paths, fonts
+        public const double S = 120;     // numbers (with their unit inside), sizes
+        public const double M = 220;     // short fields outside rows (filters, lists)
+        public const double L = 300;
         public const double Wrap = 470;  // panels of segments or switches
+        // the control column of side-by-side rows: as wide as the widest control
+        // of the page, at least this; text fields and sliders fill it
+        public const double Control = 360;
+        public const string ControlGroup = "Control";
     }
 
     // A number: slider + text box + unit (NewNumberField). Show() puts a value in
@@ -250,7 +254,7 @@ namespace RaintileOptions
         public StackPanel NewLabelBlock(string label, string help)
         {
             var sp = NewPanel();
-            AddTo(sp, NewText(label, Fs.Label));
+            AddTo(sp, NewText(label, Fs.Label, null, false, true));
             if (!string.IsNullOrEmpty(help))
             {
                 var h = NewHelp(help);
@@ -268,10 +272,10 @@ namespace RaintileOptions
             return b;
         }
 
-        // Empties a field or takes an entry out of a list (no file is deleted)
+        // Empties a field (an image or icon file goes to the Recycle Bin: its click asks first)
         public Button NewClearButton(string tip) { return NewActionIcon(Glyph.Clear, tip); }
 
-        // Deletes something, or sends it to the Recycle Bin: its click asks first
+        // Deletes an entry of a list: its click asks first
         public Button NewDeleteButton(string tip) { return NewActionIcon(Glyph.Delete, tip); }
 
         // Back to the default, or to the value of All tiles
@@ -311,28 +315,26 @@ namespace RaintileOptions
             return m.DesiredSize.Width > t.ActualWidth + 0.5;
         }
 
-        // Slider + text box + unit for a number in a range (docs/OptionsUI.md, 3).
-        // 'changed' gets the text (empty allowed: the caller says what it means);
-        // text that is not a number gets the red border and is not reported.
-        // sliderWidth NaN: the slider fills the row. slider false: the box only.
+        // Slider + text box for a number in a range (docs/OptionsUI.md, 3): the slider
+        // fills the row, the box (always FieldWidth.S) ends it with the unit written
+        // inside it, on the right. 'changed' gets the text (empty allowed: the caller
+        // says what it means); text that is not a number gets the red border and is
+        // not reported. slider false: the box only (a port).
         public NumberField NewNumberField(double min, double max, double step, string unit, Action<string> changed,
-            double sliderWidth = 220, bool slider = true, double smallChange = 0)
+            bool slider = true, double smallChange = 0)
         {
             var f = new NumberField();
-            var g = NewGrid(!slider ? "Auto" : double.IsNaN(sliderWidth) ? "*" : sliderWidth.ToString(System.Globalization.CultureInfo.InvariantCulture), "Auto", "Auto");
+            var g = NewGrid(slider ? "*" : "Auto", "Auto");
             double small = smallChange > 0 ? smallChange : step;
             var sl = new Slider { Minimum = min, Maximum = max, TickFrequency = step, SmallChange = small, LargeChange = small, VerticalAlignment = VerticalAlignment.Center };
             var tb = new TextBox { Width = FieldWidth.S, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
             if (slider) { tb.Margin = T(12, 0, 0, 0); g.Children.Add(sl); }
+            if (!slider) g.HorizontalAlignment = HorizontalAlignment.Right;
             SetCol(tb, 1);
             g.Children.Add(tb);
-            // every number keeps the room of a unit, so the sliders line up
-            var u = NewText(unit ?? "", Fs.Help, ResBrush("DimBrush"));
-            u.Width = 56;
-            u.Margin = T(Gap.Control, 0, 0, 0);
-            u.VerticalAlignment = VerticalAlignment.Center;
-            SetCol(u, 2);
-            g.Children.Add(u);
+            // the unit inside the box, on the right (UnitBox style: the unit is the Tag)
+            tb.Style = ResStyle("UnitBox");
+            if (!string.IsNullOrEmpty(unit)) tb.Tag = unit;
             f.Slider = sl; f.Box = tb; f.Root = g;
             sl.ValueChanged += (s, e) =>
             {

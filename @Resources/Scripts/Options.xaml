@@ -290,6 +290,44 @@
     </Setter>
   </Style>
 
+  <!-- Number field with its unit inside, on the right: the unit is the Tag -->
+  <Style x:Key="UnitBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+    <Setter Property="TextAlignment" Value="Right"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TextBox">
+          <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <ScrollViewer x:Name="PART_ContentHost" Focusable="False" VerticalAlignment="Center"
+                            HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"/>
+              <TextBlock x:Name="unit" Grid.Column="1" Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Margin="6,0,0,0" FontSize="12"
+                         Foreground="{StaticResource DimBrush}" VerticalAlignment="Center" IsHitTestVisible="False"/>
+            </Grid>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="Tag" Value="{x:Null}">
+              <Setter TargetName="unit" Property="Margin" Value="0"/>
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource DimBrush}"/>
+            </Trigger>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+              <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.4"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- Drop-down lists -->
   <Style TargetType="ComboBoxItem">
     <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>

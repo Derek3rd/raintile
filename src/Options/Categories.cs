@@ -1411,13 +1411,16 @@ namespace RaintileOptions
         }
 
         // A stacked row (docs/OptionsUI.md, 4): the label and its help on top, the
-        // control below at the full width of the column, then hintBlock (current
-        // values, buttons). The help can change later: SetFormHelp(FormHelp(row), ...).
-        Grid NewFormRow(string label, UIElement control, string hint = "", FrameworkElement hintBlock = null)
+        // control below filling the column, then hintBlock (current values, buttons).
+        // On the right of the control, always, the action column: its reset or clear
+        // button, or nothing, so every control ends at the same edge. The help can
+        // change later: SetFormHelp(FormHelp(row), ...).
+        Grid NewFormRow(string label, UIElement control, string hint = "", FrameworkElement hintBlock = null, FrameworkElement action = null)
         {
-            var g = new Grid { Margin = T(0, Gap.StackedRow) };
+            var g = NewGrid("*", Gap.ActionColumn.ToString(Inv));
+            g.Margin = T(0, Gap.StackedRow);
             for (int i = 0; i < 4; i++) g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            g.Children.Add(NewText(label, Fs.Label));
+            g.Children.Add(NewText(label, Fs.Label, null, false, true));
             var help = NewHelp("");
             help.Margin = T(0, 2, 0, 0);
             SetFormHelp(help, hint);
@@ -1431,6 +1434,14 @@ namespace RaintileOptions
             var holder = new Border { Margin = T(0, 6, 0, 0), Child = control };
             Grid.SetRow(holder, 2);
             g.Children.Add(holder);
+            if (action != null)
+            {
+                action.Margin = T(Gap.Icon, 6, 0, 0);
+                action.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetRow(action, 2);
+                SetCol(action, 1);
+                g.Children.Add(action);
+            }
             if (hintBlock != null)
             {
                 hintBlock.Margin = T(0, 4, 0, 0);
@@ -1446,13 +1457,6 @@ namespace RaintileOptions
         {
             help.Text = text ?? "";
             help.Visibility = help.Text != "" ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        // A number of a form: slider filling the row, text box, unit, then its reset
-        // (or the empty room of one, so the sliders line up)
-        Grid NewFormNumber(NumberField f, Button reset)
-        {
-            return NewFieldRow(null, f.Root, reset ?? (FrameworkElement)new Border { Width = Gap.ActionColumn });
         }
 
         // A colour swatch shows its field: empty = the field background, as an empty field
@@ -1671,11 +1675,12 @@ namespace RaintileOptions
             };
             catIcon = NewThumb(FieldHeight);
             var btnIcon = NewButton("Browse...");
-            var btnIconDel = NewDeleteButton("Delete the icon");
+            // x: no icon (its file goes to the Recycle Bin, asked first)
+            var btnIconDel = NewClearButton("Clear the icon");
             catIconDel = btnIconDel;
-            var iconRow = NewFieldRow(catIcon, btnIcon, btnIconDel);
+            var iconRow = NewFieldRow(catIcon, btnIcon, null);
             catIconHint = NewHelp("");
-            AddTo(f, NewFormRow("Icon", iconRow, "In the menu, left of the name.", catIconHint));
+            AddTo(f, NewFormRow("Icon", iconRow, "In the menu, left of the name.", catIconHint, btnIconDel));
             var more = NewHelp("Grid, logo size, tile colour and background, framing and logo of all its tiles: open the category (double click) and choose All tiles, the first entry above its tiles.");
             more.Margin = T(0, 6, 0, 10);
             AddTo(f, more);
@@ -1739,8 +1744,8 @@ namespace RaintileOptions
                 string icon = Core.GetCategoryIcon(GetListBase(), c);
                 if (icon != null && icon.StartsWith(Core.ImagesRoot, StringComparison.OrdinalIgnoreCase))
                 {
-                    var r = ShowDialog("Delete icon", "Move " + Path.GetFileName(icon) + " to the Recycle Bin?", new[] { "Delete", "Cancel" }, null, true);
-                    if (r.Button != "Delete") return;
+                    var r = ShowDialog("Clear icon", "No icon for this category: " + Path.GetFileName(icon) + " goes to the Recycle Bin.", new[] { "Clear", "Cancel" }, null, true);
+                    if (r.Button != "Clear") return;
                     RemoveToRecycleBin(icon);
                 }
                 Core.SetKey(c, "Icon", "");
@@ -1922,7 +1927,7 @@ namespace RaintileOptions
                 double n;
                 if (bgFrame.Bitmap == null || GetPlaceTarget() == null || !Core.TryNumber(t, out n)) return;
                 SetFrameZoom(n);
-            }, double.NaN, true, 0.05);
+            }, true, 0.05);
             FitFieldHeight(zoomField.Root);
             frameChip = NewChip();
             btnFrameReset = NewResetIcon("Back to the framing of All tiles");
@@ -1934,7 +1939,7 @@ namespace RaintileOptions
                 double n;
                 if (previewLogo.Source == null || GetPlaceTarget() == null || !Core.TryNumber(t, out n)) return;
                 SetLogoScale(n);
-            }, double.NaN, true, 0.05);
+            }, true, 0.05);
             FitFieldHeight(logoField.Root);
             logoChip = NewChip();
             btnLogoReset = NewResetIcon("Back to the logo placement of All tiles");
@@ -2102,14 +2107,14 @@ namespace RaintileOptions
             gridColsReset = NewResetIcon("Back to the default (Layout)");
             gridRowsReset = NewResetIcon("Back to the default (Layout)");
             catLogoSizeReset = NewResetIcon("Back to the default (Layout)");
-            gridCols = NewNumberField(1, 12, 1, "columns", t => setCatKey("NX", t, gridColsReset), double.NaN);
-            gridRows = NewNumberField(1, 8, 1, "rows", t => setCatKey("NY", t, gridRowsReset), double.NaN);
+            gridCols = NewNumberField(1, 12, 1, "columns", t => setCatKey("NX", t, gridColsReset));
+            gridRows = NewNumberField(1, 8, 1, "rows", t => setCatKey("NY", t, gridRowsReset));
             catLogoSize = NewSizeField("H", v => setCatKey("IconSize", v, catLogoSizeReset));
-            var colsRow = AddTo(af, NewFormRow("Columns", NewFormNumber(gridCols, gridColsReset)));
+            var colsRow = AddTo(af, NewFormRow("Columns", gridCols.Root, "", null, gridColsReset));
             gridColsHint = FormHelp(colsRow);
-            var rowsRow = AddTo(af, NewFormRow("Rows", NewFormNumber(gridRows, gridRowsReset)));
+            var rowsRow = AddTo(af, NewFormRow("Rows", gridRows.Root, "", null, gridRowsReset));
             gridRowsHint = FormHelp(rowsRow);
-            var sizeFormRow = AddTo(af, NewFormRow("Logo size", NewFieldRow(null, catLogoSize.Root, catLogoSizeReset)));
+            var sizeFormRow = AddTo(af, NewFormRow("Logo size", catLogoSize.Root, "", null, catLogoSizeReset));
             sizeHint = FormHelp(sizeFormRow);
             Func<string, double> layout = k => { double n; return Core.TryNumber(V(k), out n) ? n : 1; };
             gridColsReset.Click += (s, e) => { setCatKey("NX", "", gridColsReset); gridCols.Show("", layout("NX")); };
@@ -2119,8 +2124,8 @@ namespace RaintileOptions
             catTileColor = new TextBox();
             catColorClear = NewClearButton("Clear the colour: the default tile colour");
             catColorClear.Click += (s, e) => catTileColor.Text = "";   // TextChanged writes it
-            var catColorRow = NewFieldRow(catColorSwatch, catTileColor, catColorClear);
-            AddTo(af, NewFormRow("Colour", catColorRow, "Colour of the tiles without one of their own (their Colour), used when there is no background image. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent."));
+            var catColorRow = NewFieldRow(catColorSwatch, catTileColor, null);
+            AddTo(af, NewFormRow("Colour", catColorRow, "Colour of the tiles without one of their own (their Colour), used when there is no background image. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent.", null, catColorClear));
             catColorSwatch.Click += (s, e) =>
             {
                 if (currentFile == null) return;
@@ -2145,7 +2150,7 @@ namespace RaintileOptions
                 Core.SetKey(Core.GetCategorySection(GetModel(currentFile)), "TileOpacity", t);
                 SetChanged(currentFile);
                 SetActionVisible(catOpacityReset, t != "");
-            }, double.NaN, true, 5);
+            }, true, 5);
             catOpacityReset.Click += (s, e) =>
             {
                 if (currentFile == null) return;
@@ -2154,7 +2159,7 @@ namespace RaintileOptions
                 catOpacity.Show("", 100);
                 SetActionVisible(catOpacityReset, false);
             };
-            AddTo(af, NewFormRow("Background", NewFormNumber(catOpacity, catOpacityReset), "Opacity of the colour and the image of the tiles without one of their own (their Background), e.g. lower for a Dashboard with skins over the tiles. Logos, texts and widgets stay as they are. Empty = 100%."));
+            AddTo(af, NewFormRow("Background", catOpacity.Root, "Opacity of the colour and the image of the tiles without one of their own (their Background), e.g. lower for a Dashboard with skins over the tiles. Logos, texts and widgets stay as they are. Empty = 100%.", null, catOpacityReset));
             // framing, logo and play time line of every tile back to their default place,
             // the ones with their own too; the buttons share the column
             var btnResetLogos = NewButton("Logos");
@@ -2220,8 +2225,8 @@ namespace RaintileOptions
             colorSwatch = NewButton("", "Swatch", "Pick a colour");
             var colorClear = tileColorClear = NewClearButton("Clear the colour: the one of All tiles");
             colorClear.Click += (s, e) => { if (GetCurrentTile() != null) tileFields["Color"].Text = ""; };
-            var colorRow = NewFieldRow(colorSwatch, tileFields["Color"], colorClear);
-            AddTo(f, NewFormRow("Colour", colorRow, "Used when there is no background image. Empty = the Colour of All tiles, or taken from the logo, or the default tile colour."));
+            var colorRow = NewFieldRow(colorSwatch, tileFields["Color"], null);
+            AddTo(f, NewFormRow("Colour", colorRow, "Used when there is no background image. Empty = the Colour of All tiles, or taken from the logo, or the default tile colour.", null, colorClear));
             // opacity in %, as written to the file; empty = the one of All tiles (help set by ShowTile)
             tileOpacityReset = NewResetIcon("Back to the value of All tiles");
             tileOpacity = NewNumberField(0, 100, 1, "%", t =>
@@ -2233,7 +2238,7 @@ namespace RaintileOptions
                 SetChanged(currentFile);
                 SetActionVisible(tileOpacityReset, t != "");
                 UpdateTileDots();
-            }, double.NaN, true, 5);
+            }, true, 5);
             tileOpacityReset.Click += (s, e) =>
             {
                 var tile = GetCurrentTile();
@@ -2243,7 +2248,7 @@ namespace RaintileOptions
                 UpdateTileDots();
                 ShowTileOpacity(tile);
             };
-            var opacityRow = AddTo(f, NewFormRow("Background", NewFormNumber(tileOpacity, tileOpacityReset)));
+            var opacityRow = AddTo(f, NewFormRow("Background", tileOpacity.Root, "", null, tileOpacityReset));
             tileOpacityHint = FormHelp(opacityRow);
             // cells taken in the grid (Size=<columns>x<rows>), as the grid of the category
             Action<string> sizeChanged = x =>
@@ -2258,18 +2263,17 @@ namespace RaintileOptions
                 SetChanged(currentFile);
                 UpdateTilePreview();
             };
-            sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged, double.NaN);
-            sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged, double.NaN);
-            AddTo(f, NewFormRow("Width", NewFormNumber(sizeCols, null), "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Search, Favorites and Recent show it in one cell."));
-            AddTo(f, NewFormRow("Height", NewFormNumber(sizeRows, null)));
+            sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged);
+            sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged);
+            AddTo(f, NewFormRow("Width", sizeCols.Root, "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Search, Favorites and Recent show it in one cell."));
+            AddTo(f, NewFormRow("Height", sizeRows.Root));
             tagSuggestions = new WrapPanel();
             AddTo(f, NewFormRow("Tags", tileFields["Tags"], "Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", tagSuggestions));
             AddTo(f, NewPinRow());
             // hot key: click, then press the key with its modifiers (as the keys of Settings)
             tileKeyButton = NewButton("None", "KeyButton", "Click, then press a key");
             var keyClear = tileKeyClear = NewClearButton("Clear the key");
-            var keyRow = NewFieldRow(null, tileKeyButton, keyClear);
-            AddTo(f, NewFormRow("Hot key", keyRow, "Starts the tile also while the launcher is hidden, e.g. Ctrl + Alt + 1. Hold the modifiers, then press the key."));
+            AddTo(f, NewFormRow("Hot key", tileKeyButton, "Starts the tile also while the launcher is hidden, e.g. Ctrl + Alt + 1. Hold the modifiers, then press the key.", null, keyClear));
             tileKeyButton.Click += (s, e) =>
             {
                 if (GetCurrentTile() == null) return;
@@ -2332,13 +2336,14 @@ namespace RaintileOptions
                 var thumb = NewThumb(FieldHeight);
                 var choose = NewButton("Browse...");
                 var online = NewButton("Find online...");
-                var remove = NewDeleteButton("Delete the " + kind.ToLowerInvariant());
+                // x: no image (its file goes to the Recycle Bin, asked first)
+                var remove = NewClearButton("Clear the " + kind.ToLowerInvariant());
                 var buttons = NewPanel(Orientation.Horizontal);
                 online.Margin = T(Gap.Control, 0, 0, 0);
                 AddTo(buttons, choose); AddTo(buttons, online);
-                var row = NewFieldRow(thumb, buttons, remove);
+                var row = NewFieldRow(thumb, buttons, null);
                 // where the image comes from: the help of the row (set with the tile)
-                var imageRow = NewFormRow(kind, row, "", kind == "Logo" ? NewHelp("Find online...: images of this game or app from Steam, SteamGridDB, Dashboard Icons or its website.") : null);
+                var imageRow = NewFormRow(kind, row, "", kind == "Logo" ? NewHelp("Find online...: images of this game or app from Steam, SteamGridDB, Dashboard Icons or its website.") : null, remove);
                 AddTo(f, imageRow);
                 var pathLabel = FormHelp(imageRow);
                 if (kind == "Background") { bgThumb = thumb; bgPath = pathLabel; bgDel = remove; } else { logoThumb = thumb; logoPath = pathLabel; logoDel = remove; }
@@ -2363,8 +2368,8 @@ namespace RaintileOptions
                     string path = Core.GetTileImage(GetCurrentBase(), t, k);
                     if (path != null && path.StartsWith(Core.ImagesRoot, StringComparison.OrdinalIgnoreCase))
                     {
-                        var r = ShowDialog("Delete image", "Move " + Path.GetFileName(path) + " to the Recycle Bin?", new[] { "Delete", "Cancel" }, null, true);
-                        if (r.Button != "Delete") return;
+                        var r = ShowDialog("Clear " + k.ToLowerInvariant(), "No " + k.ToLowerInvariant() + " for this tile: " + Path.GetFileName(path) + " goes to the Recycle Bin.", new[] { "Clear", "Cancel" }, null, true);
+                        if (r.Button != "Clear") return;
                         RemoveToRecycleBin(path);
                     }
                     Core.SetKey(t, k, "");

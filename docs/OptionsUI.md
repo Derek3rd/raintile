@@ -37,11 +37,15 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 
 | Glyph | Constant | Action | Tooltip wording |
 |---|---|---|---|
-| `0xE7A7` | `Glyph.Reset` | Back to the default, or to the value inherited from All tiles | "Restore default", "Back to the value of All tiles" |
-| `0xE711` | `Glyph.Clear` | Empty a field (colour, hot key), take an entry out of a list (a folder): no file is deleted | "Clear ...", "Remove ... from the list" |
-| `0xE74D` | `Glyph.Delete` | Something that goes away or to the Recycle Bin (tile, category, image, widget): always confirmed | "Delete ..." |
-| `0xE710` | `Glyph.Add` | A new entry | "New ..." |
+| `0xE7A7` | `Glyph.Reset` | **A field** goes back to its default, or to the value of All tiles | "Restore default", "Back to the value of All tiles" |
+| `0xE711` | `Glyph.Clear` | **A field** is emptied: no key, no colour, no image, no icon. When the value is a file of the data folder (an image, an icon) the file goes to the Recycle Bin, asked first | "Clear the ..." |
+| `0xE74D` | `Glyph.Delete` | **An entry of a list** goes away (a tile, a category): in the list's header, always asked | "Delete ..." |
+| `0xE710` | `Glyph.Add` | A new entry of a list | "New ..." |
 | `0xE74A` `0xE74B` `0xE72B` `0xE72A` | `Glyph.Up` `Down` `Left` `Right` | Move an entry in a list | "Move up", ... |
+
+In short: the arrow and the x act on a field, in the action column of its row (or,
+for a field with two values such as a pair of keys, right after each value); the bin
+acts on a whole entry of a list, in the list's header. A field never has a bin.
 
 - Chevrons (`0xE70D`, `0xE76C`) only open and close groups of the menu.
 - An icon button that would do nothing (the value is already the default, the field
@@ -58,15 +62,17 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 | One of up to ~5 choices | Segments (`Segment`) |
 | One of more choices, or a list read from disk | Combo |
 | Several of a fixed set | Switches with their labels |
-| A number in a range worth dragging (counts, ms, pt, zoom, opacity) | Slider + text box + unit |
-| A length that can be pixels or a share of the screen | `size`: text box + px / % |
-| An identifier or a huge range (a port) | Text box + unit (`NoSlider` in the schema) |
+| A number in a range worth dragging (counts, ms, pt, zoom, opacity) | Slider + text box with its unit (`NewNumberField`) |
+| A length that can be pixels or a share of the screen | `size`: text box + px / % (`NewSizeField`) |
+| An identifier or a huge range (a port) | Text box with its unit (`NoSlider` in the schema) |
 | A colour | Swatch + text box |
 | A key | Key button + clear |
 | Text, path | Text box (paths: + "Browse...") |
 
-- The unit is always shown (px, pt, ms, s, %, ×, steps, columns, rows): numbers without
-  one reserve its room, so sliders line up.
+- The unit is always shown (px, pt, ms, s, %, ×, steps, columns, rows), inside the
+  number's box on its right (the `UnitBox` style of `Options.xaml`: the unit is the
+  box's `Tag`). Every number box is `FieldWidth.S` wide, so the boxes line up and the
+  sliders before them take the rest of the row.
 - The same kind of value gets the same control on every page (a grid size, an
   opacity, a zoom look the same in Settings and in the category editor).
 - A value that is not valid gets the red border (`MarkInvalid`) and is not saved
@@ -77,17 +83,26 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 Two row templates, with the same fonts and spacing:
 
 - **Side by side** (settings pages): label and help on the left (`*`), the control
-  (`Auto`), then a 34 px column for the row's reset or clear button.
+  column, then the action column.
 - **Stacked** (narrow panes: the category and tile editor): label and help on top,
-  the control below at the full width of the column, the 34 px action column on
-  its right.
+  the control below filling the column, the action column on its right.
 
-Widths:
+Every row, of both kinds, ends with the **action column** (34 px, `Gap.ActionColumn`):
+the row's reset or clear button, or nothing. It is there even when empty, so every
+control of a card ends at the same right edge.
 
-- Fields use `FieldWidth.S` (80: numbers, sizes), `FieldWidth.M` (220: colours,
-  combos, short text) or `FieldWidth.L` (300: text, paths, fonts), or fill the
-  column. No other widths.
-- Panels of segments or switches wrap within `FieldWidth.Wrap` (470).
+In side-by-side rows the **control column is shared by the whole page**
+(`SharedSizeGroup`, the page panel is the scope): as wide as the widest control of the
+page, at least `FieldWidth.Control` (360). In it:
+
+- text fields, combos, colours, folder lists and sliders **fill** the column (no
+  width of their own), so their left and right edges line up;
+- switches, segments, sizes, keys and buttons keep their size and **end at the right
+  edge** of the column.
+
+Widths: number and size boxes `FieldWidth.S` (120); panels of segments or switches
+wrap within `FieldWidth.Wrap` (470); `FieldWidth.M` / `L` only for fields outside rows
+(the Import filter and target). No other widths.
 - A row of buttons is either all `Auto` and aligned to the start, or all the same
   width filling the row (`UniformGrid`): never mixed.
 
@@ -134,8 +149,9 @@ title of the saving overlay (17).
 - English, sentence case ("Direct update", "Open the folder"), British spelling
   (colour, centre). Names of the launcher's own things stay as they are
   (Favorites, Recent).
-- Delete = goes away or to the Recycle Bin. Remove = taken out of a list, nothing
-  is deleted. Clear = a field is emptied.
+- Delete = an entry goes away (a tile, a category, a widget). Remove = taken out of a
+  list, nothing is deleted. Clear = a field is emptied (its file, if any, goes to the
+  Recycle Bin).
 - "Browse..." picks a file or a folder; a button that opens a dialog ends with "...".
   Always three ASCII dots, in buttons and in statuses ("Checking..."), as in the
   ASCII-only fallback.
@@ -165,6 +181,8 @@ title of the saving overlay (17).
 - [ ] Every field shows its help; tooltips only name icon buttons, show cut text or
       shortcuts.
 - [ ] The control matches the kind of value, and has its unit.
+- [ ] Every row ends with the action column; fields fill the control column, the
+      other controls end at its right edge.
 - [ ] Icon buttons that cannot act are hidden; list buttons that cannot act are
       disabled.
 - [ ] Deleting asks, with `danger: true`; the button says Delete, Remove or Clear as

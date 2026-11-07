@@ -995,14 +995,14 @@ function Add-To($panel, $child) { [void]$panel.Children.Add($child); return $chi
 # The rules of docs/OptionsUI.md, as in Ui.cs of the Options program: one glyph
 # per action, the type sizes, the spacing and the widths of the fields.
 $GLYPH = @{
-    Reset = 0xE7A7    # back to the default or to the value of All tiles
-    Clear = 0xE711    # empty a field, take an entry out of a list: no file is deleted
-    Delete = 0xE74D   # goes away or to the Recycle Bin: always confirmed
+    Reset = 0xE7A7    # a field back to its default or to the value of All tiles
+    Clear = 0xE711    # a field emptied (its image or icon file to the Recycle Bin, asked)
+    Delete = 0xE74D   # an entry of a list goes away (list header only): always asked
     Add = 0xE710; Up = 0xE74A; Down = 0xE74B; Left = 0xE72B; Right = 0xE72A
 }
 $FS = @{ Title = 24; Section = 11.5; Label = 13.5; Help = 12; Badge = 11 }
 $GAP = @{ Control = 8; Icon = 6; Card = 16; Row = 11; StackedRow = 8; ActionColumn = 34 }
-$FIELD = @{ S = 80; M = 220; L = 300; Wrap = 470 }
+$FIELD = @{ S = 120; M = 220; L = 300; Wrap = 470; Control = 360 }
 
 # Help under a label, hints, statuses (dim, wrapped)
 function New-Help([string]$text, $brush = $null) {
@@ -1372,6 +1372,7 @@ function New-BoolControl([string]$key) {
     $cb = New-Object System.Windows.Controls.CheckBox
     $cb.Tag = $key
     $cb.IsChecked = ($values[$key] -eq '1')
+    $cb.HorizontalAlignment = 'Right'
     $cb.Add_Click({ param($s, $e) Set-Value $s.Tag $(if ($s.IsChecked) { '1' } else { '0' }) })
     $ctl[$key] = @{ Kind = 'bool'; Box = $cb }
     return $cb
@@ -1395,35 +1396,37 @@ function New-ChoiceControl([string]$key, $choices) {
     return $wp
 }
 
+# A number in a range (docs/OptionsUI.md, 3): the slider fills the control
+# column, the box ends it with the unit inside (UnitBox style: the unit is its
+# Tag, so the box keeps the key of its setting in Uid)
 function New-NumberControl($item) {
     $key = $item.Key
-    $sp = New-Panel 'Horizontal'
+    $g = New-Grid @($(if ($item.NoSlider) { 'Auto' } else { '*' }), 'Auto')
+    if ($item.NoSlider) { $g.HorizontalAlignment = 'Right' }
     $sl = New-Object System.Windows.Controls.Slider
-    $sl.Width = 220
     $sl.Minimum = $item.Min
     $sl.Maximum = $item.Max
     $sl.TickFrequency = $item.Step
     $sl.SmallChange = $item.Step
     $sl.LargeChange = $item.Step
+    $sl.VerticalAlignment = 'Center'
     $sl.Tag = $key
     $tb = New-Object System.Windows.Controls.TextBox
+    $tb.Style = Res 'UnitBox'
     $tb.Width = $FIELD.S
     $tb.Margin = if ($item.NoSlider) { T 0 } else { T 12 0 0 0 }
-    $tb.TextAlignment = 'Right'
-    $tb.Tag = $key
+    $tb.VerticalAlignment = 'Center'
+    $tb.Uid = $key
+    if ($item.Unit) { $tb.Tag = $item.Unit }
     $tb.Text = "$($values[$key])"
     $n = 0.0
     if ([double]::TryParse("$($values[$key])", 'Float', [Globalization.CultureInfo]::InvariantCulture, [ref]$n)) {
         $sl.Value = [Math]::Min($item.Max, [Math]::Max($item.Min, $n))
     }
-    # every number keeps the room of a unit, so the sliders line up
-    $unit = New-Text $item.Unit $FS.Help (Res 'DimBrush')
-    $unit.Width = 56
-    $unit.Margin = T $GAP.Control 0 0 0
-    $unit.VerticalAlignment = 'Center'
     # an identifier or a huge range (a port): no slider
-    if (-not $item.NoSlider) { [void](Add-To $sp $sl) }
-    [void](Add-To $sp $tb); [void](Add-To $sp $unit)
+    if (-not $item.NoSlider) { [void]$g.Children.Add($sl) }
+    Set-Col $tb 1
+    [void]$g.Children.Add($tb)
     $ctl[$key] = @{ Kind = $item.Kind; Slider = $sl; Text = $tb; Step = $item.Step }
 
     $sl.Add_ValueChanged({
@@ -1434,12 +1437,13 @@ function New-NumberControl($item) {
             $script:updating = $true
             $c.Text.Text = $txt
             $script:updating = $false
+            Set-Invalid $c.Text $false
             Set-Value $s.Tag $txt
         })
     $tb.Add_TextChanged({
             param($s, $e)
             if ($script:updating) { return }
-            $c = $ctl[$s.Tag]
+            $c = $ctl[$s.Uid]
             $t = $s.Text.Trim()
             $n = 0.0
             $bad = $t -ne '' -and -not [double]::TryParse($t, 'Float', [Globalization.CultureInfo]::InvariantCulture, [ref]$n)
@@ -1450,9 +1454,9 @@ function New-NumberControl($item) {
                 $c.Slider.Value = [Math]::Min($c.Slider.Maximum, [Math]::Max($c.Slider.Minimum, $n))
                 $script:updating = $false
             }
-            Set-Value $s.Tag $t
+            Set-Value $s.Uid $t
         })
-    return $sp
+    return $g
 }
 
 function New-SizeControl($item) {
@@ -1478,6 +1482,7 @@ function New-SizeControl($item) {
     $pct.IsChecked = $isPct
     $px.IsChecked = -not $isPct
     [void](Add-To $sp $tb); [void](Add-To $sp $px); [void](Add-To $sp $pct)
+    $sp.HorizontalAlignment = 'Right'
     $ctl[$key] = @{ Kind = 'size'; Text = $tb; Px = $px; Pct = $pct; Axis = $item.Axis }
 
     $tb.Add_TextChanged({
@@ -1513,16 +1518,17 @@ function New-SizeControl($item) {
 }
 
 function New-ColorControl([string]$key) {
-    $sp = New-Panel 'Horizontal'
+    # the swatch, then the field filling the control column
+    $sp = New-Grid @('Auto', '*')
     $sw = New-Button '' 'Swatch' 'Pick a colour'
     $sw.Background = New-ColorBrush "$($values[$key])" -Opaque
     $sw.Tag = $key
     $tb = New-Object System.Windows.Controls.TextBox
-    $tb.Width = $FIELD.M
     $tb.Margin = T $GAP.Control 0 0 0
     $tb.Tag = $key
     $tb.Text = "$($values[$key])"
-    [void](Add-To $sp $sw); [void](Add-To $sp $tb)
+    Set-Col $tb 1
+    [void]$sp.Children.Add($sw); [void]$sp.Children.Add($tb)
     $ctl[$key] = @{ Kind = 'color'; Swatch = $sw; Text = $tb }
     $sw.Add_Click({
             param($s, $e)
@@ -1549,7 +1555,6 @@ function New-ColorControl([string]$key) {
 # Hidden text (the SteamGridDB key): shown as dots, saved encrypted
 function New-SecretControl([string]$key) {
     $pb = New-Object System.Windows.Controls.PasswordBox
-    $pb.Width = $FIELD.L
     $pb.Tag = $key
     $pb.Password = Unprotect-Secret "$($values[$key])"
     $pb.Add_PasswordChanged({ param($s, $e) Set-Value $s.Tag (Protect-Secret $s.Password) })
@@ -1557,10 +1562,9 @@ function New-SecretControl([string]$key) {
     return $pb
 }
 
-function New-TextControl([string]$key, [double]$width = 0) {
-    if ($width -le 0) { $width = $FIELD.L }
+# text fields fill the control column
+function New-TextControl([string]$key) {
     $tb = New-Object System.Windows.Controls.TextBox
-    $tb.Width = $width
     $tb.Tag = $key
     $tb.Text = "$($values[$key])"
     $tb.Add_TextChanged({ param($s, $e) Set-Value $s.Tag $s.Text.Trim() })
@@ -1570,7 +1574,6 @@ function New-TextControl([string]$key, [double]$width = 0) {
 
 function New-FontControl([string]$key) {
     $cb = New-Object System.Windows.Controls.ComboBox
-    $cb.Width = $FIELD.L
     $cb.IsEditable = $true
     $cb.Tag = $key
     foreach ($f in ([System.Windows.Media.Fonts]::SystemFontFamilies | ForEach-Object { $_.Source } | Sort-Object -Unique)) {
@@ -1585,7 +1588,6 @@ function New-FontControl([string]$key) {
 
 function New-CategoryControl([string]$key) {
     $cb = New-Object System.Windows.Controls.ComboBox
-    $cb.Width = $FIELD.M
     $cb.Tag = $key
     $names = @(Get-CategoryFiles | ForEach-Object { $_.BaseName })
     if ($values[$key] -and $names -notcontains $values[$key]) { $names += $values[$key] }
@@ -1645,6 +1647,7 @@ function New-PadControl([string]$key) {
 # Key binding: click, then press the key (with the modifiers for 'combo')
 function New-KeyControl([string]$key, [bool]$combo = $false) {
     $sp = New-Panel 'Horizontal'
+    $sp.HorizontalAlignment = 'Right'
     $b = New-Button (Format-HotKey "$($values[$key])") 'KeyButton' 'Click, then press a key'
     $b.Tag = @{ Key = $key; Combo = $combo }
     $clear = New-ActionIcon $GLYPH.Clear 'Clear the key'
@@ -1749,6 +1752,7 @@ function New-ScreenControl {
 
 function New-ActionControl([string]$action, [string]$label) {
     $b = New-Button $label $(if ($action -eq 'Import') { 'AccentButton' } else { '' })
+    $b.HorizontalAlignment = 'Right'
     $b.Tag = $action
     $b.Add_Click({ param($s, $e) Invoke-Action $s.Tag })
     return $b
@@ -1773,12 +1777,17 @@ function New-ResetButton([string[]]$keys) {
 }
 
 function New-Row([string]$label, [string]$help, $control, $reset) {
+    # the control column is shared by the rows of the page (as wide as its widest
+    # control, at least $FIELD.Control): fields and sliders fill it, the other
+    # controls end at its right edge, the action column follows
     $g = New-Grid @('*', 'Auto', [string]$GAP.ActionColumn)
+    $g.ColumnDefinitions[1].SharedSizeGroup = 'Control'
+    $g.ColumnDefinitions[1].MinWidth = $FIELD.Control
     $g.Margin = T 0 $GAP.Row
     $left = New-Panel
     $left.VerticalAlignment = 'Center'
     $left.Margin = T 0 0 24 0
-    [void](Add-To $left (New-Text $label $FS.Label))
+    [void](Add-To $left (New-Text $label $FS.Label -Wrap))
     if ($help) {
         $h = New-Help $help
         $h.Margin = T 0 3 0 0
@@ -1789,7 +1798,7 @@ function New-Row([string]$label, [string]$help, $control, $reset) {
         $control.VerticalAlignment = 'Center'
         Set-Col $control 1
         [void]$g.Children.Add($control)
-    }
+    } else { [System.Windows.Controls.Grid]::SetColumnSpan($left, 3) }   # text only: the whole row
     if ($reset) { Set-Col $reset 2; [void]$g.Children.Add($reset) }
     $b = New-Object System.Windows.Controls.Border
     $b.BorderBrush = Res 'LineBrush'
@@ -1831,10 +1840,11 @@ function New-ItemRow($item) {
                 # custom values (formulas, coordinates): plain fields
                 $sp = New-Panel
                 foreach ($sk in 'ScreenX', 'ScreenY', 'ScreenW', 'ScreenH') {
-                    $row = New-Panel 'Horizontal'
+                    $row = New-Grid @('64', '*')
                     $row.Margin = T 0 2
-                    $l = New-Text $sk $FS.Help (Res 'DimBrush'); $l.Width = 64; $l.VerticalAlignment = 'Center'
-                    [void](Add-To $row $l); [void](Add-To $row (New-TextControl $sk $FIELD.M))
+                    $l = New-Text $sk $FS.Help (Res 'DimBrush'); $l.VerticalAlignment = 'Center'
+                    $field = New-TextControl $sk; Set-Col $field 1
+                    [void]$row.Children.Add($l); [void]$row.Children.Add($field)
                     [void](Add-To $sp $row)
                 }
                 return (New-Row $item.Label 'Custom values: written as they are.' $sp (New-ResetButton @('ScreenX', 'ScreenY', 'ScreenW', 'ScreenH')))
@@ -1845,6 +1855,7 @@ function New-ItemRow($item) {
             $present = @($item.Pair | Where-Object { $values.ContainsKey($_) })
             if (-not $present.Count) { return $null }
             $sp = New-Panel 'Horizontal'
+            $sp.HorizontalAlignment = 'Right'
             foreach ($kk in $present) {
                 $kc = New-KeyControl $kk
                 $kc.Margin = T $GAP.Control 0 0 0
@@ -1883,6 +1894,7 @@ function New-SettingsPage($page) {
     $sp = New-Panel
     # as wide as the window: the rows stretch and their help text wraps less
     $sp.Margin = T 36 4 36 24
+    [System.Windows.Controls.Grid]::SetIsSharedSizeScope($sp, $true)   # one control column for the page
     $sv.Content = $sp
     $schemaKeys = Get-SchemaKeys
     foreach ($group in $page.Groups) {
@@ -2550,20 +2562,28 @@ function Show-Tile {
 }
 
 # A stacked row (docs/OptionsUI.md, 4): the label and its help on top, the control
-# below; hintBlock (current values that change) under the control
-function New-FormRow([string]$label, $control, [string]$hint = '', $hintBlock = $null) {
+# below filling the column; on its right, always, the action column (its reset or
+# clear button, or nothing), so every control ends at the same edge; hintBlock
+# (current values that change) under the control
+function New-FormRow([string]$label, $control, [string]$hint = '', $hintBlock = $null, $action = $null) {
     $sp = New-Panel
     $sp.Margin = T 0 $GAP.StackedRow
-    [void](Add-To $sp (New-Text $label $FS.Label))
+    [void](Add-To $sp (New-Text $label $FS.Label -Wrap))
     if ($hint) {
         $h = New-Help $hint
         $h.Margin = T 0 2 0 0
         [void](Add-To $sp $h)
     }
-    $holder = New-Object System.Windows.Controls.Border
-    $holder.Margin = T 0 6 0 0
-    $holder.Child = $control
-    [void](Add-To $sp $holder)
+    $line = New-Grid @('*', [string]$GAP.ActionColumn)
+    $line.Margin = T 0 6 0 0
+    [void]$line.Children.Add($control)
+    if ($action) {
+        $action.Margin = T $GAP.Icon 0 0 0
+        $action.VerticalAlignment = 'Center'
+        Set-Col $action 1
+        [void]$line.Children.Add($action)
+    }
+    [void](Add-To $sp $line)
     if ($hintBlock) { $hintBlock.Margin = T 0 4 0 0; [void](Add-To $sp $hintBlock) }
     return $sp
 }
@@ -2624,24 +2644,25 @@ function New-CategoryListPage {
         $cat["cat.$k"] = $tb
     }
     foreach ($k in 'NX', 'NY', 'IconSize') { $cat["cat.$k"].Width = $FIELD.S; $cat["cat.$k"].HorizontalAlignment = 'Left' }
+    # the fields keep their key in Uid (a UnitBox has its unit in Tag)
+    foreach ($k in 'Name', 'NX', 'NY', 'IconSize') { $cat["cat.$k"].Uid = $k }
     [void](Add-To $f (New-FormRow 'Name' $cat['cat.Name'] 'Text shown in the menu.'))
     $iconRow = New-Panel 'Horizontal'
     $cat.CatIcon = New-Thumb 36
     $btnIcon = New-Button 'Browse...'
     $btnIcon.Margin = T $GAP.Control 0 0 0
-    $btnIconDel = New-ActionIcon $GLYPH.Delete 'Delete the icon'
+    # x: no icon (its file goes to the Recycle Bin, asked first)
+    $btnIconDel = New-ActionIcon $GLYPH.Clear 'Clear the icon'
     $cat.CatIconDel = $btnIconDel
-    [void](Add-To $iconRow $cat.CatIcon); [void](Add-To $iconRow $btnIcon); [void](Add-To $iconRow $btnIconDel)
+    [void](Add-To $iconRow $cat.CatIcon); [void](Add-To $iconRow $btnIcon)
     $cat.CatIconHint = New-Help ''
-    [void](Add-To $f (New-FormRow 'Icon' $iconRow 'In the menu, left of the name.' $cat.CatIconHint))
+    [void](Add-To $f (New-FormRow 'Icon' $iconRow 'In the menu, left of the name.' $cat.CatIconHint $btnIconDel))
     # the grid as in Layout: columns and rows, each with its unit
     foreach ($pair in @(@('NX', 'Columns', 'columns', 'GridHint'), @('NY', 'Rows', 'rows', 'RowsHint'))) {
-        $line = New-Panel 'Horizontal'
-        [void](Add-To $line $cat["cat.$($pair[0])"])
-        $u = New-Text $pair[2] $FS.Help (Res 'DimBrush'); $u.Margin = T $GAP.Control 0 0 0; $u.VerticalAlignment = 'Center'
-        [void](Add-To $line $u)
+        $box = $cat["cat.$($pair[0])"]
+        $box.Style = Res 'UnitBox'; $box.Tag = $pair[2]
         $cat[$pair[3]] = New-Help ''
-        [void](Add-To $f (New-FormRow $pair[1] $line '' $cat[$pair[3]]))
+        [void](Add-To $f (New-FormRow $pair[1] $box '' $cat[$pair[3]]))
     }
     $cat.SizeHint = New-Help ''
     [void](Add-To $f (New-FormRow 'Logo size' $cat['cat.IconSize'] '' $cat.SizeHint))
@@ -2653,9 +2674,9 @@ function New-CategoryListPage {
                 param($s, $e)
                 if ($script:loading) { return }
                 $file = Get-ListFile; if (-not $file) { return }
-                Set-Key (Get-CategorySection (Get-Model $file)) $s.Tag $s.Text.Trim()
+                Set-Key (Get-CategorySection (Get-Model $file)) $s.Uid $s.Text.Trim()
                 Set-Changed $file
-                if ($s.Tag -eq 'Name') { Update-NavCategory $file }
+                if ($s.Uid -eq 'Name') { Update-NavCategory $file }
             })
     }
     $btnIcon.Add_Click({
@@ -2677,8 +2698,8 @@ function New-CategoryListPage {
             $c = Get-CategorySection (Get-Model $file)
             $icon = Get-CategoryIcon (Get-ListBase) $c
             if ($icon -and $icon.StartsWith($imagesRoot, [StringComparison]::OrdinalIgnoreCase)) {
-                $r = Show-Dialog 'Delete icon' "Move $([IO.Path]::GetFileName($icon)) to the Recycle Bin?" @('Delete', 'Cancel') -Danger
-                if ($r.Button -ne 'Delete') { return }
+                $r = Show-Dialog 'Clear icon' "No icon for this category: $([IO.Path]::GetFileName($icon)) goes to the Recycle Bin." @('Clear', 'Cancel') -Danger
+                if ($r.Button -ne 'Clear') { return }
                 Remove-ToRecycleBin $icon
             }
             Set-Key $c 'Icon' ''
@@ -2819,29 +2840,29 @@ function New-CategoryPage {
     # the reset arrow (shown only when there is something to reset)
     $newPlaceRow = {
         param([double]$min, [double]$max, [string]$tip)
-        $g = New-Grid @('*', 'Auto', '56', [string]$GAP.ActionColumn)
+        $g = New-Grid @('*', 'Auto')
         $sl = New-Object System.Windows.Controls.Slider
         $sl.Minimum = $min; $sl.Maximum = $max
         $sl.SmallChange = 0.05; $sl.LargeChange = 0.25
         $sl.VerticalAlignment = 'Center'
         $tb = New-Object System.Windows.Controls.TextBox
-        $tb.Width = $FIELD.S; $tb.TextAlignment = 'Right'; $tb.Margin = T 12 0 0 0; $tb.VerticalAlignment = 'Center'
-        $u = New-Text ([string][char]0xD7) $FS.Help (Res 'DimBrush'); $u.Margin = T $GAP.Control 0 0 0; $u.VerticalAlignment = 'Center'
+        $tb.Style = Res 'UnitBox'; $tb.Tag = [string][char]0xD7
+        $tb.Width = $FIELD.S; $tb.Margin = T 12 0 0 0; $tb.VerticalAlignment = 'Center'
         $r = New-ActionIcon $GLYPH.Reset $tip
-        Set-Col $tb 1; Set-Col $u 2; Set-Col $r 3
-        foreach ($x in $sl, $tb, $u, $r) { [void]$g.Children.Add($x) }
+        Set-Col $tb 1
+        foreach ($x in $sl, $tb) { [void]$g.Children.Add($x) }
         return @{ Row = $g; Slider = $sl; Text = $tb; Reset = $r }
     }
     $fr = & $newPlaceRow 1 4 'Back to the centre, at zoom 1'
     $cat.ZoomSlider = $fr.Slider; $cat.ZoomText = $fr.Text; $cat.FrameReset = $fr.Reset; $btnFrameReset = $fr.Reset
     $cat.FrameRow = $fr.Row
-    [void](Add-To $f (New-FormRow 'Framing' $fr.Row 'Drag the background in the preview to choose the part shown; zoom with the wheel, the slider or the value. The preview has the size of this category''s tiles on this screen.'))
+    [void](Add-To $f (New-FormRow 'Framing' $fr.Row 'Drag the background in the preview to choose the part shown; zoom with the wheel, the slider or the value. The preview has the size of this category''s tiles on this screen.' $null $fr.Reset))
 
     # logo: drag it in the preview, wheel over it, slider or value to resize
     $lr = & $newPlaceRow 0.25 3 'Back to the centre, at the normal size'
     $cat.LogoSlider = $lr.Slider; $cat.LogoScaleText = $lr.Text; $cat.LogoReset = $lr.Reset; $btnLogoReset = $lr.Reset
     $cat.LogoRow = $lr.Row
-    [void](Add-To $f (New-FormRow 'Logo' $lr.Row 'Drag the logo in the preview to move it; resize it with the wheel over it, the slider or the value (times the category''s logo size). Independent of the framing.'))
+    [void](Add-To $f (New-FormRow 'Logo' $lr.Row 'Drag the logo in the preview to move it; resize it with the wheel over it, the slider or the value (times the category''s logo size). Independent of the framing.' $null $lr.Reset))
     # a value typed: applied as it is typed, red while it is not a number
     $cat.ZoomText.Add_TextChanged({
             param($s, $e)
@@ -2959,11 +2980,11 @@ function New-CategoryPage {
     [void]$cmdRow.Children.Add($btnCmd)
     [void](Add-To $f (New-FormRow 'Command' $cmdRow 'A program, a .lnk/.url shortcut, a URL (also steam://...), a folder or a Rainmeter bang.'))
     [void](Add-To $f (New-FormRow 'Label' $cat['tile.Label'] 'Text at the bottom left. Empty = none (tiles without images show their name).'))
-    $colorRow = New-Panel 'Horizontal'
+    $colorRow = New-Grid @('Auto', '*')
     $cat.ColorSwatch = New-Button '' 'Swatch' 'Pick a colour'
-    $cat['tile.Color'].Width = $FIELD.M
     $cat['tile.Color'].Margin = T $GAP.Control 0 0 0
-    [void](Add-To $colorRow $cat.ColorSwatch); [void](Add-To $colorRow $cat['tile.Color'])
+    Set-Col $cat['tile.Color'] 1
+    [void]$colorRow.Children.Add($cat.ColorSwatch); [void]$colorRow.Children.Add($cat['tile.Color'])
     [void](Add-To $f (New-FormRow 'Colour' $colorRow 'Used when there is no background image. Empty = from the logo, or the default tile colour.'))
     $cat.TagSuggestions = New-Object System.Windows.Controls.WrapPanel
     [void](Add-To $f (New-FormRow 'Tags' $cat['tile.Tags'] 'Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.' $cat.TagSuggestions))
@@ -2991,12 +3012,13 @@ function New-CategoryPage {
         $choose = New-Button 'Browse...'
         $choose.Margin = T $GAP.Control 0 0 0
         $choose.Tag = $kind
-        $remove = New-ActionIcon $GLYPH.Delete "Delete the $($kind.ToLowerInvariant())"
+        # x: no image (its file goes to the Recycle Bin, asked first)
+        $remove = New-ActionIcon $GLYPH.Clear "Clear the $($kind.ToLowerInvariant())"
         $remove.Tag = $kind
         $cat["${kind}Del"] = $remove
-        [void](Add-To $row $thumb); [void](Add-To $row $choose); [void](Add-To $row $remove)
+        [void](Add-To $row $thumb); [void](Add-To $row $choose)
         $pathText = New-Help ''
-        [void](Add-To $f (New-FormRow $kind $row '' $pathText))
+        [void](Add-To $f (New-FormRow $kind $row '' $pathText $remove))
         $cat["${kind}Thumb".Replace('Background', 'Bg')] = $thumb
         $cat["${kind}Path".Replace('Background', 'Bg')] = $pathText
         $choose.Add_Click({
@@ -3014,8 +3036,9 @@ function New-CategoryPage {
                 $t = Get-CurrentTile; if (-not $t) { return }
                 $path = Get-TileImage (Get-CurrentBase) $t $s.Tag
                 if ($path -and $path.StartsWith($imagesRoot, [StringComparison]::OrdinalIgnoreCase)) {
-                    $r = Show-Dialog 'Delete image' "Move $([IO.Path]::GetFileName($path)) to the Recycle Bin?" @('Delete', 'Cancel') -Danger
-                    if ($r.Button -ne 'Delete') { return }
+                    $what = $s.Tag.ToLowerInvariant()
+                    $r = Show-Dialog "Clear $what" "No $what for this tile: $([IO.Path]::GetFileName($path)) goes to the Recycle Bin." @('Clear', 'Cancel') -Danger
+                    if ($r.Button -ne 'Clear') { return }
                     Remove-ToRecycleBin $path
                 }
                 Set-Key $t $s.Tag ''
@@ -4107,6 +4130,7 @@ function New-InfoPage {
     $sp = New-Panel
     # as wide as the window: the rows stretch and their help text wraps less
     $sp.Margin = T 36 4 36 24
+    [System.Windows.Controls.Grid]::SetIsSharedSizeScope($sp, $true)   # one control column for the page
     $sv.Content = $sp
 
     $card = New-Card '' ''
@@ -4157,8 +4181,9 @@ function New-InfoPage {
     [void]$card.Child.Children.Add((New-Row 'Settings' 'Settings.inc, in Notepad.' (New-ActionControl 'OpenSettings' 'Open Settings.inc') $null))
     [void]$card.Child.Children.Add((New-Row 'Your data' 'Settings, categories and images: updates never touch this folder.' (New-ActionControl 'OpenFolder' 'Open the folder') $null))
     $backupButtons = New-Panel 'Horizontal'
+    $backupButtons.HorizontalAlignment = 'Right'
     $b = New-ActionControl 'Backup' 'Back up...'
-    $b.Margin = T 0 0 8 0
+    $b.Margin = T 0 0 $GAP.Control 0
     [void](Add-To $backupButtons $b)
     [void](Add-To $backupButtons (New-ActionControl 'Restore' 'Restore...'))
     [void]$card.Child.Children.Add((New-Row 'Backup' 'Your data in a zip file, to keep it safe or move it to another PC (the SteamGridDB key only works for the same Windows user).' $backupButtons $null))

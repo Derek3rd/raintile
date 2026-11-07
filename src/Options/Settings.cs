@@ -206,7 +206,7 @@ namespace RaintileOptions
 
         UIElement NewBoolControl(string key)
         {
-            var cb = new CheckBox { Tag = key, IsChecked = V(key) == "1" };
+            var cb = new CheckBox { Tag = key, IsChecked = V(key) == "1", HorizontalAlignment = HorizontalAlignment.Right };
             cb.Click += (s, e) => SetValue(key, cb.IsChecked == true ? "1" : "0");
             ctl[key] = new Ctl { Kind = "bool", Box = cb };
             return cb;
@@ -231,7 +231,7 @@ namespace RaintileOptions
         {
             string key = item.Key;
             // an identifier or a huge range (a port): no slider
-            var f = NewNumberField(item.Min, item.Max, item.Step, item.Unit, t => SetValue(key, t), 220, !item.NoSlider);
+            var f = NewNumberField(item.Min, item.Max, item.Step, item.Unit, t => SetValue(key, t), !item.NoSlider);
             f.Show(V(key), item.Min);
             ctl[key] = new Ctl { Kind = item.Kind, Num = f, Slider = f.Slider, Text = f.Box, Step = item.Step };
             return f.Root;
@@ -241,6 +241,7 @@ namespace RaintileOptions
         {
             string key = item.Key;
             var f = NewSizeField(item.Axis, v => SetValue(key, v));
+            f.Root.HorizontalAlignment = HorizontalAlignment.Right;
             f.Show(V(key));
             ctl[key] = new Ctl { Kind = "size", Size = f, Text = f.Box, Px = f.Px, Pct = f.Pct, Axis = item.Axis };
             return f.Root;
@@ -248,11 +249,13 @@ namespace RaintileOptions
 
         UIElement NewColorControl(string key)
         {
-            var sp = NewPanel(Orientation.Horizontal);
+            // the swatch, then the field filling the column
+            var sp = NewGrid("Auto", "*");
             var sw = NewButton("", "Swatch", "Pick a colour");
             sw.Background = NewColorBrush(V(key), true);
-            var tb = new TextBox { Width = FieldWidth.M, Margin = T(Gap.Control, 0, 0, 0), Text = V(key) };
-            AddTo(sp, sw); AddTo(sp, tb);
+            var tb = new TextBox { Margin = T(Gap.Control, 0, 0, 0), Text = V(key) };
+            SetCol(tb, 1);
+            sp.Children.Add(sw); sp.Children.Add(tb);
             ctl[key] = new Ctl { Kind = "color", Swatch = sw, Text = tb };
             sw.Click += (s, e) =>
             {
@@ -277,15 +280,16 @@ namespace RaintileOptions
         // Hidden text (the SteamGridDB key): shown as dots, saved encrypted
         UIElement NewSecretControl(string key)
         {
-            var pb = new PasswordBox { Width = FieldWidth.L, Password = Core.UnprotectSecret(V(key)) };
+            var pb = new PasswordBox { Password = Core.UnprotectSecret(V(key)) };
             pb.PasswordChanged += (s, e) => SetValue(key, Core.ProtectSecret(pb.Password));
             ctl[key] = new Ctl { Kind = "secret", Input = pb };
             return pb;
         }
 
-        UIElement NewTextControl(string key, double width = FieldWidth.L)
+        // text fields fill the control column
+        UIElement NewTextControl(string key)
         {
-            var tb = new TextBox { Width = width, Text = V(key) };
+            var tb = new TextBox { Text = V(key) };
             tb.TextChanged += (s, e) => SetValue(key, tb.Text.Trim());
             ctl[key] = new Ctl { Kind = "text", Input = tb };
             return tb;
@@ -293,7 +297,7 @@ namespace RaintileOptions
 
         UIElement NewFontControl(string key)
         {
-            var cb = new ComboBox { Width = FieldWidth.L, IsEditable = true };
+            var cb = new ComboBox { IsEditable = true };
             foreach (var f in Fonts.SystemFontFamilies.Select(x => x.Source).Distinct().OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) cb.Items.Add(f);
             cb.Text = V(key);
             cb.AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler((s, e) => SetValue(key, cb.Text.Trim())));
@@ -303,7 +307,7 @@ namespace RaintileOptions
 
         UIElement NewCategoryControl(string key)
         {
-            var cb = new ComboBox { Width = FieldWidth.M };
+            var cb = new ComboBox();
             var names = Core.GetCategoryFiles().Select(f => System.IO.Path.GetFileNameWithoutExtension(f.Name)).ToList();
             if (V(key) != "" && !names.Contains(V(key))) names.Add(V(key));
             foreach (var n in names) cb.Items.Add(n);
@@ -353,6 +357,7 @@ namespace RaintileOptions
         FrameworkElement NewKeyControl(string key, bool combo = false)
         {
             var sp = NewPanel(Orientation.Horizontal);
+            sp.HorizontalAlignment = HorizontalAlignment.Right;
             var b = NewButton(Schema.FormatHotKey(V(key)), "KeyButton", "Click, then press a key");
             var clear = NewClearButton("Clear the key");
             AddTo(sp, b); AddTo(sp, clear);
@@ -459,6 +464,7 @@ namespace RaintileOptions
         UIElement NewActionControl(string action, string label)
         {
             var b = NewButton(label, action == "Import" ? "AccentButton" : "");
+            b.HorizontalAlignment = HorizontalAlignment.Right;
             b.Click += (s, e) => InvokeAction(action);
             return b;
         }
@@ -483,7 +489,12 @@ namespace RaintileOptions
 
         Border NewRow(string label, string help, UIElement control, UIElement reset)
         {
+            // the control column is shared by the rows of the page (as wide as its
+            // widest control, at least FieldWidth.Control): fields and sliders fill it,
+            // the other controls end at its right edge, the action column follows
             var g = NewGrid("*", "Auto", Gap.ActionColumn.ToString(CultureInfo.InvariantCulture));
+            g.ColumnDefinitions[1].SharedSizeGroup = FieldWidth.ControlGroup;
+            g.ColumnDefinitions[1].MinWidth = FieldWidth.Control;
             g.Margin = T(0, Gap.Row);
             var left = NewLabelBlock(label, help);
             left.VerticalAlignment = VerticalAlignment.Center;
@@ -496,6 +507,7 @@ namespace RaintileOptions
                 SetCol(control, 1);
                 g.Children.Add(control);
             }
+            else Grid.SetColumnSpan(left, 3);   // text only: the whole row
             if (reset != null) { SetCol(reset, 2); g.Children.Add(reset); }
             return new Border { BorderBrush = ResBrush("LineBrush"), BorderThickness = T(0, 1, 0, 0), Child = g };
         }
@@ -539,12 +551,13 @@ namespace RaintileOptions
                         var sp = NewPanel();
                         foreach (var sk in screenKeys)
                         {
-                            var row = NewPanel(Orientation.Horizontal);
+                            var row = NewGrid("64", "*");
                             row.Margin = T(0, 2);
                             var l = NewText(sk, Fs.Help, ResBrush("DimBrush"));
-                            l.Width = 64;
                             l.VerticalAlignment = VerticalAlignment.Center;
-                            AddTo(row, l); AddTo(row, NewTextControl(sk, FieldWidth.M));
+                            var field = NewTextControl(sk);
+                            SetCol(field, 1);
+                            row.Children.Add(l); row.Children.Add(field);
                             AddTo(sp, row);
                         }
                         return NewRow(item.Label, "Custom values: written as they are.", sp, NewResetButton(screenKeys));
@@ -554,6 +567,7 @@ namespace RaintileOptions
                     var present = item.Pair.Where(values.ContainsKey).ToArray();
                     if (present.Length == 0) return null;
                     var kp = NewPanel(Orientation.Horizontal);
+                    kp.HorizontalAlignment = HorizontalAlignment.Right;
                     foreach (var kk in present)
                     {
                         var kc = NewKeyControl(kk);
@@ -593,6 +607,7 @@ namespace RaintileOptions
             sp = NewPanel();
             // as wide as the window: the rows stretch and their help text wraps less
             sp.Margin = Gap.Page;
+            Grid.SetIsSharedSizeScope(sp, true);   // one control column for the page
             sv.Content = sp;
             return sv;
         }

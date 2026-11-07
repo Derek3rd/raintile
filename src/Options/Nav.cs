@@ -719,6 +719,7 @@ namespace RaintileOptions
             cp.Children.Add(NewRow("Settings", "Settings.inc, in Notepad.", NewActionControl("OpenSettings", "Open Settings.inc"), null));
             cp.Children.Add(NewRow("Your data", "Settings, categories and images: updates never touch this folder.", NewActionControl("OpenFolder", "Open the folder"), null));
             var backupButtons = NewPanel(Orientation.Horizontal);
+            backupButtons.HorizontalAlignment = HorizontalAlignment.Right;
             var b = (FrameworkElement)NewActionControl("Backup", "Back up...");
             b.Margin = T(0, 0, Gap.Control, 0);
             AddTo(backupButtons, b);

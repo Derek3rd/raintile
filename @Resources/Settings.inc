@@ -297,6 +297,11 @@ AppsCategory=Apps
 ; Windows user on this PC. Written here by hand it stays in clear until the
 ; Options window saves.
 SteamGridDBKey=
+; Steam Web API key (steamcommunity.com/dev/apikey), for widgets that read your
+; Steam data (Steam achievements). Saved encrypted by the Options window
+; (dpapi:...); widgets decrypt it with the user's DPAPI and the entropy
+; "Raintile SteamGridDB key" (see docs/Widgets.md)
+SteamApiKey=
 
 ; --- Updates --------------------------------------------------------------------
 ; 1 = check GitHub for a new version (at most once a day): a dot on the gear

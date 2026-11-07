@@ -24,6 +24,18 @@
       "base": "Modrinth",
       "files": ["Modrinth.ini", "Modrinth.ps1"],
       "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/Modrinth"
+    },
+    {
+      "id": "SteamAchievements",
+      "name": "Steam achievements",
+      "author": "Raintile",
+      "version": "1.0",
+      "kind": "custom",
+      "category": "Games",
+      "description": "The achievements of the Steam game played last, or of the game you choose (the tile's widget setting: its app id): how many are unlocked, the last ones, the easiest locked ones. Needs your Steam Web API key (Options > Widgets > Steam).",
+      "base": "SteamAchievements",
+      "files": ["SteamAchievements.ini", "SteamAchievements.ps1"],
+      "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/SteamAchievements"
     }
   ]
 }

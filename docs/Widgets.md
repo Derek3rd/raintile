@@ -4,7 +4,7 @@ A widget is a tile that shows something or offers more than one thing to start, 
 
 Raintile itself holds no logic for a particular widget: what a widget needs that Rainmeter alone cannot give, Raintile offers to every widget through the [Raintile section](#the-raintile-section).
 
-Examples in this repository: [`widgets/BigClock`](../widgets/BigClock) (meters only) and [`widgets/Modrinth`](../widgets/Modrinth) (a script and a list).
+Examples in this repository: [`widgets/BigClock`](../widgets/BigClock) (meters only), [`widgets/Modrinth`](../widgets/Modrinth) (a script reading a program's database into a list) and [`widgets/SteamAchievements`](../widgets/SteamAchievements) (a web API with the user's key, a setting per tile).
 
 ## Contents
 
@@ -36,6 +36,7 @@ Widget=custom
 Param=<Id>
 Size=1x2          ; optional: more cells
 Label=            ; optional: a title written at the top left of the tile
+WidgetOption=     ; optional: a setting of this tile for the widget (#WIDGETOPTION#)
 ```
 
 ## How the file is read
@@ -57,6 +58,8 @@ The `.ini` is written like a Rainmeter skin, but it is not a skin of its own: Ra
 | `#WIDGETW#`, `#WIDGETH#` | the size of the tile, in pixels (with `Size=` larger) |
 | `#WIDGETPATH#` | the widget's folder, with a backslash at the end: `#WIDGETPATH#icon.png`, `"#WIDGETPATH#read.ps1"` |
 | `#WIDGET:<Section>#` | the name a section of the widget has in the launcher: `[!CommandMeasure #WIDGET:Read# "Run"]` |
+| `#WIDGETOPTION#` | the tile's `WidgetOption=` (Options: the tile's *Widget setting*), empty without one: e.g. which game. Two tiles of the same widget can have different ones: give files that depend on it its value in their name (`List=list_#WIDGETOPTION#.txt`) |
+| `#SETTINGSPATH#` | (Rainmeter's) the folder of Rainmeter's settings: Raintile's own are in `#SETTINGSPATH#Raintile\Settings.inc` |
 | `#CURRENTSECTION#` | (Rainmeter's) the section the action belongs to |
 
 ## The Raintile section
@@ -142,6 +145,19 @@ FinishAction=[!CommandMeasure MeasureScript "WidgetChanged()"]
 - **Read other programs' data read only.** SQLite databases: the SQLite of Windows (`winsqlite3.dll`, in Windows 10 and 11) opened with `file:<path>?mode=ro`; see [`Modrinth.ps1`](../widgets/Modrinth/Modrinth.ps1).
 - Write into the widget's folder, whole files (`.tmp`, then move).
 - Network: `https` only, and only to the service the widget is about.
+
+### Keys of the user's
+
+A widget that needs an account key reads it from Raintile's settings instead of asking for its own. Raintile has `SteamApiKey` (Options > Widgets > Steam); a widget needing another one asks for it to be added there in the same pull request. Keys are saved encrypted with Windows DPAPI for the current user: `SteamApiKey=dpapi:<base64>` in `Settings.inc`, with the entropy `Raintile SteamGridDB key` (UTF-8). In PowerShell:
+
+```powershell
+Add-Type -AssemblyName System.Security
+$bytes = [Security.Cryptography.ProtectedData]::Unprotect([Convert]::FromBase64String($stored.Substring(6)),
+    [Text.Encoding]::UTF8.GetBytes('Raintile SteamGridDB key'), [Security.Cryptography.DataProtectionScope]::CurrentUser)
+$key = [Text.Encoding]::UTF8.GetString($bytes)
+```
+
+Use a key only for the service it is for, never write it to a file or a log, and say on a row how to add it when it is missing (see [`SteamAchievements.ps1`](../widgets/SteamAchievements/SteamAchievements.ps1)).
 
 ## Rules
 

@@ -105,7 +105,10 @@ namespace RaintileOptions
             string hint = WIDGET_KINDS.Where(k => k[0] == kind).Select(k => k[2]).FirstOrDefault() ?? "";
             widgetHint.Text = hint;
             widgetParamRow.Visibility = hint != "" ? Visibility.Visible : Visibility.Collapsed;
+            if (widgetOptionRow != null) widgetOptionRow.Visibility = kind == "custom" ? Visibility.Visible : Visibility.Collapsed;
         }
+        TextBox widgetOption;
+        FrameworkElement widgetOptionRow;
         Button colorSwatch;
         WrapPanel tagSuggestions;
         readonly Dictionary<string, TextBox> catFields = new Dictionary<string, TextBox>();
@@ -1306,6 +1309,7 @@ namespace RaintileOptions
             string kind = s != null ? Core.GetKey(s, "Widget").Trim().ToLowerInvariant() : "";
             widgetKind.SelectedItem = widgetKind.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == kind) ?? widgetKind.Items[0];
             widgetParam.Text = s != null ? Core.GetKey(s, "Param") : "";
+            widgetOption.Text = s != null ? Core.GetKey(s, "WidgetOption") : "";
             UpdateWidgetHint();
             var size = Regex.Match(s != null ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
             int sc = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[1].Value))) : 1;
@@ -2206,6 +2210,18 @@ namespace RaintileOptions
             widgetHint = NewText("", 11.5, ResBrush("DimBrush"), false, true);
             widgetParamRow = NewFormRow("Widget option", widgetParam, "", widgetHint);
             AddTo(f, widgetParamRow);
+            // a custom widget's setting for this tile (#WIDGETOPTION#)
+            widgetOption = new TextBox();
+            widgetOptionRow = NewFormRow("Widget setting", widgetOption, "A setting of this tile for its custom widget, if it takes one (its page says which): e.g. the Steam app id of a game.");
+            AddTo(f, widgetOptionRow);
+            widgetOption.TextChanged += (s, e) =>
+            {
+                if (loading) return;
+                var t = GetCurrentTile();
+                if (t == null) return;
+                Core.SetKey(t, "WidgetOption", widgetOption.Text.Trim());
+                SetChanged(currentFile);
+            };
             widgetKind.SelectionChanged += (s, e) =>
             {
                 UpdateWidgetHint();

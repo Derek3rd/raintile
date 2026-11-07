@@ -55,16 +55,17 @@ namespace RaintileOptions
         {
             settings = Core.ReadSettings(Core.SettingsFile);
             foreach (var item in settings) { fileValues[item.Key] = item.Value; values[item.Key] = item.Value; }
-            // a SteamGridDB key written in clear is encrypted in Settings.inc right away
-            string key = V("SteamGridDBKey");
-            if (key != "" && !key.StartsWith(Core.SECRET_PREFIX))
+            // a key (SteamGridDB, Steam) written in clear is encrypted in Settings.inc right away
+            foreach (var secret in new[] { "SteamGridDBKey", "SteamApiKey" })
             {
+                string key = V(secret);
+                if (key == "" || key.StartsWith(Core.SECRET_PREFIX)) continue;
                 try
                 {
                     string enc = Core.ProtectSecret(key);
-                    Core.WriteSettings(Core.SettingsFile, new Dictionary<string, string> { { "SteamGridDBKey", enc } });
-                    values["SteamGridDBKey"] = enc;
-                    fileValues["SteamGridDBKey"] = enc;
+                    Core.WriteSettings(Core.SettingsFile, new Dictionary<string, string> { { secret, enc } });
+                    values[secret] = enc;
+                    fileValues[secret] = enc;
                 }
                 catch { }
             }

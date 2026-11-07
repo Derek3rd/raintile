@@ -646,7 +646,10 @@ local function loadCategory(file)
 				c.widgets = true
 				local param = trim(k.param or '')
 				t.widget = { kind = trim(k.widget):lower(), param = param, parts = { Title = true, Value = true },
-					title = label ~= '' and label or nil }
+					title = label ~= '' and label or nil,
+					-- WidgetOption=: a setting of this tile for its custom widget
+					-- (#WIDGETOPTION#), e.g. which game
+					option = trim(k.widgetoption or '') }
 				-- a drive written as C, C: or C:\
 				local letter = param:match('^(%a):?\\?$')
 				t.widget.drive = letter and (letter:upper() .. ':') or param:upper()
@@ -1253,7 +1256,7 @@ local function signature()
 	if V.TileKeysOpen then s[#s + 1] = 'keys:open' end
 	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
 	for _, t in ipairs(widgets) do
-		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param .. ':' .. t.cols .. 'x' .. t.rows
+		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param .. ':' .. t.cols .. 'x' .. t.rows .. ':' .. (t.widget.option or '')
 		-- a changed custom widget file writes Grid.inc again
 		if t.widget.kind == 'custom' then
 			local path = D.customWidgetFile(t.widget.param)
@@ -2581,7 +2584,8 @@ function D.customWidgetText(t, i, w, h)
 			local k, v = line:match('^%s*([^=;%[]-)%s*=(.*)$')
 			if k and trim(k) ~= '' then
 				local key = trim(k):lower()
-				v = trim(own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end))
+				v = trim(own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETOPTION#', ((t.widget.option or ''):gsub('%%', '%%%%')))
+					:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end))
 				if key == 'onshow' then api.onShow = v
 				elseif key == 'onhide' then api.onHide = v
 				elseif key == 'list' and v ~= '' then
@@ -2594,6 +2598,7 @@ function D.customWidgetText(t, i, w, h)
 			if k and k ~= '' then
 				local key = trim(k):lower()
 				v = own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
+					:gsub('#WIDGETOPTION#', ((t.widget.option or ''):gsub('%%', '%%%%')))
 				-- #WIDGET:<Section>#: that section's name in the launcher
 				v = v:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end)
 				-- [Section] and [Section:...] references

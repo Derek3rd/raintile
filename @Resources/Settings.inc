@@ -40,6 +40,45 @@ ScrollStep=1
 ; categories with more tiles than fit on screen); 0 = stop at the end
 InfiniteScroll=1
 
+; --- Wheel ----------------------------------------------------------------------
+; Grid: the tiles in rows and columns (NX, NY, ScrollDir). Wheel: one line of
+; tiles on an arc; the selected tile stays in the middle and the wheel turns.
+; Every tile is one cell (Size= is not used); best when docked.
+ScrollMode=Grid
+; Auto: along the docked side (vertical docked left or right, horizontal
+; otherwise); Vertical or Horizontal
+WheelAxis=Auto
+; Out: the arc bulges towards the screen; In: hollow
+WheelCurve=Out
+; Radius of the arc, in percent of the launcher's length along the wheel
+WheelRadius=70
+; Space from one tile to the next, in percent of a tile (under 100 they overlap:
+; the middle one is drawn on top)
+WheelSpacing=50
+; Place of the selected tile across the launcher, in percent from its docked side
+WheelAnchor=69
+; Size of the tiles, in percent of the smaller side of the screen
+WheelTileSize=25
+; Tiles shown (odd): the selected one and as many on each side
+WheelVisible=11
+; How much the tiles fade towards the ends, in percent
+WheelFade=65
+; Names: Center (the selected tile only) or All
+WheelLabels=Center
+; Time to turn by one tile, in ms
+WheelStepTime=350
+; Mouse resting on a side tile: Turn (the wheel turns to it) or Highlight
+WheelHover=Turn
+; Click on a side tile: Launch (starts it) or Center (turns it to the middle)
+WheelClick=Launch
+; Categories: Ring (on an inner wheel; Q / E or LB / RB turn it) or Bar (the
+; menu at the top)
+WheelMenu=Ring
+; Inner wheel: distance from the wheel of tiles and size of its entries, in
+; percent of a tile
+WheelMenuGap=50
+WheelMenuSize=50
+
 ; --- Spacing --------------------------------------------------------------------
 ; Sizes are written in pixels (e.g. 40) or as a percentage of the screen
 ; (e.g. 2%): of the width for PadX, SearchW, MenuItemPad, MenuGap and

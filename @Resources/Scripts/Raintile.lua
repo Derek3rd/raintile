@@ -460,6 +460,7 @@ end
 -- Grid of a category: NX x NY visible tiles (Settings.inc by default), sized
 -- to fill the grid area.
 local function categoryGeometry(c, nx, ny, iconSize)
+	if V.Wheel then return M.wheelGeometry(c, iconSize) end
 	c.nx = math.max(1, math.floor(nx or V.DefNX))
 	c.ny = math.max(1, math.floor(ny or V.DefNY))
 	c.tw = math.floor((V.AreaW - (c.nx - 1) * V.Gap) / c.nx)
@@ -1251,7 +1252,7 @@ local function filterSpace()
 end
 
 local function signature()
-	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
+	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode, V.Wheel and ('wheel' .. (cats[1] and cats[1].tw or 0)) or 'grid' }
 	for _, chip in ipairs(filter.chips) do s[#s + 1] = 'chip:' .. chip.label end
 	if V.TileKeysOpen then s[#s + 1] = 'keys:open' end
 	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
@@ -1670,6 +1671,8 @@ end
 -- Infinite scroll: after the last row the first one comes back. Only if the
 -- tiles don't all fit on screen (otherwise they would show up twice).
 local function infinite()
+	-- the wheel: only when the tiles do not all fit (otherwise they would repeat)
+	if V.Wheel then return V.InfiniteScroll and lineCount() >= V.Slots end
 	return V.InfiniteScroll and lineCount() > visibleLines()
 end
 
@@ -1730,6 +1733,7 @@ end
 
 -- Index (in cur().tiles) of the tile in the slot, with the current contents.
 local function indexAt(slot)
+	if V.Wheel then return M.wv[slot] and M.wv[slot].idx end
 	if cur().pack then return view[slot] and view[slot].idx end
 	local r, c = slotRC(slot)
 	local line = base + (V.Horizontal and c or r)
@@ -1745,6 +1749,7 @@ end
 -- Pixel position (relative to the grid) of a point in grid units (column,
 -- row), at the current scroll position.
 local function gridToPx(gx, gy)
+	if V.Wheel then return M.wheelPx(V.Horizontal and gx or gy) end
 	if V.Horizontal then gx = gx - pos else gy = gy - pos end
 	return gx * V.StepX, gy * V.StepY
 end
@@ -1759,6 +1764,11 @@ end
 -- Grid coordinates (column, row) of the slot with the current contents; with
 -- infinite scroll the row (or column) is not wrapped back.
 local function slotToGrid(slot)
+	if V.Wheel then
+		local k = M.wv[slot] and M.wv[slot].k or 0
+		if V.Horizontal then return k, 0 end
+		return 0, k
+	end
 	local e = cur().pack and view[slot]
 	if e then
 		if V.Horizontal then return e.line, e.cross end
@@ -1767,6 +1777,174 @@ local function slotToGrid(slot)
 	local r, c = slotRC(slot)
 	if V.Horizontal then return base + c, r end
 	return c, base + r
+end
+
+-- Wheel (ScrollMode=Wheel) ---------------------------------------------------------
+-- One line of tiles on an arc of a circle: the tile at the scroll position
+-- (pos, as tile index) is the selected one, in the middle; the others follow
+-- along the arc and fade towards the ends. The grid model is reused with one
+-- tile per line (nx = ny = 1): offset/pos count tiles, Nav and Scroll move
+-- by tiles. The slots (WheelVisible + 2) are given to the tiles near pos
+-- every frame, the farthest first: the meters of a slot are written together
+-- in Grid.inc, so the later slot is drawn on top and the middle tile, last,
+-- covers the others where they overlap. Tiles do not change size, so widgets
+-- stay what they are.
+M.wv = {} -- per slot: { k (tile line, not wrapped), idx (in cur().tiles), d (k - pos), a (alpha) }
+M.wheel = { from = 0, to = 0, t = 0, dur = 0 }
+
+function M.readWheel()
+	V.Wheel = SKIN:GetVariable('ScrollMode', 'Grid'):lower() == 'wheel'
+	local function word(name, default) return SKIN:GetVariable(name, default):lower() end
+	V.WheelAxis = word('WheelAxis', 'auto')
+	V.WheelOut = word('WheelCurve', 'out') ~= 'in'
+	V.WheelRadius = math.max(5, num('WheelRadius', 70))
+	V.WheelSpacing = math.max(5, num('WheelSpacing', 50))
+	V.WheelAnchor = math.min(100, math.max(0, num('WheelAnchor', 69)))
+	V.WheelTileSize = math.min(80, math.max(3, num('WheelTileSize', 25)))
+	V.WheelVisible = math.max(1, math.floor(num('WheelVisible', 11)))
+	if V.WheelVisible % 2 == 0 then V.WheelVisible = V.WheelVisible + 1 end
+	V.WheelFade = math.min(100, math.max(0, num('WheelFade', 65)))
+	V.WheelLabelsAll = word('WheelLabels', 'center') == 'all'
+	V.WheelStepTime = math.max(16, num('WheelStepTime', 350))
+	V.WheelTurn = word('WheelHover', 'turn') == 'turn'
+	V.WheelClickLaunch = word('WheelClick', 'launch') ~= 'center'
+	if not V.Wheel then return end
+	-- along which axis: Auto follows the docked side
+	local vertical
+	if V.WheelAxis == 'vertical' then vertical = true
+	elseif V.WheelAxis == 'horizontal' then vertical = false
+	else vertical = V.Mode == 'dock' and (V.DockSide == 'left' or V.DockSide == 'right') end
+	-- the grid model scrolls the same way (Nav: up/down or left/right)
+	V.Horizontal = not vertical
+end
+
+-- One line, as many slots as shown plus one beyond each end; square tiles
+-- of WheelTileSize percent of the smaller side of the screen
+function M.wheelGeometry(c, iconSize)
+	local short = math.min(V.MonW or V.ScreenW, V.MonH or V.ScreenH)
+	local sz = math.floor(V.WheelTileSize * short / 100)
+	sz = math.max(16, math.min(sz, math.floor(math.min(V.AreaW, V.AreaH))))
+	c.nx, c.ny = 1, 1
+	c.tw, c.th = sz, sz
+	c.rows, c.cols = 1, V.WheelVisible + 2
+	c.iconSize = math.min(math.floor(iconSize or V.DefIconSize), math.floor(sz * 0.7))
+end
+
+-- The circle, in the coordinates of the grid (GridClip): its centre C, radius
+-- R, the direction into the screen (n) and along the wheel (t), the angle
+-- between two tiles. Worked out each frame (the filter bar changes the area).
+function M.wheelFrame()
+	local W, H = V.ClipW or V.AreaW, V.ClipH or V.AreaH
+	local vertical = not V.Horizontal
+	local n
+	if vertical then n = (V.Mode == 'dock' and V.DockSide == 'right') and { -1, 0 } or { 1, 0 }
+	elseif V.Mode == 'dock' then n = V.DockSide == 'bottom' and { 0, -1 } or { 0, 1 }
+	else n = { 0, -1 } end -- free: bulging up
+	local t = vertical and { 0, 1 } or { 1, 0 }
+	local along, across = vertical and H or W, vertical and W or H
+	-- the selected tile: across at WheelAnchor (from the docked side), along in the middle
+	local a = (n[1] + n[2] > 0 and V.WheelAnchor or 100 - V.WheelAnchor) / 100 * across
+	local cx, cy
+	if vertical then cx, cy = a, H / 2 else cx, cy = W / 2, a end
+	local R = math.max(1, V.WheelRadius / 100 * along)
+	local sgn = V.WheelOut and 1 or -1
+	local f = M.wf or {}
+	f.n, f.t, f.R, f.sgn = n, t, R, sgn
+	f.cx, f.cy = cx - sgn * n[1] * R, cy - sgn * n[2] * R
+	f.step = (V.TileW * V.WheelSpacing / 100) / R
+	f.half = (V.WheelVisible - 1) / 2
+	M.wf = f
+	return f
+end
+
+-- Top left corner (in the grid) of the tile at line k (fractional too)
+function M.wheelPx(k)
+	local f = M.wf or M.wheelFrame()
+	local th = (k - pos) * f.step
+	local c, sn = f.sgn * f.R * math.cos(th), f.R * math.sin(th)
+	local x = f.cx + c * f.n[1] + sn * f.t[1]
+	local y = f.cy + c * f.n[2] + sn * f.t[2]
+	return x - V.TileW / 2, y - V.TileH / 2
+end
+
+-- Which tile each slot shows this frame (and its alpha); the images of a
+-- slot change only when it gets another tile
+function M.wheelAssign()
+	local f = M.wheelFrame()
+	local tiles = cur().tiles
+	local L = #tiles
+	local list = {}
+	if L > 0 then
+		local inf = infinite()
+		for k = math.ceil(pos - f.half - 1), math.floor(pos + f.half + 1) do
+			if inf or (k >= 0 and k < L) then
+				local d = k - pos
+				local ad = math.abs(d)
+				local a = 1 - V.WheelFade / 100 * math.min(1, ad / math.max(0.5, f.half + 0.5))
+				-- past the last place shown: fading out completely
+				if ad > f.half + 0.5 then a = a * math.max(0, 1 - (ad - f.half - 0.5) * 2) end
+				list[#list + 1] = { k = k, idx = k % L + 1, d = d, a = a }
+			end
+		end
+	end
+	table.sort(list, function(p, q) return math.abs(p.d) > math.abs(q.d) end)
+	local first = V.Slots - #list
+	local old = M.wv
+	M.wv = {}
+	for i, e in ipairs(list) do
+		local slot = first + i
+		if slot >= 1 then
+			M.wv[slot] = e
+			if not old[slot] or old[slot].idx ~= e.idx or base ~= 0 then
+				local t = tiles[e.idx]
+				set('Tile' .. slot, 'ImageName', t.background or '')
+				if t.logo then set('TileIcon' .. slot, 'ImageName', t.logo) end
+				if t.label then set('TileLabel' .. slot, 'Text', t.label) end
+			end
+		end
+	end
+	base = 0 -- (contents set: a reset (base = -1) refills every slot once)
+end
+
+-- Time-based turn towards offset: WheelStepTime per tile (a little less each
+-- for several at once); a new target starts again from where it is
+function M.wheelAdvance()
+	local w = M.wheel
+	if w.to ~= offset then
+		w.from, w.to, w.t = pos, offset, 0
+		w.dur = V.WheelStepTime * math.sqrt(math.max(1, math.abs(offset - pos)))
+	end
+	if pos == offset then return false end
+	w.t = w.t + 16 * M.animScale
+	local p = math.min(1, w.t / w.dur)
+	pos = w.from + (w.to - w.from) * easeOut(p)
+	M.animFast = true
+	if p >= 1 then pos = offset return false end
+	return true
+end
+
+-- Mouse resting on a side tile (WheelHover=Turn): after a moment the wheel
+-- turns to it (MeasureWheelDwell); not while it turns, so a tile passing
+-- under a still mouse does not turn it again
+M.dwell = nil
+function M.wheelHover(k)
+	if not (V.Wheel and V.WheelTurn) or pos ~= offset or k == offset then return end
+	M.dwell = k
+	SKIN:Bang('!CommandMeasure', 'MeasureWheelDwell', 'Stop 1')
+	SKIN:Bang('!CommandMeasure', 'MeasureWheelDwell', 'Execute 1')
+end
+function M.wheelLeave()
+	if M.dwell == nil then return end
+	M.dwell = nil
+	SKIN:Bang('!CommandMeasure', 'MeasureWheelDwell', 'Stop 1')
+end
+function WheelDwell()
+	local k = M.dwell
+	M.dwell = nil
+	if not ready or launching or not V.Wheel or k == nil or pos ~= offset or not hover.on then return end
+	if (V.Horizontal and hover.tx or hover.ty) ~= k then return end
+	offset = k
+	if V.AnimScroll then M.startTicker() else pos = offset M.frame() end
 end
 
 -- Measures the (already updated) menu entries and centres the chain horizontally.
@@ -2137,7 +2315,7 @@ end
 
 local function renderScrollBar()
 	local maxOff = maxOffset()
-	if maxOff == 0 then
+	if maxOff == 0 or V.Wheel then
 		show('MeterScrollBar', false)
 		return
 	end
@@ -3150,7 +3328,9 @@ local function placeSlots()
 		local extra = r >= V.NY or c >= V.NX -- extra row/column
 		local e = cur().pack and view[slot]
 		if e then extra = e.line >= base + visibleLines() end
-		local visible = t and (not extra or frac > 0)
+		local wv = V.Wheel and M.wv[slot]
+		if V.Wheel then extra = false end
+		local visible = t and (not extra or frac > 0) and (not V.Wheel or (wv and wv.a > 0.01))
 		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
 		local infoMeter = 'TileInfo' .. slot
 
@@ -3168,6 +3348,8 @@ local function placeSlots()
 				y = y + (1 - f) * V.AnimSlide
 			end
 			x, y = math.floor(x + 0.5), math.floor(y + 0.5)
+			-- the wheel: fading towards the ends
+			if wv then f = f * wv.a end
 			local alpha = tostring(math.floor(255 * f + 0.5))
 
 			set(tile, 'X', tostring(x))
@@ -3215,6 +3397,7 @@ local function placeSlots()
 				set(icon, 'ColorMatrix3', rows[3])
 			end
 			local hasLabel = V.ShowLabels and t.label ~= nil
+				and (not wv or V.WheelLabelsAll or math.abs(wv.d) < 0.5)
 			if hasLabel then
 				set(label, 'W', tostring(V.TileW - 2 * V.LabelPad))
 				set(label, 'X', tostring(x + V.LabelPad))
@@ -3277,7 +3460,7 @@ local function placeSlots()
 			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
 			-- cut by the edge: how much, for each line across the scroll (a
 			-- row, or a column when the grid scrolls vertically) it covers
-			if V.EdgeFade and not appear then
+			if V.EdgeFade and not appear and not V.Wheel then
 				local along, size, step = x, V.TileW, V.StepY
 				local across, span, edge = y, V.TileH, V.ClipW or V.GridW
 				if not V.Horizontal then
@@ -3313,7 +3496,7 @@ local function placeSlots()
 	-- other touch, so a tile of more cells is covered all along
 	local edges = {}
 	fadeMoving = false
-	if V.EdgeFade then
+	if V.EdgeFade and not V.Wheel then
 		local lines = V.Horizontal and V.NY or V.NX
 		local step = V.Horizontal and V.StepY or V.StepX
 		local full = V.Horizontal and (V.ClipH or V.GridH) or (V.ClipW or V.GridW)
@@ -3379,10 +3562,14 @@ end
 
 -- Applies the current state to the grid and redraws.
 local function frame()
-	local b = math.floor(pos)
-	if b ~= base then
-		base = b
-		fillSlots()
+	if V.Wheel then
+		M.wheelAssign()
+	else
+		local b = math.floor(pos)
+		if b ~= base then
+			base = b
+			fillSlots()
+		end
 	end
 	placeSlots()
 	placeHover()
@@ -3523,6 +3710,8 @@ startTicker = function()
 	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Execute ' .. tickList)
 end
 
+M.startTicker = function() startTicker() end -- (for the functions defined above it)
+
 local function stopTicker()
 	if not ticking then return end
 	ticking = false
@@ -3565,7 +3754,7 @@ local function advance()
 		end
 	end
 
-	pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth)
+	if V.Wheel then moving = M.wheelAdvance() else pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth) end
 	busy = busy or moving or fadeMoving
 
 	-- Steam updates, when the launcher opens: progress filling up, borders turning
@@ -3929,6 +4118,7 @@ function Initialize()
 	SKIN:Bang('!SetOption', 'MeasureLaunchAnim', 'ActionList1', 'Repeat Step, ' .. V.LaunchStepMs .. ', ' .. V.LaunchSteps
 		.. ' | Wait ' .. math.floor(num('LaunchHold', 1500)) .. ' | Finish')
 	V.InfiniteScroll = num('InfiniteScroll', 1) ~= 0
+	M.readWheel()
 	-- Smoothing of each animation; AnimSmooth if empty
 	local function smooth(name)
 		return math.min(1, math.max(0.02, num(name, V.AnimSmooth)))
@@ -4970,10 +5160,12 @@ function HoverTile(slot)
 	hover.anchor = V.Horizontal and ty or tx
 	hover.part = nil
 	focus(t, indexAt(slot), tx, ty)
+	if V.Wheel then M.wheelHover(V.Horizontal and tx or ty) end
 end
 
 function LeaveTile(slot)
 	if ready then leavePointed(tileAt(slot)) end
+	M.wheelLeave()
 	if not ready or not tileAt(slot) or indexAt(slot) ~= hover.idx or not hover.on then return end
 	-- the mouse went onto a part of it (a meter of its widget with Part=1)
 	if hover.part then return end
@@ -5277,6 +5469,14 @@ end
 function Launch(slot)
 	if not ready or launching then return end
 	if M.menuOverGrid() then M.picked = nil return end
+	-- the wheel: a side tile turns to the middle (WheelClick=Center)
+	local e = V.Wheel and M.wv[slot]
+	if e and not V.WheelClickLaunch and math.abs(e.k - offset) >= 0.5 then
+		M.wheelLeave()
+		offset = e.k
+		if V.AnimScroll then startTicker() else pos = offset frame() end
+		return
+	end
 	local x, y = gridToPx(slotToGrid(slot))
 	launchTile(tileAt(slot), x, y)
 end

@@ -19,4 +19,6 @@ paths:
   ask the user to test the program, saying which pages changed.
 - A layout change: run `tools\options-shots.ps1 -Base origin/nightly` and look at
   `build\options-shots\report.txt` and the pictures in `diff\` (CLAUDE.md,
-  "Verifying changes"); say in the hand-over which pages changed and how.
+  "Verifying changes"); say in the hand-over which pages changed and how. While
+  iterating, commit each step you are happy with and compare the next one with
+  `-Base HEAD`: that step is already in the cache, only the new state is shot.

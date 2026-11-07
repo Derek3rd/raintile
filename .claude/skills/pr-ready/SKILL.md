@@ -11,12 +11,13 @@ passed, what failed and what was not verified.
 ## 1. Checks and builds
 1. `python tools/check.py` (pre-push hook too: `python tools/check.py --install-hook`).
    A fixed bug has a test that fails without the fix (`tests/lua`, `tests/ps`).
-2. Anything under `src/Options/` changed: `dotnet build src/Options/RaintileOptions.csproj -c Release`
-   (0 errors), then `powershell -NoProfile -ExecutionPolicy Bypass -File tools\dev-build.ps1`
-   so the live test runs the new program (close the Options window first).
+2. Anything under `src/Options/` changed: `powershell -NoProfile -ExecutionPolicy Bypass -File tools\dev-build.ps1`
+   (it builds, 0 errors, and installs it so the live test runs the new program; close the
+   Options window first, or it stops before building).
 3. The layout of the Options window changed: `powershell -NoProfile -ExecutionPolicy Bypass
    -File tools\options-shots.ps1 -Base origin/nightly`, then look at the changed pages in
-   `build\options-shots\diff\`. Only for such changes: it takes a few minutes.
+   `build\options-shots\diff\`. Only for such changes. Shots are kept by content: nightly is
+   shot once, and between two steps of the same change `-Base HEAD` shoots only the new state.
 
 ## 2. Docs in sync
 - A new or changed setting: its comment in `@Resources/Settings.inc` and the "Settings

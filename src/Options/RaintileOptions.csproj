@@ -2,12 +2,12 @@
   <!--
     Raintile Options window as a native program (WPF, .NET Framework 4.8,
     included in Windows 10/11). Built by .github/workflows/release.yml and
-    shipped in @Resources\Bin\RaintileOptions.exe; the skin falls back to
-    Scripts\Options.ps1 when the program is missing.
+    shipped in @Resources\Bin\RaintileOptions.exe (tools\dev-build.ps1 builds
+    it into a copy of the repository). Without its window (-Action) it also
+    runs the tile menu's Run as administrator and Remove.
 
     No compiled XAML: the styles are read at run time from
-    @Resources\Scripts\Options.xaml (the same file the PowerShell window
-    uses), so it builds on Linux too.
+    @Resources\Scripts\Options.xaml, so it builds on Linux too.
 
       dotnet build src/Options -c Release -o build/options
   -->
@@ -18,6 +18,8 @@
     <AssemblyName>RaintileOptions</AssemblyName>
     <RootNamespace>RaintileOptions</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- the Raintile symbol (assets/logo/raintile-symbol.svg), 16 to 256 px: the program, its windows and the taskbar -->
+    <ApplicationIcon>raintile.ico</ApplicationIcon>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Product>Raintile</Product>
     <AssemblyTitle>Raintile Options</AssemblyTitle>

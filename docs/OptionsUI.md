@@ -1,9 +1,8 @@
 # The Options window: UI rules
 
 How the Options window looks and behaves, so that every page works the same way.
-These rules apply to the Options program (`src/Options/`, `RaintileOptions.exe`) and
-to its PowerShell fallback (`@Resources/Scripts/Options.ps1`), which share the
-styles of `@Resources/Scripts/Options.xaml`.
+These rules apply to the Options program (`src/Options/`, `RaintileOptions.exe`),
+whose styles are in `@Resources/Scripts/Options.xaml`.
 
 Most rules are already code: the constants and helpers in `src/Options/Ui.cs`
 (`Glyph`, `Fs`, `Gap`, `FieldWidth`, `NewHelp`, `NewSectionTitle`, `NewLabelBlock`,
@@ -13,13 +12,9 @@ Most rules are already code: the constants and helpers in `src/Options/Ui.cs`
 `SetFormHelp`. Build new UI with them: no glyph codes,
 font sizes or margins written by hand. When a page needs something the helpers do
 not have, add it to `Ui.cs` and to this page, not to the page's own file.
-`Options.ps1` has the same rules as `$GLYPH`, `$FS`, `$GAP`, `$FIELD`, `New-Help`,
-`New-SectionTitle`, `New-ActionIcon`, `Set-ActionVisible`, `Set-Invalid`, `Set-Trimmed`
-and `Show-Dialog -Danger`.
 
 `python tools/check.py` fails on a glyph code, a font size, or a margin or padding
-with a number other than 0 written by hand in `src/Options/` (outside `Ui.cs`) or in
-`Options.ps1` (outside `$GLYPH` and the helpers). Where a value really has to be its
+with a number other than 0 written by hand in `src/Options/` (outside `Ui.cs`). Where a value really has to be its
 own (a drawing on a thumbnail, the menu chrome, the on-screen keyboard, the launcher
 preview), the line says why with a comment `ui-exempt: <why>`. The XAML of the window
 (`Options.xaml` and the window's frame: menu, header, footer) is the chrome and is not
@@ -56,6 +51,9 @@ for a field with two values such as a pair of keys, right after each value); the
 acts on a whole entry of a list, in the list's header. A field never has a bin.
 
 - Chevrons (`0xE70D`, `0xE76C`) only open and close groups of the menu.
+- Pad glyphs (`Glyph.PadB` `0xF094`, `Glyph.PadStart` `0xEDE3`) only go before the text of a
+  button that a gamepad button presses, with `AddPadHint`: shown while the pad is in use,
+  never an icon button of their own.
 - An icon button that would do nothing (the value is already the default, the field
   is already empty) is hidden with `SetActionVisible`: `Visibility.Hidden`, so its
   room stays and nothing moves. Never dim it by hand.
@@ -132,8 +130,7 @@ menu's icons (15) and group chevrons (9), the title of the saving overlay (17).
 
 ## 6. Spacing (`Gap`)
 
-Every margin and padding of a page is one of these, or 0 (`$GAP` in `Options.ps1`,
-where the page margin is `$GAP.PageBox`):
+Every margin and padding of a page is one of these, or 0:
 
 | Constant | px | Where |
 |---|---|---|
@@ -155,7 +152,7 @@ where the page margin is `$GAP.PageBox`):
 | `Gap.ListItem` | 12, 9 | padding of the entries of the menu and of the category list |
 
 Cards use the `Card` style. A spacing that none of these fits is a new constant in
-`Ui.cs`, in `$GAP` and in this table, not a number in the page.
+`Ui.cs` and in this table, not a number in the page.
 
 ## 7. Buttons and dialogs
 
@@ -181,8 +178,7 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
   list, nothing is deleted. Clear = a field is emptied (its file, if any, goes to the
   Recycle Bin).
 - "Browse..." picks a file or a folder; a button that opens a dialog ends with "...".
-  Always three ASCII dots, in buttons and in statuses ("Checking..."), as in the
-  ASCII-only fallback.
+  Always three ASCII dots, in buttons and in statuses ("Checking...").
 - "Cancel" in dialogs. "cannot", not "can not".
 - Statuses are sentences with a full stop: "Saved.", "Unsaved changes.",
   "Download failed: ...", "The search could not start: ...".
@@ -218,5 +214,4 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 - [ ] Works with the keyboard and the gamepad, without hovering.
 - [ ] Fits the narrowest window (960 px): nothing cut without its tooltip.
 - [ ] `tools\options-shots.ps1 -Base origin/nightly`: only the pages you meant to
-      change are different, in the program and in the fallback.
-- [ ] The same change in `Options.ps1`, when the page exists there too.
+      change are different.

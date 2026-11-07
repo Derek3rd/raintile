@@ -70,9 +70,9 @@ do
 end
 local osk = { open = false, sel = 1 }
 local tileKeys = {}  -- tile hot keys: { { key, id } }, in the order of their measures
-local widgets = {}   -- Dashboard widget tiles, in the order of their meters (t.widget.idx)
-local updateDashState -- defined with the Dashboard widgets
-local D = {}          -- functions and tables of the Dashboard widgets
+local widgets = {}   -- widget tiles of all categories, in the order of their meters (t.widget.idx)
+local updateDashState -- defined with the widgets
+local D = {}          -- functions and tables of the widgets (D for the Dashboard they began with)
 local M = {}          -- launcher modes: window, docked
 local renderOsk, oskMove -- defined with the keyboard (Search section)
 
@@ -1267,8 +1267,9 @@ local function signature()
 				if f then
 					local text = f:read('*a')
 					f:close()
+					-- (every byte: a change of the same length, a setting 1 -> 4, must show)
 					local sum = 0
-					for k = 1, #text, 7 do sum = (sum * 31 + text:byte(k)) % 1000000007 end
+					for k = 1, #text do sum = (sum * 31 + text:byte(k)) % 1000000007 end
 					s[#s + 1] = '#' .. #text .. '.' .. sum
 				end
 			end
@@ -2665,7 +2666,7 @@ function D.customWidgetText(t, i, w, h)
 end
 
 -- Skin tiles (Widget=skin, Param=<config>\<file>.ini): the skin is loaded
--- over the tile while the Dashboard is shown, and unloaded when it is left
+-- over the tile while its category is shown, and unloaded when it is left
 function D.syncSkins()
 	local wanted = dash.on and dash.skinsWanted or {}
 	for config, p in pairs(wanted) do
@@ -2953,7 +2954,7 @@ function D.dashActive()
 	return ready and visible and not searchCat and cats[active] ~= nil and cats[active].widgets == true
 end
 
--- The widgets of the Dashboard on screen, from dash.data
+-- The widgets on screen, from dash.data
 function D.fillShown()
 	local catW, catH = V.TileW, V.TileH
 	for _, t in ipairs(cats[active].tiles) do
@@ -3413,8 +3414,8 @@ end
 
 -- Click on a chip: All clears the filter, the others turn on and off. The
 -- grid starts again from the top, with the appear animation.
--- New data from the helper: the history of the graphs, then the widgets of
--- the Dashboard on screen
+-- New data from the helper: the history of the graphs, then the widgets on
+-- screen
 function DashTick()
 	if not D.dashActive() then
 		updateDashState()
@@ -3810,7 +3811,7 @@ end
 
 function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
-	-- a Dashboard left open by the previous load: the helper stops until shown
+	-- widgets left on screen by the previous load: the helper stops until shown
 	os.remove(resources .. 'Generated\\DashOn.txt')
 	-- and the Steam downloads, followed only while it is open
 	os.remove(resources .. 'Generated\\DownloadOn.txt')
@@ -4550,26 +4551,30 @@ function M.checkHwAccel()
 	end
 end
 
--- Options window: the native program (@Resources\Bin\RaintileOptions.exe,
--- in the packages of the releases) when it is there, otherwise
--- Scripts\Options.ps1 with PowerShell (a copy of the repository has no
--- program). page: '', 'import', 'tile' or 'info'. The launcher hides first.
+-- Options window: the program @Resources\Bin\RaintileOptions.exe, in the
+-- packages of the releases. page: '', 'import', 'tile' or 'info'. The
+-- launcher hides first.
 function OpenOptions(page)
 	Hide()
+	if not M.optionsExe() then return end
 	page = page or ''
 	-- "<dir>\." keeps the trailing backslash from escaping the closing quote
 	local args = string.format(' -Resources "%s." -Data "%sRaintile" -Config "%s"', resources,
 		SKIN:ReplaceVariables('#SETTINGSPATH#'), SKIN:ReplaceVariables('#ROOTCONFIG#'))
 	if page ~= '' then args = args .. ' -Page ' .. page end
+	SKIN:Bang('["' .. M.optionsExe() .. '"' .. args .. ']')
+end
+
+-- The Options program, or nil after saying it is missing and Raintile should
+-- be installed again (a message box of Windows, through PowerShell: the skin
+-- has none of its own)
+function M.optionsExe()
 	local exe = resources .. 'Bin\\RaintileOptions.exe'
-	if fileExists(exe) then
-		dbg('options: ' .. exe)
-		SKIN:Bang('["' .. exe .. '"' .. args .. ']')
-	else
-		-- conhost --headless starts PowerShell without any console window
-		SKIN:Bang('["conhost.exe" --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File "'
-			.. resources .. 'Scripts\\Options.ps1"' .. args .. ']')
-	end
+	if fileExists(exe) then return exe end
+	print('Raintile: ' .. exe .. ' not found')
+	SKIN:Bang('["conhost.exe" --headless powershell.exe -NoProfile -NonInteractive -Command "$null = (New-Object -ComObject WScript.Shell).Popup(\'The Options program is missing (Bin\\RaintileOptions.exe in the skin folder): '
+		.. 'install Raintile again to get it back.\', 0, \'Raintile\', 48)"]')
+	return nil
 end
 
 -- Context menu > Edit this tile: the Options window opens on the tile the
@@ -4757,9 +4762,9 @@ function TileMenu(kind)
 		local path = commandTarget(t.command)
 		if path then SKIN:Bang('explorer.exe /select,"' .. path .. '"') end
 	elseif kind == 'admin' or kind == 'remove' then
-		-- TileAction.ps1: run as administrator (UAC asks), or remove the tile
+		-- the Options program (TileAction.cs): run as administrator (UAC asks), or remove the tile
 		-- from its category file (after a confirmation)
-		if writeTileFile('TileAction.txt', t) then
+		if M.optionsExe() and writeTileFile('TileAction.txt', t) then
 			SKIN:Bang(SKIN:GetVariable(kind == 'admin' and 'TileRunAsAction' or 'TileRemoveAction'))
 		end
 	end

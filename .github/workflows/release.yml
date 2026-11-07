@@ -49,11 +49,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # the pages of the window are written in Scripts/Options.ps1: the
-      # program's copy (SchemaData.cs) must match it
-      - name: Check the Options schema
-        run: python3 tools/gen_options_schema.py --check
-
       - name: Build the Options program
         run: |
           dotnet build src/Options/RaintileOptions.csproj -c Release -o build/options

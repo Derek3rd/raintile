@@ -1,20 +1,19 @@
-# Screenshots of every page of the Options window (the program and the Options.ps1
-# fallback) and, with -Base, of the same pages at another git ref, compared pixel by
+# Screenshots of every page of the Options window (RaintileOptions.exe) and, with
+# -Base, of the same pages at another git ref, compared pixel by
 # pixel: a check by eye of what a change does to the layout. It opens the windows
 # and takes a few minutes, so it is run by hand when the window changed, never by
 # tools/check.py; with -Base it stops at once when nothing of the window changed.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\options-shots.ps1 -Base origin/nightly
 #
-# Output in build\options-shots\ (git-ignored): current\ and base\ (program\ and
-# fallback\, one PNG per page and screen), diff\ (the current shot dimmed, the
+# Output in build\options-shots\ (git-ignored): current\ and base\ (program\,
+# one PNG per page and screen), diff\ (the current shot dimmed, the
 # changed pixels red) and report.txt. The windows use a copy of the data folder and
 # the skin name RaintileShots, so nothing is saved and no bang reaches the skin.
 # Pages are reached with UI Automation: every entry of the menu, every screen of a
 # page scrolled, and on a category page also its first tile. Dialogs are not shot.
 param(
     [string]$Base = '',     # git ref to compare with; empty: only the shots of this checkout
-    [ValidateSet('Both', 'Program', 'Fallback')][string]$Window = 'Both',
     [string]$Out = '',
     [int]$Width = 1280,
     [int]$Height = 1000,
@@ -23,7 +22,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $Out) { $Out = Join-Path $repo 'build\options-shots' }
-$windowFiles = @('src/Options', '@Resources/Scripts/Options.ps1', '@Resources/Scripts/Options.xaml')
+$windowFiles = @('src/Options', '@Resources/Scripts/Options.xaml')
 
 function Invoke-Git {
     # git writes progress to stderr: in PowerShell 5.1 with 'Stop' that would be an error
@@ -162,17 +161,13 @@ function Save-Page($win, [IntPtr]$hwnd, [string]$dir, [string]$name) {
     $sp.SetScrollPercent(-1, 0)
 }
 
-# Opens one window (the program 'exe', or Options.ps1 with PowerShell) and shoots
-# every page into 'dir'
-function Save-Window([string]$exe, [string]$ps1, [string]$resources, [string]$dir) {
+# Opens one window (the program 'exe') and shoots every page into 'dir'
+function Save-Window([string]$exe, [string]$resources, [string]$dir) {
     New-Item -ItemType Directory -Force $dir | Out-Null
     $data = Copy-Data (Join-Path $Out 'data')   # a fresh copy: a page may mark things as seen
     $a = @('-Resources', ('"' + $resources + '"'), '-Config', 'RaintileShots')
     if ($data) { $a += @('-Data', ('"' + $data + '"')) }
-    if ($exe) { $p = Start-Process $exe -ArgumentList $a -PassThru }
-    else {
-        $p = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList (@('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA', '-File', ('"' + $ps1 + '"')) + $a)
-    }
+    $p = Start-Process $exe -ArgumentList $a -PassThru
     try {
         $win = $null
         for ($i = 0; $i -lt 120 -and -not $win; $i++) {
@@ -194,7 +189,7 @@ function Save-Window([string]$exe, [string]$ps1, [string]$resources, [string]$di
             $name = '{0:00}-{1}' -f $i, ($label -replace '[^A-Za-z0-9]', '')
             Select-Item $item
             Save-Page $win $hwnd $dir $name
-            # a category page of the program: also its first tile (after All tiles)
+            # a category page: also its first tile (after All tiles)
             $strip = @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -gt 300 -and $_.Current.BoundingRectangle.Width -lt 200 })
             if ($strip.Count -gt 1) {
                 Select-Item $strip[1]
@@ -213,15 +208,12 @@ function Build-Program([string]$tree, [string]$bin) {
     return (Join-Path $bin 'RaintileOptions.exe')
 }
 
-# Shoots the windows of a source tree whose @Resources (Options.xaml, Options.ps1)
-# and program are given
+# Shoots the window of a source tree whose @Resources (Options.xaml) and program
+# are given
 function Save-Tree([string]$label, [string]$exe, [string]$tree) {
     $res = Join-Path $tree '@Resources'
-    if ($Window -ne 'Fallback') {
-        if ($exe -and (Test-Path -LiteralPath $exe)) { Save-Window $exe '' $res (Join-Path $Out "$label\program") }
-        else { Write-Output "  $label\program: no RaintileOptions.exe (no .NET SDK?), not shot" }
-    }
-    if ($Window -ne 'Program') { Save-Window '' (Join-Path $res 'Scripts\Options.ps1') $res (Join-Path $Out "$label\fallback") }
+    if ($exe -and (Test-Path -LiteralPath $exe)) { Save-Window $exe $res (Join-Path $Out "$label\program") }
+    else { Write-Output "  $label\program: no RaintileOptions.exe (no .NET SDK?), not shot" }
 }
 
 foreach ($d in @('current', 'base', 'diff', 'base-bin')) {
@@ -233,7 +225,7 @@ $hasDotnet = [bool](Get-Command dotnet -ErrorAction SilentlyContinue)
 
 Write-Output 'Shooting this checkout...'
 $exe = Join-Path $repo '@Resources\Bin\RaintileOptions.exe'
-if ($Window -ne 'Fallback' -and $hasDotnet) {
+if ($hasDotnet) {
     # rebuilds only when a source is newer than the program
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'dev-build.ps1') | Out-Null
 }
@@ -256,7 +248,7 @@ if ($Base) {
         $gen = Join-Path $repo '@Resources\Generated'
         if (Test-Path -LiteralPath $gen) { Copy-Item -Path (Join-Path $gen '*') -Destination (Join-Path $tree '@Resources\Generated') -Recurse -Force }
         $baseExe = ''
-        if ($Window -ne 'Fallback' -and $hasDotnet) { $baseExe = Build-Program $tree (Join-Path $Out 'base-bin') }
+        if ($hasDotnet) { $baseExe = Build-Program $tree (Join-Path $Out 'base-bin') }
         Save-Tree 'base' $baseExe $tree
     }
     finally { [void](Invoke-Git worktree remove --force $tree) }
@@ -264,7 +256,7 @@ if ($Base) {
     $report = New-Object System.Collections.Generic.List[string]
     $report.Add("Options window: this checkout against $Base (changed pixels, area x0,y0-x1,y1;")
     $report.Add('changes on 2 rows or fewer, the edges of a scrolled view, count as the same)')
-    foreach ($kind in @('program', 'fallback')) {
+    foreach ($kind in @('program')) {
         $a = Join-Path $Out "base\$kind"
         $b = Join-Path $Out "current\$kind"
         if (-not ((Test-Path -LiteralPath $a) -and (Test-Path -LiteralPath $b))) { continue }

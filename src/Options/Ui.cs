@@ -41,6 +41,8 @@ namespace RaintileOptions
         public const int Up = 0xE74A, Down = 0xE74B, Left = 0xE72B, Right = 0xE72A;   // move an entry
         public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
         public const int Pin = 0xE718;      // marks a pinned tile (not a button)
+        // the pad button that presses a button, before its text while the pad is in use (AddPadHint)
+        public const int PadB = 0xF094, PadStart = 0xEDE3;
     }
 
     // Type sizes
@@ -153,12 +155,13 @@ namespace RaintileOptions
 
     static class Program
     {
-        // Arguments as in Options.ps1: -Resources <dir> -Data <dir> -Config <name> -Page <page>
+        // Arguments: -Resources <dir> -Data <dir> -Config <name> -Page <page>, or
+        // -Action runas|remove for the tile menu (TileAction.cs, no window)
         [STAThread]
         static int Main(string[] args)
         {
             var clock = Stopwatch.StartNew();
-            string resources = null, data = "", config = "Raintile", page = "";
+            string resources = null, data = "", config = "Raintile", page = "", action = "";
             for (int i = 0; i + 1 < args.Length; i++)
             {
                 string a = args[i].TrimStart('-', '/').ToLowerInvariant();
@@ -166,6 +169,7 @@ namespace RaintileOptions
                 else if (a == "data") data = args[++i];
                 else if (a == "config") config = args[++i];
                 else if (a == "page" || a == "openpage") page = args[++i];
+                else if (a == "action") action = args[++i].ToLowerInvariant();
             }
             if (resources == null)
             {
@@ -176,6 +180,7 @@ namespace RaintileOptions
             try
             {
                 Core.Init(resources, data, config);
+                if (action == "runas" || action == "remove") return TileAction.Run(action);
                 Core.DeleteOldUpdateFiles();
                 var app = new OptionsApp(page, clock);
                 return app.Run();
@@ -219,7 +224,6 @@ namespace RaintileOptions
         // separator between the parts of a sub-line ("Steam   .   game")
         public static readonly string Dot = ((char)0xB7).ToString();
 
-        public object Res(string name) { return app.Resources[name]; }
         public Style ResStyle(string name) { return (Style)app.Resources[name]; }
         public Brush ResBrush(string name) { return (Brush)app.Resources[name]; }
 
@@ -597,6 +601,12 @@ namespace RaintileOptions
                 if (isDefault) b.IsDefault = true;
                 b.Click += (s, e) => { result = label; d.Close(); };
                 AddTo(bar, b);
+                // B closes the dialog as its last button (Cancel, or the only one)
+                if (i == buttons.Length - 1)
+                {
+                    var hint = AddPadHint(b, Glyph.PadB);
+                    d.Closed += (s, e) => RemovePadHint(hint);
+                }
             }
             d.KeyDown += (s, e) => { if (e.Key == System.Windows.Input.Key.Escape) d.Close(); };
             if (tb != null) d.ContentRendered += (s, e) => { tb.Focus(); tb.SelectAll(); };

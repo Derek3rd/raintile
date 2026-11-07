@@ -145,7 +145,7 @@ Right click on a tile adds, after Raintile's own entries, the ones that apply to
 | **Run as administrator** | starts the program as administrator; Windows asks for confirmation (only for `.exe`, `.lnk`, `.bat`, `.cmd`) |
 | **Remove from \<category\>...** | removes the tile from its category file, after asking; its images stay in `Images\` |
 
-*Run as administrator* and *Remove* go through `Scripts\TileAction.ps1`, which reads the tile's command from its category file.
+*Run as administrator* and *Remove* go through the Options program (`Bin\RaintileOptions.exe`, without its window), which reads the tile's command from its category file.
 
 ## Favorites and Recent
 
@@ -208,10 +208,10 @@ The **Dashboard** (`Categories\Dashboard.ini`, added once to existing data too) 
 
 - In the Options window it is among the categories like the others: name, icon, grid, **Show in the menu** (`Hidden=1` in its `[Category]` keeps any category out of the menu). Options > **Widgets** > *Add the example Dashboard* brings it back if you deleted it.
 - The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a category with widgets is on screen, every `DashInterval` ms (default 1000): with it closed nothing is measured.
-- **Modrinth instances** (widget gallery, under Games): the instances of [Modrinth App](https://modrinth.com/app), the last played first, with their icons; a click starts one. Its script reads Modrinth App's database (read only) when the category comes on screen. More cells for the tile (`Size=1x2`), more rows. Widgets can do the same for anything: see *What Raintile does for a widget* in `widgets/README.md`.
+- **Modrinth instances** (widget gallery, under Games): the instances of [Modrinth App](https://modrinth.com/app), the last played first, with their icons; a click starts one. Its script reads Modrinth App's database (read only) when the category comes on screen. More cells for the tile (`Size=1x2`), more rows. Widgets can do the same for anything: see [Writing widgets](Widgets.md).
 - **Steam achievements** (widget gallery, under Games): the achievements of the Steam game played last, or of the game in the tile's *Widget setting* (its Steam app id, `WidgetOption=570`): how many are unlocked, the last ones unlocked, the locked ones most players have. A click opens the game's achievements in Steam. It needs your Steam Web API key (free, from [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)) in Options > Widgets > Steam achievements (the widget's own settings), and your profile's game details public; it asks Steam at most every 5 minutes for the same game.
 - Installed widgets with settings of their own (a key, a colour) have an entry each under Options > **Widgets**, in the menu on the left (click *Widgets* again to open or close the list); the settings are kept in the widget's folder (`settings.inc`) and survive its updates. What a single tile shows (e.g. which game) is its *Widget setting* in the tile editor instead.
-- A custom widget can have parts (`Part=1` on its meters): the highlight goes onto the part under the mouse and a click runs the part's own action (see `widgets/README.md`).
+- A custom widget can have parts (`Part=1` on its meters): the highlight goes onto the part under the mouse and a click runs the part's own action (see [Writing widgets](Widgets.md#parts-of-a-tile)).
 - Widgets are left out of search, Favorites, Recent and the filters. In a sorted category they are sorted like the other tiles (by name, by when they were added...); pin them to keep them first.
 - Clicking a widget runs its `Command=`, or by default opens what fits: Task Manager (CPU, GPU, RAM, processes), the disk in Explorer, network or system settings.
 
@@ -353,13 +353,13 @@ Each tile looks for images named after itself, with the extensions `.png`, `.jpg
 
 ### Framing a background
 
-A background fills its tile and, by default, is cropped at the centre. When the subject is off-centre, or the image is much wider or taller than the tile, choose the part to show in Options > *the category* > *the tile* (or right click on the tile > **Edit \<tile\>...**): in the large preview on the left drag the background to move the image, zoom with the mouse wheel (it zooms on the point under the mouse) or the **Framing** slider, and the **x** next to the slider to give the tile back the framing of **All tiles** (the centre unless the category has one, see [Placement for a whole category](#placement-for-a-whole-category)). The preview has the proportions of this category's tiles on this screen.
+A background fills its tile and, by default, is cropped at the centre. When the subject is off-centre, or the image is much wider or taller than the tile, choose the part to show in Options > *the category* > *the tile* (or right click on the tile > **Edit \<tile\>...**): in the large preview on the left drag the background to move the image, zoom with the mouse wheel (it zooms on the point under the mouse) or the **Framing** slider, and the **x** next to the slider to give the tile back the framing of **All tiles** (the centre unless the category has one, see [Placement for a whole category](#placement-for-a-whole-category)). The preview has the proportions of this category's tiles on this screen. With a controller, press `A` on the preview: see [Options window](#options-window), Gamepad.
 
 The framing is saved in the tile as `BgFocus` (the point kept at the centre, in % of the image) and `BgZoom`. Both are relative, so it holds when the resolution, the margins or the grid change: only the edges of the image limit it. With the sliding styles (`BgStyle` `Pan`, `Parallax`, `Zoom`) the tile starts from the framed part and moves within `BgOverscan` of it, instead of across the whole image. Choosing or removing the background resets the framing. The launch animation still shows the whole image.
 
 ### Placing the logo
 
-The logo is centred in its tile and as large as the category's `IconSize`. To move it, drag the logo itself in the same preview (Options > *the category* > *the tile*); to resize it, use the mouse wheel over it or the **Logo** slider, and the **x** next to it to give it back the placement of **All tiles** (centred at its normal size unless the category has one of its own). It is independent of the framing: the background and the logo move separately.
+The logo is centred in its tile and as large as the category's `IconSize`. To move it, drag the logo itself in the same preview (Options > *the category* > *the tile*); to resize it, use the mouse wheel over it or the **Logo** slider, and the **x** next to it to give it back the placement of **All tiles** (centred at its normal size unless the category has one of its own). It is independent of the framing: the background and the logo move separately. With a controller: `A` on the preview, then `LB` / `RB` to the logo.
 
 The placement is saved in the tile as `LogoPos` (where the centre of the logo goes, in % of the tile) and `LogoScale` (times the category's logo size). Both are relative, so the logo keeps its place when the resolution or the grid change. What is visible of the logo always stays inside the tile, also while it grows under the mouse: pushed into a corner, it stays in the corner at any size. The launch animation starts from where the logo is and brings it to the centre of the screen.
 
@@ -413,7 +413,7 @@ Reported tiles are **greyed out** in the launcher, say **Not installed** and do 
 
 ## Options window
 
-The **gear** next to the X, or right click > **Options...**, opens the Options window: the program `Bin\RaintileOptions.exe` (C#, WPF, .NET Framework 4.8, included in Windows 10/11), in the packages of the releases; a copy of the repository without it opens the same window from `Scripts\Options.ps1` with PowerShell, a little slower. Both look the same: their look is in `Scripts\Options.xaml`. Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
+The **gear** next to the X, or right click > **Options...**, opens the Options window: the program `Bin\RaintileOptions.exe` (C#, WPF, .NET Framework 4.8, included in Windows 10/11), in the packages of the releases (without it the launcher says it is missing and Raintile should be installed again; a copy of the repository builds it with `tools\dev-build.ps1`). Its look is in `Scripts\Options.xaml`. Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
 
 The sections are in the menu on the left; **Keybindings** and **Categories** open into sub-entries (click them again to close them):
 
@@ -445,9 +445,10 @@ The sections are in the menu on the left; **Keybindings** and **Categories** ope
     - **Pinned tiles** (the tile's **Pinned** box, or right click on the tile in the launcher > **Pin to the start**) come first, in the order you drag them to, with a pin on their small tile; sorting moves only the others.
   - **Moving a tile to another category**: drag it from the strip onto that category in the menu on the left (the entry is outlined when it can take it). The tile and its images move, and both category files are saved at once. Imported games move only once they are normal tiles.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
-- **Gamepad** (the program only, not `Options.ps1`; off with `Gamepad=0`): while the window is in the foreground the controller moves a ring between the controls. D-pad / left stick move (on a slider left and right change the value, the field next to it is skipped), `A` presses a button, flips a switch, picks a choice or a list entry, opens a drop-down list (up/down choose, `LB`/`RB` jump by 10, `A` keeps, `B` puts back) or types into a text field, `B` goes back to the menu (in the menu it closes the window, in a dialog it cancels), `LB` / `RB` go to the previous / next page, `Start` alone saves and refreshes, the right stick scrolls. The ring goes away when you move the mouse or press a key; the next pad input brings it back without acting.
+- **Gamepad** (off with `Gamepad=0`): while the window is in the foreground the controller moves a ring between the controls. D-pad / left stick move (on a slider left and right change the value, the field next to it is skipped), `A` presses a button, flips a switch, picks a choice or a list entry, opens a drop-down list (up/down choose, `LB`/`RB` jump by 10, `A` keeps, `B` puts back) or types into a text field, `B` goes back to the menu (in the menu it closes the window, in a dialog it cancels), `LB` / `RB` go to the previous / next page, `Start` alone saves and refreshes, the right stick scrolls. In the menu on the left there is no ring: up and down open the entry's page right away (its background marks it) and go round from the last entry to the first, passing over an open group; right goes to the first control of the page, and coming back to the menu lands on the page shown. While the pad is in use, *Save and refresh* shows the `Start` glyph and *Close* (and the last button of a dialog) the `B` glyph. The ring and the glyphs go away when you move the mouse or press a key; the next pad input brings them back without acting. The arrow keys go round the menu the same way.
   - **On-screen keyboard** (`A` on a text field): the launcher's layout with lower case, **Shift** for capitals and a page of symbols (`#+=`) for paths and commands; the text shows above the keys. `A` types the key, `X` deletes, `Y` adds a space, `LB` / `RB` move the cursor, `LT` is Shift, `RT` the symbols, `Start` (or *Done*) keeps the text, `B` puts back what was there. The keys can be clicked too.
-  - Still mouse or keyboard: key bindings (they wait for a key), colour and file pickers (Windows dialogs), framing the background and placing the logo by dragging (the zoom and logo size sliders work with the pad).
+  - **Tile preview** (`A` on it): moves the background, the logo or the play time line, as dragging them. The left stick moves the outlined part (the further, the faster), the D-pad by one pixel, `LB` / `RB` switch between background, logo and play time line, `LT` / `RT` make the background zoom or the logo smaller / larger, `A` keeps, `B` puts back what was there. A click or a key ends it and keeps the changes.
+  - Still mouse or keyboard: key bindings (they wait for a key), colour and file pickers (Windows dialogs).
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 
 The window hides the launcher while open. You can always keep editing the files by hand.
@@ -755,7 +756,6 @@ TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated whi
   Images/<category>/         their icons, backgrounds and logos
   Icons/                     icons of Favorites and Recent
   Scripts/Data.ps1           prepares the data folder
-  Scripts/TileAction.ps1     tile menu: run as administrator, remove
   Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic
   Scripts/Thumbs.ps1         thumbnail creation
@@ -764,7 +764,6 @@ TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated whi
   Scripts/GameUpdates.ps1    Steam games with an update waiting
   Scripts/Helper.ps1         gamepad and focus-loss helper
   Bin/RaintileOptions.exe    Options window (built from src/Options by the release workflow)
-  Scripts/Options.ps1        Options window with PowerShell, when the program is missing
   Scripts/Options.xaml       look of the Options window
   Generated/Grid.inc         generated meters
   Generated/Sizes.inc        the launcher's rectangle (LauncherMode), percentage sizes and #hex colours converted for Rainmeter

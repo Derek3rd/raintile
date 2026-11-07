@@ -970,8 +970,9 @@ namespace RaintileOptions
         }
 
         // New zoom; 'anchor' (a point of the preview) keeps showing the same part of
-        // the image, as when zooming with the wheel under the mouse
-        void SetFrameZoom(double zoom, Point? anchor = null)
+        // the image, as when zooming with the wheel under the mouse. save: false while
+        // the pad places it (written when it is done, PadPlace.cs)
+        void SetFrameZoom(double zoom, Point? anchor = null, bool save = true)
         {
             zoom = Math.Round(Math.Min(4.0, Math.Max(1.0, zoom)), 2);
             if (anchor != null)
@@ -987,7 +988,7 @@ namespace RaintileOptions
             else bgFrame.Zoom = zoom;
             LimitFocus();
             UpdateFraming();
-            SaveFraming();
+            if (save) SaveFraming();
         }
 
         // A new or removed background: the old framing no longer applies
@@ -1079,11 +1080,11 @@ namespace RaintileOptions
         }
 
         // The position is not limited here: a logo pushed into a corner stays there
-        void SetLogoScale(double scale)
+        void SetLogoScale(double scale, bool save = true)
         {
             logoPlace.Scale = Math.Round(Math.Min(3.0, Math.Max(0.25, scale)), 2);
             UpdateLogoPlace();
-            SaveLogoPlace();
+            if (save) SaveLogoPlace();
         }
 
         // --- Placement of the play time line (InfoPos) ------------------------------------
@@ -1132,13 +1133,14 @@ namespace RaintileOptions
         }
 
         // The line moved to (left, top) in the preview: back to InfoPos, close to an
-        // edge it snaps to it (top right is 100,0, not 99.4,0.3)
-        void MoveInfo(double left, double top)
+        // edge it snaps to it (top right is 100,0, not 99.4,0.3). Not with the pad,
+        // whose small steps would never leave the edge (PadPlace.cs)
+        void MoveInfo(double left, double top, bool snapToEdge = true)
         {
             double pad = GetInfoPad();
             var d = previewInfo.DesiredSize;
             double fw = preview.Width - 2 * pad - d.Width, fh = preview.Height - 2 * pad - d.Height;
-            Func<double, double> snap = v => { v = Math.Min(1.0, Math.Max(0.0, v)); return v < 0.03 ? 0 : v > 0.97 ? 1 : v; };
+            Func<double, double> snap = v => { v = Math.Min(1.0, Math.Max(0.0, v)); return !snapToEdge ? v : v < 0.03 ? 0 : v > 0.97 ? 1 : v; };
             if (fw > 0) infoPlace.X = snap((left - pad) / fw);
             if (fh > 0) infoPlace.Y = snap((top - pad) / fh);
         }
@@ -1890,7 +1892,9 @@ namespace RaintileOptions
                 Child = new TextBlock { Text = "24 h played - yesterday", FontWeight = FontWeights.SemiBold },
             };
             canvas.Children.Add(previewInfo);
-            previewLabel = NewText("", 14, NewColorBrush(V("TextColor")));   // ui-exempt: preview of the launcher
+            // what the pad is moving (PadPlace.cs)
+            canvas.Children.Add(NewPlaceMark());
+            previewLabel =NewText("", 14, NewColorBrush(V("TextColor")));   // ui-exempt: preview of the launcher
             previewLabel.HorizontalAlignment = HorizontalAlignment.Left;
             previewLabel.VerticalAlignment = VerticalAlignment.Bottom;
             previewLabel.Margin = T(12, 0, 0, 10);   // ui-exempt: preview of the launcher
@@ -1901,7 +1905,10 @@ namespace RaintileOptions
             pg.Children.Add(canvas);
             pg.Children.Add(previewLabel);
             AddTo(left, preview);
-            var how = NewHelp("Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. The preview has the proportions of this category's tiles on this screen. " +
+            // with the pad: A on the preview moves its parts
+            AddPadArea(preview, StartPlace);
+            AddTo(left, NewPlaceHint());
+            var how = NewHelp("Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. With the gamepad: A on the preview. The preview has the proportions of this category's tiles on this screen. " +
                 "A tile follows All tiles until you move something on it (Own); its reset gives it back the placement of All tiles.");
             how.Margin = T(0, Gap.Control, 0, Gap.Line);
             AddTo(left, how);

@@ -3,7 +3,8 @@
   @Resources\Bin\RaintileOptions.exe (git-ignored), for testing a branch.
 
   The release and nightly workflows build it for the packages; the repository
-  has none, so the skin would open the older Options.ps1 window instead.
+  has none, and without it the skin has no Options window (nor the tile
+  menu's Run as administrator and Remove).
   Suggested: make the repository the skin itself, linked into Rainmeter's
   skins folder (mklink /J "%USERPROFILE%\Documents\Rainmeter\Skins\Raintile" <repo>);
   otherwise pass the skin folder with -Target.
@@ -35,14 +36,6 @@ if (-not (Test-Path (Join-Path $Target 'Raintile.ini'))) {
 }
 $bin = Join-Path $Target '@Resources\Bin'
 $exe = Join-Path $bin 'RaintileOptions.exe'
-
-# The settings schema is written in Options.ps1; SchemaData.cs is generated from it
-$schemaSource = Join-Path $repo '@Resources\Scripts\Options.ps1'
-$schemaData = Join-Path $src 'SchemaData.cs'
-if ((Test-Path $schemaSource) -and (Test-Path $schemaData) -and
-    (Get-Item $schemaSource).LastWriteTime -gt (Get-Item $schemaData).LastWriteTime) {
-    Write-Host 'Options.ps1 is newer than SchemaData.cs: if the schema changed, run python tools\gen_options_schema.py first.'
-}
 
 # Up to date: no source newer than the installed program
 $sources = Get-ChildItem $src -Recurse -File -Include '*.cs', '*.csproj', '*.manifest' |

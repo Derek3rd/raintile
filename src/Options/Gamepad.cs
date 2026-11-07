@@ -10,7 +10,8 @@
 // Close and on the last button of a dialog).
 //
 //   D-pad / left stick   move between controls (on a slider: left/right change it)
-//   A                    press, switch, open a list, or type in a field (OskOpen)
+//   A                    press, switch, open a list, or type in a field (OskOpen);
+//                        on the tile preview: move its parts (PadPlace.cs)
 //   B                    back to the menu; in the menu: close; in a dialog: cancel
 //   LB / RB              previous / next page
 //   Start                Save and refresh (alone, on release: Back + Start is the
@@ -102,7 +103,8 @@ namespace RaintileOptions
         DispatcherTimer padTimer;
         readonly Stopwatch padClock = Stopwatch.StartNew();
         readonly bool[] padConnected = new bool[4];
-        long padNextScan, padRepeatAt, padRepeatXAt;
+        long padNextScan, padRepeatAt, padRepeatXAt, padLastRead;
+        double padLX, padLY, padLT, padRT;   // left stick past the dead zone (-1..1), triggers (0..1)
         int padPrev, padRepeatDir;
         bool padStartAlone, padRepeatX;
         bool padMode;                 // the ring is shown: the last input came from the pad
@@ -181,12 +183,13 @@ namespace RaintileOptions
         {
             padTimer.Stop();
             CloseOsk(true);
+            EndPlace(true);
             padCombo = null;
         }
 
         void PadModeOff(bool closeOsk)
         {
-            if (closeOsk) CloseOsk(true);
+            if (closeOsk) { CloseOsk(true); EndPlace(true); }
             if (!padMode) return;
             padMode = false;
             HideRing();
@@ -208,7 +211,7 @@ namespace RaintileOptions
             long now = padClock.ElapsedMilliseconds;
             bool scan = now >= padNextScan;
             if (scan) padNextScan = now + 2000;
-            int buttons = 0, lx = 0, ly = 0;
+            int buttons = 0, lx = 0, ly = 0, lt = 0, rt = 0;
             rx = 0; ry = 0;
             for (uint i = 0; i < 4; i++)
             {
@@ -219,6 +222,8 @@ namespace RaintileOptions
                 buttons |= st.Buttons;
                 if (st.LeftTrigger > 128) buttons |= PadLT;
                 if (st.RightTrigger > 128) buttons |= PadRT;
+                lt = Math.Max(lt, st.LeftTrigger);
+                rt = Math.Max(rt, st.RightTrigger);
                 if (Math.Abs((int)st.ThumbLX) > Math.Abs(lx)) lx = st.ThumbLX;
                 if (Math.Abs((int)st.ThumbLY) > Math.Abs(ly)) ly = st.ThumbLY;
                 if (Math.Abs((int)st.ThumbRX) > Math.Abs(rx)) rx = st.ThumbRX;
@@ -229,6 +234,13 @@ namespace RaintileOptions
                 buttons |= Math.Abs(lx) > Math.Abs(ly) ? (lx > 0 ? PadRight : PadLeft) : (ly > 0 ? PadUp : PadDown);
             if (Math.Abs(rx) <= dead) rx = 0;
             if (Math.Abs(ry) <= dead) ry = 0;
+            // as amounts, for placing in the preview (PadPlace.cs): from 0 at the
+            // dead zone to 1 at full tilt; the triggers past a light touch
+            Func<int, int, int, double> amount = (v, zone, full) => Math.Abs(v) <= zone ? 0 : Math.Sign(v) * Math.Min(1.0, (Math.Abs(v) - zone) / (double)Math.Max(1, full - zone));
+            padLX = amount(lx, dead, 32767);
+            padLY = amount(ly, dead, 32767);
+            padLT = amount(lt, 30, 255);
+            padRT = amount(rt, 30, 255);
             return buttons;
         }
 
@@ -252,6 +264,9 @@ namespace RaintileOptions
             int prev = padPrev;
             padPrev = buttons;
             long now = padClock.ElapsedMilliseconds;
+            // moving in the preview is time-based: a late read moves more, up to a limit
+            double dt = Math.Min(0.1, Math.Max(0, now - padLastRead) / 1000.0);
+            padLastRead = now;
 
             // the mouse moved: the ring goes (the on-screen keyboard stays, its keys can be clicked)
             Win32.Point c;
@@ -312,6 +327,7 @@ namespace RaintileOptions
                 if (padCombo.IsDropDownOpen) { PadComboInput(fire); return; }
                 padCombo = null;
             }
+            if (placePart >= 0 && root == win) { PadPlaceInput(fire, start, dt); return; }
             if (rx != 0 || ry != 0) PadScroll(root, rx, ry);
             if (padMode)
             {
@@ -351,7 +367,7 @@ namespace RaintileOptions
 
         static bool IsPadTarget(FrameworkElement fe)
         {
-            return fe is ButtonBase || fe is TextBox || fe is PasswordBox || fe is ComboBox || fe is Slider || fe is ListBoxItem;
+            return fe is ButtonBase || fe is TextBox || fe is PasswordBox || fe is ComboBox || fe is Slider || fe is ListBoxItem || padAreas.ContainsKey(fe);
         }
 
         // The field next to a slider: the pad changes the value with the slider
@@ -630,6 +646,8 @@ namespace RaintileOptions
         {
             var fe = padFocus;
             if (fe == null) return;
+            Action area;
+            if (padAreas.TryGetValue(fe, out area)) { area(); return; }
             var cb = fe as ComboBox;
             if (cb != null)
             {

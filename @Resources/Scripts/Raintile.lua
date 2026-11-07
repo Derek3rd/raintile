@@ -1171,6 +1171,9 @@ local function loadCategories(files)
 			end
 		end
 	end
+	-- the lists of the list widgets as read last time (the helper reads them
+	-- again when the launcher opens)
+	for src in pairs(D.LIST_LAUNCH) do M.readList(src) end
 	-- Widgets, of every category: their meters are numbered in this order
 	widgets = {}
 	for _, c in ipairs(cats) do
@@ -1237,7 +1240,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 14
+local GRID_VERSION = 15
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1428,6 +1431,31 @@ local function writeGrid(path, sig, files)
 			w('MeterStyle=StyleWidgetText')
 			if part == 'Value' then w('FontWeight=600') end
 			w('')
+		end
+		-- a list widget: its rows, each a part of the tile (D.placeList)
+		if t.widget.kind == 'list' then
+			for k = 1, M.LIST_ROWS do
+				w('[W' .. i .. 'RowHit' .. k .. ']')
+				w('Meter=Shape')
+				w('MeterStyle=StyleWidgetShape')
+				w('MouseOverAction=[!CommandMeasure MeasureScript "HoverPart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
+				w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeavePart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
+				w('LeftMouseUpAction=[!CommandMeasure MeasureScript "ListLaunch(' .. i .. ',' .. k .. ')"]')
+				w('')
+				w('[W' .. i .. 'RowIcon' .. k .. ']')
+				w('Meter=Image')
+				w('Container=GridClip')
+				w('PreserveAspectRatio=1')
+				w('Hidden=1')
+				w('')
+				for _, part in ipairs({ 'RowName', 'RowSub' }) do
+					w('[W' .. i .. part .. k .. ']')
+					w('Meter=String')
+					w('MeterStyle=StyleWidgetText')
+					if part == 'RowName' then w('FontWeight=600') end
+					w('')
+				end
+			end
 		end
 		-- a custom widget: its sections, in a container over the tile
 		-- (only when its file is there: a container without meters would be
@@ -2160,6 +2188,141 @@ local dash = { data = nil, hist = { cpu = {}, gpu = {}, ram = {}, down = {}, up 
 	skinsWanted = {}, skinsActive = {}, customShown = {} }
 D.DASH_HISTORY = 60 -- samples kept for the graphs
 
+-- List widgets (Widget=list, Param=<source>): one row per item, each a part
+-- of the tile (Raintile's highlight goes onto it), a click starts it.
+-- Sources: modrinth (the instances of Modrinth App, the last played first).
+-- While the launcher is open and shows a category with one, Generated\
+-- ListOn.txt names the sources; the helper reads them (Helper.ps1, ListStep)
+-- into Generated\List_<source>.txt ("<id>|<name>|<icon>|<last played>")
+-- and calls OnLists().
+M.LIST_ROWS = 10
+M.lists = {}
+D.LIST_TITLES = { modrinth = 'Modrinth' }
+D.LIST_LAUNCH = {
+	-- the id goes in the address: encoded (spaces, brackets of legacy ids)
+	modrinth = function(id)
+		return 'modrinth://launch/instance/' .. id:gsub('[^%w%-%._~:]', function(c) return string.format('%%%02X', c:byte()) end)
+	end,
+}
+
+function M.readList(source)
+	local items = {}
+	for _, line in ipairs(readLines(resources .. 'Generated\\List_' .. source .. '.txt')) do
+		local id, name, icon, last = line:match('^([^|]+)|([^|]*)|([^|]*)|(%d*)$')
+		if id then items[#items + 1] = { id = id, name = name ~= '' and name or id, icon = icon, last = tonumber(last) or 0 } end
+	end
+	M.lists[source] = items
+end
+
+-- The sources the helper reads while the launcher is open (the list widgets
+-- of the categories), or none
+function M.writeListFlag(on)
+	local flag = resources .. 'Generated\\ListOn.txt'
+	local sources, seen = {}, {}
+	for _, t in ipairs(on and widgets or {}) do
+		local src = t.widget.kind == 'list' and t.widget.param:lower()
+		if src and D.LIST_LAUNCH[src] and not seen[src] then
+			seen[src] = true
+			sources[#sources + 1] = src
+		end
+	end
+	if #sources == 0 then os.remove(flag) return end
+	writeLines(flag, sources)
+end
+
+function OnLists()
+	if not ready then return end
+	for src in pairs(D.LIST_LAUNCH) do M.readList(src) end
+	base = -1
+	if visible and M.frame then M.frame() end
+end
+
+function D.hideRows(i, from)
+	for k = from, M.LIST_ROWS do
+		for _, part in ipairs({ 'RowHit', 'RowIcon', 'RowName', 'RowSub' }) do show('W' .. i .. part .. k, false) end
+	end
+end
+
+-- The rows of list widget t in its tile at x, y: as many as fit under the
+-- title; each row a part (t.widget.partsAt: x, y, w, h in the tile)
+function D.placeList(t, x, y, alpha)
+	local w = t.widget
+	local i = w.idx
+	local W, H, pad = V.TileW, V.TileH, V.LabelPad
+	local small, valueSize, line = D.sizes()
+	local top = D.layout(small, valueSize, line).top
+	local rowH = math.max(36, math.floor(line * 2.4))
+	local fit = math.max(0, math.min(M.LIST_ROWS, math.floor((H - top - math.floor(pad / 2)) / rowH)))
+	local items = M.lists[w.param:lower()] or {}
+	w.partsAt = {}
+	local shown = 0
+	for k = 1, math.min(fit, #items) do
+		local it = items[k]
+		local ry = top + (k - 1) * rowH
+		local hit, icon, name, sub = 'W' .. i .. 'RowHit' .. k, 'W' .. i .. 'RowIcon' .. k, 'W' .. i .. 'RowName' .. k, 'W' .. i .. 'RowSub' .. k
+		local hx, hw = math.floor(pad / 2), W - 2 * math.floor(pad / 2)
+		set(hit, 'X', tostring(x + hx))
+		set(hit, 'Y', tostring(y + ry))
+		-- (not fully transparent: Rainmeter gives the mouse only to pixels that are not)
+		set(hit, 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,1 | StrokeWidth 0', hw, rowH))
+		show(hit, alpha >= 1)
+		w.partsAt[hit] = { hx, ry, hw, rowH }
+		local size = rowH - 10
+		local tx = pad
+		if it.icon ~= '' and fileExists(it.icon) then
+			set(icon, 'ImageName', it.icon)
+			set(icon, 'X', tostring(x + pad))
+			set(icon, 'Y', tostring(y + ry + 5))
+			set(icon, 'W', tostring(size))
+			set(icon, 'H', tostring(size))
+			set(icon, 'ImageAlpha', tostring(math.floor(255 * alpha + 0.5)))
+			show(icon, true)
+			tx = pad + size + 10
+		else
+			show(icon, false)
+		end
+		set(name, 'Text', D.text(it.name))
+		set(name, 'X', tostring(x + tx))
+		set(name, 'Y', tostring(y + ry + math.floor(rowH / 2) - math.floor(small * 1.5)))
+		set(name, 'W', tostring(math.max(1, W - tx - pad)))
+		set(name, 'FontSize', tostring(small + 1))
+		set(name, 'FontColor', fade(V.TextColor, alpha))
+		show(name, true)
+		set(sub, 'Text', it.last > 0 and ('Played ' .. ago(it.last)) or 'Not played yet')
+		set(sub, 'X', tostring(x + tx))
+		set(sub, 'Y', tostring(y + ry + math.floor(rowH / 2) + 1))
+		set(sub, 'W', tostring(math.max(1, W - tx - pad)))
+		set(sub, 'FontSize', tostring(small))
+		set(sub, 'FontColor', fade(V.TextDimColor, alpha))
+		show(sub, true)
+		shown = k
+	end
+	D.hideRows(i, shown + 1)
+	-- nothing to list: say so on the first row
+	if #items == 0 then
+		local name = 'W' .. i .. 'RowName1'
+		set(name, 'Text', D.LIST_LAUNCH[w.param:lower()] and 'Nothing found yet' or ('Unknown list: ' .. w.param))
+		set(name, 'X', tostring(x + pad))
+		set(name, 'Y', tostring(y + top))
+		set(name, 'W', tostring(math.max(1, W - 2 * pad)))
+		set(name, 'FontSize', tostring(small))
+		set(name, 'FontColor', fade(V.TextDimColor, alpha))
+		show(name, true)
+	end
+end
+
+-- Click on row k of list widget i: starts that item
+function ListLaunch(i, k)
+	local t = widgets[i]
+	if not ready or launching or not t or M.menuOverGrid() then return end
+	local src = t.widget.param:lower()
+	local it = (M.lists[src] or {})[k]
+	local make = D.LIST_LAUNCH[src]
+	if not it or not make then return end
+	SKIN:Bang('["' .. make(it.id) .. '"]')
+	if V.CloseOnLaunch then Hide() end
+end
+
 D.WIDGET_TITLES = {
 	cpu = 'CPU', gpu = 'GPU', ram = 'Memory', disk = 'Disks', network = 'Network',
 	processes = 'Processes', system = 'System', temps = 'Temperatures', fans = 'Fans',
@@ -2478,6 +2641,8 @@ function D.placeWidget(t, x, y, alpha)
 			dash.skinsWanted[config] = { file = file, x = math.floor(SKIN:GetX() + V.PadX + x + V.LabelPad),
 				y = math.floor(SKIN:GetY() + V.GridY + y + V.LabelPad) }
 		end
+	elseif w.kind == 'list' then
+		D.placeList(t, x, y, alpha)
 	elseif w.kind == 'custom' and w.boxed then
 		set('CW' .. i .. 'Box', 'X', tostring(math.floor(V.PadX + x)))
 		set('CW' .. i .. 'Box', 'Y', tostring(math.floor(V.GridY + y)))
@@ -2571,9 +2736,10 @@ function D.fillWidget(t)
 	local barH = math.floor(6 * k + 0.5)
 	local maxLines = math.max(1, math.floor((H - pad - L.top) / line))
 	local function text(meter, s) set(meter, 'Text', D.text(s)) end
-	local title = w.title or D.WIDGET_TITLES[w.kind] or t.name
+	local title = w.title or D.WIDGET_TITLES[w.kind] or (w.kind == 'list' and D.LIST_TITLES[w.param:lower()]) or t.name
 	text(m .. 'Title', title:upper())
 	w.parts = { Title = true }
+	if w.kind == 'list' then return end -- its rows: D.placeList
 	-- a skin or a custom widget draws itself: only its title, if it has one
 	if w.kind == 'custom' and not w.boxed then
 		-- its file is missing (or has no meters): say where it goes
@@ -3106,6 +3272,7 @@ local function placeSlots()
 		local n = t.widget.idx
 		if not dash.shown[n] then
 			for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List', 'Bar', 'Graph' }) do show('W' .. n .. part, false) end
+			if t.widget.kind == 'list' then D.hideRows(n, 1) end
 		end
 		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
@@ -3554,8 +3721,9 @@ function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
 	-- a Dashboard left open by the previous load: the helper stops until shown
 	os.remove(resources .. 'Generated\\DashOn.txt')
-	-- and the Steam downloads, followed only while it is open
+	-- and the Steam downloads and the lists, read only while it is open
 	os.remove(resources .. 'Generated\\DownloadOn.txt')
+	os.remove(resources .. 'Generated\\ListOn.txt')
 	local userData = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Raintile\\'
 	data = fileExists(userData .. 'Settings.inc') and userData or resources
 	V.NeedsSetup = data ~= userData or settingsOutdated(userData .. 'Settings.inc')
@@ -4065,6 +4233,7 @@ function Show()
 	M.dl.f = 0
 	M.dl.anim = V.GameUpdates and next(gameUpdates) ~= nil
 	M.writeDownloadFlag()
+	M.writeListFlag(true)
 	frame() -- first frame drawn before showing the window
 	if M.dockAnimated() then
 		-- from where it is (it may be still going out)
@@ -4106,6 +4275,7 @@ function Hide()
 	-- the downloads are followed only while it is open
 	os.remove(resources .. 'Generated\\DownloadOn.txt')
 	M.dl.live = {}
+	M.writeListFlag(false)
 	if M.dockAnimated() then
 		-- goes out first; M.finishHide() hides the window at the end
 		M.dock.dir = -1
@@ -4718,7 +4888,7 @@ end
 -- the tile: their X, Y are from its top left corner.
 function HoverPart(name)
 	if not ready or launching or M.more.open or power.open then return end
-	local n = tonumber(name:match('^CW(%d+)_') or '')
+	local n = tonumber(name:match('^CW(%d+)_') or name:match('^W(%d+)RowHit%d+$') or '')
 	local t = n and widgets[n]
 	local m = t and SKIN:GetMeter(name)
 	if not m then return end
@@ -4756,7 +4926,7 @@ function M.focusPart(t, slot, name)
 	hover.anchor = V.Horizontal and ty or tx
 	local p = M.widgetParts(t)[name]
 	local px, py = p and p[1] or m:GetX(), p and p[2] or m:GetY()
-	focus(t, indexAt(slot), tx + px / V.StepX, ty + py / V.StepY, m:GetW(), m:GetH())
+	focus(t, indexAt(slot), tx + px / V.StepX, ty + py / V.StepY, p and p[3] or m:GetW(), p and p[4] or m:GetH())
 end
 
 function LeavePart(name)

@@ -205,6 +205,7 @@ The **Dashboard** (`Categories\Dashboard.ini`, added once to existing data too) 
 
 - In the Options window it is among the categories like the others: name, icon, grid, **Show in the menu** (`Hidden=1` in its `[Category]` keeps any category out of the menu). Options > **Widgets** > *Add the example Dashboard* brings it back if you deleted it.
 - The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a category with widgets is on screen, every `DashInterval` ms (default 1000): with it closed nothing is measured.
+- **List widgets** (`Widget=list`): `Param=modrinth` lists the instances of [Modrinth App](https://modrinth.com/app), read from its database (`%APPDATA%\ModrinthApp\app.db`, read only, with the SQLite built into Windows) by the background helper when the launcher opens and again when it changes. A click starts the instance (`modrinth://launch/instance/<id>`). As many rows as fit in the tile: give it more cells (`Size=1x2`) for more.
 - A custom widget can have parts (`Part=1` on its meters): the highlight goes onto the part under the mouse and a click runs the part's own action (see `widgets/README.md`).
 - Widgets are left out of search, Favorites, Recent and the filters. In a sorted category they are sorted like the other tiles (by name, by when they were added...); pin them to keep them first.
 - Clicking a widget runs its `Command=`, or by default opens what fits: Task Manager (CPU, GPU, RAM, processes), the disk in Explorer, network or system settings.
@@ -226,6 +227,7 @@ A tile becomes a widget with `Widget=` (and, for some kinds, `Param=`). In Optio
 | `fans` | fan speeds (from LibreHardwareMonitor or HWiNFO) | sensors to show |
 | `skin` | a Rainmeter skin placed over the tile | its config and file: `illustro\Clock\Clock.ini` |
 | `custom` | a custom widget drawn in the tile | its name in the `Widgets` folder |
+| `list` | a list to start things from, one row each: pointed at and clicked on its own, a click starts it | where from: `modrinth` (the instances of Modrinth App, the last played first, with their icons) |
 
 ### Temperatures and fans
 
@@ -765,6 +767,8 @@ TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated whi
   Generated/GameUpdates.txt  Steam games with an update waiting
   Generated/DownloadOn.txt   while the launcher is open: the downloads for the helper to follow
   Generated/Downloads.txt    their progress, speed and time left (Helper.ps1)
+  Generated/ListOn.txt       while the launcher is open: the sources of the list widgets for the helper to read
+  Generated/List_<source>.txt  their items (Helper.ps1)
   Generated/DashOn.txt       present while a category with widgets is on screen: the helper collects their data
   Generated/DashData.txt     the data of the widgets (written by the helper)
   Generated/DockEdge.txt     docked with DockEdge=1: the edge the helper watches to open it

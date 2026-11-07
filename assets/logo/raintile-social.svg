@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+<title>Raintile</title>
+<rect width="1280" height="640" fill="#1b222b"/>
+<g transform="translate(474.659,117.415) scale(0.62)">
+<g transform="translate(98.6797,82.5)">
+<defs>
+<linearGradient id="pedge" x1="0" y1="0" x2="336" y2="336" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#5fe3f5"/><stop offset="1" stop-color="#2f7fe0"/></linearGradient>
+<linearGradient id="pfill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#173a52"/><stop offset="1" stop-color="#11273a"/></linearGradient>
+<mask id="pcut" maskUnits="userSpaceOnUse" x="-50" y="-150" width="436" height="536">
+<rect x="-50" y="-150" width="436" height="536" fill="#fff"/>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(168,72.5)" fill="#000" stroke="#000" stroke-width="14" stroke-linejoin="round"/>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(286,190.5)" fill="#000" stroke="#000" stroke-width="14" stroke-linejoin="round"/>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(50,308.5)" fill="#000" stroke="#000" stroke-width="14" stroke-linejoin="round"/>
+</mask>
+</defs>
+<g mask="url(#pcut)">
+<rect x="0" y="0" width="100" height="100" rx="20" fill="url(#pfill)" stroke="url(#pedge)" stroke-width="7"/>
+<rect x="118" y="0" width="100" height="100" rx="20" fill="url(#pfill)" stroke="url(#pedge)" stroke-width="7"/>
+<rect x="236" y="0" width="100" height="100" rx="20" fill="url(#pfill)" stroke="url(#pedge)" stroke-width="7"/>
+<rect x="0" y="118" width="100" height="100" rx="20" fill="url(#pfill)" stroke="url(#pedge)" stroke-width="7"/>
+<rect x="118" y="118" width="100" height="100" rx="20" fill="url(#pfill)" stroke="url(#pedge)" stroke-width="7"/>
+<rect x="236" y="118" width="100" height="100" rx="20" fill="url(#pfill)" stroke="url(#pedge)" stroke-width="7"/>
+<rect x="0" y="236" width="100" height="100" rx="20" fill="url(#pfill)" stroke="url(#pedge)" stroke-width="7"/>
+<rect x="118" y="236" width="100" height="100" rx="20" fill="url(#pfill)" stroke="url(#pedge)" stroke-width="7"/>
+<rect x="236" y="236" width="100" height="100" rx="20" fill="url(#pfill)" stroke="url(#pedge)" stroke-width="7"/>
+</g>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(168,72.5)" fill="#3ab8f0"/>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(286,190.5)" fill="#3ab8f0"/>
+<path d="M0,-108 C2,-96 31,-34.1 31,0 A31,31 0 1 1 -31,0 C-31,-34.1 -2,-96 0,-108 Z" transform="translate(50,308.5)" fill="#3ab8f0"/>
+</g>
+<g transform="translate(266.68,553.5)">
+<defs>
+<linearGradient id="nameA" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4aa3f0"/><stop offset="1" stop-color="#2f7fe0"/></linearGradient>
+<linearGradient id="nameB" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5fe3f5"/><stop offset="1" stop-color="#7fe9f7"/></linearGradient>
+</defs>
+<path d="M5.44 0H21.98V-24.05H30.98L43.78 0H61.92L47.34 -26.67C55.08 -30.14 59.48 -36.98 59.48 -46.64C59.48 -60.89 49.78 -69.84 34.03 -69.84H5.44ZM21.98 -37.12V-56.44H30.52C38.3 -56.44 42.33 -53.16 42.33 -46.64C42.33 -40.12 38.3 -37.12 30.56 -37.12ZM67.77 0H86.14L90.69 -14.86H113.94L118.67 0H137.23L113.23 -69.84H91.06ZM94.58 -27.52 95.52 -30.52C97.81 -38.44 99.88 -47.25 101.98 -56.67C104.23 -47.3 106.53 -38.48 108.97 -30.52L109.91 -27.52ZM163.42 -69.84H146.88V0H163.42ZM176.3 0H193.27V-28.92C193.27 -33.33 192.8 -40.92 192.23 -49.22C196.12 -40.88 198.7 -35.62 202.83 -28.92L220.69 0H238.92V-69.84H221.95V-40.12C221.95 -35.25 222.47 -27.23 222.94 -20.25C219.98 -27.84 217.08 -33.14 213.98 -38.3L194.48 -69.84H176.3Z" transform="translate(-226.68,0)" fill="url(#nameA)"/>
+<path d="M4.22 -60.66H26.02V0H36.75V-60.66H58.45V-69.84H4.22ZM83.09 -69.84H72.41V0H83.09ZM100.56 0H142.89V-9.19H111.25V-69.84H100.56ZM156.84 0H201.09V-9.19H167.53V-30.7H198.47V-39.84H167.53V-60.66H200.81V-69.84H156.84Z" transform="translate(19.68,0)" fill="url(#nameB)"/>
+<path d="M2.42 0H15.64V-2.87H5.76V-21.83H2.42ZM26.71 0H30.33L32.28 -5.76H40.86L42.87 0H46.49L38.58 -21.83H34.47ZM33.23 -8.54 34.44 -12.14C34.99 -13.81 35.66 -16.08 36.51 -19.2C37.37 -16.11 38.03 -13.89 38.62 -12.14L39.88 -8.54ZM67.35 0.34C72.57 0.34 76.02 -2.92 76.02 -7.5V-21.83H72.67V-7.78C72.67 -4.83 70.63 -2.7 67.35 -2.7C64.05 -2.7 61.99 -4.83 61.99 -7.78V-21.83H58.65V-7.5C58.65 -2.92 62.09 0.34 67.35 0.34ZM89.86 0H93.24V-11.65C93.24 -12.77 93.12 -15.03 92.99 -17.77C94.57 -14.84 95.41 -13.33 96.48 -11.62L103.85 0H107.71V-21.83H104.33V-9.4C104.33 -8.14 104.39 -6.11 104.55 -4C103.58 -6.09 102.6 -7.75 101.93 -8.83L93.71 -21.83H89.86ZM130.61 0.29C135.43 0.29 138.95 -2.75 139.62 -7.08H136.25C135.7 -4.29 133.37 -2.75 130.64 -2.75C126.91 -2.75 124.1 -5.6 124.1 -10.9C124.1 -16.17 126.89 -19.07 130.64 -19.07C133.37 -19.07 135.7 -17.55 136.25 -14.77H139.61C138.88 -19.39 135.21 -22.12 130.61 -22.12C124.96 -22.12 120.79 -17.9 120.79 -10.9C120.79 -3.93 124.95 0.29 130.61 0.29ZM152.55 0H155.89V-9.73H166.7V0H170.05V-21.83H166.7V-12.6H155.89V-21.83H152.55ZM183.89 0H197.72V-2.87H187.23V-9.59H196.9V-12.45H187.23V-18.96H197.63V-21.83H183.89ZM210.98 0H214.32V-8.25H218.77C218.83 -8.25 218.9 -8.25 218.96 -8.25L223.39 0H227.18L222.38 -8.82C225.03 -9.81 226.36 -12.04 226.36 -14.97C226.36 -19 223.85 -21.83 218.8 -21.83H210.98ZM214.32 -11.1V-18.97H218.42C221.64 -18.97 222.98 -17.43 222.98 -14.97C222.98 -12.52 221.64 -11.1 218.45 -11.1Z" transform="translate(-114.00,60)" fill="#8a97a6"/>
+</g>
+</g>
+</svg>

@@ -69,7 +69,7 @@ namespace RaintileOptions
                 double p = PlannedProgress((DateTime.Now - refreshStart).TotalMilliseconds);
                 progressBar.Width = p * progressTrack.ActualWidth;
                 progressPercent.Text = (int)Math.Floor(p * 100) + "%";
-                progressStage.Text = p < 0.3 ? "Saving the settings\u2026" : p < 0.85 ? "Refreshing the skin\u2026" : "Opening the launcher\u2026";
+                progressStage.Text = p < 0.3 ? "Saving the settings..." : p < 0.85 ? "Refreshing the skin..." : "Opening the launcher...";
                 if (p >= 1)
                 {
                     refreshTimer.Stop();
@@ -136,7 +136,7 @@ namespace RaintileOptions
             NewProgressPlan();
             progressBar.Width = 0;
             progressPercent.Text = "0%";
-            progressStage.Text = "Saving the settings\u2026";
+            progressStage.Text = "Saving the settings...";
             overlay.Visibility = Visibility.Visible;
             refreshStart = DateTime.Now;
             refreshTimer.Start();

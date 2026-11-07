@@ -88,7 +88,7 @@ namespace RaintileOptions
                 Background = ResBrush("FieldBg"), BorderBrush = ResBrush("AccentBrush"), BorderThickness = T(1),
                 CornerRadius = new CornerRadius(6), Padding = T(10, 7), Margin = T(3, 0, 3, 10), Child = text, MinHeight = 36,
             };
-            var hint = NewText("A type   X delete   Y space   LB/RB cursor   LT Shift   RT symbols   Start done   B cancel", 11.5, ResBrush("DimBrush"), false, true);
+            var hint = NewText("A type   X delete   Y space   LB/RB cursor   LT Shift   RT symbols   Start done   B cancel", Fs.Help, ResBrush("DimBrush"), false, true);
             hint.Margin = T(3, 10, 3, 0);
             var sp = NewPanel();
             sp.Width = 10 * size;

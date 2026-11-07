@@ -212,28 +212,30 @@ namespace RaintileOptions
             }
             var texts = NewPanel();
             texts.VerticalAlignment = VerticalAlignment.Center;
-            var title = NewPanel(Orientation.Horizontal);
-            var t = NewText(it.Name, 13.5);
-            t.TextTrimming = TextTrimming.CharacterEllipsis;
-            AddTo(title, t);
+            // the NEW badge before the name, so the name can take the rest and be cut
+            var title = NewGrid("Auto", "*");
             if (it.New)
             {
                 var badge = new Border
                 {
-                    Background = ResBrush("AccentSoftBrush"), CornerRadius = new CornerRadius(3), Padding = T(5, 0, 5, 1), Margin = T(8, 0, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center, Child = NewText("NEW", 10, ResBrush("AccentBrush"), true),
+                    Background = ResBrush("AccentSoftBrush"), CornerRadius = new CornerRadius(3), Padding = T(5, 0, 5, 1), Margin = T(0, 0, Gap.Control, 0),
+                    VerticalAlignment = VerticalAlignment.Center, Child = NewText("NEW", Fs.Badge, ResBrush("AccentBrush"), true),
                 };
-                AddTo(title, badge);
+                title.Children.Add(badge);
             }
+            var t = NewText(it.Name, Fs.Label);
+            SetTrimmed(t);
+            SetCol(t, 1);
+            title.Children.Add(t);
             AddTo(texts, title);
             string store;
             if (!Schema.STORE_LABELS.TryGetValue(it.Store ?? "", out store)) store = it.Store;
-            AddTo(texts, NewText(store + "   \u00B7   " + (it.Kind == "game" ? "game" : "app"), 11.5, ResBrush("DimBrush")));
+            AddTo(texts, NewText(store + "   \u00B7   " + (it.Kind == "game" ? "game" : "app"), Fs.Help, ResBrush("DimBrush")));
             SetCol(texts, 2);
             g.Children.Add(texts);
             if (inCategory != null)
             {
-                var note = NewText("in " + inCategory, 12, ResBrush("DimBrush"));
+                var note = NewText("in " + inCategory, Fs.Help, ResBrush("DimBrush"));
                 note.VerticalAlignment = VerticalAlignment.Center;
                 note.Margin = T(12, 0, 4, 0);
                 SetCol(note, 3);
@@ -267,7 +269,7 @@ namespace RaintileOptions
                     if (inCat == null && foundSelected.Contains(it.Id)) item.IsSelected = true;
                 }
                 foundEmpty.Visibility = foundList.Items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
-                foundEmpty.Text = scanProcess != null && !scanProcess.HasExited ? "Searching\u2026"
+                foundEmpty.Text = scanProcess != null && !scanProcess.HasExited ? "Searching..."
                     : foundItems.Count == 0 ? "Nothing found yet: press Search again."
                     : "Nothing to show: everything is already in the launcher, or hidden by the filters.";
             }
@@ -279,7 +281,7 @@ namespace RaintileOptions
         {
             if (scanProcess != null && !scanProcess.HasExited) return;
             foundScanButton.IsEnabled = false;
-            foundStatus.Text = "Searching the stores and the Start menu\u2026";
+            foundStatus.Text = "Searching the stores and the Start menu...";
             try
             {
                 scanProcess = StartScript("Scan.ps1", "-Resources " + Arg(Core.Resources) + " -Data " + Arg(Core.Data) + " -Stores \"" + V("ImportStores") + "\"");
@@ -395,7 +397,7 @@ namespace RaintileOptions
                 for (int i = 0; i < sel.Count; i++)
                 {
                     var it = sel[i];
-                    foundStatus.Text = "Adding " + (i + 1) + " of " + sel.Count + ": " + it.Name + "\u2026";
+                    foundStatus.Text = "Adding " + (i + 1) + " of " + sel.Count + ": " + it.Name + "...";
                     win.Dispatcher.Invoke(new Action(() => { }), DispatcherPriority.Background);
                     foundSelected.Remove(it.Id);
                     if (GetPresentIn(it, present) != null) continue;
@@ -463,14 +465,14 @@ namespace RaintileOptions
 
         Border NewFoundCard()
         {
-            var card = NewCard("Found on this PC", "");
+            var card = NewCard("Found on this PC", "Tick the games and apps to add, then Add selected: they become tiles at once, with their images. The text box filters by name or store.");
             var f = CardPanel(card);
 
             int converted = ConvertOldImports();
             if (converted > 0)
             {
-                var note = NewText(converted + " games of the old automatic import are now normal tiles: you can edit and move them.", 12.5, ResBrush("AccentBrush"), false, true);
-                note.Margin = T(0, 0, 0, 8);
+                var note = NewHelp(converted + " games of the old automatic import are now normal tiles: you can edit and move them.", ResBrush("AccentBrush"));
+                note.Margin = T(0, 0, 0, Gap.Control);
                 AddTo(f, note);
             }
 
@@ -479,7 +481,7 @@ namespace RaintileOptions
             head.Margin = T(0, 2, 0, 10);
             foundScanButton = NewButton("Search again");
             head.Children.Add(foundScanButton);
-            foundStatus = NewText("", 12, ResBrush("DimBrush"), false, true);
+            foundStatus = NewHelp("");
             foundStatus.VerticalAlignment = VerticalAlignment.Center;
             foundStatus.Margin = T(12, 0, 0, 0);
             SetCol(foundStatus, 1);
@@ -495,7 +497,7 @@ namespace RaintileOptions
                 rb.Click += (s, e) => { foundKind = kind; RefreshFoundList(); };
                 filters.Children.Add(rb);
             }
-            var search = new TextBox { Width = 200, Margin = T(10, 2, 16, 2), ToolTip = "Filter by name or store" };
+            var search = new TextBox { Width = FieldWidth.M, Margin = T(10, 2, 16, 2) };
             search.TextChanged += (s, e) => { foundFilter = search.Text; RefreshFoundList(); };
             filters.Children.Add(search);
             var showAdded = new CheckBox { Content = "Show added", Margin = T(0, 4, 16, 4), IsChecked = foundShowAdded };
@@ -512,7 +514,7 @@ namespace RaintileOptions
             frame.Child = grid;
             foundList = new ListBox { SelectionMode = SelectionMode.Multiple };
             grid.Children.Add(foundList);
-            foundEmpty = NewText("", 13, ResBrush("DimBrush"), false, true);
+            foundEmpty = NewHelp("");
             foundEmpty.HorizontalAlignment = HorizontalAlignment.Center;
             foundEmpty.VerticalAlignment = VerticalAlignment.Center;
             foundEmpty.IsHitTestVisible = false;
@@ -535,7 +537,7 @@ namespace RaintileOptions
             bottom.Children.Add(all); bottom.Children.Add(none);
             all.Click += (s, e) => { foreach (ListBoxItem i in foundList.Items) if (i.IsEnabled) i.IsSelected = true; };
             none.Click += (s, e) => { foundList.UnselectAll(); foundSelected.Clear(); UpdateFoundCount(); };
-            foundTarget = new ComboBox { Width = 290, Margin = T(0, 0, 10, 0) };
+            foundTarget = new ComboBox { Width = FieldWidth.L, Margin = T(0, 0, Gap.Control, 0) };
             foundTarget.Items.Add(new ComboBoxItem { Content = "By type: games to " + V("ImportCategory") + ", apps to " + V("AppsCategory"), Tag = "auto" });
             foreach (var e in GetCategoryEntries()) foundTarget.Items.Add(new ComboBoxItem { Content = "All to " + e.Name, Tag = e.File });
             foundTarget.SelectedIndex = 0;
@@ -645,47 +647,57 @@ namespace RaintileOptions
                 row.Margin = T(0, 3);
                 var texts = NewPanel();
                 texts.VerticalAlignment = VerticalAlignment.Center;
-                var name = NewText(t.Name, 13.5);
-                name.TextTrimming = TextTrimming.CharacterEllipsis;
+                var name = NewText(t.Name, Fs.Label);
+                SetTrimmed(name);
                 AddTo(texts, name);
                 string catName;
                 names.TryGetValue(t.File, out catName);
-                var sub = NewText("in " + catName + "   \u00B7   " + Core.GetKey(t.Section, "Command"), 11.5, ResBrush("DimBrush"));
-                sub.TextTrimming = TextTrimming.CharacterEllipsis;
+                // the command can be long: cut, the whole line in the tooltip
+                var sub = NewText("in " + catName + "   \u00B7   " + Core.GetKey(t.Section, "Command"), Fs.Help, ResBrush("DimBrush"));
+                SetTrimmed(sub);
                 AddTo(texts, sub);
                 row.Children.Add(texts);
                 var tile = t;
-                var remove = NewButton("Remove", "", "Takes the tile out of its category. Its images stay in the Images folder.");
-                remove.Margin = T(10, 0, 0, 0);
-                remove.Click += (s, e) => RemoveMissingTiles(new List<MissingTile> { tile });
+                var remove = NewButton("Remove");
+                remove.Margin = T(Gap.Control, 0, 0, 0);
+                remove.Click += (s, e) => { if (ConfirmRemoveMissing(1)) RemoveMissingTiles(new List<MissingTile> { tile }); };
                 SetCol(remove, 1);
                 row.Children.Add(remove);
-                var keepBtn = NewButton("Keep", "", "Keeps the tile as it is and stops reporting it.");
-                keepBtn.Margin = T(6, 0, 0, 0);
+                var keepBtn = NewButton("Keep");
+                keepBtn.Margin = T(Gap.Control, 0, 0, 0);
                 keepBtn.Click += (s, e) => KeepMissingTiles(new List<MissingTile> { tile });
                 SetCol(keepBtn, 2);
                 row.Children.Add(keepBtn);
                 missingList.Children.Add(row);
             }
-            missingCount.Text = tiles.Count + " tile" + (tiles.Count != 1 ? "s" : "") + " of games that are no longer installed, or whose program file is gone. In the launcher they are greyed out and do not start.";
+            missingCount.Text = tiles.Count + " tile" + (tiles.Count != 1 ? "s" : "") + " of games that are no longer installed, or whose program file is gone. In the launcher they are greyed out and do not start. " +
+                "Remove takes a tile out of its category at once (its images stay in the Images folder); Keep leaves it as it is and stops reporting it.";
+        }
+
+        // Taking tiles out of their categories is written at once: asked first
+        bool ConfirmRemoveMissing(int count)
+        {
+            var r = ShowDialog("Remove tiles", (count == 1 ? "Remove this tile from its category?" : "Remove these " + count + " tiles from their categories?") +
+                " Their images stay in the Images folder.", new[] { "Remove", "Cancel" }, null, true);
+            return r.Button == "Remove";
         }
 
         Border NewMissingCard()
         {
             missingCard = NewCard("No longer installed", "");
             var f = CardPanel(missingCard);
-            missingCount = NewText("", 12, ResBrush("DimBrush"), false, true);
-            missingCount.Margin = T(0, 0, 0, 8);
+            missingCount = NewHelp("");
+            missingCount.Margin = T(0, 0, 0, Gap.Control);
             AddTo(f, missingCount);
             missingList = NewPanel();
             AddTo(f, missingList);
             var bottom = NewPanel(Orientation.Horizontal);
             bottom.Margin = T(0, 10, 0, 6);
             var all = NewButton("Remove all");
-            all.Click += (s, e) => RemoveMissingTiles(GetMissingList());
+            all.Click += (s, e) => { var list = GetMissingList(); if (list.Count > 0 && ConfirmRemoveMissing(list.Count)) RemoveMissingTiles(list); };
             AddTo(bottom, all);
             var keepAll = NewButton("Keep all");
-            keepAll.Margin = T(8, 0, 0, 0);
+            keepAll.Margin = T(Gap.Control, 0, 0, 0);
             keepAll.Click += (s, e) => KeepMissingTiles(GetMissingList());
             AddTo(bottom, keepAll);
             AddTo(f, bottom);

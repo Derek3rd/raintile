@@ -2,7 +2,8 @@
 # .rmskin package with it (tools/build_rmskin.py), and attaches the package to
 # the release when a release is published. On a pull request, or run by hand
 # (Actions > Release package > Run workflow), it only builds them, as a
-# downloadable artifact to test.
+# downloadable artifact to test. The "checks" job runs the checks and tests
+# (tools/check.py) on every pull request.
 #
 # The release tag should be the version, e.g. v1.0.3, the same as Version= in
 # Raintile.ini: if they differ the build stops, before attaching anything.
@@ -19,6 +20,28 @@ permissions:
   contents: write
 
 jobs:
+  # tools/check.py: checks on the files and the tests (tests/ps, tests/lua).
+  # On Windows, with Windows PowerShell 5.1 like the skin; lupa gives Lua 5.1,
+  # the version of Rainmeter. The whole history, for the GRID_VERSION check
+  # against the PR's base.
+  checks:
+    if: github.event_name != 'release'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Lua 5.1 (lupa)
+        run: python -m pip install "lupa>=2,<3"
+
+      - name: Checks and tests
+        run: python tools/check.py
+
   package:
     # the pre-release "nightly" has its own workflow (nightly.yml)
     if: github.event_name != 'release' || github.event.release.tag_name != 'nightly'

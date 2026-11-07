@@ -23,6 +23,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - `@Resources/Settings.inc`, `State.inc`, `Categories/`, `Images/`: the defaults, copied to the user data folder on first run.
 - `@Resources/Generated/`: written by the skin (git-ignored). Never edit or commit it.
 - `widgets/`: the widget gallery (`index.json`) and the widgets hosted here (`widgets/<Id>/`). `docs/Widgets.md`: how to write widgets and the widget API.
+- `tests/`: `ps/` (PowerShell tests, `run.ps1`) and `lua/` (`Raintile.lua` against a fake Rainmeter, `rainmeter.lua`), run by `tools/check.py`. No `.ini` files there: Rainmeter would list the folder as a skin.
 - `tools/build_rmskin.py`: builds the `.rmskin`. `tools/dev-build.ps1`: builds the Options program into the repository's `@Resources\Bin\` (git-ignored), for testing. `.github/workflows/`: `release.yml` (tag `vX.Y.Z`), `nightly.yml` (every push to `nightly`), `sync-nightly.yml` (merges `main` back into `nightly` after a release), `wiki.yml` (writes the GitHub wiki from `docs/` with `tools/build_wiki.py` when the docs reach `main`).
 
 ## Conventions
@@ -66,9 +67,10 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - Release: bump `Version=` on `nightly`, PR `nightly` -> `main`, tag `vX.Y.Z` on `main`; the workflows attach the `.rmskin` and merge `main` back into `nightly` (see "Publishing a release" in the Guide). Release notes in English.
 
 ## Verifying changes
+- `python tools/check.py` passes before every commit (needs `pip install lupa`): it runs the checks below that can be automated and the tests in `tests/`; the `checks` job runs it on every PR, and `python tools/check.py --install-hook` makes it run before every push (a failure stops the push: fix, commit, push again; never `--no-verify`). A fixed bug gets a test that fails without the fix, where the fake Rainmeter or a PowerShell test can show it; when the fake lacks a Rainmeter behaviour the change relies on, add it to `tests/lua/rainmeter.lua`.
 - Every changed `.ps1` parses without errors (`[System.Management.Automation.Language.Parser]::ParseFile`), and `Options.xaml` loads as `[xml]`.
 - Changed scripts are still ASCII only and without BOM.
-- Lua: `luac -p @Resources/Scripts/Raintile.lua` where `luac` (5.1) is available; otherwise review the change carefully. Either way, test it live.
+- Lua: `tools/check.py` compiles it with Lua 5.1 and runs it in the fake Rainmeter; that does not replace a live test.
 - Options program: it builds (`dotnet build src/Options/RaintileOptions.csproj -c Release`, also on Linux; the `package` check does it on every PR), and `python tools/gen_options_schema.py --check` passes after schema changes.
 - Suggested local setup: make the repository the skin itself, linking it into Rainmeter's skins folder (`mklink /J "%USERPROFILE%\Documents\Rainmeter\Skins\Raintile" <repo>`): the branch checked out is then what Rainmeter runs, with nothing to copy.
 - `RaintileOptions.exe` is not in the repository (the workflows build it): without it the skin opens the older `Options.ps1` window. Before every live test of a branch, after changing anything under `src/Options` and after pulling or switching branch, run `powershell -NoProfile -ExecutionPolicy Bypass -File tools\dev-build.ps1` (needs the .NET SDK, `dotnet`): it rebuilds only when a source is newer than the program, into `@Resources\Bin\` of the repository (git-ignored; close the Options window first), or of another skin folder with `-Target <folder>`. Without the SDK, take `RaintileOptions.exe` from the `rmskin` artifact of the PR's `package` check.

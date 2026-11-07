@@ -135,7 +135,7 @@ namespace RaintileOptions
         Border NewThumb(double size)
         {
             var b = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(5), Background = ResBrush("FieldBg") };
-            b.Child = new Image { Stretch = Stretch.Uniform, Margin = T(Math.Round(size / 8)) };
+            b.Child = new Image { Stretch = Stretch.Uniform, Margin = T(Math.Round(size / 8)) };   // ui-exempt: drawn on the thumbnail
             return b;
         }
 
@@ -150,7 +150,7 @@ namespace RaintileOptions
             var item = new ListBoxItem();
             var sp = NewPanel(Orientation.Horizontal);
             var thumb = NewThumb(thumbSize);
-            thumb.Margin = T(0, 0, 10, 0);
+            thumb.Margin = T(0, 0, Gap.Text, 0);
             AddTo(sp, thumb);
             var texts = NewPanel();
             texts.VerticalAlignment = VerticalAlignment.Center;
@@ -386,7 +386,7 @@ namespace RaintileOptions
                 if (e.Imported > 0) count += " + " + e.Imported + " imported";
                 var item = NewListEntry(e.Name, e.File + "   " + Dot + "   " + count, new ListTag { File = e.File }, 36);
                 SetThumb(((ListTag)item.Tag).Thumb, e.Icon);
-                item.Padding = T(12, 9);
+                item.Padding = Gap.ListItem;
                 catsList.Items.Add(item);
                 if (e.File == selectFile) index = i;
                 i++;
@@ -431,16 +431,16 @@ namespace RaintileOptions
         // Entry of the tile strip: a small tile (background, logo) and the name below
         ListBoxItem NewStripEntry(string title, ListTag tag)
         {
-            var item = new ListBoxItem { Width = 132, Padding = T(6), Margin = T(0, 0, 4, 0), VerticalContentAlignment = VerticalAlignment.Top };
+            var item = new ListBoxItem { Width = 132, Padding = T(Gap.Icon), Margin = T(0, 0, Gap.Line, 0), VerticalContentAlignment = VerticalAlignment.Top };
             var sp = NewPanel();
             var g = new Grid();
             var thumb = new Border { Height = 68, CornerRadius = new CornerRadius(6), Background = ResBrush("FieldBg"), ClipToBounds = true };
-            thumb.Child = new Image { Stretch = Stretch.Uniform, Margin = T(14, 10) };
+            thumb.Child = new Image { Stretch = Stretch.Uniform, Margin = T(14, 10) };   // ui-exempt: drawn on the thumbnail
             g.Children.Add(thumb);
             var dot = new Border
             {
                 Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = ResBrush("AccentBrush"),
-                BorderBrush = ResBrush("CardBg"), BorderThickness = T(1.5), Margin = T(0, 5, 5, 0),
+                BorderBrush = ResBrush("CardBg"), BorderThickness = T(1.5), Margin = T(0, 5, 5, 0),   // ui-exempt: drawn on the thumbnail
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
                 Visibility = Visibility.Collapsed, ToolTip = "Its own colour, background, framing, logo or play time placement, not the one of All tiles",
             };
@@ -448,7 +448,7 @@ namespace RaintileOptions
             var pin = new Border
             {
                 Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = ResBrush("CardBg"),
-                Margin = T(4, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                Margin = T(4, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,   // ui-exempt: drawn on the thumbnail VerticalAlignment = VerticalAlignment.Top,
                 Visibility = Visibility.Collapsed, ToolTip = "Pinned: at the start of the category",
                 Child = NewGlyph(Glyph.Pin, Fs.Badge),
             };
@@ -457,7 +457,7 @@ namespace RaintileOptions
             AddTo(sp, g);
             // a caption under a thumbnail: help size, the full name when it is cut
             var t = NewText(title, Fs.Help);
-            t.Margin = T(2, 6, 2, 0);
+            t.Margin = T(0, Gap.Icon, 0, 0);
             SetTrimmed(t);
             AddTo(sp, t);
             item.Content = sp;
@@ -862,7 +862,7 @@ namespace RaintileOptions
         Border NewChip()
         {
             var t = NewText("", Fs.Badge);
-            return new Border { CornerRadius = new CornerRadius(9), Padding = T(8, 1, 8, 2), Margin = T(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = t };
+            return new Border { CornerRadius = new CornerRadius(9), Padding = Gap.Chip, Margin = T(Gap.Control, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = t };
         }
 
         // Reset of a whole category: the default place ('back'), for the category and every tile
@@ -1156,7 +1156,7 @@ namespace RaintileOptions
             text.FontSize = Math.Max(1.0, font * 96 / 72 * k);
             text.Foreground = NewColorBrush(V("TextColor"));
             if (V("FontFace") != "") text.FontFamily = new FontFamily(V("FontFace"));
-            previewInfo.Padding = new Thickness(7 * k, 3 * k, 7 * k, 4 * k);
+            previewInfo.Padding = new Thickness(7 * k, 3 * k, 7 * k, 4 * k);   // ui-exempt: preview of the launcher
             previewInfo.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             var r = GetInfoRect();
             Canvas.SetLeft(previewInfo, r.X);
@@ -1262,7 +1262,7 @@ namespace RaintileOptions
             {
                 if (mine.Contains(tag.ToLowerInvariant())) continue;
                 var b = NewButton("+ " + tag, "LinkButton", "Add this tag");
-                b.Margin = T(0, 0, 12, 0);
+                b.Margin = T(0, 0, Gap.Group, 0);
                 string value = tag;
                 b.Click += (s, e) =>
                 {
@@ -1397,7 +1397,7 @@ namespace RaintileOptions
                 // the style's 5 px above and below would cut the text at this height;
                 // centred anyway, in the size of the labels
                 tb.Height = FieldHeight;
-                tb.Padding = T(8, 0);
+                tb.Padding = T(Gap.Control, 0);
                 tb.FontSize = 13;   // ui-exempt: the text size of the fields
                 return;
             }
@@ -1426,7 +1426,7 @@ namespace RaintileOptions
             for (int i = 0; i < 4; i++) g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             g.Children.Add(NewText(label, Fs.Label, null, false, true));
             var help = NewHelp("");
-            help.Margin = T(0, 2, 0, 0);
+            help.Margin = T(0, Gap.Help, 0, 0);
             SetFormHelp(help, hint);
             Grid.SetRow(help, 1);
             g.Children.Add(help);
@@ -1435,12 +1435,12 @@ namespace RaintileOptions
             var fe = control as FrameworkElement;
             if (fe != null && !double.IsNaN(fe.Width)) fe.HorizontalAlignment = HorizontalAlignment.Left;
             FitFieldHeight(control);
-            var holder = new Border { Margin = T(0, 6, 0, 0), Child = control };
+            var holder = new Border { Margin = T(0, Gap.Icon, 0, 0), Child = control };
             Grid.SetRow(holder, 2);
             g.Children.Add(holder);
             if (action != null)
             {
-                action.Margin = T(Gap.Icon, 6, 0, 0);
+                action.Margin = T(Gap.Icon, Gap.Icon, 0, 0);
                 action.VerticalAlignment = VerticalAlignment.Center;
                 Grid.SetRow(action, 2);
                 SetCol(action, 1);
@@ -1448,7 +1448,7 @@ namespace RaintileOptions
             }
             if (hintBlock != null)
             {
-                hintBlock.Margin = T(0, 4, 0, 0);
+                hintBlock.Margin = T(0, Gap.Line, 0, 0);
                 Grid.SetRow(hintBlock, 3);
                 g.Children.Add(hintBlock);
             }
@@ -1478,7 +1478,7 @@ namespace RaintileOptions
             {
                 lead.VerticalAlignment = VerticalAlignment.Center;
                 g.Children.Add(lead);
-                field.Margin = T(8, 0, 0, 0);
+                field.Margin = T(Gap.Control, 0, 0, 0);
             }
             field.VerticalAlignment = VerticalAlignment.Center;
             SetCol(field, 1);
@@ -1494,11 +1494,11 @@ namespace RaintileOptions
 
         Border NewListColumn(string title, UIElement list, params UIElement[] buttons)
         {
-            var b = new Border { Style = ResStyle("Card"), Padding = T(8, 4, 8, 8), Margin = T(0, 0, 14, 0) };
+            var b = new Border { Style = ResStyle("Card"), Padding = T(Gap.Control, Gap.Line, Gap.Control, Gap.Control) };
             var dp = new DockPanel();
             b.Child = dp;
             var head = NewGrid("*", "Auto");
-            head.Margin = T(6, 8, 0, 6);
+            head.Margin = T(Gap.Icon, Gap.Control, 0, Gap.Icon);
             DockPanel.SetDock(head, Dock.Top);
             var h = NewSectionTitle(title);
             h.VerticalAlignment = VerticalAlignment.Center;
@@ -1686,7 +1686,7 @@ namespace RaintileOptions
             catIconHint = NewHelp("");
             AddTo(f, NewFormRow("Icon", iconRow, "In the menu, left of the name.", catIconHint, btnIconDel));
             var more = NewHelp("Grid, logo size, tile colour and background, framing and logo of all its tiles: open the category (double click) and choose All tiles, the first entry above its tiles.");
-            more.Margin = T(0, 6, 0, 10);
+            more.Margin = T(0, Gap.Icon, 0, Gap.Text);
             AddTo(f, more);
 
             catsList.SelectionChanged += (s, e) => ShowCategoryDetails();
@@ -1848,7 +1848,7 @@ namespace RaintileOptions
             var leftScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = T(0, 0, Gap.Card, 0) };
             Grid.SetRow(leftScroll, 1);
             grid.Children.Add(leftScroll);
-            previewCard = new Border { Style = ResStyle("Card"), Padding = T(20, 16, 20, 14), VerticalAlignment = VerticalAlignment.Top };
+            previewCard = new Border { Style = ResStyle("Card"), Padding = T(Gap.CardPadding, Gap.Card, Gap.CardPadding, Gap.Card), VerticalAlignment = VerticalAlignment.Top };
             leftScroll.Content = previewCard;
             var left = NewPanel();
             previewCard.Child = left;
@@ -1858,7 +1858,7 @@ namespace RaintileOptions
 
             // All tiles: the tile whose images show the category's values
             var por = NewPanel(Orientation.Horizontal);
-            por.Margin = T(0, 0, 0, 12);
+            por.Margin = T(0, 0, 0, Gap.Group);
             var pol = NewText("Preview on", Fs.Label);
             pol.VerticalAlignment = VerticalAlignment.Center;
             pol.Margin = T(0, 0, Gap.Control, 0);
@@ -1893,7 +1893,7 @@ namespace RaintileOptions
             previewLabel = NewText("", 14, NewColorBrush(V("TextColor")));   // ui-exempt: preview of the launcher
             previewLabel.HorizontalAlignment = HorizontalAlignment.Left;
             previewLabel.VerticalAlignment = VerticalAlignment.Bottom;
-            previewLabel.Margin = T(12, 0, 0, 10);
+            previewLabel.Margin = T(12, 0, 0, 10);   // ui-exempt: preview of the launcher
             previewLabel.Effect = new DropShadowEffect { BlurRadius = 6, ShadowDepth = 1, Opacity = 0.8 };
             // logo and label must not catch the drag (the preview tells them apart)
             previewLogo.IsHitTestVisible = false;
@@ -1903,7 +1903,7 @@ namespace RaintileOptions
             AddTo(left, preview);
             var how = NewHelp("Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. The preview has the proportions of this category's tiles on this screen. " +
                 "A tile follows All tiles until you move something on it (Own); its reset gives it back the placement of All tiles.");
-            how.Margin = T(0, Gap.Control, 0, 4);
+            how.Margin = T(0, Gap.Control, 0, Gap.Line);
             AddTo(left, how);
 
             // framing, logo, play time: the name and the chip (Own / From All tiles) on
@@ -1911,7 +1911,7 @@ namespace RaintileOptions
             Func<string, FrameworkElement, Border, Button, StackPanel> placeBlock = (title, line, chip, reset) =>
             {
                 var block = NewPanel();
-                block.Margin = T(0, 12, 0, 0);
+                block.Margin = T(0, Gap.Group, 0, 0);
                 var head = NewGrid("Auto", "*");
                 var name = NewText(title, Fs.Label);
                 name.VerticalAlignment = VerticalAlignment.Center;
@@ -1921,7 +1921,7 @@ namespace RaintileOptions
                 head.Children.Add(chip);
                 AddTo(block, head);
                 var row = NewFieldRow(null, line, reset);
-                row.Margin = T(0, 4, 0, 0);
+                row.Margin = T(0, Gap.Line, 0, 0);
                 AddTo(block, row);
                 return block;
             };
@@ -1957,7 +1957,7 @@ namespace RaintileOptions
             btnInfoReset = NewResetIcon("Back to the play time placement of All tiles");
             var infoBlock = placeBlock("Play time", infoPosText, infoChip, btnInfoReset);
             var infoHelp = NewHelp("The line with the play time and the last launch (Appearance > Text): drag it in the preview.");
-            infoHelp.Margin = T(0, 2, 0, 0);
+            infoHelp.Margin = T(0, Gap.Help, 0, 0);
             infoBlock.Children.Insert(1, infoHelp);
             infoRow = infoBlock;
             AddTo(left, infoBlock);
@@ -2076,11 +2076,11 @@ namespace RaintileOptions
             importedCard.Visibility = Visibility.Collapsed;
             AddTo(details, importedCard);
             var txt = NewHelp("From the old automatic import (written below its marker line), so it cannot be edited here. Make it a normal tile to edit or move it: its images are copied to the category folders. Opening Import turns all of them into normal tiles.");
-            txt.Margin = T(0, 0, 0, 10);
+            txt.Margin = T(0, 0, 0, Gap.Text);
             AddTo(CardPanel(importedCard), txt);
             var btnConvert = NewButton("Make it a normal tile", "AccentButton");
             btnConvert.HorizontalAlignment = HorizontalAlignment.Left;
-            btnConvert.Margin = T(0, 0, 0, 10);
+            btnConvert.Margin = T(0, 0, 0, Gap.Text);
             AddTo(CardPanel(importedCard), btnConvert);
             btnConvert.Click += (s, e) =>
             {

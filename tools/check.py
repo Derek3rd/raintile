@@ -15,8 +15,8 @@ parses with Windows PowerShell 5.1 (so no PowerShell 7 syntax), XAML and
 JSON load, Raintile.lua compiles with Lua 5.1, the widget gallery points to
 files that exist, every setting of Settings.inc is in the Options schema and
 SchemaData.cs is up to date, GRID_VERSION is bumped when writeGrid() changes,
-every page of docs/ goes to the wiki, the Options window takes its glyphs and
-type sizes from Ui.cs / $GLYPH, $FS (docs/OptionsUI.md).
+every page of docs/ goes to the wiki, the Options window takes its glyphs, type
+sizes and spacing from Ui.cs / $GLYPH, $FS, $GAP (docs/OptionsUI.md).
 
 Tests: tests/ps (PowerShell scripts run on temporary folders) and tests/lua
 (Raintile.lua run against a fake Rainmeter, tests/lua/rainmeter.lua).
@@ -301,10 +301,10 @@ def check_wiki_pages():
     print('  %d pages' % len(docs))
 
 
-# docs/OptionsUI.md: glyphs come from Glyph / $GLYPH and type sizes from Fs / $FS,
-# so the same action keeps the same icon and text the same size on every page.
-# A line that has to differ (a drawing, the menu chrome, the on-screen keyboard)
-# says why with "ui-exempt: <why>".
+# docs/OptionsUI.md: glyphs come from Glyph / $GLYPH, type sizes from Fs / $FS and
+# margins and paddings from Gap / $GAP, so the same action keeps the same icon and
+# text the same size and spacing on every page. A line that has to differ (a
+# drawing, the menu chrome, the on-screen keyboard) says why with "ui-exempt: <why>".
 UI_GLYPH = re.compile(r'0x[Ee][0-9A-Fa-f]{3}\b|\\u[Ee][0-9A-Fa-f]{3}')
 UI_RULES = {
     'cs': [
@@ -320,8 +320,47 @@ UI_RULES = {
 }
 
 
+# A margin or padding: what is assigned to it may hold no number but 0 once the
+# Gap / $GAP names are taken out (C#: up to the end of the call or of the property
+# in an initializer; PowerShell: up to the end of the statement). XAML attributes
+# (Margin="...") are the window's chrome and styles, not checked.
+UI_SPACING = {
+    'cs': re.compile(r'\b(?:Margin|Padding)\s*=\s*(?!")'),
+    'ps1': re.compile(r'\.(?:Margin|Padding)\s*=\s*'),
+}
+UI_GAP_NAME = re.compile(r'\bGap\.\w+(?:\.\w+)?|\$GAP\.\w+')
+UI_NUMBER = re.compile(r'(?<![\w.])(?:[1-9]\d*(?:\.\d+)?|0\.\d*[1-9])')
+
+
+def spacing_values(line, kind):
+    for m in UI_SPACING[kind].finditer(line):
+        rest = line[m.end():]
+        if kind == 'ps1':
+            yield re.split(r';|#', rest)[0]
+            continue
+        depth, end = 0, len(rest)
+        for i, c in enumerate(rest):
+            if c in '([{':
+                depth += 1
+            elif c in ')]}':
+                if depth == 0:
+                    end = i
+                    break
+                depth -= 1
+            elif c in ',;' and depth == 0:
+                end = i
+                break
+        yield rest[:end]
+
+
+def spacing_by_hand(line, kind):
+    if line.lstrip().startswith('//' if kind == 'cs' else '#'):
+        return False
+    return any(UI_NUMBER.search(UI_GAP_NAME.sub('', v)) for v in spacing_values(line, kind))
+
+
 def check_options_ui():
-    section('Options window: glyphs and type sizes from Ui.cs / $GLYPH, $FS (docs/OptionsUI.md)')
+    section('Options window: glyphs, type sizes and spacing from Ui.cs / $GLYPH, $FS, $GAP (docs/OptionsUI.md)')
     files = [f for f in glob.glob(os.path.join(ROOT, 'src', 'Options', '*.cs'))
              if os.path.basename(f) not in ('Ui.cs', 'SchemaData.cs')]
     files.append(os.path.join(ROOT, '@Resources', 'Scripts', 'Options.ps1'))
@@ -342,10 +381,11 @@ def check_options_ui():
                     continue
                 if stripped.startswith('function ') or re.search(r'\bIcon = 0x', line):
                     continue
-            for rx, what in UI_RULES[kind]:
-                if rx.search(line):
-                    fail('%s:%d %s (docs/OptionsUI.md), or say why with "ui-exempt: ..."' % (rel(path), i, what))
-                    break
+            what = next((w for rx, w in UI_RULES[kind] if rx.search(line)), None)
+            if what is None and spacing_by_hand(line, kind):
+                what = 'margin or padding: use ' + ('Gap' if kind == 'cs' else '$GAP')
+            if what:
+                fail('%s:%d %s (docs/OptionsUI.md), or say why with "ui-exempt: ..."' % (rel(path), i, what))
     print('  %d files' % len(files))
 
 

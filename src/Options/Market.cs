@@ -109,12 +109,12 @@ namespace RaintileOptions
                 "Add as a tile puts a tile with an installed widget at the end of a category you pick; Delete sends the widget's folder to the Recycle Bin.");
             var f = CardPanel(card);
             var head = NewGrid("Auto", "*");
-            head.Margin = T(0, 2, 0, 10);
+            head.Margin = T(0, 0, 0, Gap.Text);
             var reload = NewButton("Load the list");
             head.Children.Add(reload);
             marketStatus = NewHelp("");
             marketStatus.VerticalAlignment = VerticalAlignment.Center;
-            marketStatus.Margin = T(12, 0, 0, 0);
+            marketStatus.Margin = T(Gap.Group, 0, 0, 0);
             SetCol(marketStatus, 1);
             head.Children.Add(marketStatus);
             AddTo(f, head);
@@ -122,7 +122,7 @@ namespace RaintileOptions
             AddTo(f, marketList);
             var folder = NewButton("Open the Widgets folder", "LinkButton");
             folder.HorizontalAlignment = HorizontalAlignment.Left;
-            folder.Margin = T(0, Gap.Control, 0, 6);
+            folder.Margin = T(0, Gap.Control, 0, Gap.Icon);
             folder.Click += (s, e) => { Directory.CreateDirectory(WidgetsDir); System.Diagnostics.Process.Start("explorer.exe", "\"" + WidgetsDir + "\""); };
             AddTo(f, folder);
             reload.Click += (s, e) => LoadMarket();
@@ -155,7 +155,7 @@ namespace RaintileOptions
             {
                 // a group: titled as a section
                 var head = NewSectionTitle(g.First().Category);
-                head.Margin = T(0, marketList.Children.Count > 0 ? Gap.Card : 2, 0, 4);
+                head.Margin = T(0, marketList.Children.Count > 0 ? Gap.Card : 0, 0, Gap.Line);
                 marketList.Children.Add(head);
                 foreach (var e in g) marketList.Children.Add(NewMarketRow(e));
             }
@@ -164,7 +164,7 @@ namespace RaintileOptions
         UIElement NewMarketRow(MarketEntry e)
         {
             var row = NewGrid("*", "Auto");
-            row.Margin = T(0, 6);
+            row.Margin = T(0, Gap.Icon);
             var texts = NewPanel();
             texts.VerticalAlignment = VerticalAlignment.Center;
             var title = NewText(e.Name, Fs.Label);
@@ -241,7 +241,7 @@ namespace RaintileOptions
                 page.Click += (s, a) => OpenUrl(e.Page);
                 AddTo(bar, page);
             }
-            return new Border { BorderBrush = ResBrush("LineBrush"), BorderThickness = T(0, 1, 0, 0), Child = row, Padding = T(0, 4) };
+            return new Border { BorderBrush = ResBrush("LineBrush"), BorderThickness = T(0, 1, 0, 0), Child = row, Padding = T(0, Gap.Line) };
         }
 
         async Task InstallWidget(MarketEntry e, bool offerTile)

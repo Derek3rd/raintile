@@ -69,7 +69,7 @@ namespace RaintileOptions
                 k.Label = NewText("", 15, null, true);   // ui-exempt: on-screen keyboard
                 k.Label.HorizontalAlignment = HorizontalAlignment.Center;
                 k.Label.VerticalAlignment = VerticalAlignment.Center;
-                k.Box = new Border { CornerRadius = new CornerRadius(6), Margin = T(3), Child = k.Label, Cursor = Cursors.Hand };
+                k.Box = new Border { CornerRadius = new CornerRadius(6), Margin = T(3), Child = k.Label, Cursor = Cursors.Hand };   // ui-exempt: on-screen keyboard
                 Grid.SetRow(k.Box, k.Row);
                 Grid.SetColumn(k.Box, k.Col);
                 Grid.SetColumnSpan(k.Box, k.Span);
@@ -86,17 +86,17 @@ namespace RaintileOptions
             var field = new Border
             {
                 Background = ResBrush("FieldBg"), BorderBrush = ResBrush("AccentBrush"), BorderThickness = T(1),
-                CornerRadius = new CornerRadius(6), Padding = T(10, 7), Margin = T(3, 0, 3, 10), Child = text, MinHeight = 36,
+                CornerRadius = new CornerRadius(6), Padding = T(10, 7), Margin = T(3, 0, 3, 10), Child = text, MinHeight = 36,   // ui-exempt: on-screen keyboard
             };
             var hint = NewText("A type   X delete   Y space   LB/RB cursor   LT Shift   RT symbols   Start done   B cancel", Fs.Help, ResBrush("DimBrush"), false, true);
-            hint.Margin = T(3, 10, 3, 0);
+            hint.Margin = T(3, 10, 3, 0);   // ui-exempt: on-screen keyboard
             var sp = NewPanel();
             sp.Width = 10 * size;
             AddTo(sp, field); AddTo(sp, grid); AddTo(sp, hint);
             var card = new Border
             {
                 Background = ResBrush("CardBg"), BorderBrush = ResBrush("AccentBrush"), BorderThickness = T(1),
-                CornerRadius = new CornerRadius(12), Padding = T(14), Margin = T(16), Child = sp,
+                CornerRadius = new CornerRadius(12), Padding = T(14), Margin = T(16), Child = sp,   // ui-exempt: on-screen keyboard
                 Effect = new DropShadowEffect { BlurRadius = 24, ShadowDepth = 4, Opacity = 0.5 },
             };
             osk = new Popup { AllowsTransparency = true, StaysOpen = true, Placement = PlacementMode.Relative, Focusable = false, Child = card };

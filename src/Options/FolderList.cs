@@ -27,7 +27,7 @@ namespace RaintileOptions
             AddTo(root, rows);
             var add = NewButton("Add folder...");
             add.HorizontalAlignment = HorizontalAlignment.Left;
-            add.Margin = T(0, 4, 0, 0);
+            add.Margin = T(0, Gap.Line, 0, 0);
             AddTo(root, add);
 
             Action render = null;
@@ -40,7 +40,7 @@ namespace RaintileOptions
                 foreach (var folder in folders)
                 {
                     var row = NewGrid("*", "Auto");
-                    row.Margin = T(0, 0, 0, 4);
+                    row.Margin = T(0, 0, 0, Gap.Line);
                     var cell = NewPanel();
                     cell.VerticalAlignment = VerticalAlignment.Center;
                     var path = NewText(folder, Fs.Label);

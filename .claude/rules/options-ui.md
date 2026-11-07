@@ -18,7 +18,7 @@ paths:
   every row ends with the action column, icon buttons that cannot act are hidden.
   The user found these by screenshot more than once: check them before handing over.
 - Before handing over, go through the checklist at the end of `docs/OptionsUI.md`,
-  run `python tools/check.py` (it rejects glyph codes and font sizes written by hand)
-  and `powershell -NoProfile -ExecutionPolicy Bypass -File tools\dev-build.ps1`, then
+  run `python tools/check.py` (it rejects glyph codes, font sizes, margins and
+  paddings written by hand) and `powershell -NoProfile -ExecutionPolicy Bypass -File tools\dev-build.ps1`, then
   ask the user to test both the program and the `Options.ps1` fallback, saying which
   pages changed.

@@ -23,7 +23,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - `@Resources/Settings.inc`, `State.inc`, `Categories/`, `Images/`: the defaults, copied to the user data folder on first run.
 - `@Resources/Generated/`: written by the skin (git-ignored). Never edit or commit it.
 - `widgets/`: the widget gallery (`index.json`) and the widgets hosted here (`widgets/<Id>/`). `docs/Widgets.md`: how to write widgets and the widget API.
-- `tools/build_rmskin.py`: builds the `.rmskin`. `tools/dev-build.ps1`: builds the Options program into the repository's `@Resources\Bin\` (git-ignored), for testing. `.github/workflows/`: `release.yml` (tag `vX.Y.Z`), `nightly.yml` (every push to `nightly`), `sync-nightly.yml` (merges `main` back into `nightly` after a release).
+- `tools/build_rmskin.py`: builds the `.rmskin`. `tools/dev-build.ps1`: builds the Options program into the repository's `@Resources\Bin\` (git-ignored), for testing. `.github/workflows/`: `release.yml` (tag `vX.Y.Z`), `nightly.yml` (every push to `nightly`), `sync-nightly.yml` (merges `main` back into `nightly` after a release), `wiki.yml` (writes the GitHub wiki from `docs/` with `tools/build_wiki.py` when the docs reach `main`).
 
 ## Conventions
 - English for code, comments, docs, commit messages, PRs and release notes.
@@ -61,6 +61,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 ## Docs stay in sync
 - New or changed setting: its comment in `Settings.inc` and the "Settings reference" in `docs/Guide.md`.
 - Changed behaviour: the matching section of `docs/Guide.md`, and `README.md` if it is a feature.
+- The GitHub wiki is a copy of `docs/`, rewritten at each release: edit `docs/`, never the wiki. A new page of `docs/` goes into `PAGES` of `tools/build_wiki.py`.
 - Versions: releases are `X.Y.Z` (`Version=` in `[Metadata]` of `Raintile.ini`); nightly builds are the last release plus the build number (`1.2.2.3`), written by the workflow.
 - Release: bump `Version=` on `nightly`, PR `nightly` -> `main`, tag `vX.Y.Z` on `main`; the workflows attach the `.rmskin` and merge `main` back into `nightly` (see "Publishing a release" in the Guide). Release notes in English.
 

@@ -413,7 +413,7 @@ Reported tiles are **greyed out** in the launcher, say **Not installed** and do 
 
 ## Options window
 
-The **gear** next to the X, or right click > **Options...**, opens the Options window: the program `Bin\RaintileOptions.exe` (C#, WPF, .NET Framework 4.8, included in Windows 10/11), in the packages of the releases; a copy of the repository without it opens the same window from `Scripts\Options.ps1` with PowerShell, a little slower. Both look the same: their look is in `Scripts\Options.xaml`. Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
+The **gear** next to the X, or right click > **Options...**, opens the Options window: the program `Bin\RaintileOptions.exe` (C#, WPF, .NET Framework 4.8, included in Windows 10/11), in the packages of the releases; a copy of the repository without it opens the same window from `Scripts\Options.ps1` with PowerShell, a little slower. Both look the same: their look is in `Scripts\Options.xaml`. `Options.ps1` lacks the newer pages and fields, kept by the program only: widgets in the tile editor, the widget gallery and the settings of each widget, pinned tiles, sorting a category, the gamepad (edit those in the category files, or build the program with `tools\dev-build.ps1`). Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
 
 The sections are in the menu on the left; **Keybindings** and **Categories** open into sub-entries (click them again to close them):
 

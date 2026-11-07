@@ -1188,10 +1188,19 @@ local function loadCategories(files)
 					if t.widget.kind == 'custom' then
 						local path = D.customWidgetFile(t.widget.param)
 						local f = path and io.open(path, 'rb')
+						-- why it is not shown, for the tile: the file looked for, or
+						-- what is wrong with it
+						t.widget.why = 'Looked for ' .. data .. 'Widgets\\' .. t.widget.param .. '\\' .. t.widget.param .. '.ini'
 						if f then
 							local text = f:read('*a')
 							f:close()
 							t.widget.boxed = ('\n' .. text):lower():find('\n%s*meter%s*=') ~= nil
+							t.widget.why = path .. ': no meters in it (no Meter= line)'
+							-- (copied into Grid.inc as it is: it must be UTF-8 or ANSI)
+							if text:find('%z') then
+								t.widget.boxed = false
+								t.widget.why = path .. ' is saved as UTF-16: save it as UTF-8'
+							end
 						end
 					end
 				end
@@ -2519,7 +2528,7 @@ function D.fillWidget(t)
 	if w.kind == 'custom' and not w.boxed then
 		-- its file is missing (or has no meters): say where it goes
 		text(m .. 'Value', 'Widget not found')
-		text(m .. 'Sub', 'Widgets\\' .. w.param .. '\\' .. w.param .. '.ini in the data folder')
+		text(m .. 'Sub', w.why or ('Widgets\\' .. w.param .. '\\' .. w.param .. '.ini in the data folder'))
 		w.parts.Value, w.parts.Sub = true, true
 		return
 	end

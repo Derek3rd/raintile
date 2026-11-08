@@ -489,7 +489,7 @@ end
 -- Steam:570) or from the command. nil for programs and apps.
 local STORE_NAMES = {
 	steam = 'Steam', epic = 'Epic Games', gog = 'GOG', ubisoft = 'Ubisoft', ['battle.net'] = 'Battle.net',
-	battlenet = 'Battle.net', ea = 'EA', xbox = 'Xbox',
+	battlenet = 'Battle.net', ea = 'EA', xbox = 'Xbox', googleplay = 'Google Play Games',
 }
 local function tileStore(command, store, source)
 	local low = command:lower()
@@ -506,6 +506,7 @@ local function tileStore(command, store, source)
 		elseif low:find('^uplay://') or low:find('^ubisoft://') then name = 'Ubisoft'
 		elseif low:find('battle%.net') or low:find('^battlenet://') then name = 'Battle.net'
 		elseif low:find('^origin2?://') or low:find('^link2ea://') or low:find('^ea://') then name = 'EA'
+		elseif low:find('^googleplaygames://') then name = 'Google Play Games'
 		end
 	end
 	return name, steamId

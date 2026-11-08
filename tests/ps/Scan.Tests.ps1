@@ -73,3 +73,35 @@ Test 'Update-FirstFound: the first date stays, gone items leave' {
     Assert-True ($text -notmatch 'Folders:x') 'an item no longer found is still in the file'
     Assert-True (-not (Test-Path -LiteralPath "$file.tmp")) 'the .tmp is left'
 }
+
+foreach ($fn in 'Read-GooglePlay', 'Add-Installed', 'Add-Item', 'Get-NameKey', 'Test-CommandMissing') {
+    Import-ScriptFunction (Join-Path $Root '@Resources\Scripts\Scan.ps1') $fn
+}
+$GPG_LINK = '(?i)googleplaygames://launch/?\?(?:[^"\s]*?&)?id=([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)'
+
+Test 'Read-GooglePlay: the shortcuts of its games' {
+    $menu = New-TestFolder
+    New-Item -ItemType Directory -Path (Join-Path $menu 'Google Play Games') | Out-Null
+    [IO.File]::WriteAllText((Join-Path $menu 'Google Play Games\Clash of Clans.url'),
+        "[InternetShortcut]`r`nURL=googleplaygames://launch/?id=com.supercell.clashofclans&lid=1&pid=1`r`nIconFile=C:\nothing\icon.ico`r`n")
+    # the package after other parameters, and a shortcut of something else
+    [IO.File]::WriteAllText((Join-Path $menu 'Other Game.url'), "[InternetShortcut]`r`nURL=googleplaygames://launch/?pid=2&id=com.example.othergame`r`n")
+    [IO.File]::WriteAllText((Join-Path $menu 'A website.url'), "[InternetShortcut]`r`nURL=https://example.com/?id=com.not.agame`r`n")
+    $script:items = New-Object System.Collections.ArrayList
+    $script:installed = @{}
+    $script:gameNames = @{}
+    $StartMenu = $menu
+    $out = Read-GooglePlay
+    Assert-Equal $out '2 found' 'result'
+    $coc = $script:items | Where-Object { $_.Name -eq 'Clash of Clans' }
+    Assert-True $coc 'Clash of Clans is not found'
+    Assert-Equal $coc.Store 'GooglePlay' 'store'
+    Assert-Equal $coc.Kind 'game' 'kind'
+    Assert-Equal $coc.Command 'googleplaygames://launch/?id=com.supercell.clashofclans' 'command'
+    Assert-Equal $coc.Id 'GooglePlay:com.supercell.clashofclans' 'id'
+    Assert-True ($script:items | Where-Object { $_.Command -like '*id=com.example.othergame' }) 'the package after pid= is not found'
+    Assert-True (-not ($script:items | Where-Object { $_.Command -like '*com.not.agame*' })) 'a website was taken for a game'
+    # a tile of a game no longer there is told missing
+    Assert-Equal (Test-CommandMissing 'googleplaygames://launch/?id=com.supercell.clashofclans') 'present' 'an installed game'
+    Assert-Equal (Test-CommandMissing 'googleplaygames://launch/?id=com.gone.game') 'missing' 'a game no longer installed'
+}

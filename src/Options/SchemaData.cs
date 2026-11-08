@@ -331,7 +331,7 @@ namespace RaintileOptions
             {
                 new Group { Title = "Game stores", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "stores", Key = "ImportStores", Label = "Game stores", Help = "", Stores = new[] { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox" } },
+                    new Item { Kind = "stores", Key = "ImportStores", Label = "Game stores", Help = "", Stores = new[] { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox", "GooglePlay" } },
                 } },
                 new Group { Title = "Apps", Help = null, Items = new List<Item>
                 {
@@ -468,7 +468,7 @@ namespace RaintileOptions
             { "IconSize", "96" },
             { "ImportCategory", "Games" },
             { "ImportFolders", "" },
-            { "ImportStores", "Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps" },
+            { "ImportStores", "Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|GooglePlay|Folders|Apps" },
             { "InfiniteScroll", "1" },
             { "InfoFontSize", "10" },
             { "KeyboardNav", "1" },
@@ -571,7 +571,7 @@ namespace RaintileOptions
         };
 
         public static readonly string[] GAMEPAD_BUTTONS = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };
-        public static readonly string[] SOURCES = { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox", "Folders", "Apps" };
+        public static readonly string[] SOURCES = { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox", "GooglePlay", "Folders", "Apps" };
         // the kinds of what Import finds (see ImportKind); the first one is the
         // kind of a folder without one
         public static readonly List<ImportKind> IMPORT_KINDS = new List<ImportKind>
@@ -588,7 +588,7 @@ namespace RaintileOptions
         public static readonly Dictionary<string, string> STORE_HELP = new Dictionary<string, string>
         {
             { "Steam", "Games" }, { "Epic", "Games" }, { "GOG", "Games (GOG Galaxy)" }, { "Ubisoft", "Games (Ubisoft Connect)" },
-            { "Battlenet", "Games" }, { "EA", "Games" }, { "Xbox", "Games of the Xbox app and the Microsoft Store" },
+            { "Battlenet", "Games" }, { "EA", "Games" }, { "Xbox", "Games of the Xbox app and the Microsoft Store" }, { "GooglePlay", "Android games of Google Play Games for PC (its shortcuts)" },
             { "Folders", "The programs in your folders (below)" }, { "Apps", "The apps of the Start menu" },
         };
         public static readonly Dictionary<string, string> STORE_LABELS = new Dictionary<string, string>
@@ -600,6 +600,7 @@ namespace RaintileOptions
             { "Epic", "Epic Games" },
             { "Folders", "Your folders" },
             { "GOG", "GOG" },
+            { "GooglePlay", "Google Play Games" },
             { "Steam", "Steam" },
             { "Ubisoft", "Ubisoft Connect" },
             { "Xbox", "Xbox / Store" },

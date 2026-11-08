@@ -30,7 +30,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Resources,
     # folder with your data (Categories\, Seen.txt); the skin's own if empty
     [string]$Data = '',
-    [string]$Stores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps',
+    [string]$Stores = 'Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|GooglePlay|Folders|Apps',
     # Folders: the folders (separated by |) and their kind (game or app); if
     # empty, ImportFolders / ImportFoldersKind of Settings.inc in the data folder
     [string]$Folders = '',
@@ -341,6 +341,53 @@ function Read-Xbox {
     return "$count found"
 }
 
+# Google Play Games (Android games of Google Play Games for PC): the shortcuts
+# it makes for each installed game, in the Start menu and on the desktop
+# (.url or .lnk), open googleplaygames://launch/?id=<package> (e.g.
+# com.supercell.clashofclans). The package is the id; the game starts with
+# that link, through the Google Play Games client.
+$GPG_LINK = '(?i)googleplaygames://launch/?\?(?:[^"\s]*?&)?id=([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)'
+function Read-GooglePlay {
+    $roots = if ($StartMenu) { @($StartMenu) } else {
+        @((Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'),
+            [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'))
+    }
+    $shell = $null
+    $ids = @{}
+    $count = 0
+    foreach ($root in $roots) {
+        if (-not $root -or -not (Test-Path -LiteralPath $root)) { continue }
+        foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -File -Include '*.url', '*.lnk' -ErrorAction SilentlyContinue) {
+            $link = ''; $icon = ''
+            if ($f.Extension -eq '.url') {
+                $text = ''
+                try { $text = [IO.File]::ReadAllText($f.FullName) } catch { continue }
+                if ($text -match '(?im)^\s*URL\s*=\s*(\S+)') { $link = $Matches[1] }
+                if ($text -match '(?im)^\s*IconFile\s*=\s*(.+?)\s*$') { $icon = $Matches[1] }
+            } else {
+                if (-not $shell) { try { $shell = New-Object -ComObject WScript.Shell } catch { continue } }
+                try {
+                    $sc = $shell.CreateShortcut($f.FullName)
+                    $link = "$($sc.TargetPath) $($sc.Arguments)"
+                    $icon = ($sc.IconLocation -replace ',\s*-?\d+\s*$', '').Trim().Trim('"')
+                } catch { continue }
+            }
+            if ($link -notmatch $GPG_LINK) { continue }
+            $id = $Matches[1]
+            if ($ids[$id.ToLowerInvariant()]) { continue }
+            $ids[$id.ToLowerInvariant()] = $true
+            Add-Installed 'GooglePlay' $id
+            # its icon: the shortcut's, else the shortcut itself (the shell draws it)
+            $iconSource = if ($icon -and (Test-Path -LiteralPath $icon)) { $icon } else { $f.FullName }
+            Add-Item 'game' 'GooglePlay' $id $f.BaseName ('googleplaygames://launch/?id={0}' -f $id) '' '' $iconSource
+            $count++
+        }
+    }
+    # searched (the client may have no game yet): its games can be told missing
+    if (-not $installed.ContainsKey('GooglePlay')) { $installed['GooglePlay'] = @{} }
+    return "$count found"
+}
+
 # Apps: Start menu shortcuts (desktop programs) and Store apps
 $APP_SKIP = '(?i)uninstall|deinstall|readme|read me|\bhelp\b|documentation|\bmanual\b|licen[cs]e|release notes|changelog|' +
 'website|web site|homepage|\bsupport\b|\bfaq\b|what.s new|\bsetup\b|\brepair\b|\bmodify\b'
@@ -621,6 +668,8 @@ function Test-CommandMissing([string]$command) {
         $store = 'GOG'; $id = $Matches[1]
     } elseif ($c -match '(?i)^uplay://launch/(\d+)') {
         $store = 'Ubisoft'; $id = $Matches[1]
+    } elseif ($c -match $GPG_LINK) {
+        $store = 'GooglePlay'; $id = $Matches[1]
     } elseif ($c -match '(?i)shell:AppsFolder\\([^"\s]+)') {
         $store = 'AppsFolder'; $id = $Matches[1]
     }
@@ -702,7 +751,7 @@ foreach ($s in $Stores.Split('|')) { if ($s.Trim()) { $enabled[($s.Trim() -repla
 
 $summary = @()
 # games first: the apps leave out their shortcuts
-foreach ($store in 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'Folders', 'Apps') {
+foreach ($store in 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox', 'GooglePlay', 'Folders', 'Apps') {
     if (-not $enabled[$store.ToLowerInvariant()]) { continue }
     try { $summary += "${store}: " + (& "Read-$store") }
     catch { $summary += "${store}: error ($($_.Exception.Message))" }

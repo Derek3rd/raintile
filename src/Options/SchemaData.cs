@@ -10,7 +10,7 @@ namespace RaintileOptions
     {
         public static readonly List<Page> Pages = new List<Page>
         {
-            new Page { Id = "general", Title = "General", Icon = 0xE713, Desc = "Saved sets of all these settings, where the launcher appears, its margins, and how it opens and closes.", Groups = new List<Group>
+            new Page { Id = "general", Title = "General", Icon = 0xE713, Desc = "Profiles of your settings, where the launcher appears, its margins, and how it opens and closes.", Groups = new List<Group>
             {
                 new Group { Title = "Profiles", Help = null, Profiles = true, Items = new List<Item>
                 {

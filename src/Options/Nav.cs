@@ -21,7 +21,7 @@ namespace RaintileOptions
     // What a menu entry leads to. Ids: page:<id>, group:<id>, categories, cat:<file>
     class NavTag
     {
-        public string Type, Group, First, File, Id;
+        public string Type, Group, File, Id;
         public Page Page;
         public TextBlock Title;
         public Image Icon;
@@ -37,7 +37,7 @@ namespace RaintileOptions
         Button btnSave;
         string version = "", information = "";
         readonly Dictionary<string, UIElement> pages = new Dictionary<string, UIElement>();
-        readonly Dictionary<string, bool> navOpen = new Dictionary<string, bool> { { "keybindings", true }, { "categories", true } };
+        readonly Dictionary<string, bool> navOpen = new Dictionary<string, bool> { { "tiles", true }, { "toprow", true }, { "keybindings", true }, { "categories", true } };
         bool navBuilding;
         string navCurrent, navPending;
         bool[] navDots;   // new found / missing, update
@@ -109,33 +109,16 @@ namespace RaintileOptions
                 navBuilding = true;
                 navBottom.SelectedItem = null;
                 navBuilding = false;
-                var tag = (NavTag)sel.Tag;
-                if (tag.Type == "group")
-                {
-                    // reached with the keyboard: open the group on its first entry
-                    navOpen[tag.Group] = true;
-                    OpenNav(tag.First);
-                    return;
-                }
-                ShowNavTarget(tag);
+                ShowNavTarget((NavTag)sel.Tag);
             };
-            // Up and down go round the menu and pass over an open group: selected,
-            // it would go straight back to its first entry
+            // Up and down go round the menu
             foreach (var list in new[] { nav, navBottom })
                 list.PreviewKeyDown += (s, e) =>
                 {
                     if ((e.Key != Key.Up && e.Key != Key.Down) || Keyboard.Modifiers != ModifierKeys.None) return;
                     e.Handled = true;
                     var next = NavStep(e.Key == Key.Down ? 1 : -1);
-                    if (next == null) return;
-                    next.Focus();
-                    // a closed group: the keys stay on its first page once the menu is rebuilt
-                    if (((NavTag)next.Tag).Type == "group")
-                        win.Dispatcher.BeginInvoke(new Action(() =>
-                        {
-                            var sel = nav.SelectedItem as ListBoxItem;
-                            if (sel != null) sel.Focus();
-                        }));
+                    if (next != null) next.Focus();
                 };
 
             btnSave.Click += (s, e) => StartSaveAndRefresh();
@@ -360,9 +343,11 @@ namespace RaintileOptions
                 {
                     if (node.Children != null)
                     {
-                        bool open = navOpen.ContainsKey(node.Id) && navOpen[node.Id];
-                        nav.Items.Add(NewNavItem("group:" + node.Id, node.Title, node.Icon, 0,
-                            new NavTag { Type = "group", Group = node.Id, First = "page:" + node.Children[0] }, "", open));
+                        // a page with sub-pages below it: a click on it shows it and
+                        // opens them, a click when it is shown closes them
+                        var page = Schema.ById(node.Page);
+                        bool open = navOpen.ContainsKey(node.Page) && navOpen[node.Page];
+                        nav.Items.Add(NewNavItem("page:" + node.Page, page.Title, page.Icon, 0, new NavTag { Type = "page", Group = node.Page, Page = page }, "", open));
                         if (open)
                             foreach (var c in node.Children)
                                 nav.Items.Add(NewNavItem("page:" + c, Schema.ById(c).Title, 0, 1, new NavTag { Type = "page", Page = Schema.ById(c) }));
@@ -407,24 +392,14 @@ namespace RaintileOptions
             finally { navBuilding = false; }
         }
 
-        // The pages of the menu in order: an open group is left out (its entries
-        // follow it), a closed one counts as one and opens on its first page
+        // The entries of the menu in order, the bottom ones (Info) last
         List<ListBoxItem> NavEntries()
         {
-            var entries = new List<ListBoxItem>();
-            foreach (ListBoxItem it in nav.Items)
-            {
-                var tag = (NavTag)it.Tag;
-                if (tag.Type == "group" && navOpen.ContainsKey(tag.Group) && navOpen[tag.Group]) continue;
-                entries.Add(it);
-            }
-            foreach (ListBoxItem it in navBottom.Items) entries.Add(it);
-            return entries;
+            return nav.Items.OfType<ListBoxItem>().Concat(navBottom.Items.OfType<ListBoxItem>()).ToList();
         }
 
         // Selects the entry 'delta' steps from the selected one, round the end of
-        // the menu (keyboard arrows, D-pad, LB / RB). A group rebuilds the menu:
-        // the entry returned is then gone, and the selected one is its first page.
+        // the menu (keyboard arrows, D-pad, LB / RB).
         ListBoxItem NavStep(int delta)
         {
             var entries = NavEntries();
@@ -456,20 +431,13 @@ namespace RaintileOptions
             OpenNav("cat:" + file);
         }
 
-        // Click on a group: opens or closes it. Keybindings has no page of its own
-        // and goes to its first entry; Categories opens on the first click and only
-        // closes when its page is already shown.
+        // Click on a page with entries below it (sub-pages, categories, widgets):
+        // it opens on the first click and only closes when its page is already shown.
         void SwitchNavGroup(ListBoxItem item, MouseButtonEventArgs e)
         {
             var tag = (NavTag)item.Tag;
             bool open = navOpen.ContainsKey(tag.Group) && navOpen[tag.Group];
-            if (tag.Type == "group")
-            {
-                e.Handled = true;
-                navOpen[tag.Group] = !open;
-                OpenNav(!open ? tag.First : navCurrent);
-            }
-            else if (navCurrent == tag.Id)
+            if (navCurrent == tag.Id)
             {
                 e.Handled = true;
                 navOpen[tag.Group] = !open;

@@ -223,6 +223,44 @@ def check_settings_schema():
     for key in sorted(set(re.findall(r'Key = "([^"]+)"', schema)) - seen):
         fail('the Options schema has %s, which is not in Settings.inc' % key)
     print('  %d settings' % len(settings))
+    check_schema_layout(schema)
+
+
+def check_schema_layout(schema):
+    # docs/OptionsUI.md, "Where a setting goes": every When names a setting and
+    # values it can take, the switch comes before what it switches on its page,
+    # and every page is in the menu (NavTree) once
+    items = {}
+    for m in re.finditer(r'new Item \{ Kind = "([a-z]+)", Key = "([A-Za-z0-9]+)"(.*?) \},?\n', schema):
+        choices = re.findall(r'new\[\] \{ "([^"]*)", "', m.group(3))
+        items[m.group(2)] = (m.group(1), choices)
+    pages, order = {}, []
+    for pm in re.finditer(r'new Page \{ Id = "([a-z]+)"(.*?)\n            \} \},', schema, re.S):
+        keys = re.findall(r'Key = "([A-Za-z0-9]+)"', pm.group(2))
+        pages[pm.group(1)] = keys
+        order.append(pm.group(1))
+    page_of = {k: p for p, ks in pages.items() for k in ks}
+    for m in re.finditer(r'Key = "([A-Za-z0-9]+)"[^\n]*When = "([^"]*)"', schema):
+        key, when = m.group(1), m.group(2)
+        for cond in when.split(';'):
+            name, _, values = cond.partition('=')
+            if name not in items:
+                fail('Options schema: When of %s names %s, which is not a setting' % (key, name))
+                continue
+            kind, choices = items[name]
+            allowed = ['0', '1'] if kind == 'bool' else choices
+            for v in values.split('|'):
+                if allowed and v not in allowed:
+                    fail('Options schema: When of %s: %s cannot be %s (%s)' % (key, name, v, ', '.join(allowed)))
+            if page_of.get(name) == page_of.get(key) and pages[page_of[key]].index(name) > pages[page_of[key]].index(key):
+                fail('Options schema: %s switches %s but comes after it on its page' % (name, key))
+    nav = re.search(r'NavTree = new List<NavNode>(.*?)\n        \};', schema, re.S).group(1)
+    listed = re.findall(r'Page = "([a-z]+)"', nav) + [c for ch in re.findall(r'Children = new\[\] \{([^}]*)\}', nav) for c in re.findall(r'"([a-z]+)"', ch)]
+    for pid in order:
+        n = listed.count(pid)
+        if pid != 'info' and n != 1:
+            fail('Options schema: page %s is in the menu (NavTree) %d times' % (pid, n))
+    print('  %d pages, %d conditions' % (len(order), len(re.findall(r'When = "', schema))))
 
 
 def lua_runtime():

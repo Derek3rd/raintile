@@ -20,6 +20,9 @@ namespace RaintileOptions
         public double Min, Max, Step = 1;
         public string Unit = "", Axis = "H";
         public bool NoSlider;
+        // the settings this one applies with, "Key=value" (values separated by
+        // |, conditions by ;): otherwise disabled, with the reason under it
+        public string When;
     }
 
     public class Group
@@ -36,7 +39,7 @@ namespace RaintileOptions
         public List<Group> Groups = new List<Group>();
     }
 
-    // Menu on the left: a page, a group with sub-pages, or the categories
+    // Menu on the left: a page (with its sub-pages, Children), or the categories
     public class NavNode
     {
         public string Page, Id, Title;
@@ -50,6 +53,17 @@ namespace RaintileOptions
         public static Page ById(string id)
         {
             return Pages.FirstOrDefault(p => p.Id == id);
+        }
+
+        // The item of a Settings.inc key and its page (null when no page shows it)
+        public static Item ItemOf(string key, out Page page)
+        {
+            foreach (var p in Pages)
+                foreach (var g in p.Groups)
+                    foreach (var it in g.Items)
+                        if (string.Equals(it.Key, key, System.StringComparison.OrdinalIgnoreCase)) { page = p; return it; }
+            page = null;
+            return null;
         }
 
         // Settings.inc keys the schema shows on a page

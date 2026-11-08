@@ -20,6 +20,53 @@ preview), the line says why with a comment `ui-exempt: <why>`. The XAML of the w
 (`Options.xaml` and the window's frame: menu, header, footer) is the chrome and is not
 checked.
 
+## 0. Where a setting goes
+
+Settings are placed **by the part of the launcher they change**, not by the kind of
+value: a part's sizes, font size, colours and timing live on its page. Only what
+several parts share has a page of its own: **Theme** (the font, the text colours,
+background, accent, highlight) and **Animations** (effects of the whole launcher).
+
+| Part of the launcher | Page |
+| --- | --- |
+| Where it shows, its mode (full screen, window, docked), margins, opening and closing | General |
+| Grid or wheel, the tile itself (colour, corners, logo, highlight, label) | Tiles |
+| Rows and columns, scrolling, scrollbar, edge fade | Tiles > Grid |
+| The wheel, its turning, its inner wheel of categories, its backdrop | Tiles > Wheel |
+| Background images of the tiles | Tiles > Backgrounds |
+| The play time line, Steam updates on the tiles | Tiles > Play time and updates |
+| The category menu and its colours, the buttons of the top row | Top row |
+| Favorites, Recent, Not played yet | Top row > Favorites and Recent |
+| Time and date | Top row > Clock |
+| Search bar, filter bar | Top row > Search |
+| Shared font and colours | Theme |
+| Effects, appearing tiles, smoothing, tile launch | Animations |
+| Opening keys, tile hot keys; navigation keys; the gamepad | Keybindings; > Keyboard; > Gamepad |
+| Widgets, Import, Categories | their pages |
+| Performance, updates, diagnostics | Advanced |
+
+- A new setting: find its part in the table. A new part gets a row here (and its
+  page, or a group on the page of the part it belongs to) in the same PR.
+- **The switch before what it switches.** A setting that decides which others apply
+  (a mode, a choice of layout, a feature on or off) is the first of its page or group;
+  the pages of its modes are sub-pages of the page holding it (Grid / Wheel under
+  Tiles, with the choice on Tiles).
+- **What does not apply is disabled, not hidden.** A setting that only applies with
+  another one has `When = "Key=value"` in `SchemaData.cs` (values separated by `|`,
+  conditions by `;`): while it does not apply its control is disabled (the gamepad
+  passes over it), its label dimmed, and the reason shown under it in the accent
+  colour, from the labels of the settings it needs ("Only with Layout: Wheel (Tiles
+  page)."). Built by `AddRowReason` / `SetRowApplies` in `Ui.cs`.
+- Order on a page: the switch, then layout and sizes, the look, the behaviour, the
+  timing.
+- A group (card) is one part of the launcher. A page with fewer than about four
+  settings joins the page of its part as a group.
+- Two menu levels at most. A menu entry with sub-pages is a page of its own (the
+  switch and what the sub-pages share), never only a folder.
+- `tools/check.py` checks that every `When` names a setting and values it can take,
+  that a switch on the same page comes before what it switches, and that every
+  page is in the menu (`NavTree`) once.
+
 ## 1. Nothing only in a tooltip
 
 The window is used with the mouse, the keyboard and the gamepad: hovering is not
@@ -221,6 +268,8 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 ## 11. Checklist for a change to the window
 
 - [ ] Glyphs, sizes, widths and margins come from `Ui.cs` (`tools/check.py` passes).
+- [ ] A new setting is on the page of the part it changes ("Where a setting goes"),
+      after the switch it depends on, with its `When`.
 - [ ] Every field shows its help; tooltips only name icon buttons, show cut text or
       shortcuts.
 - [ ] The control matches the kind of value: a single choice is a combo, a unit only

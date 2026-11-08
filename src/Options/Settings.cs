@@ -130,30 +130,56 @@ namespace RaintileOptions
             UpdateDirty();
             UpdateResets();
             if (keyButtons.ContainsKey(key)) UpdateKeyConflicts();
-            if (key == "LauncherMode") UpdateModeRows();
+            UpdateWhenRows();
             // the wheel's preview follows every setting (sizes, mode, colours)
             if (wheelCanvas != null) DrawWheel();
         }
 
-        // Rows that only matter in one LauncherMode: the window size, the docked side
-        static readonly Dictionary<string, string> MODE_KEYS = new Dictionary<string, string>
-        {
-            { "WindowW", "window" }, { "WindowH", "window" },
-            { "DockSide", "dock" }, { "DockSize", "dock" }, { "DockEdge", "dock" }, { "DockEdgeDelay", "dock" },
-        };
-        readonly Dictionary<string, UIElement> modeRows = new Dictionary<string, UIElement>();
+        // Rows that apply only with other settings (Item.When): disabled, with
+        // the reason under their label, so they are seen and can be found
+        class WhenRow { public string When; public Border Row; public TextBlock Why; }
+        readonly List<WhenRow> whenRows = new List<WhenRow>();
 
-        void UpdateModeRows()
+        // "Key=a|b;Key2=c": every condition holds (one of its values)
+        bool WhenHolds(string when)
         {
-            string mode = V("LauncherMode").Trim().ToLowerInvariant();
-            foreach (var r in modeRows)
-                r.Value.Visibility = MODE_KEYS[r.Key] == mode ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var cond in when.Split(';'))
+            {
+                var kv = cond.Split(new[] { '=' }, 2);
+                string v = V(kv[0]).Trim();
+                if (!kv[1].Split('|').Any(x => string.Equals(x, v, StringComparison.OrdinalIgnoreCase))) return false;
+            }
+            return true;
+        }
+
+        // "Only with Layout: Wheel (Tiles page)": the settings it needs by their
+        // labels, with their page when it is another one
+        static string WhenReason(string when, Page here)
+        {
+            var parts = new List<string>();
+            foreach (var cond in when.Split(';'))
+            {
+                var kv = cond.Split(new[] { '=' }, 2);
+                Page page; var item = Schema.ItemOf(kv[0], out page);
+                if (item == null) { parts.Add(cond); continue; }
+                string what = item.Kind == "bool" ? item.Label + " on"
+                    : item.Label + ": " + string.Join(" or ", kv[1].Split('|').Select(v =>
+                        { var c = item.Choices == null ? null : item.Choices.FirstOrDefault(x => string.Equals(x[0], v, StringComparison.OrdinalIgnoreCase)); return c != null ? c[1] : v; }));
+                if (page != null && page != here) what += " (" + page.Title + " page)";
+                parts.Add(what);
+            }
+            return "Only with " + string.Join(" and ", parts) + ".";
+        }
+
+        void UpdateWhenRows()
+        {
+            foreach (var w in whenRows) SetRowApplies(w.Row, WhenHolds(w.When), w.Why);
         }
 
         // Shows the current value of 'key' in its controls (after a reset)
         void UpdateControl(string key)
         {
-            if (key == "LauncherMode") UpdateModeRows();
+            UpdateWhenRows();
             Ctl c;
             if (!ctl.TryGetValue(key, out c)) return;
             string v = V(key);
@@ -623,12 +649,14 @@ namespace RaintileOptions
                     {
                         var row = NewItemRow(item);
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
-                        if (row != null && item.Key != null && MODE_KEYS.ContainsKey(item.Key)) modeRows[item.Key] = row;
+                        var b = row as Border;
+                        if (b != null && !string.IsNullOrEmpty(item.When))
+                            whenRows.Add(new WhenRow { When = item.When, Row = b, Why = AddRowReason(b, WhenReason(item.When, page)) });
                     }
                 }
                 if (rows > 0) AddTo(sp, card);
             }
-            UpdateModeRows();
+            UpdateWhenRows();
             return sv;
         }
     }

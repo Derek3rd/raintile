@@ -291,6 +291,30 @@ namespace RaintileOptions
             return NewText((title ?? "").ToUpperInvariant(), Fs.Section, ResBrush("DimBrush"), true);
         }
 
+        // A row that applies only with other settings (Item.When): the reason under
+        // its label, shown while it does not apply (SetRowApplies)
+        public TextBlock AddRowReason(Border row, string reason)
+        {
+            var left = (StackPanel)((Grid)row.Child).Children[0];
+            var why = NewHelp(reason, ResBrush("AccentBrush"));
+            why.Margin = T(0, Gap.Help, 0, 0);
+            AddTo(left, why);
+            return why;
+        }
+
+        // A row that does not apply: its controls disabled (the gamepad passes
+        // over them), its label dimmed, the reason shown
+        public void SetRowApplies(Border row, bool on, TextBlock why)
+        {
+            var g = (Grid)row.Child;
+            var left = (StackPanel)g.Children[0];
+            var label = (TextBlock)left.Children[0];
+            if (on) label.ClearValue(TextBlock.ForegroundProperty);
+            else label.Foreground = ResBrush("DimBrush");
+            foreach (UIElement c in g.Children) if (c != left) c.IsEnabled = on;
+            why.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        }
+
         // Label with its help below: the left part of a row, or the top of a stacked one
         public StackPanel NewLabelBlock(string label, string help)
         {

@@ -280,9 +280,11 @@ namespace RaintileOptions
             // with the selected tile's background: one band behind the whole top row (TopBarColor)
             if (WNum("WheelBackdrop", 1) != 0)
             {
-                double gapPx = WSize("Gap", g.MonH, 18);
-                var band = new Rectangle { Width = g.LW, Height = padY + menuH + gapPx / 2, Fill = NewColorBrush(V("TopBarColor")) ?? Brushes.Black };
-                Canvas.SetLeft(band, g.LX); Canvas.SetTop(band, g.LY);
+                // (as MeterTopBar: from the search to the close button, a little larger than the menu's pills)
+                double padX = WSize("PadX", g.MonW, 40), r = WSize("MenuRadius", g.MonH, 22) + 6;
+                var band = new Rectangle { Width = Math.Max(1, g.LW - 2 * padX + 16), Height = menuH + 12, RadiusX = r, RadiusY = r,
+                    Fill = NewColorBrush(V("TopBarColor")) ?? Brushes.Black };
+                Canvas.SetLeft(band, g.LX + padX - 8); Canvas.SetTop(band, g.LY + padY - 6);
                 wheelCanvas.Children.Add(band);
             }
             wheelCanvas.Children.Add(bar);

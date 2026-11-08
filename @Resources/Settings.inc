@@ -399,8 +399,8 @@ LabelFontSize=14
 ; optional). The same formats work for Color= in the category files.
 BgColor=8,8,12,200
 ; Band behind the row at the top (clock, search, buttons, close) while the
-; wheel shows the selected tile's background (WheelBackdrop): one band across
-; the whole width, so the row stays readable over the picture
+; wheel shows the selected tile's background (WheelBackdrop): one rounded band
+; from the search to the close button, so the row stays readable over the picture
 TopBarColor=0,0,0,255
 TileColor=36,36,44,255
 ; Rounded corners of the tiles, in pixels (0 = square)

@@ -3898,7 +3898,7 @@ local function placeSlots()
 				if infoAlpha <= 0 then infoText = nil end
 			end
 			if sel and V.WheelInfoBack then
-				M.backdropInfo(t, updText, f, infoText, infoAlpha)
+				M.backdropInfo(t, updText, updAlpha, infoText, infoAlpha)
 				backLines = true
 				updText, infoText = nil, nil
 			end

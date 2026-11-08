@@ -624,8 +624,10 @@ namespace RaintileOptions
             {
                 var r = PadRect(c, win);
                 if (r.IsEmpty) continue;
-                // a row: what is level with the best counts as the same row
-                if (best == null || r.Top < bestRect.Top - 4 || (Math.Abs(r.Top - bestRect.Top) <= 4 && r.Left < bestRect.Left))
+                // a row: what overlaps the best up and down counts as the same row
+                // (a slider is lower than the box after it, centred in the row)
+                bool sameRow = best != null && r.Top < bestRect.Bottom && r.Bottom > bestRect.Top;
+                if (best == null || (sameRow ? r.Left < bestRect.Left : r.Top < bestRect.Top))
                 {
                     best = c;
                     bestRect = r;

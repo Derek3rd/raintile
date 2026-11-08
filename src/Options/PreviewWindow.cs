@@ -115,14 +115,19 @@ namespace RaintileOptions
             AddTo(head, lbl); AddTo(head, wheelCatBox);
             // let go of Options (moved or sized by hand): back beside it
             btnAttach = NewButton("Attach", "", "Put the preview back beside the Options window, following it.");
-            btnAttach.Margin = T(Gap.Control, 0, 0, 0);
             btnAttach.Click += (s, e) => { previewFree = null; SavePreviewState(); UpdateAttachButton(); PlacePreview(); };
-            AddTo(head, btnAttach);
             root.Children.Add(head);
+            // at the bottom: the hint, and Attach on the right
+            var foot = new DockPanel { Margin = T(0, Gap.Control, 0, 0) };
+            DockPanel.SetDock(foot, Dock.Bottom);
+            btnAttach.Margin = T(Gap.Control, 0, 0, 0);
+            btnAttach.VerticalAlignment = VerticalAlignment.Bottom;
+            DockPanel.SetDock(btnAttach, Dock.Right);
+            foot.Children.Add(btnAttach);
             var hint = NewHelp("The launcher with these settings, before saving: the mouse wheel scrolls it (turns the wheel), Q / E change category. Nothing is launched.");
-            hint.Margin = T(0, Gap.Control, 0, 0);
-            DockPanel.SetDock(hint, Dock.Bottom);
-            root.Children.Add(hint);
+            hint.VerticalAlignment = VerticalAlignment.Center;
+            foot.Children.Add(hint);
+            root.Children.Add(foot);
             wheelCanvas = new Canvas { ClipToBounds = true, Focusable = true, Background = Brushes.Transparent };
             wheelBox = new Viewbox { Stretch = Stretch.Uniform, Child = wheelCanvas, StretchDirection = StretchDirection.Both };
             var frame = new Border { Child = wheelBox, BorderBrush = ResBrush("LineBrush"), BorderThickness = new Thickness(1), ClipToBounds = true, VerticalAlignment = VerticalAlignment.Top };

@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -488,34 +487,51 @@ namespace RaintileOptions
             return tb != null && numericChars.TryGetValue(tb, out chars) ? chars : null;
         }
 
-        // A box for numbers only: typing and pasting let through digits, the decimal
-        // point (a comma becomes one) and the minus sign where they can be. What is
-        // still not a number (a lone "-", the on-screen keyboard) gets MarkInvalid.
+        // Text a number box can hold while it is written: digits, the minus sign once
+        // and at the start, the decimal point once, each only if 'chars' has it.
+        // The keyboard, a paste and the on-screen keyboard go through it.
+        public static bool IsPartialNumber(string chars, string text)
+        {
+            int i = text.Length > 0 && text[0] == '-' && chars.IndexOf('-') >= 0 ? 1 : 0;
+            bool dot = false;
+            for (; i < text.Length; i++)
+            {
+                char ch = text[i];
+                if (ch >= '0' && ch <= '9') continue;
+                if (ch == '.' && !dot && chars.IndexOf('.') >= 0) { dot = true; continue; }
+                return false;
+            }
+            return true;
+        }
+
+        // A box for numbers only: typing and pasting change it only into what can
+        // still be a number (IsPartialNumber; a comma becomes the decimal point).
+        // What is not a number yet (a lone "-") gets MarkInvalid. A value that was
+        // not a number to begin with (a formula) can only be deleted.
         public static void NumericOnly(TextBox tb, bool negative, bool decimals)
         {
             string chars = "0123456789" + (decimals ? "." : "") + (negative ? "-" : "");
             numericChars.Remove(tb);
             numericChars.Add(tb, chars);
-            Func<string, bool> ok = text => text.All(ch => chars.IndexOf(ch) >= 0);
+            // the text with the selection replaced by 's'
+            Func<string, string> after = s => tb.Text.Remove(tb.SelectionStart, tb.SelectionLength).Insert(tb.SelectionStart, s);
             InputMethod.SetIsInputMethodEnabled(tb, false);
             tb.PreviewTextInput += (s, e) =>
             {
-                if (decimals && e.Text == ",")
-                {
-                    e.Handled = true;
-                    int at = tb.SelectionStart;
-                    tb.SelectedText = ".";
-                    tb.CaretIndex = at + 1;
-                    return;
-                }
-                if (!ok(e.Text)) e.Handled = true;
+                string t = decimals && e.Text == "," ? "." : e.Text;
+                e.Handled = true;
+                if (!IsPartialNumber(chars, after(t))) return;
+                if (t == e.Text) { e.Handled = false; return; }
+                int at = tb.SelectionStart;
+                tb.SelectedText = t;
+                tb.CaretIndex = at + t.Length;
             };
             // Space does not come as text input
             tb.PreviewKeyDown += (s, e) => { if (e.Key == Key.Space) e.Handled = true; };
             DataObject.AddPastingHandler(tb, (s, e) =>
             {
                 var text = e.DataObject.GetDataPresent(DataFormats.UnicodeText) ? e.DataObject.GetData(DataFormats.UnicodeText) as string : null;
-                if (text == null || !ok(text.Trim())) e.CancelCommand();
+                if (text == null || !IsPartialNumber(chars, after(text.Trim()))) e.CancelCommand();
             });
         }
 

@@ -12,8 +12,9 @@
 // The keys can be clicked with the mouse too; a click elsewhere in the window
 // or a key on the keyboard closes it and keeps the text.
 //
-// A box for numbers only (NumericOnly) gets a number pad instead: the digits,
-// with - and . dimmed where the box does not take them.
+// A box for numbers only (NumericOnly) gets a number pad instead, as on a phone.
+// A key that cannot type at that point (- after the start, a second ., a sign the
+// box does not take) is dimmed and skipped when moving, as typing in the box.
 
 using System;
 using System.Collections.Generic;
@@ -41,8 +42,8 @@ namespace RaintileOptions
         // Rows of 10, 10, 10 and 8 characters (then Delete), as in the launcher
         const string OskLetters = "1234567890qwertyuiopasdfghjkl-zxcvbnm.";
         const string OskSymbols = "1234567890!@#$%^&*()\\/:;_=+'\",[]{}<>|?";
-        // the number pad: 7 8 9 / 4 5 6 - / 1 2 3 . / 0
-        const string OskDigits = "789456123-.0";
+        // the number pad: 1 2 3 / 4 5 6 - / 7 8 9 . / 0
+        const string OskDigits = "123456789-.0";
 
         Popup osk;
         List<OskKey> oskKeys;
@@ -146,7 +147,7 @@ namespace RaintileOptions
             oskCaret = oskText.Length;
             oskShift = false;
             oskSymbols = false;
-            oskRow = oskNumeric != null ? 0 : 1;   // on the 7, or on the first letter
+            oskRow = oskNumeric != null ? 0 : 1;   // on the 1, or on the first letter
             oskCol = 0;
             OskRender();
             var card = (FrameworkElement)osk.Child;
@@ -194,12 +195,10 @@ namespace RaintileOptions
             foreach (var k in oskKeys)
             {
                 string label;
-                k.Box.Opacity = 1;
                 if (k.Char >= 0)
                 {
                     label = page[k.Char].ToString();
                     if (oskShift && !oskSymbols) label = label.ToUpperInvariant();
-                    if (!OskTakes(label)) k.Box.Opacity = 0.35;   // a - or . the box does not take
                 }
                 else if (k.Value == "BACK") label = "Delete";
                 else if (k.Value == "SHIFT") label = "Shift";
@@ -207,6 +206,7 @@ namespace RaintileOptions
                 else if (k.Value == "SPACE") label = "Space";
                 else label = "Done";
                 k.Label.Text = label;
+                k.Box.Opacity = OskEnabled(k) ? 1 : 0.35;   // ui-exempt: on-screen keyboard, a key that cannot type here
                 bool on = (k.Value == "SHIFT" && oskShift) || (k.Value == "SYM" && oskSymbols);
                 k.Box.Background = ResBrush(k == sel ? "AccentBrush" : on ? "AccentSoftBrush" : "FieldBg");
                 k.Label.Foreground = ResBrush(k == sel ? "OnAccentBrush" : on ? "AccentBrush" : "TextBrush");
@@ -221,10 +221,16 @@ namespace RaintileOptions
             return oskNumeric != null ? OskDigits : oskSymbols ? OskSymbols : OskLetters;
         }
 
-        // A numeric box takes only its characters (as typing in it, NumericOnly)
+        // A numeric box takes 's' at the caret only if the text can still be a number
+        // (as typing in it, NumericOnly)
         bool OskTakes(string s)
         {
-            return oskNumeric == null || s.All(ch => oskNumeric.IndexOf(ch) >= 0);
+            return oskNumeric == null || IsPartialNumber(oskNumeric, oskText.Insert(oskCaret, s));
+        }
+
+        bool OskEnabled(OskKey k)
+        {
+            return k.Char < 0 || OskTakes(OskPage()[k.Char].ToString());
         }
 
         void OskInsert(string s)
@@ -270,13 +276,22 @@ namespace RaintileOptions
             }
         }
 
+        // To the next key in that direction that can type here; at the edge it stays
         void OskMove(int dir)
         {
-            var k = OskKeyAt(oskRow, oskCol);
-            if (dir == PadLeft && k.Col > 0) oskCol = k.Col - 1;
-            else if (dir == PadRight && k.Col + k.Span < oskCols) oskCol = k.Col + k.Span;
-            else if (dir == PadUp && oskRow > 0) oskRow--;
-            else if (dir == PadDown && oskRow < oskRows - 1) oskRow++;
+            int row = oskRow, col = oskCol;
+            while (true)
+            {
+                var k = OskKeyAt(row, col);
+                if (dir == PadLeft && k.Col > 0) col = k.Col - 1;
+                else if (dir == PadRight && k.Col + k.Span < oskCols) col = k.Col + k.Span;
+                else if (dir == PadUp && row > 0) row--;
+                else if (dir == PadDown && row < oskRows - 1) row++;
+                else return;
+                if (OskEnabled(OskKeyAt(row, col))) break;
+            }
+            oskRow = row;
+            oskCol = col;
             OskRender();
         }
 

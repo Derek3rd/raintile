@@ -84,9 +84,11 @@ acts on a whole entry of a list, in the list's header. A field never has a bin.
   Width in columns). Every number box is `FieldWidth.S` wide, so the boxes line up and
   the sliders before them take the rest of the row.
 - Number boxes take only numbers (`NumericOnly`, already in `NewNumberField` and
-  `NewSizeField`): letters and spaces are not typed or pasted, a comma becomes the
-  decimal point, the minus sign only where the value can be negative. The on-screen
-  keyboard shows a number pad on them, with the same characters (`NumericChars`).
+  `NewSizeField`): typing and pasting change the text only into what can still be a
+  number (`IsPartialNumber`): no letters or spaces, the minus sign once and at the
+  start (only where the value can be negative), one decimal point (a comma becomes
+  it). The on-screen keyboard shows a number pad on them with the same rule
+  (`NumericChars`): the keys that cannot type there are dimmed and skipped.
 - The same kind of value gets the same control on every page (a grid size, an
   opacity, a zoom look the same in Settings and in the category editor).
 - A value that is not valid gets the red border (`MarkInvalid`) and is not saved

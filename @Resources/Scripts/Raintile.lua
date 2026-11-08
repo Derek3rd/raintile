@@ -1435,7 +1435,8 @@ local function writeGrid(path, sig, files)
 		w('Meter=Image')
 		w('MeterStyle=StyleTile')
 		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(' .. slot .. ')"]')
-		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ')"]')
+		-- (where the mouse is: the wheel turns to a tile only when the mouse moved)
+		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ', \'$MouseX$\', \'$MouseY$\')"]')
 		w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(' .. slot .. ')"]')
 		w('')
 		-- Steam update: the coloured part of a greyscale background, the
@@ -1978,6 +1979,9 @@ end
 M.dwell = nil
 function M.wheelHover(k)
 	if not (V.Wheel and V.WheelTurn) or pos ~= offset or k == offset then return end
+	-- a tile that came under a still mouse with the last turn: not again
+	local a, b = M.turnMouse, M.mouse
+	if a and b and a[1] and b[1] and math.abs(a[1] - b[1]) + math.abs(a[2] - b[2]) < 3 then return end
 	M.dwell = k
 	SKIN:Bang('!CommandMeasure', 'MeasureWheelDwell', 'Stop 1')
 	SKIN:Bang('!CommandMeasure', 'MeasureWheelDwell', 'Execute 1')
@@ -1992,6 +1996,7 @@ function WheelDwell()
 	M.dwell = nil
 	if not ready or launching or not V.Wheel or k == nil or pos ~= offset or not hover.on then return end
 	if (V.Horizontal and hover.tx or hover.ty) ~= k then return end
+	M.turnMouse = M.mouse
 	offset = k
 	if V.AnimScroll then M.startTicker() else pos = offset M.frame() end
 end
@@ -5317,8 +5322,9 @@ function M.menuOverGrid()
 	return M.picked ~= nil and os.time() - M.picked <= 1
 end
 
-function HoverTile(slot)
+function HoverTile(slot, mx, my)
 	M.picked = nil
+	M.mouse = { tonumber(mx), tonumber(my) }
 	if M.more.open or power.open then return end
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end

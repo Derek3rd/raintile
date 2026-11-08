@@ -74,7 +74,7 @@ Sizes in percent (margins, menu, fonts) are of the area, not of the window, so t
 
 ### Grid or wheel
 
-`ScrollMode` (Options > Layout > Grid > **Tiles**) sets how the tiles are laid out, in every mode:
+`ScrollMode` (Options > **Wheel** > *Tiles*) sets how the tiles are laid out, in every mode:
 
 - **Grid** (default): rows and columns (`NX`, `NY`), scrolled by rows or columns.
 - **Wheel**: one line of tiles on an arc of a circle. The selected tile stays in the middle and the wheel turns: the mouse wheel, the arrows and the gamepad turn it by one tile, `Enter` / `A` launch the middle one. Best when docked.
@@ -84,6 +84,8 @@ Sizes in percent (margins, menu, fonts) are of the area, not of the window, so t
   - The mouse resting on a side tile turns the wheel to it (`WheelHover=Turn`; `Highlight` only highlights it); a click on a side tile launches it (`WheelClick=Launch`) or turns it to the middle (`Center`). `WheelStepTime` is the time to turn by one tile.
   - **Inner wheel of categories** (`WheelMenu=Ring`): the categories go on a smaller circle inside the wheel of tiles, a disc each with the category's icon (or its initial), the active one in line with the selected tile and its name beside it. `Q` / `E`, `LB` / `RB`, a click or the mouse wheel over it change category; Favorites, Recent and Not played yet keep their buttons next to the search bar. `WheelMenuGap` (distance from the tiles) and `WheelMenuSize` (size of the discs) are in percent of a tile. `WheelMenu=Bar` keeps the categories in the menu at the top.
   - In a short launcher (docked at the top or bottom) leave room for the inner wheel: a lower `WheelAnchor` or `WheelTileSize`.
+  - Options > **Wheel** has a live preview: the launcher with these settings on your main screen, with the tiles of a category you pick and your categories on the inner wheel. It turns like the launcher (the mouse wheel, the arrows, a click, the mouse resting on a side tile, `Q` / `E`) and follows every change of a setting, before you save.
+  - The mouse resting on a side tile turns the wheel only after it moved: a tile that comes under the still mouse with a turn does not turn it again.
 
 Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter starts; `ShowZPos=1` brings it above other windows when shown (`-2` = on the desktop); `CloseAction=[!DeactivateConfig]` unloads the skin on close instead of hiding it (slower to reopen).
 

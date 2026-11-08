@@ -139,6 +139,21 @@ function T.click_and_hover_turn()
 	t.clean(s)
 end
 
+-- After a turn by the resting mouse, the tile that comes under the still
+-- mouse does not turn the wheel again; once the mouse moves, it does
+function T.still_mouse_turns_once()
+	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', WheelHover = 'Turn' })
+	local start = s:upvalue('offset')
+	s:call("HoverTile(" .. slotOf(s, start + 1) .. ", '200', '300')")
+	t.eq(s:upvalue('offset'), start + 1, 'resting on a side tile did not turn the wheel')
+	-- the next tile is now where the mouse is
+	s:call("HoverTile(" .. slotOf(s, start + 2) .. ", '200', '300')")
+	t.eq(s:upvalue('offset'), start + 1, 'the still mouse turned the wheel again')
+	s:call("HoverTile(" .. slotOf(s, start + 2) .. ", '205', '330')")
+	t.eq(s:upvalue('offset'), start + 2, 'the moved mouse did not turn the wheel')
+	t.clean(s)
+end
+
 -- Size= is not used: every tile one cell
 function T.one_cell_each()
 	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left' })

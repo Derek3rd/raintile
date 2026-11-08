@@ -36,6 +36,8 @@ namespace RaintileOptions
     {
         public string Id, Title, Desc;
         public int Icon;
+        // a page for one mode (as Item.When): its menu entry is disabled otherwise
+        public string When;
         public List<Group> Groups = new List<Group>();
     }
 

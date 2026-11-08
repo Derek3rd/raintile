@@ -174,6 +174,7 @@ namespace RaintileOptions
         void UpdateWhenRows()
         {
             foreach (var w in whenRows) SetRowApplies(w.Row, WhenHolds(w.When), w.Why);
+            UpdateNavApplies();
         }
 
         // Shows the current value of 'key' in its controls (after a reset)

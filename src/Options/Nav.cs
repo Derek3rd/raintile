@@ -293,7 +293,26 @@ namespace RaintileOptions
             tag.Id = id;
             tag.Title = t;
             item.Tag = tag;
+            SetNavApplies(item);
             return item;
+        }
+
+        // The page of a mode not in use (Page.When: Grid, Wheel): its entry greyed
+        // out and passed over, until the setting it needs changes
+        void SetNavApplies(ListBoxItem item)
+        {
+            var tag = (NavTag)item.Tag;
+            if (tag.Page == null || string.IsNullOrEmpty(tag.Page.When)) return;
+            bool on = WhenHolds(tag.Page.When);
+            item.IsEnabled = on;
+            if (on) tag.Title.ClearValue(TextBlock.ForegroundProperty);
+            else tag.Title.Foreground = ResBrush("DimBrush");
+        }
+
+        void UpdateNavApplies()
+        {
+            if (nav == null) return;
+            foreach (ListBoxItem it in nav.Items) SetNavApplies(it);
         }
 
         // Import: games or apps found and not seen in the list yet
@@ -392,10 +411,11 @@ namespace RaintileOptions
             finally { navBuilding = false; }
         }
 
-        // The entries of the menu in order, the bottom ones (Info) last
+        // The entries of the menu in order, the bottom ones (Info) last; not the
+        // disabled ones
         List<ListBoxItem> NavEntries()
         {
-            return nav.Items.OfType<ListBoxItem>().Concat(navBottom.Items.OfType<ListBoxItem>()).ToList();
+            return nav.Items.OfType<ListBoxItem>().Concat(navBottom.Items.OfType<ListBoxItem>()).Where(it => it.IsEnabled).ToList();
         }
 
         // Selects the entry 'delta' steps from the selected one, round the end of

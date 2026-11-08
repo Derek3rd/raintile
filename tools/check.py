@@ -240,8 +240,9 @@ def check_schema_layout(schema):
         pages[pm.group(1)] = keys
         order.append(pm.group(1))
     page_of = {k: p for p, ks in pages.items() for k in ks}
-    for m in re.finditer(r'Key = "([A-Za-z0-9]+)"[^\n]*When = "([^"]*)"', schema):
-        key, when = m.group(1), m.group(2)
+    conds = [(m.group(1), m.group(2)) for m in re.finditer(r'Key = "([A-Za-z0-9]+)"[^\n]*When = "([^"]*)"', schema)]
+    conds += [('page ' + m.group(1), m.group(2)) for m in re.finditer(r'new Page \{ Id = "([a-z]+)", When = "([^"]*)"', schema)]
+    for key, when in conds:
         for cond in when.split(';'):
             name, _, values = cond.partition('=')
             if name not in items:

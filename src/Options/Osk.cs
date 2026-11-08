@@ -9,6 +9,10 @@
 //   LB / RB        move the cursor      LT Shift           RT symbols
 //   Start / Done   keep the text        B  cancel
 //
+// As on the buttons of the window (AddPadHint), the pad buttons show as their
+// glyphs: on the keys they press (Delete, Space, Shift, symbols, Done), the
+// others (A, LB / RB, B) on the hint line under the keys.
+//
 // The keys can be clicked with the mouse too; a click elsewhere in the window
 // or a key on the keyboard closes it and keeps the text.
 //
@@ -35,8 +39,9 @@ namespace RaintileOptions
             public int Row, Col, Span = 1;
             public int Char = -1;     // position in the page of characters, or -1
             public string Value;      // otherwise BACK, SHIFT, SYM, SPACE, DONE
+            public int Pad;           // the glyph of the pad button that presses it, or 0
             public Border Box;
-            public TextBlock Label;
+            public TextBlock Label, PadGlyph;
         }
 
         // Rows of 10, 10, 10 and 8 characters (then Delete), as in the launcher
@@ -62,11 +67,11 @@ namespace RaintileOptions
                 oskCols = 4; oskRows = 4;
                 for (int r = 0; r < 3; r++)
                     for (int i = 0; i < 3; i++) oskKeys.Add(new OskKey { Row = r, Col = i, Char = r * 3 + i });
-                oskKeys.Add(new OskKey { Row = 0, Col = 3, Value = "BACK" });
+                oskKeys.Add(new OskKey { Row = 0, Col = 3, Value = "BACK", Pad = Glyph.PadX });
                 oskKeys.Add(new OskKey { Row = 1, Col = 3, Char = 9 });
                 oskKeys.Add(new OskKey { Row = 2, Col = 3, Char = 10 });
                 oskKeys.Add(new OskKey { Row = 3, Col = 0, Span = 2, Char = 11 });
-                oskKeys.Add(new OskKey { Row = 3, Col = 2, Span = 2, Value = "DONE" });
+                oskKeys.Add(new OskKey { Row = 3, Col = 2, Span = 2, Value = "DONE", Pad = Glyph.PadStart });
             }
             else
             {
@@ -74,24 +79,35 @@ namespace RaintileOptions
                 int c = 0;
                 for (int r = 0; r < 4; r++)
                     for (int i = 0; i < (r < 3 ? 10 : 8); i++) oskKeys.Add(new OskKey { Row = r, Col = i, Char = c++ });
-                oskKeys.Add(new OskKey { Row = 3, Col = 8, Span = 2, Value = "BACK" });
-                oskKeys.Add(new OskKey { Row = 4, Col = 0, Span = 2, Value = "SHIFT" });
-                oskKeys.Add(new OskKey { Row = 4, Col = 2, Span = 2, Value = "SYM" });
-                oskKeys.Add(new OskKey { Row = 4, Col = 4, Span = 4, Value = "SPACE" });
-                oskKeys.Add(new OskKey { Row = 4, Col = 8, Span = 2, Value = "DONE" });
+                oskKeys.Add(new OskKey { Row = 3, Col = 8, Span = 2, Value = "BACK", Pad = Glyph.PadX });
+                oskKeys.Add(new OskKey { Row = 4, Col = 0, Span = 2, Value = "SHIFT", Pad = Glyph.PadLT });
+                oskKeys.Add(new OskKey { Row = 4, Col = 2, Span = 2, Value = "SYM", Pad = Glyph.PadRT });
+                oskKeys.Add(new OskKey { Row = 4, Col = 4, Span = 4, Value = "SPACE", Pad = Glyph.PadY });
+                oskKeys.Add(new OskKey { Row = 4, Col = 8, Span = 2, Value = "DONE", Pad = Glyph.PadStart });
             }
 
             const double size = 50;
             var grid = new Grid();
-            for (int i = 0; i < oskCols; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(size) });
+            // the number pad's last column is two keys wide: Delete with its glyph
+            for (int i = 0; i < oskCols; i++)
+                grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(numeric && i == oskCols - 1 ? 2 * size : size) });
             for (int i = 0; i < oskRows; i++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(size - 4) });
             foreach (var k in oskKeys)
             {
                 var key = k;
                 k.Label = NewText("", 15, null, true);   // ui-exempt: on-screen keyboard
-                k.Label.HorizontalAlignment = HorizontalAlignment.Center;
                 k.Label.VerticalAlignment = VerticalAlignment.Center;
-                k.Box = new Border { CornerRadius = new CornerRadius(6), Margin = T(3), Child = k.Label, Cursor = Cursors.Hand };   // ui-exempt: on-screen keyboard
+                // the pad button's glyph before the name of the key
+                var content = NewPanel(Orientation.Horizontal);
+                content.HorizontalAlignment = HorizontalAlignment.Center;
+                if (k.Pad != 0)
+                {
+                    k.PadGlyph = NewGlyph(k.Pad, Fs.Label);
+                    k.PadGlyph.Margin = T(0, 0, Gap.Icon, 0);
+                    AddTo(content, k.PadGlyph);
+                }
+                AddTo(content, k.Label);
+                k.Box = new Border { CornerRadius = new CornerRadius(6), Margin = T(3), Child = content, Cursor = Cursors.Hand };   // ui-exempt: on-screen keyboard
                 Grid.SetRow(k.Box, k.Row);
                 Grid.SetColumn(k.Box, k.Col);
                 Grid.SetColumnSpan(k.Box, k.Span);
@@ -110,11 +126,16 @@ namespace RaintileOptions
                 Background = ResBrush("FieldBg"), BorderBrush = ResBrush("AccentBrush"), BorderThickness = T(1),
                 CornerRadius = new CornerRadius(6), Padding = T(10, 7), Margin = T(3, 0, 3, 10), Child = text, MinHeight = 36,   // ui-exempt: on-screen keyboard
             };
-            var hint = NewText(numeric ? "A type   X delete   LB/RB cursor   Start done   B cancel"
-                : "A type   X delete   Y space   LB/RB cursor   LT Shift   RT symbols   Start done   B cancel", Fs.Help, ResBrush("DimBrush"), false, true);
+            // the pad buttons that are not on a key, as glyphs
+            var hint = NewText("", Fs.Help, ResBrush("DimBrush"), false, true);
+            foreach (var h in new[] { new object[] { new[] { Glyph.PadA }, "type" }, new object[] { new[] { Glyph.PadLB, Glyph.PadRB }, "cursor" }, new object[] { new[] { Glyph.PadB }, "cancel" } })
+            {
+                foreach (int g in (int[])h[0]) hint.Inlines.Add(new Run(((char)g).ToString()) { FontFamily = Glyph.Font });
+                hint.Inlines.Add(new Run(" " + h[1] + "     "));
+            }
             hint.Margin = T(3, 10, 3, 0);   // ui-exempt: on-screen keyboard
             var sp = NewPanel();
-            sp.Width = oskCols * size;
+            sp.Width = grid.ColumnDefinitions.Sum(c => c.Width.Value);
             AddTo(sp, field); AddTo(sp, grid); AddTo(sp, hint);
             var card = new Border
             {
@@ -210,6 +231,7 @@ namespace RaintileOptions
                 bool on = (k.Value == "SHIFT" && oskShift) || (k.Value == "SYM" && oskSymbols);
                 k.Box.Background = ResBrush(k == sel ? "AccentBrush" : on ? "AccentSoftBrush" : "FieldBg");
                 k.Label.Foreground = ResBrush(k == sel ? "OnAccentBrush" : on ? "AccentBrush" : "TextBrush");
+                if (k.PadGlyph != null) k.PadGlyph.Foreground = k.Label.Foreground;
             }
             string shown = oskTarget is PasswordBox ? new string('\u2022', oskText.Length) : oskText;
             oskBefore.Text = shown.Substring(0, oskCaret);

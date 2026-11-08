@@ -43,8 +43,11 @@ namespace RaintileOptions
         public const int Up = 0xE74A, Down = 0xE74B, Left = 0xE72B, Right = 0xE72A;   // move an entry
         public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
         public const int Pin = 0xE718;      // marks a pinned tile (not a button)
-        // the pad button that presses a button, before its text while the pad is in use (AddPadHint)
-        public const int PadB = 0xF094, PadStart = 0xEDE3;
+        // the pad button that presses a button, before its text while the pad is in use
+        // (AddPadHint), and on the keys and the hint line of the on-screen keyboard
+        public const int PadA = 0xF093, PadB = 0xF094, PadY = 0xF095, PadX = 0xF096, PadStart = 0xEDE3;
+        public const int PadLT = 0xF10A, PadRT = 0xF10B, PadLB = 0xF10C, PadRB = 0xF10D;
+        public static readonly FontFamily Font = new FontFamily("Segoe MDL2 Assets");
     }
 
     // Type sizes
@@ -246,7 +249,7 @@ namespace RaintileOptions
         public TextBlock NewGlyph(int code, double size = 14)
         {
             var t = NewText(((char)code).ToString(), size);
-            t.FontFamily = new FontFamily("Segoe MDL2 Assets");
+            t.FontFamily = Glyph.Font;
             t.VerticalAlignment = VerticalAlignment.Center;
             return t;
         }

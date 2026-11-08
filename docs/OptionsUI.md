@@ -171,7 +171,7 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 | Glyph | Constant | Action | Tooltip wording |
 |---|---|---|---|
 | `0xE7A7` | `Glyph.Reset` | **A field** goes back to its default, or to the value of All tiles | "Restore default", "Back to the value of All tiles" |
-| `0xE70F` | `Glyph.Edit` | **A row of a list** shown read-only (Import > Your folders) is edited in place; the same button ends the editing. Shown with the mouse over the row or the focus in it (faded out otherwise, so the pad still reaches it) | "Edit ...", "Done" |
+| `0xE70F` | `Glyph.Edit` | **A row of a list** shown read-only (Import > Your folders) is edited in place; the same button ends the editing. Shown with the mouse over the row or the focus in it (faded out otherwise, so the pad still reaches it). **The entry picked in a combo** of entries saved on disk (General > Profiles) is renamed: in the action column of the combo's row, the new name asked in a dialog, hidden when the entry cannot be renamed | "Edit ...", "Done", "Rename ..." |
 | `0xE711` | `Glyph.Clear` | **A field** is emptied: no key, no colour, no image, no icon. When the value is a file of the data folder (an image, an icon) the file goes to the Recycle Bin, asked first | "Clear the ..." |
 | `0xE74D` | `Glyph.Delete` | **An entry of a list** goes away (a tile, a category): in the list's header, always asked | "Delete ..." |
 | `0xE710` | `Glyph.Add` | A new entry of a list | "New ..." |
@@ -179,7 +179,8 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 
 In short: the arrow and the x act on a field, in the action column of its row (or,
 for a field with two values such as a pair of keys, right after each value); the bin
-acts on a whole entry of a list, in the list's header. A field never has a bin.
+acts on a whole entry of a list, in the list's header; the pencil edits a row of a
+list, or renames the entry picked in a combo. A field never has a bin.
 
 - A new glyph is checked by drawing it (Segoe MDL2 Assets in a TextBlock, saved to a
   picture) before its constant goes into `Glyph`: codes are not written from memory.

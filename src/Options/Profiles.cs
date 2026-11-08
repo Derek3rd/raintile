@@ -38,7 +38,7 @@ namespace RaintileOptions
 
         Border profilesCard;
         ComboBox profileBox;
-        Button profileLoad, profileSave, profileDelete;
+        Button profileLoad, profileSave, profileDelete, profileRename;
         TextBlock profileNote;
         // the entry shown in the combo, and the one Current.txt names: null none,
         // "" the default settings, otherwise the name of a profile
@@ -171,6 +171,30 @@ namespace RaintileOptions
             if (name == null) { if (File.Exists(f)) File.Delete(f); return; }
             Directory.CreateDirectory(dir);
             Core.WriteAllTextAtomic(f, (name == "" ? DefaultProfileMark : name) + "\r\n");
+        }
+
+        // Why 'name' cannot name a profile in 'dir' (null when it can): it cannot be
+        // a file name, it is Default settings or another profile's ('except': the
+        // profile renamed, which may change only the case of its name)
+        public static string TestProfileName(string dir, string name, string except)
+        {
+            string n = CleanProfileName(name);
+            if (GetProfilePath(dir, n) == null) return "This name cannot be a file name: use letters and digits.";
+            if (n.Equals(DefaultProfileLabel, StringComparison.OrdinalIgnoreCase)
+                || GetProfileNames(dir).Any(x => x.Equals(n, StringComparison.OrdinalIgnoreCase) && !x.Equals(except ?? "", StringComparison.OrdinalIgnoreCase)))
+                return "The profile '" + n + "' already exists.";
+            return null;
+        }
+
+        // A profile renamed (its name cleaned), and Current.txt with it when it
+        // names that profile
+        public static void RenameProfile(string dir, string from, string to)
+        {
+            string a = GetProfilePath(dir, from), b = GetProfilePath(dir, to);
+            if (a == null || b == null) throw new ArgumentException("This name cannot be a file name.");
+            bool inUse = string.Equals(ReadCurrentProfile(dir), from, StringComparison.OrdinalIgnoreCase);
+            File.Move(a, b);
+            if (inUse) WriteCurrentProfile(dir, CleanProfileName(to));
         }
 
         // A setting a profile holds: in Settings.inc, not excluded, not a secret
@@ -430,7 +454,9 @@ namespace RaintileOptions
             var card = NewCard(group.Title, "A profile holds the settings of these pages (not where Import looks, the updates and the diagnostics), the look of each category (its grid, colours and places, not its tiles) and the settings of the widgets. Your tiles, categories and images are not part of it.");
             var f = CardPanel(card);
             profileBox = new ComboBox();
-            AddTo(f, NewRow("Profile", "Picking one puts its settings in the window, on every page: Save and refresh applies them. Default settings: the ones Raintile comes with.", profileBox, null));
+            profileRename = NewEditButton("Rename the profile");
+            SetActionVisible(profileRename, false);
+            AddTo(f, NewRow("Profile", "Picking one puts its settings in the window, on every page: Save and refresh applies them. Default settings: the ones Raintile comes with. The pencil renames the profile, at once.", profileBox, profileRename));
             profileLoad = NewButton("Load");
             profileSave = NewButton("Save");
             profileDelete = NewButton("Delete");
@@ -456,6 +482,7 @@ namespace RaintileOptions
             profileLoad.Click += (s, e) => InvokeProfileLoad();
             profileSave.Click += (s, e) => InvokeProfileSave();
             profileDelete.Click += (s, e) => InvokeProfileDelete();
+            profileRename.Click += (s, e) => InvokeProfileRename();
             saveAs.Click += (s, e) => InvokeProfileSaveAs();
             card.IsVisibleChanged += (s, e) => QueueProfileState();
             QueueProfileState();
@@ -490,6 +517,7 @@ namespace RaintileOptions
             profileLoad.IsEnabled = n > 0;
             profileSave.IsEnabled = mine;
             profileDelete.IsEnabled = mine;
+            SetActionVisible(profileRename, mine);
             profileNote.Text = profileShown == null ? "" : "The settings in the window differ from " + ProfileLabel(profileShown) + ".";
             profileNote.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
@@ -563,14 +591,9 @@ namespace RaintileOptions
         {
             var r = ShowDialog("Save as new profile", "Name of the new profile (e.g. Desk, Couch):", new[] { "Save", "Cancel" }, "");
             if (r.Button != "Save" || string.IsNullOrWhiteSpace(r.Text)) return;
-            string name = CleanProfileName(r.Text);
-            string path = GetProfilePath(ProfilesDir, name);
-            if (path == null) { ShowDialog("Save as new profile", "This name cannot be a file name: use letters and digits."); return; }
-            if (name.Equals(DefaultProfileLabel, StringComparison.OrdinalIgnoreCase) || GetProfileNames(ProfilesDir).Any(x => x.Equals(name, StringComparison.OrdinalIgnoreCase)))
-            {
-                ShowDialog("Save as new profile", "The profile '" + name + "' already exists: pick it, then Save to update it.");
-                return;
-            }
+            string problem = TestProfileName(ProfilesDir, r.Text, null);
+            if (problem != null) { ShowDialog("Save as new profile", problem); return; }
+            string name = CleanProfileName(r.Text), path = GetProfilePath(ProfilesDir, name);
             var p = TakeProfile();
             try { WriteProfile(path, p); }
             catch (Exception e) { ShowDialog("Save as new profile", "The profile could not be saved: " + e.Message); return; }
@@ -579,6 +602,26 @@ namespace RaintileOptions
             FillProfileBox();
             NoteProfileInUse();
             status.Text = "Profile " + name + " saved.";
+        }
+
+        // Rename (the pencil): the profile shown, at once; Current.txt follows it
+        void InvokeProfileRename()
+        {
+            if (string.IsNullOrEmpty(profileShown)) return;
+            string from = profileShown;
+            var r = ShowDialog("Rename profile", "New name of the profile " + from + ":", new[] { "Rename", "Cancel" }, from);
+            if (r.Button != "Rename" || string.IsNullOrWhiteSpace(r.Text)) return;
+            string problem = TestProfileName(ProfilesDir, r.Text, from);
+            if (problem != null) { ShowDialog("Rename profile", problem); return; }
+            string to = CleanProfileName(r.Text);
+            if (to == from) return;
+            try { RenameProfile(ProfilesDir, from, to); }
+            catch (Exception e) { ShowDialog("Rename profile", "The profile could not be renamed: " + e.Message); return; }
+            if (profileSaved == from) profileSaved = to;
+            profileShown = to;
+            FillProfileBox();
+            UpdateDirty();
+            status.Text = "Profile renamed to " + to + ".";
         }
 
         // Delete: the profile shown to the Recycle Bin (asked); the window keeps its settings

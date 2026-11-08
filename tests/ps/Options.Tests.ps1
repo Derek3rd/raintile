@@ -138,6 +138,24 @@ Test 'Options: the profiles of a folder and the one in use' {
     Assert-Equal (Invoke-Options 'ReadCurrentProfile' @($d)) $null 'no profile in use'
 }
 
+Test 'Options: a profile is renamed, and the one in use with it' {
+    $d = New-TestFolder
+    foreach ($f in 'Desk.ini', 'Couch.ini') { [IO.File]::WriteAllText((Join-Path $d $f), "[Settings]`r`nNX=5`r`n") }
+    Assert-Equal (Invoke-Options 'TestProfileName' @($d, 'couch', 'Desk')) "The profile 'couch' already exists." "another profile's name"
+    Assert-Equal (Invoke-Options 'TestProfileName' @($d, 'default SETTINGS', $null)) "The profile 'default SETTINGS' already exists." 'the default settings'
+    Assert-True ($null -ne (Invoke-Options 'TestProfileName' @($d, 'CON', $null))) 'a name Windows keeps taken'
+    Assert-Equal (Invoke-Options 'TestProfileName' @($d, 'desk', 'Desk')) $null 'the case of its own name'
+    Assert-Equal (Invoke-Options 'TestProfileName' @($d, 'Work: late', 'Desk')) $null 'a new name'
+    Invoke-Options 'WriteCurrentProfile' @($d, 'Desk') | Out-Null
+    Invoke-Options 'RenameProfile' @($d, 'Desk', 'Work: late') | Out-Null
+    Assert-Equal (@(Invoke-Options 'GetProfileNames' @($d)) -join ',') 'Couch,Work late' 'profiles after the rename'
+    Assert-Equal (Invoke-Options 'ReadCurrentProfile' @($d)) 'Work late' 'the one in use after its rename'
+    Assert-Equal ((Invoke-Options 'ReadProfile' @((Join-Path $d 'Work late.ini'))).Settings['NX']) '5' 'the settings of the renamed profile'
+    Invoke-Options 'RenameProfile' @($d, 'Couch', 'couch') | Out-Null
+    Assert-Equal (@(Invoke-Options 'GetProfileNames' @($d)) -join ',') 'couch,Work late' 'only the case changed'
+    Assert-Equal (Invoke-Options 'ReadCurrentProfile' @($d)) 'Work late' 'the one in use after renaming another'
+}
+
 Test 'Options: a profile holds the settings, not the excluded ones nor the secrets' {
     foreach ($k in 'SteamGridDBKey', 'steamgriddbkey', 'ImportStores', 'ImportFolders', 'ScanOnStart', 'ImportCategory', 'AppsCategory',
         'CheckUpdates', 'UpdateChannel', 'DebugLog', 'SensorPort', 'TrackPlaytime', 'NoSuchKey', '') {

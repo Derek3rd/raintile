@@ -3,7 +3,9 @@
 // tiles of a category: the grid (ScrollMode=Grid) or the wheel (Wheel, drawn
 // by WheelPreview.cs). A window of its own, anchored to the right side of the
 // Options window (or its left, when there is no room), shown on every page
-// and opened or closed with the Preview button at the bottom. It follows the
+// and opened or closed with the Preview button at the bottom. Moved or sized
+// by hand it lets go of Options and stays where it was put, the next time
+// too, until Attach puts it back beside Options. It follows the
 // category open in the Categories page and every change of a setting or of
 // a tile, before saving. The mouse wheel scrolls it (turns the wheel).
 
@@ -14,6 +16,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -24,33 +27,66 @@ namespace RaintileOptions
     {
         Window previewWin;
         Button btnPreview;
+        Button btnAttach;
         int gridScroll; // first line shown in the grid preview
+        // moved or sized by hand: where it was put (null: beside Options)
+        Rect? previewFree;
+        bool previewWanted = true;
 
-        // open by default; the choice is kept for the next time
+        // open by default; the choice and the place are kept for the next
+        // time: "1" or "0", then "x y w h" when it was let go of Options
         static string PreviewStateFile { get { return System.IO.Path.Combine(Core.Generated, "OptionsPreview.txt"); } }
-        static bool PreviewWanted()
+        void LoadPreviewState()
         {
-            try { return !File.Exists(PreviewStateFile) || File.ReadAllText(PreviewStateFile).Trim() != "0"; } catch { return true; }
+            try
+            {
+                if (!File.Exists(PreviewStateFile)) return;
+                var p = File.ReadAllText(PreviewStateFile).Trim().Split(' ');
+                previewWanted = p[0] != "0";
+                double x, y, w, h;
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                if (p.Length == 5 && double.TryParse(p[1], System.Globalization.NumberStyles.Float, inv, out x)
+                    && double.TryParse(p[2], System.Globalization.NumberStyles.Float, inv, out y)
+                    && double.TryParse(p[3], System.Globalization.NumberStyles.Float, inv, out w)
+                    && double.TryParse(p[4], System.Globalization.NumberStyles.Float, inv, out h) && w > 50 && h > 50)
+                {
+                    // a screen that is not there any more: back beside Options
+                    var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+                        SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+                    var r = new Rect(x, y, w, h);
+                    r.Intersect(screen);
+                    if (!r.IsEmpty && r.Width >= 50 && r.Height >= 50) previewFree = new Rect(x, y, w, h);
+                }
+            }
+            catch { }
         }
-        static void SavePreviewWanted(bool on)
+        void SavePreviewState()
         {
-            try { File.WriteAllText(PreviewStateFile, on ? "1" : "0"); } catch { }
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            string text = previewWanted ? "1" : "0";
+            if (previewFree.HasValue)
+            {
+                var r = previewFree.Value;
+                text += string.Format(inv, " {0:0} {1:0} {2:0} {3:0}", r.X, r.Y, r.Width, r.Height);
+            }
+            try { File.WriteAllText(PreviewStateFile, text); } catch { }
         }
 
         void InitPreview()
         {
             btnPreview = (Button)win.FindName("BtnPreview");
+            LoadPreviewState();
             btnPreview.Click += (s, e) =>
             {
-                bool on = previewWin == null;
-                SavePreviewWanted(on);
-                if (on) OpenPreview(); else ClosePreview();
+                previewWanted = previewWin == null;
+                SavePreviewState();
+                if (previewWanted) OpenPreview(); else ClosePreview();
             };
             win.LocationChanged += (s, e) => PlacePreview();
             win.SizeChanged += (s, e) => PlacePreview();
             win.StateChanged += (s, e) => { if (previewWin != null) previewWin.Visibility = win.WindowState == WindowState.Minimized ? Visibility.Hidden : Visibility.Visible; PlacePreview(); };
             win.Closed += (s, e) => { if (previewWin != null) previewWin.Close(); };
-            win.ContentRendered += (s, e) => { if (previewWin == null && PreviewWanted()) OpenPreview(); };
+            win.ContentRendered += (s, e) => { if (previewWin == null && previewWanted) OpenPreview(); };
         }
 
         void OpenPreview()
@@ -58,7 +94,7 @@ namespace RaintileOptions
             if (previewWin != null) return;
             var w = new Window
             {
-                Title = "Raintile - Preview", Owner = win, ShowInTaskbar = false, ResizeMode = ResizeMode.NoResize,
+                Title = "Raintile - Preview", Owner = win, ShowInTaskbar = false, ResizeMode = ResizeMode.CanResize,
                 WindowStyle = WindowStyle.ToolWindow, Background = ResBrush("WindowBg") ?? ResBrush("CardBg"),
                 Foreground = ResBrush("TextBrush"), ShowActivated = false,
             };
@@ -77,6 +113,11 @@ namespace RaintileOptions
                 SetWheelCategory(wheelCatBox.SelectedIndex);
             };
             AddTo(head, lbl); AddTo(head, wheelCatBox);
+            // let go of Options (moved or sized by hand): back beside it
+            btnAttach = NewButton("Attach", "", "Put the preview back beside the Options window, following it.");
+            btnAttach.Margin = T(Gap.Control, 0, 0, 0);
+            btnAttach.Click += (s, e) => { previewFree = null; SavePreviewState(); UpdateAttachButton(); PlacePreview(); };
+            AddTo(head, btnAttach);
             root.Children.Add(head);
             var hint = NewHelp("The launcher with these settings, before saving: the mouse wheel scrolls it (turns the wheel), Q / E change category. Nothing is launched.");
             hint.Margin = T(0, Gap.Control, 0, 0);
@@ -105,8 +146,24 @@ namespace RaintileOptions
                 wheelTurnMouse = Mouse.GetPosition(wheelCanvas);
                 WheelTurnTo(wheelDwellK);
             };
-            w.SourceInitialized += (s, e) => SetDarkTitle(w);
-            w.Closed += (s, e) => { previewWin = null; wheelCanvas = null; wheelCatBox = null; UpdatePreviewButton(); };
+            w.SourceInitialized += (s, e) =>
+            {
+                SetDarkTitle(w);
+                // the end of a move or a resize by the person (not by PlacePreview):
+                // it stays there
+                HwndSource.FromHwnd(new WindowInteropHelper(w).Handle).AddHook((IntPtr hwnd, int msg, IntPtr wp, IntPtr lp, ref bool handled) =>
+                {
+                    const int WM_EXITSIZEMOVE = 0x0232;
+                    if (msg == WM_EXITSIZEMOVE && previewWin != null)
+                    {
+                        previewFree = new Rect(previewWin.Left, previewWin.Top, previewWin.ActualWidth, previewWin.ActualHeight);
+                        SavePreviewState();
+                        UpdateAttachButton();
+                    }
+                    return IntPtr.Zero;
+                });
+            };
+            w.Closed += (s, e) => { previewWin = null; wheelCanvas = null; wheelCatBox = null; btnAttach = null; UpdatePreviewButton(); };
             previewWin = w;
             LoadWheelCategories();
             if (currentFile != null) PreviewFollow(currentFile);
@@ -114,11 +171,17 @@ namespace RaintileOptions
             w.Show();
             DrawWheel();
             UpdatePreviewButton();
+            UpdateAttachButton();
         }
 
         void ClosePreview()
         {
             if (previewWin != null) previewWin.Close();
+        }
+
+        void UpdateAttachButton()
+        {
+            if (btnAttach != null) btnAttach.Visibility = previewFree.HasValue ? Visibility.Visible : Visibility.Collapsed;
         }
 
         void UpdatePreviewButton()
@@ -128,10 +191,20 @@ namespace RaintileOptions
         }
 
         // Beside the Options window, as tall as it, as wide as the screen's
-        // proportions want: on its right, or on its left when the right has no room
+        // proportions want: on its right, or on its left when the right has no
+        // room. Let go of Options: where it was put.
         void PlacePreview()
         {
             if (previewWin == null || win.WindowState == WindowState.Minimized) return;
+            if (previewFree.HasValue)
+            {
+                var r = previewFree.Value;
+                if (previewWin.Left != r.X) previewWin.Left = r.X;
+                if (previewWin.Top != r.Y) previewWin.Top = r.Y;
+                if (previewWin.Width != r.Width) previewWin.Width = r.Width;
+                if (previewWin.Height != r.Height) previewWin.Height = r.Height;
+                return;
+            }
             var work = SystemParameters.WorkArea;
             double monW = screenPx[0] > 0 ? screenPx[0] : 16, monH = screenPx[1] > 0 ? screenPx[1] : 9;
             double h = Math.Min(win.ActualHeight, work.Height);

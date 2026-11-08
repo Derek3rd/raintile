@@ -155,6 +155,27 @@ function T.gallery_titles()
 		t.ok(api.listY and api.listY >= 30 and api.listY <= 52, id .. ': ListY= not under the title: ' .. tostring(api.listY))
 		t.ok(grid(s):find('Text=' .. (id == 'Modrinth' and 'Modrinth' or 'Steam achievements'), 1, true), id .. ': no title meter in Grid.inc')
 	end
+	-- its settings: another text, or no title (the rows from the top)
+	for _, case in ipairs({ { 'ShowTitle=1\r\nTitle=My mods\r\n', true }, { 'ShowTitle=0\r\n', false } }) do
+		local s = R.new({})
+		host_mkdir(s.data .. 'Widgets')
+		host_copytree(s.repo .. '\\widgets\\Modrinth', s.data .. 'Widgets\\Modrinth', '')
+		R.writeFile(s.data .. 'Widgets\\Modrinth\\settings.inc', case[1])
+		local cat = s.data .. 'Categories\\Dashboard.ini'
+		R.writeFile(cat, R.readFile(cat) .. '\r\n[Gallery widget]\r\nWidget=custom\r\nParam=Modrinth\r\n')
+		s:start()
+		t.clean(s)
+		local w
+		for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == 'Modrinth' then w = x end end
+		local api = s:upvalue('M').widgetInfo(w)
+		if case[2] then
+			t.ok(grid(s):find('Text=My mods', 1, true), 'the Title setting is not the title')
+			t.ok(api.listY >= 30, 'with the title the rows start under it: ' .. tostring(api.listY))
+		else
+			t.ok(api.listY < 10, 'without the title the rows start at the top: ' .. tostring(api.listY))
+			t.ok(grid(s):find('Hidden=(1-0)', 1, true), 'the title is not hidden with ShowTitle=0')
+		end
+	end
 end
 
 return T

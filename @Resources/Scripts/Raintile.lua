@@ -1863,6 +1863,8 @@ function M.readWheel()
 	V.WheelBackdrop = num('WheelBackdrop', 1) ~= 0
 	V.WheelBackdropOpacity = math.min(100, math.max(0, num('WheelBackdropOpacity', 40)))
 	V.WheelIconsOnly = num('WheelIconsOnly', 0) ~= 0
+	-- the band behind the top row: with the selected tile's background only
+	SKIN:Bang('!SetOption', 'MeterTopBar', 'Hidden', (V.Wheel and V.WheelBackdrop) and '0' or '1')
 	if not V.Wheel then return end
 	-- along which axis: Auto follows the docked side
 	local vertical

@@ -195,6 +195,7 @@ function T.backdrop_follows_the_selection()
 	t.eq(shown(), selected(), 'backdrop meter image')
 	s:call('Scroll(1)')
 	t.eq(M.backdrop.img, selected(), 'backdrop after a turn')
+	t.ok(not s.meters['metertopbar'].hidden, 'no band behind the top row with the backdrop')
 	t.eq(M.backdrop.f, 1, 'the fade did not finish')
 	s:call('Hide()')
 	t.atRest(s)
@@ -202,6 +203,7 @@ function T.backdrop_follows_the_selection()
 	-- off: nothing over the background colour
 	s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', WheelBackdrop = 0 })
 	t.ok(s.meters['meterbackdrop1'].hidden and s.meters['meterbackdrop2'].hidden, 'backdrop shown with WheelBackdrop=0')
+	t.ok(s.meters['metertopbar'].hidden, 'band behind the top row without the backdrop')
 	t.clean(s)
 end
 

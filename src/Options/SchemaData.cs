@@ -158,6 +158,7 @@ namespace RaintileOptions
                 new Group { Title = "Colours", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "color", Key = "BgColor", Label = "Launcher background", Help = "" },
+                    new Item { Kind = "color", Key = "TopBarColor", Label = "Band behind the top row", Help = "With the wheel showing the selected tile's background: one band behind the clock, the search and the buttons." },
                     new Item { Kind = "color", Key = "AccentColor", Label = "Accent", Help = "Highlight border, scrollbar, buttons under the mouse." },
                     new Item { Kind = "color", Key = "HoverColor", Label = "Highlight fill", Help = "" },
                     new Item { Kind = "color", Key = "ActiveCategoryColor", Label = "Active category", Help = "" },
@@ -485,6 +486,7 @@ namespace RaintileOptions
             { "TileInfo", "Hover" },
             { "TileKeysWhen", "Always" },
             { "TileRadius", "0" },
+            { "TopBarColor", "0,0,0,255" },
             { "TrackPlaytime", "1" },
             { "UnplayedCount", "24" },
             { "UpdateChannel", "Release" },

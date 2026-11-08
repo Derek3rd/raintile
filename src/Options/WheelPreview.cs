@@ -277,6 +277,14 @@ namespace RaintileOptions
             double padY = WSize("PadY", g.MonH, 24), menuH = WSize("MenuH", g.MonH, 44);
             var bar = new Rectangle { Width = Math.Max(1, g.GW), Height = menuH, RadiusX = menuH / 2, RadiusY = menuH / 2, Fill = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)) };
             Canvas.SetLeft(bar, g.GX); Canvas.SetTop(bar, g.LY + padY);
+            // with the selected tile's background: one band behind the whole top row (TopBarColor)
+            if (WNum("WheelBackdrop", 1) != 0)
+            {
+                double gapPx = WSize("Gap", g.MonH, 18);
+                var band = new Rectangle { Width = g.LW, Height = padY + menuH + gapPx / 2, Fill = NewColorBrush(V("TopBarColor")) ?? Brushes.Black };
+                Canvas.SetLeft(band, g.LX); Canvas.SetTop(band, g.LY);
+                wheelCanvas.Children.Add(band);
+            }
             wheelCanvas.Children.Add(bar);
             // the grid area clips the tiles, as GridClip
             var grid = new Canvas { Width = g.GW, Height = g.GH, ClipToBounds = true };

@@ -81,7 +81,7 @@ Sizes in percent (margins, menu, fonts) are of the area, not of the window, so t
   - The arc runs along the docked side (`WheelAxis=Auto`; across the screen in a window or full screen) and bulges towards the screen (`WheelCurve=Out`, or hollow: `In`). `WheelRadius` is in percent of the launcher's length, `WheelAnchor` places the selected tile across the launcher (in percent from its docked side), `WheelTileSize` sizes the tiles (percent of the smaller side of the screen).
   - `WheelSpacing` is the space from one tile to the next, in percent of a tile: under 100 they overlap, and the middle one is always on top. `WheelVisible` tiles show (odd), fading towards the ends by `WheelFade`. Names only on the middle tile (`WheelLabels=Center`) or on all.
   - Tiles all take one cell (`Size=` is not used) and keep their size: widgets work as in the grid.
-  - **Background of the selected tile** (`WheelBackdrop=1`): the launcher's background takes the background image of the tile in the middle, fading from one to the next as the wheel turns, at `WheelBackdropOpacity` percent over `BgColor`.
+  - **Background of the selected tile** (`WheelBackdrop=1`): the launcher's background takes the background image of the tile in the middle, fading from one to the next as the wheel turns, at `WheelBackdropOpacity` percent over `BgColor`. The row at the top (clock, search, buttons, close) then gets one band behind it, across the whole width, so it stays readable over the picture: its colour is `TopBarColor` (Options > Appearance; black by default).
   - **Logos only** (`WheelIconsOnly=1`): the tiles show their logo on a colour taken from it (as `AutoTileColor`, also when that is off; a `Color=` of the tile or `TileColor=` of the category still wins). Tiles without a logo keep their background. Together with the background above: logos on the wheel, the art behind it.
   - The mouse resting on a side tile turns the wheel to it (`WheelHover=Turn`; `Highlight` only highlights it); a click on a side tile launches it (`WheelClick=Launch`) or turns it to the middle (`Center`). `WheelStepTime` is the time to turn by one tile.
   - **Inner wheel of categories** (`WheelMenu=Ring`): the categories go on a smaller circle inside the wheel of tiles, a disc each with the category's icon (or its initial), the active one in line with the selected tile and its name beside it. `Q` / `E`, `LB` / `RB`, a click or the mouse wheel over it change category; Favorites, Recent and Not played yet keep their buttons next to the search bar. `WheelMenuGap` (distance from the tiles) and `WheelMenuSize` (size of the discs) are in percent of a tile. `WheelMenu=Bar` keeps the categories in the menu at the top.
@@ -588,6 +588,7 @@ See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
 | `WheelBackdrop` | `1` | the launcher's background takes the selected tile's background image |
 | `WheelBackdropOpacity` | `40` | its opacity over `BgColor`, % |
 | `WheelIconsOnly` | `0` | tiles show only their logo, on a colour taken from it |
+| `TopBarColor` | `0,0,0,255` | with `WheelBackdrop`: the band behind the row at the top (Options > Appearance) |
 
 ### Spacing
 
@@ -754,6 +755,7 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFold
 | `FontFace` | `Segoe UI` | font |
 | `MenuFontSize`, `LabelFontSize` | `12`, `14` | font sizes (points) |
 | `BgColor` | `8,8,12,200` | launcher background |
+| `TopBarColor` | `0,0,0,255` | band behind the row at the top, with the wheel showing the selected tile's background (`WheelBackdrop`) |
 | `TileColor` | `36,36,44,255` | default tile colour |
 | `TileRadius` | `0` | rounded corners of the tiles and of the highlight, in pixels (`0` = square) |
 | `EdgeFade` | `1` | tiles cut by the edge of the grid (a tile of more cells only partly on screen, a row while scrolling) fade into the background there, to show they go on |

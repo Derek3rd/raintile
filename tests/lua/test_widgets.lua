@@ -217,4 +217,33 @@ function T.parts_with_keys()
 	t.ok(not s:upvalue('launching'), 'Confirm on a row launched the tile')
 end
 
+-- The wheel: a custom widget (its own container, drawn after the tiles) is
+-- cut by the tiles nearer the middle, as its tile is
+function T.custom_widget_under_nearer_tiles()
+	local s = skinWithWidget(nil, { ScrollMode = 'Wheel', LauncherMode = 'Dock', DockSide = 'Left' })
+	local w = testWidget(s)
+	for i, c in ipairs(s:upvalue('cats')) do
+		for _, tile in ipairs(c.tiles) do
+			if tile == w then s:call('Show()') s:call('SetCategory(' .. i .. ')') end
+		end
+	end
+	t.clean(s)
+	local M = s:upvalue('M')
+	local slot = M.slotOfTile(w)
+	t.ok(slot and M.wv[slot], 'the widget is not on the wheel')
+	local box = s.meters['cw' .. w.widget.idx .. 'box']
+	t.ok(box, 'no container of the custom widget')
+	local shapes = {}
+	for k = 1, 30 do
+		local v = box:opt(k == 1 and 'Shape' or ('Shape' .. k), '')
+		if v ~= '' then shapes[#shapes + 1] = v end
+	end
+	local text = table.concat(shapes, '\n')
+	if math.abs(M.wv[slot].d) >= 0.5 then
+		t.ok(text:find('Exclude', 1, true), 'a side widget not cut by the nearer tiles:\n' .. text)
+	else
+		t.ok(not text:find('Exclude', 1, true), 'the middle widget cut:\n' .. text)
+	end
+end
+
 return T

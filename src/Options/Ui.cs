@@ -411,7 +411,7 @@ namespace RaintileOptions
             var f = new SizeField();
             var sp = NewPanel(Orientation.Horizontal);
             var tb = new TextBox { Width = FieldWidth.S, TextAlignment = TextAlignment.Right, Margin = T(0, 0, Gap.Control, 0), VerticalAlignment = VerticalAlignment.Center };
-            NumericOnly(tb, true, true);
+            NumericOnly(tb, false, true);   // a length: never below 0
             var unit = NewChoiceBox(new[] { new[] { "px", "px" }, new[] { "%", "%" } }, "px", null);
             unit.Width = FieldWidth.Unit;
             unit.VerticalAlignment = VerticalAlignment.Center;

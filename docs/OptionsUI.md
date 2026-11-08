@@ -7,8 +7,8 @@ whose styles are in `@Resources/Scripts/Options.xaml`.
 Most rules are already code: the constants and helpers in `src/Options/Ui.cs`
 (`Glyph`, `Fs`, `Gap`, `FieldWidth`, `NewHelp`, `NewSectionTitle`, `NewLabelBlock`,
 `NewClearButton`, `NewDeleteButton`, `NewResetIcon`, `SetActionVisible`,
-`MarkInvalid`, `SetTrimmed`, `NewNumberField`, `NewSizeField`, `NewEqualButtons`,
-`ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
+`MarkInvalid`, `SetTrimmed`, `NewNumberField`, `NewSizeField`, `NewChoiceBox` with
+`SelectChoice` / `ChoiceValue`, `NumericOnly`, `NewEqualButtons`, `ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
 `SetFormHelp`. Build new UI with them: no glyph codes,
 font sizes or margins written by hand. When a page needs something the helpers do
 not have, add it to `Ui.cs` and to this page, not to the page's own file.
@@ -50,10 +50,14 @@ In short: the arrow and the x act on a field, in the action column of its row (o
 for a field with two values such as a pair of keys, right after each value); the bin
 acts on a whole entry of a list, in the list's header. A field never has a bin.
 
+- A new glyph is checked by drawing it (Segoe MDL2 Assets in a TextBlock, saved to a
+  picture) before its constant goes into `Glyph`: codes are not written from memory.
 - Chevrons (`0xE70D`, `0xE76C`) only open and close groups of the menu.
-- Pad glyphs (`Glyph.PadB` `0xF094`, `Glyph.PadStart` `0xEDE3`) only go before the text of a
-  button that a gamepad button presses, with `AddPadHint`: shown while the pad is in use,
-  never an icon button of their own.
+- Pad glyphs (`Glyph.PadA` `PadB` `PadX` `PadY` `PadLB` `PadRB` `PadLT` `PadRT` `PadStart`)
+  only go before the text of what a gamepad button presses: a button of the window
+  (`AddPadHint`, shown while the pad is in use) or a key of the on-screen keyboard
+  (Delete, Space, Shift, symbols, Done). The keyboard's hint line names the other pad
+  buttons by their glyphs too, never by their letters. Never an icon button of their own.
 - An icon button that would do nothing (the value is already the default, the field
   is already empty) is hidden with `SetActionVisible`: `Visibility.Hidden`, so its
   room stays and nothing moves. Never dim it by hand.
@@ -65,20 +69,34 @@ acts on a whole entry of a list, in the list's header. A field never has a bin.
 | Value | Control |
 |---|---|
 | On / off | Switch (`CheckBox`) |
-| One of up to ~5 choices | Segments (`Segment`) |
-| One of more choices, or a list read from disk | Combo |
-| Several of a fixed set | Switches with their labels |
+| One of a fixed set, however few | Combo (`NewChoiceBox`) |
+| One of a list read from disk | Combo |
+| Several of a fixed set | Switches with their labels, or chips (`Segment` toggles) for short names (gamepad buttons) |
 | A number in a range worth dragging (counts, ms, pt, zoom, opacity) | Slider + text box with its unit (`NewNumberField`) |
-| A length that can be pixels or a share of the screen | `size`: text box + px / % (`NewSizeField`) |
+| A length that can be pixels or a share of the screen | `size`: text box + px / % combo (`NewSizeField`) |
 | An identifier or a huge range (a port) | Text box with its unit (`NoSlider` in the schema) |
 | A colour | Swatch + text box |
 | A key | Key button + clear |
 | Text, path | Text box (paths: + "Browse...") |
 
-- The unit is always shown (px, pt, ms, s, %, ×, steps, columns, rows), inside the
+- No row of chips for a single choice: it wraps and clutters the page. Chips stay for
+  several of a set and for the filters of a list (Import: All / Games / Apps).
+- A unit of measure is always shown (px, pt, ms, s, %, ×, / 255, steps), inside the
   number's box on its right (the `UnitBox` style of `Options.xaml`: the unit is the
-  box's `Tag`). Every number box is `FieldWidth.S` wide, so the boxes line up and the
-  sliders before them take the rest of the row.
+  box's `Tag`). A count has no unit when its label already says what it counts
+  (Columns, Rows, Tiles in Recent); it keeps it when the label does not (a tile's
+  Width in columns). Every number box is `FieldWidth.S` wide, so the boxes line up and
+  the sliders before them take the rest of the row.
+- Number boxes take only numbers (`NumericOnly`, already in `NewNumberField` and
+  `NewSizeField`): typing and pasting change the text only into what can still be a
+  number (`IsPartialNumber`): no letters or spaces, the minus sign once and at the
+  start (only where the value can be negative: a slider whose minimum is below 0, a
+  widget's number; never a size), one decimal point (a comma becomes it). The on-screen keyboard shows a number pad on them with the same rule
+  (`NumericChars`): the keys that cannot type there are dimmed and skipped.
+- With the gamepad every control is a stop the ring passes over, a slider too: `A`
+  starts changing it (the ring goes, its thumb turns accent), left and right change
+  it, `A` keeps the value and `B` puts it back. Left and right never change a value
+  by themselves, or the control after it could not be reached.
 - The same kind of value gets the same control on every page (a grid size, an
   opacity, a zoom look the same in Settings and in the category editor).
 - A value that is not valid gets the red border (`MarkInvalid`) and is not saved
@@ -105,11 +123,12 @@ not scroll, so cards and columns are in the same place on every page. In it:
 
 - text fields, combos, colours, folder lists and sliders **fill** the column (no
   width of their own), so their left and right edges line up;
-- switches, segments, sizes, keys and buttons keep their size and **end at the right
-  edge** of the column.
+- switches, chips, sizes, keys and buttons keep their size and **end at the right
+  edge** of the column; two combos of one value (the screen's area and monitor) share
+  it in equal parts (`NewEqualButtons`).
 
-Widths: number and size boxes `FieldWidth.S` (120); panels of segments or switches
-wrap within `FieldWidth.Wrap` (470); `FieldWidth.M` / `L` only for fields outside rows
+Widths: number and size boxes `FieldWidth.S` (120), the px / % combo after a size box
+`FieldWidth.Unit` (72); panels of chips or switches wrap within `FieldWidth.Wrap` (470); `FieldWidth.M` / `L` only for fields outside rows
 (the Import filter and target). No other widths.
 - A row of buttons is either all `Auto` and aligned to the start, or all the same
   width filling the row (`UniformGrid`): never mixed.
@@ -204,14 +223,23 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 - [ ] Glyphs, sizes, widths and margins come from `Ui.cs` (`tools/check.py` passes).
 - [ ] Every field shows its help; tooltips only name icon buttons, show cut text or
       shortcuts.
-- [ ] The control matches the kind of value, and has its unit.
+- [ ] The control matches the kind of value: a single choice is a combo, a unit only
+      where the label does not say it already.
+- [ ] The control refuses what the value cannot be: letters in a number, a minus sign
+      in a size or a count, a second decimal point (`NumericOnly`, with the range of
+      the value: can it be negative, can it have decimals?).
 - [ ] Every row ends with the action column; fields fill the control column, the
       other controls end at its right edge.
 - [ ] Icon buttons that cannot act are hidden; list buttons that cannot act are
       disabled.
 - [ ] Deleting asks, with `danger: true`; the button says Delete, Remove or Clear as
       in "Words".
-- [ ] Works with the keyboard and the gamepad, without hovering.
+- [ ] Works with the keyboard and the gamepad, without hovering. With the pad, on
+      the page changed: right from the menu lands on the first control (top, then
+      left); every control can be reached and left in every direction (a slider: `A`
+      to change it); `A` acts, `B` goes back or puts the value back; a text or number
+      field opens the right keyboard. These were found only by trying with the pad:
+      say in the hand-over which of them were not tried.
 - [ ] Fits the narrowest window (960 px): nothing cut without its tooltip.
 - [ ] `tools\options-shots.ps1 -Base origin/nightly`: only the pages you meant to
       change are different.

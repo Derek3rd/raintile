@@ -22,8 +22,8 @@ namespace RaintileOptions
         public Panel Panel;
         public TextBox Text;
         public Button Swatch, Button, Clear;
-        public Control Input;   // text, font, category, secret
-        public WrapPanel Area, Monitor;
+        public Control Input;   // text, font, category, secret, choice
+        public ComboBox Area, Monitor;
         public NumberField Num;
         public SizeField Size;
     }
@@ -165,9 +165,7 @@ namespace RaintileOptions
                 switch (c.Kind)
                 {
                     case "bool": c.Box.IsChecked = v == "1"; break;
-                    case "choice":
-                        foreach (RadioButton rb in c.Panel.Children) rb.IsChecked = string.Equals(((string[])rb.Tag)[1], v, StringComparison.OrdinalIgnoreCase);
-                        break;
+                    case "choice": SelectChoice((ComboBox)c.Input, v); break;
                     case "int":
                     case "float": c.Num.Show(v, c.Num.Slider.Minimum); break;
                     case "size": c.Size.Show(v); break;
@@ -187,11 +185,7 @@ namespace RaintileOptions
                     case "combo": c.Button.Content = Schema.FormatHotKey(v); SetActionVisible(c.Clear, v.Trim() != ""); break;
                     case "screen":
                         var sa = Core.ScreenAreaFrom(values);
-                        if (sa != null)
-                        {
-                            foreach (RadioButton rb in c.Area.Children) rb.IsChecked = ((string[])rb.Tag)[1] == sa[0];
-                            foreach (var rb in c.Monitor.Children.OfType<RadioButton>()) rb.IsChecked = ((string[])rb.Tag)[1] == sa[1];
-                        }
+                        if (sa != null) { SelectChoice(c.Area, sa[0]); SelectChoice(c.Monitor, sa[1]); }
                         break;
                 }
             }
@@ -208,19 +202,12 @@ namespace RaintileOptions
             return cb;
         }
 
+        // one of a fixed set: a combo filling the control column
         UIElement NewChoiceControl(string key, List<string[]> choices)
         {
-            var wp = new WrapPanel { MaxWidth = FieldWidth.Wrap, HorizontalAlignment = HorizontalAlignment.Right };
-            foreach (var c in choices)
-            {
-                var rb = new RadioButton { Style = ResStyle("Segment"), Content = c[1], GroupName = "choice_" + key, Tag = new[] { key, c[0] } };
-                rb.IsChecked = string.Equals(V(key), c[0], StringComparison.OrdinalIgnoreCase);
-                string val = c[0];
-                rb.Click += (s, e) => SetValue(key, val);
-                wp.Children.Add(rb);
-            }
-            ctl[key] = new Ctl { Kind = "choice", Panel = wp };
-            return wp;
+            var cb = NewChoiceBox(choices, V(key), v => SetValue(key, v));
+            ctl[key] = new Ctl { Kind = "choice", Input = cb };
+            return cb;
         }
 
         UIElement NewNumberControl(Item item)
@@ -421,40 +408,22 @@ namespace RaintileOptions
         UIElement NewScreenControl()
         {
             var sa = Core.ScreenAreaFrom(values) ?? new[] { "", "" };
-            var sp = NewPanel();
-            sp.HorizontalAlignment = HorizontalAlignment.Right;
-            var area = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
-            var mon = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = T(0, Gap.Control, 0, 0) };
-            foreach (var a in new[] { new[] { "SCREENAREA", "Whole screen" }, new[] { "WORKAREA", "Work area" } })
-            {
-                var rb = new RadioButton { Style = ResStyle("Segment"), Content = a[1], GroupName = "screen_area", Tag = new[] { "area", a[0] }, IsChecked = sa[0] == a[0] };
-                area.Children.Add(rb);
-            }
-            var monLabel = NewText("Monitor", Fs.Help, ResBrush("DimBrush"));
-            monLabel.Margin = T(0, 0, Gap.Control, 0);
-            monLabel.VerticalAlignment = VerticalAlignment.Center;
-            mon.Children.Add(monLabel);
-            foreach (var m in new[] { new[] { "", "Main" }, new[] { "1", "1" }, new[] { "2", "2" }, new[] { "3", "3" }, new[] { "4", "4" } })
-            {
-                var rb = new RadioButton { Style = ResStyle("Segment"), Content = m[1], GroupName = "screen_monitor", Tag = new[] { "monitor", m[0] }, MinWidth = 38, IsChecked = sa[1] == m[0] };
-                mon.Children.Add(rb);
-            }
-            AddTo(sp, area); AddTo(sp, mon);
+            // the area and the monitor side by side, filling the column
+            var area = NewChoiceBox(new[] { new[] { "SCREENAREA", "Whole screen" }, new[] { "WORKAREA", "Work area" } }, sa[0], null);
+            var mon = NewChoiceBox(new[] { new[] { "", "Main monitor" }, new[] { "1", "Monitor 1" }, new[] { "2", "Monitor 2" }, new[] { "3", "Monitor 3" }, new[] { "4", "Monitor 4" } }, sa[1], null);
             var c = new Ctl { Kind = "screen", Area = area, Monitor = mon };
             ctl["ScreenX"] = c;
-            foreach (var rb in area.Children.OfType<RadioButton>().Concat(mon.Children.OfType<RadioButton>()))
+            SelectionChangedEventHandler changed = (s, e) =>
             {
-                rb.Click += (s, e) =>
-                {
-                    var ar = area.Children.OfType<RadioButton>().FirstOrDefault(x => x.IsChecked == true);
-                    var mr = mon.Children.OfType<RadioButton>().FirstOrDefault(x => x.IsChecked == true);
-                    var n = Core.ScreenAreaTo(ar != null ? ((string[])ar.Tag)[1] : "SCREENAREA", mr != null ? ((string[])mr.Tag)[1] : "");
-                    foreach (var kv in n) values[kv.Key] = kv.Value;
-                    SetValue("ScreenX", n["ScreenX"]);
-                };
-            }
+                if (updating) return;
+                var n = Core.ScreenAreaTo(ChoiceValue(area) ?? "SCREENAREA", ChoiceValue(mon) ?? "");
+                foreach (var kv in n) values[kv.Key] = kv.Value;
+                SetValue("ScreenX", n["ScreenX"]);
+            };
+            area.SelectionChanged += changed;
+            mon.SelectionChanged += changed;
             ctl["ScreenY"] = c; ctl["ScreenW"] = c; ctl["ScreenH"] = c;
-            return sp;
+            return NewEqualButtons(area, mon);
         }
 
         UIElement NewActionControl(string action, string label)

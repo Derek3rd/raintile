@@ -50,6 +50,8 @@ In short: the arrow and the x act on a field, in the action column of its row (o
 for a field with two values such as a pair of keys, right after each value); the bin
 acts on a whole entry of a list, in the list's header. A field never has a bin.
 
+- A new glyph is checked by drawing it (Segoe MDL2 Assets in a TextBlock, saved to a
+  picture) before its constant goes into `Glyph`: codes are not written from memory.
 - Chevrons (`0xE70D`, `0xE76C`) only open and close groups of the menu.
 - Pad glyphs (`Glyph.PadA` `PadB` `PadX` `PadY` `PadLB` `PadRB` `PadLT` `PadRT` `PadStart`)
   only go before the text of what a gamepad button presses: a button of the window
@@ -221,14 +223,23 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 - [ ] Glyphs, sizes, widths and margins come from `Ui.cs` (`tools/check.py` passes).
 - [ ] Every field shows its help; tooltips only name icon buttons, show cut text or
       shortcuts.
-- [ ] The control matches the kind of value, and has its unit.
+- [ ] The control matches the kind of value: a single choice is a combo, a unit only
+      where the label does not say it already.
+- [ ] The control refuses what the value cannot be: letters in a number, a minus sign
+      in a size or a count, a second decimal point (`NumericOnly`, with the range of
+      the value: can it be negative, can it have decimals?).
 - [ ] Every row ends with the action column; fields fill the control column, the
       other controls end at its right edge.
 - [ ] Icon buttons that cannot act are hidden; list buttons that cannot act are
       disabled.
 - [ ] Deleting asks, with `danger: true`; the button says Delete, Remove or Clear as
       in "Words".
-- [ ] Works with the keyboard and the gamepad, without hovering.
+- [ ] Works with the keyboard and the gamepad, without hovering. With the pad, on
+      the page changed: right from the menu lands on the first control (top, then
+      left); every control can be reached and left in every direction (a slider: `A`
+      to change it); `A` acts, `B` goes back or puts the value back; a text or number
+      field opens the right keyboard. These were found only by trying with the pad:
+      say in the hand-over which of them were not tried.
 - [ ] Fits the narrowest window (960 px): nothing cut without its tooltip.
 - [ ] `tools\options-shots.ps1 -Base origin/nightly`: only the pages you meant to
       change are different.

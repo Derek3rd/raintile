@@ -1602,6 +1602,21 @@ namespace RaintileOptions
         }
 
         // The scroll viewer inside a control's template (the strip scrolls with the wheel)
+        // The room of the vertical scrollbar kept also when there is none, so the
+        // content's width never changes with it. The preview follows the width of
+        // its column and with it its height: without this, at some window sizes
+        // the bar showed (narrower: the preview shorter, everything fits), hid
+        // (wider: taller, it no longer fits) and showed again, over and over.
+        static void KeepScrollBarRoom(ScrollViewer sv, FrameworkElement content)
+        {
+            content.Margin = T(content.Margin.Left, content.Margin.Top, Gap.ScrollBar, content.Margin.Bottom);
+            sv.ScrollChanged += (s, e) =>
+            {
+                double right = sv.ComputedVerticalScrollBarVisibility == Visibility.Visible ? 0 : Gap.ScrollBar;
+                if (content.Margin.Right != right) content.Margin = T(content.Margin.Left, content.Margin.Top, right, content.Margin.Bottom);
+            };
+        }
+
         static ScrollViewer FindScrollViewer(DependencyObject d)
         {
             var sv = d as ScrollViewer;
@@ -1852,6 +1867,7 @@ namespace RaintileOptions
             grid.Children.Add(leftScroll);
             previewCard = new Border { Style = ResStyle("Card"), Padding = T(Gap.CardPadding, Gap.Card, Gap.CardPadding, Gap.Card), VerticalAlignment = VerticalAlignment.Top };
             leftScroll.Content = previewCard;
+            KeepScrollBarRoom(leftScroll, previewCard);
             var left = NewPanel();
             previewCard.Child = left;
             previewColumn = left;
@@ -2077,6 +2093,7 @@ namespace RaintileOptions
             grid.Children.Add(sv);
             var details = NewPanel();
             sv.Content = details;
+            KeepScrollBarRoom(sv, details);
 
             // Imported game: read-only, can become a normal tile
             importedCard = NewCard("Imported game", "");

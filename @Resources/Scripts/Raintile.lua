@@ -2268,6 +2268,35 @@ function M.widgetMask(boxes, live)
 	end
 end
 
+-- The wheel: the highlight is drawn after every tile (HoverClip, above them):
+-- its container is cut by the tiles nearer the middle than the highlighted
+-- one, which are drawn over it, as M.widgetMask cuts the widgets; and it
+-- fades as its tile does towards the ends (WheelFade). x, y: where the
+-- highlight is, in the grid. Returns that fade. (Shape, the grid area, is
+-- set by setGridArea.)
+function M.hoverMask(x, y)
+	local f = M.wf or M.wheelFrame()
+	local d = math.abs((V.Horizontal and hover.gx or hover.gy) - pos)
+	local fade = 1 - V.WheelFade / 100 * math.min(1, d / math.max(0.5, f.half + 0.5))
+	local r = math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))
+	local n, ops = 1, { 'Combine Shape' }
+	for slot = 1, V.Slots do
+		local b, e = M.wboxes and M.wboxes[slot], M.wv[slot]
+		if b and e and math.abs(e.d) < d - 0.01 and math.abs(b[1] - x) < V.TileW and math.abs(b[2] - y) < V.TileH then
+			n = n + 1
+			set('HoverClip', 'Shape' .. n, string.format('Rectangle %d,%d,%d,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', b[1], b[2], V.TileW, V.TileH, r))
+			ops[#ops + 1] = 'Exclude Shape' .. n
+		end
+	end
+	if n > 1 then
+		n = n + 1
+		set('HoverClip', 'Shape' .. n, table.concat(ops, ' | '))
+	end
+	for j = n + 1, M.hoverShapes or 1 do set('HoverClip', 'Shape' .. j, '') end
+	M.hoverShapes = n
+	return fade
+end
+
 -- Time-based turn towards offset: WheelStepTime per tile (a little less each
 -- for several at once); a new target starts again from where it is
 function M.wheelAdvance()
@@ -4086,7 +4115,10 @@ local function placeSlots()
 		end
 		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
-	if V.Wheel then M.widgetMask(wboxes, wlive) end
+	if V.Wheel then
+		M.widgetMask(wboxes, wlive)
+		M.wboxes = wboxes -- (the highlight is cut by them: M.hoverMask)
+	end
 end
 
 local function placeHover()
@@ -4096,12 +4128,14 @@ local function placeHover()
 	end
 	local x, y = gridToPx(hover.gx, hover.gy)
 	x, y = x + hover.ox, y + hover.oy
+	-- the wheel: under the nearer tiles, faded as its tile
+	local a = V.Wheel and hover.a * M.hoverMask(x, y) or hover.a
 	set('TileHover', 'X', tostring(math.floor(x + 0.5)))
 	set('TileHover', 'Y', tostring(math.floor(y + 0.5)))
 	set('TileHover', 'Shape', string.format(
 		'Rectangle 1,1,%d,%d,%d | Fill Color %s | StrokeWidth 2 | Stroke Color %s',
 		math.floor(hover.w + 0.5) - 2, math.floor(hover.h + 0.5) - 2, math.max(0, V.TileRadius - 1),
-		fade(V.HoverColor, hover.a), fade(V.AccentColor, hover.a)))
+		fade(V.HoverColor, a), fade(V.AccentColor, a)))
 	show('TileHover', true)
 end
 

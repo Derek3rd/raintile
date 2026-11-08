@@ -455,6 +455,32 @@ function T.highlight_after_a_category_change()
 	t.clean(s)
 end
 
+-- The highlight on a side tile: its container cut by the tile nearer the
+-- middle that covers it (drawn over it), and faded as that side tile; on the
+-- middle tile nothing cuts it and it is not faded
+function T.highlight_under_the_nearer_tiles()
+	local s = wheel({ LauncherMode = 'Fullscreen', WheelHover = 'Highlight', WheelSpacing = 50, WheelFade = 60 })
+	local V = s:upvalue('V')
+	local k = s:upvalue('offset')
+	local clip = s.meters['hoverclip']
+	t.eq(clip:opt('Shape2', ''), '', 'the highlight on the middle tile is cut')
+	local function strokeAlpha()
+		local a = s.meters['tilehover']:opt('Shape', ''):match('Stroke Color %d+,%d+,%d+,(%d+)')
+		return tonumber(a or '0')
+	end
+	local middle = strokeAlpha()
+	t.ok(middle > 0, 'no highlight on the middle tile')
+	s:call('HoverTile(' .. slotOf(s, k + 1) .. ')')
+	t.ok(clip:opt('Shape2', ''):find('^Rectangle'), 'the highlight on a side tile is not cut by the middle one')
+	local combine = clip:opt('Shape3', '')
+	t.ok(combine:find('Combine Shape') and combine:find('Exclude Shape2'), 'no combined shape: ' .. combine)
+	t.ok(strokeAlpha() < middle, 'the highlight on a side tile is not faded')
+	-- back on the middle tile: nothing cuts it
+	s:call('HoverTile(' .. slotOf(s, k) .. ')')
+	t.eq(clip:opt('Shape2', ''), '', 'the highlight back on the middle tile is still cut')
+	t.clean(s)
+end
+
 -- The mouse wheel notch (ScrollStep) turns the wheel by that many tiles
 function T.scroll_step_in_the_wheel()
 	local s, c = wheel({ LauncherMode = 'Fullscreen', ScrollStep = 2 })

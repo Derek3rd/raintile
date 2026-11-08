@@ -31,10 +31,11 @@ namespace RaintileOptions
         int gridScroll; // first line shown in the grid preview
         // moved or sized by hand: where it was put (null: beside Options)
         Rect? previewFree;
-        bool previewWanted = true;
+        bool previewWanted = true, previewMax;
 
         // open by default; the choice and the place are kept for the next
-        // time: "1" or "0", then "x y w h" when it was let go of Options
+        // time: "1" or "0", then "x y w h" when it was let go of Options, then
+        // "max" when it was maximized (x y w h: where it goes back to)
         static string PreviewStateFile { get { return System.IO.Path.Combine(Core.Generated, "OptionsPreview.txt"); } }
         void LoadPreviewState()
         {
@@ -45,7 +46,8 @@ namespace RaintileOptions
                 previewWanted = p[0] != "0";
                 double x, y, w, h;
                 var inv = System.Globalization.CultureInfo.InvariantCulture;
-                if (p.Length == 5 && double.TryParse(p[1], System.Globalization.NumberStyles.Float, inv, out x)
+                previewMax = p.Length == 6 && p[5] == "max";
+                if (p.Length >= 5 && double.TryParse(p[1], System.Globalization.NumberStyles.Float, inv, out x)
                     && double.TryParse(p[2], System.Globalization.NumberStyles.Float, inv, out y)
                     && double.TryParse(p[3], System.Globalization.NumberStyles.Float, inv, out w)
                     && double.TryParse(p[4], System.Globalization.NumberStyles.Float, inv, out h) && w > 50 && h > 50)
@@ -68,6 +70,7 @@ namespace RaintileOptions
             {
                 var r = previewFree.Value;
                 text += string.Format(inv, " {0:0} {1:0} {2:0} {3:0}", r.X, r.Y, r.Width, r.Height);
+                if (previewMax) text += " max";
             }
             try { File.WriteAllText(PreviewStateFile, text); } catch { }
         }
@@ -84,7 +87,9 @@ namespace RaintileOptions
             };
             win.LocationChanged += (s, e) => PlacePreview();
             win.SizeChanged += (s, e) => PlacePreview();
-            win.StateChanged += (s, e) => { if (previewWin != null) previewWin.Visibility = win.WindowState == WindowState.Minimized ? Visibility.Hidden : Visibility.Visible; PlacePreview(); };
+            // (minimized with Options and back by Windows itself: an owned window.
+            // Shown again by hand it failed once maximized, as it is not activated.)
+            win.StateChanged += (s, e) => PlacePreview();
             win.Closed += (s, e) => { if (previewWin != null) previewWin.Close(); };
             win.ContentRendered += (s, e) => { if (previewWin == null && previewWanted) OpenPreview(); };
         }
@@ -115,7 +120,13 @@ namespace RaintileOptions
             AddTo(head, lbl); AddTo(head, wheelCatBox);
             // let go of Options (moved or sized by hand): back beside it
             btnAttach = NewButton("Attach", "", "Put the preview back beside the Options window, following it.");
-            btnAttach.Click += (s, e) => { previewFree = null; SavePreviewState(); UpdateAttachButton(); PlacePreview(); };
+            btnAttach.Click += (s, e) =>
+            {
+                previewFree = null;
+                previewMax = false;
+                if (previewWin.WindowState != WindowState.Normal) previewWin.WindowState = WindowState.Normal;
+                SavePreviewState(); UpdateAttachButton(); PlacePreview();
+            };
             root.Children.Add(head);
             // at the bottom: the hint, and Attach on the right
             var foot = new DockPanel { Margin = T(0, Gap.Control, 0, 0) };
@@ -168,12 +179,22 @@ namespace RaintileOptions
                     return IntPtr.Zero;
                 });
             };
+            // maximized: let go of Options, back where it was when restored
+            w.StateChanged += (s, e) =>
+            {
+                if (w.WindowState == WindowState.Minimized) return;
+                previewMax = w.WindowState == WindowState.Maximized;
+                if (previewMax || !previewFree.HasValue) previewFree = w.RestoreBounds;
+                SavePreviewState();
+                UpdateAttachButton();
+            };
             w.Closed += (s, e) => { previewWin = null; wheelCanvas = null; wheelCatBox = null; btnAttach = null; UpdatePreviewButton(); };
             previewWin = w;
             LoadWheelCategories();
             if (currentFile != null) PreviewFollow(currentFile);
             PlacePreview();
             w.Show();
+            if (previewMax && previewFree.HasValue) w.WindowState = WindowState.Maximized;
             DrawWheel();
             UpdatePreviewButton();
             UpdateAttachButton();
@@ -201,6 +222,7 @@ namespace RaintileOptions
         void PlacePreview()
         {
             if (previewWin == null || win.WindowState == WindowState.Minimized) return;
+            if (previewWin.WindowState != WindowState.Normal) return;   // maximized: where Windows put it
             if (previewFree.HasValue)
             {
                 var r = previewFree.Value;

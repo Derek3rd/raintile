@@ -1245,7 +1245,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 18
+local GRID_VERSION = 19
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1492,6 +1492,17 @@ local function writeGrid(path, sig, files)
 		w('')
 	end
 
+	-- The wheel: a container drawn after the tiles' own (TileBox), so the
+	-- widgets are drawn over the tiles (inside GridClip, drawn before those,
+	-- they were under every tile)
+	local wcont = V.Wheel and 'Container=WidgetClip' or nil
+	if wcont then
+		w('[WidgetClip]')
+		w('Meter=Shape')
+		w('Shape=Rectangle 0,0,1,1 | Fill Color 0,0,0,255 | StrokeWidth 0')
+		w('')
+	end
+
 	-- Dashboard widgets: graph and bars below, then the texts (placed by the
 	-- script over the tile of the widget)
 	for i, t in ipairs(widgets) do
@@ -1499,12 +1510,14 @@ local function writeGrid(path, sig, files)
 			w('[W' .. i .. part .. ']')
 			w('Meter=Shape')
 			w('MeterStyle=StyleWidgetShape')
+			if wcont then w(wcont) end
 			w('')
 		end
 		for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List' }) do
 			w('[W' .. i .. part .. ']')
 			w('Meter=String')
 			w('MeterStyle=StyleWidgetText')
+			if wcont then w(wcont) end
 			if part == 'Value' then w('FontWeight=600') end
 			w('')
 		end
@@ -1514,13 +1527,14 @@ local function writeGrid(path, sig, files)
 				w('[W' .. i .. 'RowHit' .. k .. ']')
 				w('Meter=Shape')
 				w('MeterStyle=StyleWidgetShape')
+				if wcont then w(wcont) end
 				w('MouseOverAction=[!CommandMeasure MeasureScript "HoverPart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
 				w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeavePart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
 				w('LeftMouseUpAction=[!CommandMeasure MeasureScript "WidgetRowClick(' .. i .. ',' .. k .. ')"]')
 				w('')
 				w('[W' .. i .. 'RowIcon' .. k .. ']')
 				w('Meter=Image')
-				w('Container=GridClip')
+				w(wcont or 'Container=GridClip')
 				w('PreserveAspectRatio=1')
 				w('Hidden=1')
 				w('')
@@ -1528,6 +1542,7 @@ local function writeGrid(path, sig, files)
 					w('[W' .. i .. part .. k .. ']')
 					w('Meter=String')
 					w('MeterStyle=StyleWidgetText')
+					if wcont then w(wcont) end
 					if part == 'RowName' then w('FontWeight=600') end
 					w('')
 				end
@@ -1929,6 +1944,9 @@ function M.wheelFrame()
 	f.step = (V.TileW * V.WheelSpacing / 100) / R
 	f.half = (V.WheelVisible - 1) / 2
 	M.wf = f
+	set('WidgetClip', 'X', tostring(math.floor(V.PadX)))
+	set('WidgetClip', 'Y', tostring(math.floor(V.GridY)))
+	set('WidgetClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', math.floor(W), math.floor(H)))
 	return f
 end
 
@@ -1975,7 +1993,9 @@ function M.wheelAssign()
 				-- logos only (WheelIconsOnly): the tile's colour behind the logo
 				set('Tile' .. slot, 'ImageName', (V.WheelIconsOnly and t.logo) and '' or (t.background or ''))
 				if t.logo then set('TileIcon' .. slot, 'ImageName', t.logo) end
-				if t.label then set('TileLabel' .. slot, 'Text', t.label) end
+				-- (a widget away from the middle is a plain tile: its title)
+				local text = t.label or (t.widget and (t.widget.title or t.name))
+				if text then set('TileLabel' .. slot, 'Text', text) end
 			end
 		end
 	end
@@ -3579,6 +3599,16 @@ local function placeSlots()
 	dash.shown = {}
 	dash.skinsWanted = {}
 	dash.customShown = {}
+	-- the wheel repeating few tiles: a widget has one set of meters, for the
+	-- copy nearest the middle
+	local nearest = {}
+	if V.Wheel then
+		for slot, e in pairs(M.wv) do
+			local t = slot <= V.Slots and tileAt(slot)
+			local n = t and t.widget and nearest[t.widget.idx]
+			if t and t.widget and (not n or math.abs(e.d) < math.abs(M.wv[n].d)) then nearest[t.widget.idx] = slot end
+		end
+	end
 	for slot = 1, slots do
 		local inUse = slot <= V.Slots -- slots beyond the category grid: hidden
 		local t = inUse and tileAt(slot)
@@ -3588,6 +3618,10 @@ local function placeSlots()
 		if e then extra = e.line >= base + visibleLines() end
 		local wv = V.Wheel and M.wv[slot]
 		if V.Wheel then extra = false end
+		-- a widget is live (drawn over the tiles) in the middle, or anywhere when
+		-- the tiles do not overlap (WheelSpacing 100 or more); elsewhere a plain tile
+		local live = not wv or ((V.WheelSpacing >= 100 or math.abs(wv.d) < 0.5)
+			and not (t and t.widget and nearest[t.widget.idx] ~= slot))
 		local visible = t and (not extra or frac > 0) and (not V.Wheel or (wv and wv.a > 0.01))
 		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
 		local infoMeter = 'TileInfo' .. slot
@@ -3660,8 +3694,8 @@ local function placeSlots()
 				set(icon, 'ColorMatrix2', rows[2])
 				set(icon, 'ColorMatrix3', rows[3])
 			end
-			local hasLabel = V.ShowLabels and t.label ~= nil
-				and (not wv or V.WheelLabelsAll or math.abs(wv.d) < 0.5)
+			local hasLabel = V.ShowLabels and (t.label ~= nil or (t.widget and not live))
+				and (not wv or V.WheelLabelsAll or math.abs(wv.d) < 0.5 or (t.widget and not live))
 			if hasLabel then
 				set(label, 'W', tostring(V.TileW - 2 * V.LabelPad))
 				set(label, 'X', tostring(x + V.LabelPad))
@@ -3718,9 +3752,9 @@ local function placeSlots()
 			show('TileUpd' .. slot, updText ~= nil and updText ~= false)
 			show(tile, true)
 			show(icon, t.logo ~= nil and not t.widget)
-			show(label, hasLabel and not t.widget)
+			show(label, hasLabel and (not t.widget or not live))
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
-			if t.widget then D.placeWidget(t, x + wx, y + wy, f) end
+			if t.widget and live then D.placeWidget(t, x + wx, y + wy, f) end
 			if not wv then rects[#rects + 1] = { x, y, V.TileW, V.TileH } end
 			-- cut by the edge: how much, for each line across the scroll (a
 			-- row, or a column when the grid scrolls vertically) it covers

@@ -351,4 +351,51 @@ function T.menu_bar()
 	t.clean(s)
 end
 
+-- Widgets: in their own container, drawn over the tiles (in GridClip they
+-- were under every tile, so the one in the middle was covered); live in the
+-- middle, a plain tile with its name at the sides, where tiles overlap
+local function dashboard(settings)
+	settings.LauncherMode, settings.DockSide = 'Dock', 'Left'
+	local s = wheel(settings)
+	for i, c in ipairs(s:upvalue('cats')) do
+		if c.name == 'Dashboard' then s:call('SetCategory(' .. i .. ')') end
+	end
+	t.clean(s)
+	local live = 0
+	for name, m in pairs(s.meters) do
+		if name:match('^w%d+title$') and not m.hidden then
+			live = live + 1
+			t.eq(m:opt('Container', ''), 'WidgetClip', 'container of ' .. name)
+		end
+	end
+	return s, live
+end
+
+function T.widgets_over_the_tiles()
+	local s, live = dashboard({})
+	t.ok(s.meters.widgetclip, 'no WidgetClip container in the wheel')
+	t.eq(live, 1, 'widgets drawn (only the one in the middle)')
+	local pos = s:upvalue('pos')
+	local mid, side = slotOf(s, pos), slotOf(s, pos + 1)
+	t.eq(s.meters['tilelabel' .. mid].hidden, true, 'name of the widget in the middle')
+	t.eq(s.meters['tilelabel' .. side].hidden, false, 'name of the widget beside it')
+	-- tiles apart: every widget is live
+	s, live = dashboard({ WheelSpacing = 110 })
+	t.ok(live > 1, 'tiles apart: only ' .. live .. ' widget drawn')
+	-- a widget repeated (few tiles): its meters with one copy, the others named
+	local M = s:upvalue('M')
+	local copies, named = {}, 0
+	for slot, e in pairs(M.wv) do
+		local tile = s:upvalue('tileAt')(slot)
+		if tile and tile.widget and not s.meters['tile' .. slot].hidden and num(s.meters['tile' .. slot], 'ImageAlpha') ~= 0 then
+			copies[tile.widget.idx] = (copies[tile.widget.idx] or 0) + 1
+			if not s.meters['tilelabel' .. slot].hidden then named = named + 1 end
+		end
+	end
+	local extra = 0
+	for _, n in pairs(copies) do extra = extra + n - 1 end
+	t.ok(extra > 0, 'no widget repeated in the test')
+	t.ok(named >= extra, 'repeated widgets without their name: ' .. named .. ' of ' .. extra)
+end
+
 return T

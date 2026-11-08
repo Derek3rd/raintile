@@ -40,7 +40,7 @@ namespace RaintileOptions
         Button btnSave;
         string version = "", information = "";
         readonly Dictionary<string, UIElement> pages = new Dictionary<string, UIElement>();
-        readonly Dictionary<string, bool> navOpen = new Dictionary<string, bool> { { "tiles", true }, { "toprow", true }, { "keybindings", true }, { "categories", true } };
+        readonly Dictionary<string, bool> navOpen = new Dictionary<string, bool> { { "tiles", true }, { "toprow", true }, { "keybindings", true }, { "import", true }, { "categories", true } };
         bool navBuilding;
         string navCurrent, navPending;
         bool[] navDots;   // new found / missing, update
@@ -176,7 +176,7 @@ namespace RaintileOptions
             // The menu is built before the window appears, the page right after
             if (openPage == "info") BuildNav("");
             else if (editTile != null) { navOpen["categories"] = true; BuildNav("cat:" + editTile[0]); }
-            else BuildNav(openPage == "import" ? "page:import" : "page:general");
+            else BuildNav(openPage == "import" ? "page:found" : "page:general");
             AddStartStep("menu");
             UpdateDirty();
             win.ShowDialog();

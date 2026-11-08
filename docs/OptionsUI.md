@@ -42,7 +42,9 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 | Shared font and colours | Theme |
 | Effects, appearing tiles, smoothing, tile launch | Animations |
 | Opening keys, tile hot keys; navigation keys; the gamepad | Keybindings; > Keyboard; > Gamepad |
-| Widgets, Import, Categories | their pages |
+| Where to look for games and apps, your folders, where they go | Import |
+| The games and apps found, the tiles no longer installed | Import > Found |
+| Widgets, Categories | their pages |
 | Performance, diagnostics | Advanced |
 | The updates (check, channel) with the installed and latest version | Info > Updates |
 

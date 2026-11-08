@@ -21,6 +21,7 @@ namespace RaintileOptions
         public string Kind;
         public CheckBox Box;
         public Panel Panel;
+        public List<CheckBox> Boxes;   // stores: one switch per store
         public TextBox Text;
         public Button Swatch, Button, Clear;
         public Control Input;   // text, font, category, secret, choice
@@ -219,7 +220,7 @@ namespace RaintileOptions
                     case "secret": ((PasswordBox)c.Input).Password = Core.UnprotectSecret(v); break;
                     case "category": ((ComboBox)c.Input).SelectedItem = v; break;
                     case "stores":
-                        foreach (CheckBox cb in c.Panel.Children) cb.IsChecked = v.Split('|').Contains(((string[])cb.Tag)[1]);
+                        foreach (var cb in c.Boxes) cb.IsChecked = v.Split('|').Select(x => x.Trim().Replace(".", "")).Contains(((string[])cb.Tag)[1]);
                         break;
                     case "pad":
                         foreach (ToggleButton tb in c.Panel.Children) tb.IsChecked = Regex.Split(v, @"\s+").Contains(((string[])tb.Tag)[1]);
@@ -343,22 +344,24 @@ namespace RaintileOptions
             return cb;
         }
 
-        UIElement NewStoresControl(string key)
+        // Where to look (ImportStores, "Steam|Epic|..."): a row per store with its
+        // switch, as any other setting, the stores in a fixed order
+        List<UIElement> NewStoresRows(string key)
         {
-            var wp = new WrapPanel { MaxWidth = FieldWidth.Wrap, HorizontalAlignment = HorizontalAlignment.Right };
+            var rows = new List<UIElement>();
+            var boxes = new List<CheckBox>();
             var current = V(key).Split('|').Select(x => x.Trim().Replace(".", "")).ToList();
             foreach (var store in Schema.SOURCES)
             {
-                var cb = new CheckBox { Content = Schema.STORE_LABELS[store], Margin = T(Gap.Indent, Gap.Line, 0, Gap.Line), Tag = new[] { key, store }, IsChecked = current.Contains(store) };
-                cb.Click += (s, e) =>
-                {
-                    var on = wp.Children.OfType<CheckBox>().Where(x => x.IsChecked == true).Select(x => ((string[])x.Tag)[1]);
-                    SetValue(key, string.Join("|", on));
-                };
-                wp.Children.Add(cb);
+                var cb = new CheckBox { Tag = new[] { key, store }, IsChecked = current.Contains(store), HorizontalAlignment = HorizontalAlignment.Right };
+                cb.Click += (s, e) => SetValue(key, string.Join("|", boxes.Where(x => x.IsChecked == true).Select(x => ((string[])x.Tag)[1])));
+                boxes.Add(cb);
+                string help;
+                if (!Schema.STORE_HELP.TryGetValue(store, out help)) help = "Games";
+                rows.Add(NewRow(Schema.STORE_LABELS[store], help, cb, null));
             }
-            ctl[key] = new Ctl { Kind = "stores", Panel = wp };
-            return wp;
+            ctl[key] = new Ctl { Kind = "stores", Boxes = boxes };
+            return rows;
         }
 
         UIElement NewPadControl(string key)
@@ -632,7 +635,6 @@ namespace RaintileOptions
                 case "secret": control = NewSecretControl(k); break;
                 case "font": control = NewFontControl(k); break;
                 case "category": control = NewCategoryControl(k); break;
-                case "stores": control = NewStoresControl(k); break;
                 case "pad": control = NewPadControl(k); break;
                 case "key": control = NewKeyControl(k); break;
                 case "combo": control = NewKeyControl(k, true); break;
@@ -718,6 +720,11 @@ namespace RaintileOptions
                     foreach (var item in group.Items)
                     {
                         if (item == sw || item == pageSw) { rows++; continue; }
+                        if (item.Kind == "stores")
+                        {
+                            foreach (var r in NewStoresRows(item.Key)) { CardPanel(card).Children.Add(r); rows++; }
+                            continue;
+                        }
                         var row = NewItemRow(item);
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
                         var b = row as Border;

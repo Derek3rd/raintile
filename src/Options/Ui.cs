@@ -4,10 +4,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Markup;
 using System.Windows.Media;
@@ -41,8 +43,11 @@ namespace RaintileOptions
         public const int Up = 0xE74A, Down = 0xE74B, Left = 0xE72B, Right = 0xE72A;   // move an entry
         public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
         public const int Pin = 0xE718;      // marks a pinned tile (not a button)
-        // the pad button that presses a button, before its text while the pad is in use (AddPadHint)
-        public const int PadB = 0xF094, PadStart = 0xEDE3;
+        // the pad button that presses a button, before its text while the pad is in use
+        // (AddPadHint), and on the keys and the hint line of the on-screen keyboard
+        public const int PadA = 0xF093, PadB = 0xF094, PadY = 0xF095, PadX = 0xF096, PadStart = 0xEDE3;
+        public const int PadLT = 0xF10A, PadRT = 0xF10B, PadLB = 0xF10C, PadRB = 0xF10D;
+        public static readonly FontFamily Font = new FontFamily("Segoe MDL2 Assets");
     }
 
     // Type sizes
@@ -85,7 +90,8 @@ namespace RaintileOptions
         public const double S = 120;     // numbers (with their unit inside), sizes
         public const double M = 220;     // short fields outside rows (filters, lists)
         public const double L = 300;
-        public const double Wrap = 470;  // panels of segments or switches
+        public const double Wrap = 470;  // panels of chips or switches
+        public const double Unit = 72;   // the px / % combo after a size box
         // the control column of side-by-side rows: one width for every page, half
         // the room of a card between these two (UpdateControlColumn); text fields
         // and sliders fill it
@@ -123,13 +129,15 @@ namespace RaintileOptions
         }
     }
 
-    // A length in pixels or in % of the screen: text box + px / % (NewSizeField)
+    // A length in pixels or in % of the screen: text box + px / % combo (NewSizeField)
     public class SizeField
     {
         public TextBox Box;
-        public RadioButton Px, Pct;
+        public ComboBox Unit;   // item 0 px, item 1 %
         public FrameworkElement Root;
         public bool Sync;
+
+        public bool IsPct { get { return Unit.SelectedIndex == 1; } }
 
         public void Show(string value)
         {
@@ -137,11 +145,9 @@ namespace RaintileOptions
             try
             {
                 string v = (value ?? "").Trim();
-                bool pct = v.EndsWith("%");
                 Box.Text = v.TrimEnd('%').Trim();
                 Box.ClearValue(Control.BorderBrushProperty);   // a value put in is valid again
-                Pct.IsChecked = pct;
-                Px.IsChecked = !pct;
+                Unit.SelectedIndex = v.EndsWith("%") ? 1 : 0;
             }
             finally { Sync = false; }
         }
@@ -149,7 +155,7 @@ namespace RaintileOptions
         // as written to the file: "" when empty
         public string Value
         {
-            get { string t = Box.Text.Trim(); return t == "" ? "" : t + (Pct.IsChecked == true ? "%" : ""); }
+            get { string t = Box.Text.Trim(); return t == "" ? "" : t + (IsPct ? "%" : ""); }
         }
     }
 
@@ -243,7 +249,7 @@ namespace RaintileOptions
         public TextBlock NewGlyph(int code, double size = 14)
         {
             var t = NewText(((char)code).ToString(), size);
-            t.FontFamily = new FontFamily("Segoe MDL2 Assets");
+            t.FontFamily = Glyph.Font;
             t.VerticalAlignment = VerticalAlignment.Center;
             return t;
         }
@@ -370,6 +376,7 @@ namespace RaintileOptions
             // the unit inside the box, on the right (UnitBox style: the unit is the Tag)
             tb.Style = ResStyle("UnitBox");
             if (!string.IsNullOrEmpty(unit)) tb.Tag = unit;
+            NumericOnly(tb, min < 0, step != Math.Floor(step));
             f.Slider = sl; f.Box = tb; f.Root = g;
             sl.ValueChanged += (s, e) =>
             {
@@ -400,18 +407,19 @@ namespace RaintileOptions
             return f;
         }
 
-        // Text box + px / % for a length; switching the unit converts the number on the
-        // main screen (axis "W" or "H"). 'changed' gets the value as written ("" when empty).
+        // Text box + px / % combo for a length; switching the unit converts the number on
+        // the main screen (axis "W" or "H"). 'changed' gets the value as written ("" when empty).
         public SizeField NewSizeField(string axis, Action<string> changed)
         {
             var f = new SizeField();
             var sp = NewPanel(Orientation.Horizontal);
             var tb = new TextBox { Width = FieldWidth.S, TextAlignment = TextAlignment.Right, Margin = T(0, 0, Gap.Control, 0), VerticalAlignment = VerticalAlignment.Center };
-            string group = "size_" + Guid.NewGuid().ToString("N");
-            var px = new RadioButton { Style = ResStyle("Segment"), Content = "px", GroupName = group, MinWidth = 42, IsChecked = true };
-            var pct = new RadioButton { Style = ResStyle("Segment"), Content = "%", GroupName = group, MinWidth = 42 };
-            AddTo(sp, tb); AddTo(sp, px); AddTo(sp, pct);
-            f.Box = tb; f.Px = px; f.Pct = pct; f.Root = sp;
+            NumericOnly(tb, false, true);   // a length: never below 0
+            var unit = NewChoiceBox(new[] { new[] { "px", "px" }, new[] { "%", "%" } }, "px", null);
+            unit.Width = FieldWidth.Unit;
+            unit.VerticalAlignment = VerticalAlignment.Center;
+            AddTo(sp, tb); AddTo(sp, unit);
+            f.Box = tb; f.Unit = unit; f.Root = sp;
             tb.TextChanged += (s, e) =>
             {
                 if (f.Sync) return;
@@ -420,22 +428,114 @@ namespace RaintileOptions
                 MarkInvalid(tb, bad);
                 if (!bad) changed(f.Value);
             };
-            RoutedEventHandler unitClick = (s, e) =>
+            unit.SelectionChanged += (s, e) =>
             {
-                bool toPct = pct.IsChecked == true;
+                if (f.Sync) return;
                 int full = axis == "W" ? screenPx[0] : screenPx[1];
                 string t = tb.Text.Trim();
                 double n;
                 if (full > 0 && Core.TryNumber(t, out n))
-                    t = toPct ? Core.FormatNumber(n * 100 / full, 0.01) : Core.FormatNumber(n * full / 100, 1);
+                    t = f.IsPct ? Core.FormatNumber(n * 100 / full, 0.01) : Core.FormatNumber(n * full / 100, 1);
                 f.Sync = true;
                 tb.Text = t;
                 f.Sync = false;
                 changed(f.Value);
             };
-            px.Click += unitClick;
-            pct.Click += unitClick;
             return f;
+        }
+
+        // One of a fixed set (docs/OptionsUI.md, 3): a combo of { value, label } pairs,
+        // 'current' selected; 'changed' (may be null) gets the value picked. Callers
+        // that put a value in (SelectChoice) keep their own guard against the echo.
+        public static ComboBox NewChoiceBox(IEnumerable<string[]> choices, string current, Action<string> changed)
+        {
+            var cb = new ComboBox();
+            foreach (var c in choices) cb.Items.Add(new ComboBoxItem { Content = c[1], Tag = c[0] });
+            if (!SelectChoice(cb, current) && cb.Items.Count > 0) cb.SelectedIndex = 0;
+            if (changed != null)
+                cb.SelectionChanged += (s, e) => { string v = ChoiceValue(cb); if (v != null) changed(v); };
+            return cb;
+        }
+
+        // Selects the item with this value (case-insensitive); false when there is none
+        public static bool SelectChoice(ComboBox cb, string value)
+        {
+            foreach (var o in cb.Items)
+            {
+                var i = o as ComboBoxItem;
+                if (i != null && string.Equals(i.Tag as string, value ?? "", StringComparison.OrdinalIgnoreCase))
+                {
+                    cb.SelectedItem = i;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // The value of the item selected, null when none
+        public static string ChoiceValue(ComboBox cb)
+        {
+            var i = cb.SelectedItem as ComboBoxItem;
+            return i != null ? i.Tag as string : null;
+        }
+
+        // The characters a box of NumericOnly takes, null for any other field (the
+        // on-screen keyboard shows its number pad with them)
+        static readonly ConditionalWeakTable<TextBox, string> numericChars = new ConditionalWeakTable<TextBox, string>();
+
+        public static string NumericChars(FrameworkElement field)
+        {
+            string chars;
+            var tb = field as TextBox;
+            return tb != null && numericChars.TryGetValue(tb, out chars) ? chars : null;
+        }
+
+        // Text a number box can hold while it is written: digits, the minus sign once
+        // and at the start, the decimal point once, each only if 'chars' has it.
+        // The keyboard, a paste and the on-screen keyboard go through it.
+        public static bool IsPartialNumber(string chars, string text)
+        {
+            int i = text.Length > 0 && text[0] == '-' && chars.IndexOf('-') >= 0 ? 1 : 0;
+            bool dot = false;
+            for (; i < text.Length; i++)
+            {
+                char ch = text[i];
+                if (ch >= '0' && ch <= '9') continue;
+                if (ch == '.' && !dot && chars.IndexOf('.') >= 0) { dot = true; continue; }
+                return false;
+            }
+            return true;
+        }
+
+        // A box for numbers only: typing and pasting change it only into what can
+        // still be a number (IsPartialNumber; a comma becomes the decimal point).
+        // What is not a number yet (a lone "-") gets MarkInvalid. A value that was
+        // not a number to begin with (a formula) can only be deleted.
+        public static void NumericOnly(TextBox tb, bool negative, bool decimals)
+        {
+            string chars = "0123456789" + (decimals ? "." : "") + (negative ? "-" : "");
+            numericChars.Remove(tb);
+            numericChars.Add(tb, chars);
+            // the text with the selection replaced by 's'
+            Func<string, string> after = s => tb.Text.Remove(tb.SelectionStart, tb.SelectionLength).Insert(tb.SelectionStart, s);
+            InputMethod.SetIsInputMethodEnabled(tb, false);
+            tb.PreviewTextInput += (s, e) =>
+            {
+                string t = decimals && e.Text == "," ? "." : e.Text;
+                e.Handled = true;
+                if (!IsPartialNumber(chars, after(t))) return;
+                if (t == e.Text) { e.Handled = false; return; }
+                int at = tb.SelectionStart;
+                tb.SelectedText = t;
+                tb.CaretIndex = at + t.Length;
+            };
+            // Space does not come as text input
+            tb.PreviewKeyDown += (s, e) => { if (e.Key == Key.Space) e.Handled = true; };
+            DataObject.AddPastingHandler(tb, (s, e) =>
+            {
+                var text = e.DataObject.GetDataPresent(DataFormats.UnicodeText) ? e.DataObject.GetData(DataFormats.UnicodeText) as string : null;
+                if (text == null || !IsPartialNumber(chars, after(text.Trim()))) e.CancelCommand();
+            });
         }
 
         // Buttons of the same width filling a row, 8 apart (docs/OptionsUI.md, 4)

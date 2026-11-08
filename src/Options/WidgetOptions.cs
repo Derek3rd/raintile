@@ -160,16 +160,15 @@ namespace RaintileOptions
                         break;
                     default:
                         var tb = new TextBox { Text = v };
+                        if (def.Kind == "number") NumericOnly(tb, true, true);
                         tb.LostFocus += (s, e) =>
                         {
                             string t = tb.Text.Trim();
                             double n;
-                            if (def.Kind == "number" && t != "" && !double.TryParse(t, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out n))
-                            {
-                                ShowDialog("Raintile", def.Label + ": a number, please.");
-                                return;
-                            }
-                            save(def.Name, t);
+                            // what is still not a number (a lone "-") keeps the red border and is not saved
+                            bool bad = def.Kind == "number" && t != "" && !Core.TryNumber(t, out n);
+                            MarkInvalid(tb, bad);
+                            if (!bad) save(def.Name, t);
                         };
                         control = tb;
                         break;

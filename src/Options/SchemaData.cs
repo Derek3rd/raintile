@@ -73,9 +73,9 @@ namespace RaintileOptions
                 {
                     new Item { Kind = "int", Key = "NX", Label = "Columns", Help = "", Min = 1.0, Max = 12.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "int", Key = "NY", Label = "Rows", Help = "", Min = 1.0, Max = 8.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "size", Key = "Gap", Label = "Space between tiles", Help = "", Axis = "H" },
                     new Item { Kind = "choice", Key = "ScrollDir", Label = "Scroll direction", Help = "", Choices = new List<string[]> { new[] { "V", "Vertical" }, new[] { "H", "Horizontal" } } },
                     new Item { Kind = "int", Key = "ScrollStep", Label = "Rows per mouse wheel notch", Help = "", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "" },
-                    new Item { Kind = "size", Key = "Gap", Label = "Space between tiles", Help = "", Axis = "H" },
                     new Item { Kind = "bool", Key = "EdgeFade", Label = "Fade at the edge of the grid", Help = "Tiles cut by the edge (e.g. a tall tile only partly on screen) fade into the background there, to show they go on." },
                 } },
                 new Group { Title = "Scrollbar", Help = null, Items = new List<Item>
@@ -92,9 +92,9 @@ namespace RaintileOptions
                     new Item { Kind = "choice", Key = "WheelAxis", Label = "Direction", Help = "Auto: along the side when docked, across otherwise.", Choices = new List<string[]> { new[] { "Auto", "Auto" }, new[] { "Vertical", "Vertical" }, new[] { "Horizontal", "Horizontal" } } },
                     new Item { Kind = "choice", Key = "WheelCurve", Label = "Curve", Help = "", Choices = new List<string[]> { new[] { "Out", "Bulging towards the screen" }, new[] { "In", "Hollow" } } },
                     new Item { Kind = "int", Key = "WheelRadius", Label = "Radius", Help = "", Min = 25.0, Max = 300.0, Step = 5.0, Unit = "%" },
-                    new Item { Kind = "int", Key = "WheelSpacing", Label = "Space between tiles", Help = "Under 100 the tiles overlap; the middle one stays on top.", Min = 30.0, Max = 160.0, Step = 2.0, Unit = "%" },
                     new Item { Kind = "int", Key = "WheelAnchor", Label = "Place of the selected tile", Help = "Across the launcher, from its docked side.", Min = 10.0, Max = 90.0, Step = 1.0, Unit = "%" },
                     new Item { Kind = "int", Key = "WheelTileSize", Label = "Tile size", Help = "", Min = 8.0, Max = 40.0, Step = 1.0, Unit = "%" },
+                    new Item { Kind = "int", Key = "WheelSpacing", Label = "Space between tiles", Help = "Under 100 the tiles overlap; the middle one stays on top.", Min = 30.0, Max = 160.0, Step = 2.0, Unit = "%" },
                     new Item { Kind = "int", Key = "WheelVisible", Label = "Tiles shown", Help = "", Min = 3.0, Max = 15.0, Step = 2.0, Unit = "" },
                     new Item { Kind = "int", Key = "WheelFade", Label = "Fade at the ends", Help = "", Min = 0.0, Max = 90.0, Step = 1.0, Unit = "%" },
                     new Item { Kind = "choice", Key = "WheelLabels", Label = "Names", Help = "", Choices = new List<string[]> { new[] { "Center", "Middle tile only" }, new[] { "All", "All tiles" } } },
@@ -152,18 +152,18 @@ namespace RaintileOptions
                 new Group { Title = "Category menu", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "choice", Key = "MenuMode", Label = "Show", Help = "A category without an icon always shows its name.", Choices = new List<string[]> { new[] { "IconText", "Icon and text" }, new[] { "Icon", "Icon only" }, new[] { "Text", "Text only" } } },
-                    new Item { Kind = "int", Key = "MenuFontSize", Label = "Menu font size", Help = "", Min = 6.0, Max = 40.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "size", Key = "MenuH", Label = "Height", Help = "", Axis = "H" },
+                    new Item { Kind = "int", Key = "MenuFontSize", Label = "Menu font size", Help = "", Min = 6.0, Max = 40.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "size", Key = "MenuIconSize", Label = "Icon size", Help = "", Axis = "H" },
                     new Item { Kind = "size", Key = "MenuIconGap", Label = "Space between icon and text", Help = "", Axis = "W" },
+                    new Item { Kind = "int", Key = "MenuIconDimAlpha", Label = "Opacity of inactive icons", Help = "0 = invisible, 255 = as the active one.", Min = 0.0, Max = 255.0, Step = 5.0, Unit = "/ 255" },
                     new Item { Kind = "size", Key = "MenuItemPad", Label = "Entry padding", Help = "", Axis = "W" },
                     new Item { Kind = "size", Key = "MenuGap", Label = "Space between entries", Help = "", Axis = "W" },
                     new Item { Kind = "size", Key = "MenuRadius", Label = "Corner radius", Help = "", Axis = "H" },
-                    new Item { Kind = "int", Key = "MenuIconDimAlpha", Label = "Opacity of inactive icons", Help = "0 = invisible, 255 = as the active one.", Min = 0.0, Max = 255.0, Step = 5.0, Unit = "/ 255" },
                     new Item { Kind = "color", Key = "ActiveCategoryColor", Label = "Active category", Help = "" },
                     new Item { Kind = "color", Key = "HoverCategoryColor", Label = "Category under the mouse", Help = "" },
                 } },
-                new Group { Title = "Buttons", Help = null, When = "Gamepad=1", Items = new List<Item>
+                new Group { Title = "Buttons", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "int", Key = "CloseSize", Label = "Size of the X and gear buttons", Help = "", Min = 8.0, Max = 40.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "bool", Key = "ShowPower", Label = "Power button", Help = "Left of the gear: Lock, Sleep, Restart, Shut down. Restart and Shut down want a second click." },
@@ -187,15 +187,15 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "UnplayedCount", Label = "Tiles in Not played yet", Help = "", Min = 1.0, Max = 96.0, Step = 1.0, Unit = "" },
                 } },
             } },
-            new Page { Id = "clock", Title = "Clock", Icon = 0, Desc = "At the top left, updated every minute while the launcher is visible.", Groups = new List<Group>
+            new Page { Id = "clock", Switch = "ShowClock", Title = "Clock", Icon = 0, Desc = "At the top left, updated every minute while the launcher is visible.", Groups = new List<Group>
             {
-                new Group { Title = null, Help = null, Switch = "ShowClock", Items = new List<Item>
+                new Group { Title = null, Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "ShowClock", Label = "Show the clock", Help = "" },
-                    new Item { Kind = "bool", Key = "ShowDate", Label = "Date", Help = "Next to the time, in the language of Windows." },
                     new Item { Kind = "text", Key = "ClockFormat", Label = "Time format", Help = "%H:%M = 14:05, %#I:%M %p = 2:05 PM." },
-                    new Item { Kind = "text", Key = "DateFormat", Label = "Date format", Help = "%A %#d %B = Monday 2 November, %#d/%m/%Y = 2/11/2026.", When = "ShowDate=1" },
                     new Item { Kind = "int", Key = "ClockFontSize", Label = "Time font size", Help = "", Min = 8.0, Max = 60.0, Step = 1.0, Unit = "pt" },
+                    new Item { Kind = "bool", Key = "ShowDate", Label = "Date", Help = "Next to the time, in the language of Windows." },
+                    new Item { Kind = "text", Key = "DateFormat", Label = "Date format", Help = "%A %#d %B = Monday 2 November, %#d/%m/%Y = 2/11/2026.", When = "ShowDate=1" },
                 } },
             } },
             new Page { Id = "search", Title = "Search", Icon = 0xE721, Desc = "The search bar at the top left searches the tiles of every category.", Groups = new List<Group>
@@ -211,9 +211,9 @@ namespace RaintileOptions
                     new Item { Kind = "bool", Key = "FilterBar", Label = "Filter bar", Help = "" },
                     new Item { Kind = "bool", Key = "FilterStores", Label = "A chip per store", Help = "Only when the tiles come from at least two stores." },
                     new Item { Kind = "size", Key = "FilterH", Label = "Chip height", Help = "", Axis = "H" },
-                    new Item { Kind = "size", Key = "FilterGap", Label = "Space between chips", Help = "", Axis = "W" },
-                    new Item { Kind = "size", Key = "FilterPad", Label = "Chip padding", Help = "", Axis = "W" },
                     new Item { Kind = "int", Key = "FilterFontSize", Label = "Font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt" },
+                    new Item { Kind = "size", Key = "FilterPad", Label = "Chip padding", Help = "", Axis = "W" },
+                    new Item { Kind = "size", Key = "FilterGap", Label = "Space between chips", Help = "", Axis = "W" },
                 } },
             } },
             new Page { Id = "theme", Title = "Theme", Icon = 0xE790, Desc = "The font and the colours the whole launcher shares; the colours of one part are on its page. Colours can be written as R,G,B,A or #RRGGBBAA: click the swatch to pick one.", Groups = new List<Group>
@@ -274,9 +274,9 @@ namespace RaintileOptions
                     new Item { Kind = "choice", Key = "TileKeysWhen", Label = "Tile hot keys", Help = "When the key combinations of the tiles (tile editor > Hot key) start them. Only with the launcher open, the keys stay free for other programs the rest of the time.", Choices = new List<string[]> { new[] { "Always", "Always, also with the launcher closed" }, new[] { "Open", "Only with the launcher open" } } },
                 } },
             } },
-            new Page { Id = "keys", Title = "Keyboard", Icon = 0xE765, Desc = "Navigation keys only work while the launcher is visible.", Groups = new List<Group>
+            new Page { Id = "keys", Switch = "KeyboardNav", Title = "Keyboard", Icon = 0xE765, Desc = "Navigation keys only work while the launcher is visible.", Groups = new List<Group>
             {
-                new Group { Title = null, Help = null, Switch = "KeyboardNav", Items = new List<Item>
+                new Group { Title = null, Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "KeyboardNav", Label = "Keyboard navigation", Help = "" },
                     new Item { Kind = "keys", Key = "NavUp", Label = "Move up", Help = "", Pair = new[] { "NavUp", "NavUp2" } },
@@ -289,9 +289,9 @@ namespace RaintileOptions
                     new Item { Kind = "key", Key = "NavSearch", Label = "Search", Help = "" },
                 } },
             } },
-            new Page { Id = "gamepad", Title = "Gamepad", Icon = 0xE7FC, Desc = "Xbox and compatible (XInput) controllers, read by a small background helper.", Groups = new List<Group>
+            new Page { Id = "gamepad", Switch = "Gamepad", Title = "Gamepad", Icon = 0xE7FC, Desc = "Xbox and compatible (XInput) controllers, read by a small background helper.", Groups = new List<Group>
             {
-                new Group { Title = null, Help = null, Switch = "Gamepad", Items = new List<Item>
+                new Group { Title = "Controller", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "Gamepad", Label = "Gamepad support", Help = "" },
                     new Item { Kind = "pad", Key = "GamepadToggle", Label = "Open / close", Help = "Buttons to hold together." },
@@ -336,9 +336,9 @@ namespace RaintileOptions
                     new Item { Kind = "stores", Key = "ImportStores", Label = "Where to look", Help = "" },
                     new Item { Kind = "text", Key = "ImportFolders", Label = "Your folders", Help = "With Your folders on: folders of programs (portable games, emulators...). Every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out. (In Settings.inc: separated by |, e.g. D:\\Games|E:\\Emulators.)" },
                     new Item { Kind = "choice", Key = "ImportFoldersKind", Label = "They are", Help = "Where the programs of your folders go when added.", Choices = new List<string[]> { new[] { "Game", "Games (Category for games)" }, new[] { "App", "Apps (Category for apps)" } } },
-                    new Item { Kind = "bool", Key = "ScanOnStart", Label = "Look for new ones on start", Help = "In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear." },
                     new Item { Kind = "category", Key = "ImportCategory", Label = "Category for games", Help = "" },
                     new Item { Kind = "category", Key = "AppsCategory", Label = "Category for apps", Help = "" },
+                    new Item { Kind = "bool", Key = "ScanOnStart", Label = "Look for new ones on start", Help = "In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear." },
                     new Item { Kind = "secret", Key = "SteamGridDBKey", Label = "SteamGridDB API key", Help = "Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded. Saved encrypted: only your Windows user on this PC can read it." },
                 } },
             } },

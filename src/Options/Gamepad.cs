@@ -617,6 +617,8 @@ namespace RaintileOptions
         void PadPageStart()
         {
             var all = new List<FrameworkElement>();
+            // the switch beside the page title (Page.Switch) first: it is at the top
+            CollectPadTargets(pageSwitch, all);
             CollectPadTargets(pageHost, all);
             FrameworkElement best = null;
             Rect bestRect = Rect.Empty;

@@ -64,6 +64,12 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
   (`AddCardReason` / `SetCardApplies`), and its settings carry no `When` of that
   mode; a setting of the card that also needs another one keeps its own `When`.
   Their labels do not repeat the group's name (Window > Width, not Window width).
+- **A switch for a whole page goes beside its title.** A bool that turns the whole
+  page on or off (the clock, keyboard navigation, the gamepad) is `Switch = "Key"`
+  on the page (`Page.Switch`, the first setting of its first group): the switch and
+  its reset are at the right of the page title (`PageSwitch` in the window's
+  header), the page title is its label, and every card of the page is disabled while
+  it is off. With the gamepad, right from the menu lands on it first.
 - **A switch for a whole group goes in its header.** A bool that turns a whole
   group on or off (the clock, the filter bar, keyboard navigation, the gamepad) is
   `Switch = "Key"` on the group (`Group.Switch`, the first of its items): the card's
@@ -81,13 +87,17 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
   a tooltip.
 - Order on a page: the switch, then layout and sizes, the look, the behaviour, the
   timing.
+- **What concerns one thing stays together**, in the order it is used: the time
+  format and its font size, then the date and its format; the height of an entry
+  and its font, then its icon and the icon's spacing, then the spacing between
+  entries, then the colours. A setting that depends on another comes right after it.
 - A group (card) is one part of the launcher. A page with fewer than about four
   settings joins the page of its part as a group.
 - Two menu levels at most. A menu entry with sub-pages is a page of its own (the
   switch and what the sub-pages share), never only a folder.
 - `tools/check.py` checks that every `When` (of a setting, a group or a page) names a setting and values it can take,
-  that a switch on the same page comes before what it switches, that a group's
-  `Switch` is its first setting and a bool, that no card is titled as its page, that
+  that a switch on the same page comes before what it switches, that a group's or a
+  page's `Switch` is its first setting and a bool, that no card is titled as its page, that
   a page's only card has no title, and that every page is in the menu (`NavTree`) once.
 
 ## 1. Nothing only in a tooltip

@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -140,7 +141,8 @@ namespace RaintileOptions
         class WhenRow { public string When, GroupWhen; public Border Row; public TextBlock Why; }
         readonly List<WhenRow> whenRows = new List<WhenRow>();
         // and whole cards (Group.When)
-        class WhenCard { public string When; public Border Card; public TextBlock Why; }
+        // (Outer: the page's switch, Own: the group's When, whose reason Why shows)
+        class WhenCard { public string Outer, Own; public Border Card; public TextBlock Why; }
         readonly List<WhenCard> whenCards = new List<WhenCard>();
 
         // "Key=a|b;Key2=c": every condition holds (one of its values)
@@ -176,7 +178,12 @@ namespace RaintileOptions
 
         void UpdateWhenRows()
         {
-            foreach (var c in whenCards) SetCardApplies(c.Card, WhenHolds(c.When), c.Why);
+            foreach (var c in whenCards)
+            {
+                bool outer = c.Outer == null || WhenHolds(c.Outer), own = c.Own == null || WhenHolds(c.Own);
+                SetCardApplies(c.Card, outer && own, null);
+                if (c.Why != null) c.Why.Visibility = outer && !own ? Visibility.Visible : Visibility.Collapsed;
+            }
             foreach (var w in whenRows)
             {
                 // in a card that does not apply: disabled, the reason is the card's
@@ -656,12 +663,30 @@ namespace RaintileOptions
             StackPanel sp;
             var sv = NewPageScroller(out sp);
             var schemaKeys = new HashSet<string>(Schema.SchemaKeys(), StringComparer.OrdinalIgnoreCase);
+            // the page's switch beside its title (ShowPage), the page applying with it
+            string pageWhen = null;
+            Item pageSw = null;
+            if (page.Switch != null)
+            {
+                pageSw = page.Groups[0].Items.First(i => i.Key == page.Switch);
+                pageWhen = page.Switch + "=1";
+                var head = NewPanel(Orientation.Horizontal);
+                var control = NewBoolControl(page.Switch);
+                AutomationProperties.SetName(control, pageSw.Label);
+                ((FrameworkElement)control).VerticalAlignment = VerticalAlignment.Center;
+                AddTo(head, control);
+                var reset = NewResetButton(new[] { page.Switch });
+                reset.Margin = T(Gap.Icon, 0, 0, 0);
+                AddTo(head, reset);
+                pageSwitches[page.Id] = head;
+            }
             foreach (var group in page.Groups)
             {
                 // a group with a switch: the switch in the header, its label the title
                 var sw = group.Switch == null ? null : group.Items.First(i => i.Key == group.Switch);
                 var card = sw != null ? NewSwitchCard(sw, group.Help) : NewCard(group.Title, group.Help);
-                string groupWhen = group.When ?? (sw != null ? sw.Key + "=1" : null);
+                string own = group.When ?? (sw != null ? sw.Key + "=1" : null);
+                string groupWhen = pageWhen == null ? own : own == null ? pageWhen : pageWhen + ";" + own;
                 int rows = 0;
                 if (group.Found)
                 {
@@ -692,7 +717,7 @@ namespace RaintileOptions
                 {
                     foreach (var item in group.Items)
                     {
-                        if (item == sw) { rows++; continue; }
+                        if (item == sw || item == pageSw) { rows++; continue; }
                         var row = NewItemRow(item);
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
                         var b = row as Border;
@@ -702,7 +727,7 @@ namespace RaintileOptions
                 }
                 // (with a switch, no reason: the switch is in the header)
                 if (rows > 0 && groupWhen != null)
-                    whenCards.Add(new WhenCard { When = groupWhen, Card = card, Why = sw != null ? null : AddCardReason(card, WhenReason(group.When, page)) });
+                    whenCards.Add(new WhenCard { Outer = pageWhen, Own = own, Card = card, Why = sw != null || group.When == null ? null : AddCardReason(card, WhenReason(group.When, page)) });
                 if (rows > 0) AddTo(sp, card);
             }
             UpdateWhenRows();

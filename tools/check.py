@@ -267,6 +267,12 @@ def check_schema_layout(schema):
                 fail('Options schema: page %s: the switch %s is not the first setting of its group, or not a bool' % (pm.group(1), switch))
             if title.strip('"').lower() == pm.group(2).lower():
                 fail('Options schema: page %s: a card titled as its page' % pm.group(1))
+        psw = re.match(r'[^\n]*', pm.group(0)).group(0)
+        psw = re.search(r'Switch = "([A-Za-z0-9]+)"', psw)
+        if psw:
+            first = groups and re.search(r'Kind = "([a-z]+)", Key = "([A-Za-z0-9]*)"', groups[0][2])
+            if not (first and first.group(2) == psw.group(1) and first.group(1) == 'bool'):
+                fail('Options schema: page %s: its switch %s is not the first setting of its first group, or not a bool' % (pm.group(1), psw.group(1)))
         if len(groups) == 1 and groups[0][0] != 'null' and not re.search(r'Dash|Market|Found|Other', pm.group(3)):
             fail('Options schema: page %s: its only card has a title (the page has it)' % pm.group(1))
     nav = re.search(r'NavTree = new List<NavNode>(.*?)\n        \};', schema, re.S).group(1)

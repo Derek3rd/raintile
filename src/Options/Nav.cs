@@ -33,6 +33,9 @@ namespace RaintileOptions
     {
         ListBox nav, navBottom;
         Grid pageHost;
+        // the switch of the page shown (Page.Switch), beside its title
+        ContentControl pageSwitch;
+        readonly Dictionary<string, UIElement> pageSwitches = new Dictionary<string, UIElement>();
         TextBlock pageTitle, pageDesc, status;
         Button btnSave;
         string version = "", information = "";
@@ -77,6 +80,7 @@ namespace RaintileOptions
             nav = (ListBox)win.FindName("Nav");
             navBottom = (ListBox)win.FindName("NavBottom");
             pageHost = (Grid)win.FindName("PageHost");
+            pageSwitch = (ContentControl)win.FindName("PageSwitch");
             UpdateControlColumn();
             pageHost.SizeChanged += (s, e) => UpdateControlColumn();
             pageTitle = (TextBlock)win.FindName("PageTitle");
@@ -490,6 +494,8 @@ namespace RaintileOptions
             pageHost.Children.Add(pages[page.Id]);
             pageTitle.Text = page.Title;
             pageDesc.Text = page.Desc;
+            UIElement sw;
+            pageSwitch.Content = pageSwitches.TryGetValue(page.Id, out sw) ? sw : null;
         }
 
         void ShowCategoryPage(string file)
@@ -503,6 +509,7 @@ namespace RaintileOptions
             var c = Core.GetCategorySection(GetModel(file));
             string name = Core.GetKey(c, "Name");
             pageTitle.Text = name != "" ? name : System.IO.Path.GetFileNameWithoutExtension(file);
+            pageSwitch.Content = null;
             pageDesc.Text = "Categories\\" + file + ": its tiles. All tiles, the first entry, holds the settings of the whole category; name and icon are on the Categories page.";
         }
 

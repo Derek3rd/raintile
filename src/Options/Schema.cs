@@ -44,6 +44,9 @@ namespace RaintileOptions
         public int Icon;
         // a page for one mode (as Item.When): its menu entry is disabled otherwise
         public string When;
+        // a bool that turns the whole page on or off (the first setting of its
+        // first group): beside the page title, the page disabled while it is off
+        public string Switch;
         public List<Group> Groups = new List<Group>();
     }
 

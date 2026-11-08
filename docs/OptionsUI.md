@@ -42,7 +42,9 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 | Shared font and colours | Theme |
 | Effects, appearing tiles, smoothing, tile launch | Animations |
 | Opening keys, tile hot keys; navigation keys; the gamepad | Keybindings; > Keyboard; > Gamepad |
-| Widgets, Import, Categories | their pages |
+| Where to look for games and apps, your folders, where they go | Import |
+| The games and apps found, the tiles no longer installed | Import > Found |
+| Widgets, Categories | their pages |
 | Performance, diagnostics | Advanced |
 | The updates (check, channel) with the installed and latest version | Info > Updates |
 
@@ -124,6 +126,7 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 | Glyph | Constant | Action | Tooltip wording |
 |---|---|---|---|
 | `0xE7A7` | `Glyph.Reset` | **A field** goes back to its default, or to the value of All tiles | "Restore default", "Back to the value of All tiles" |
+| `0xE70F` | `Glyph.Edit` | **A row of a list** shown read-only (Import > Your folders) is edited in place; the same button ends the editing. Shown with the mouse over the row or the focus in it (faded out otherwise, so the pad still reaches it) | "Edit ...", "Done" |
 | `0xE711` | `Glyph.Clear` | **A field** is emptied: no key, no colour, no image, no icon. When the value is a file of the data folder (an image, an icon) the file goes to the Recycle Bin, asked first | "Clear the ..." |
 | `0xE74D` | `Glyph.Delete` | **An entry of a list** goes away (a tile, a category): in the list's header, always asked | "Delete ..." |
 | `0xE710` | `Glyph.Add` | A new entry of a list | "New ..." |
@@ -163,7 +166,7 @@ acts on a whole entry of a list, in the list's header. A field never has a bin.
 | Text, path | Text box (paths: + "Browse...") |
 
 - No row of chips for a single choice: it wraps and clutters the page. Chips stay for
-  several of a set and for the filters of a list (Import: All / Games / Apps).
+  several of a set. The filters of a list are combos too (Import > Found: the kind, the store or folder, the order), so a new kind or store adds an entry, not a chip.
 - A unit of measure is always shown (px, pt, ms, s, %, ×, / 255, steps), inside the
   number's box on its right (the `UnitBox` style of `Options.xaml`: the unit is the
   box's `Tag`). A count has no unit when its label already says what it counts

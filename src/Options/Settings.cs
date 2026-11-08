@@ -21,6 +21,7 @@ namespace RaintileOptions
         public string Kind;
         public CheckBox Box;
         public Panel Panel;
+        public List<CheckBox> Boxes;   // stores: one switch per store
         public TextBox Text;
         public Button Swatch, Button, Clear;
         public Control Input;   // text, font, category, secret, choice
@@ -142,7 +143,7 @@ namespace RaintileOptions
         readonly List<WhenRow> whenRows = new List<WhenRow>();
         // and whole cards (Group.When)
         // (Outer: the page's switch, Own: the group's When, whose reason Why shows)
-        class WhenCard { public string Outer, Own; public Border Card; public TextBlock Why; }
+        class WhenCard { public string Outer, Own; public Border Card; public TextBlock Why; public UIElement Keep; }
         readonly List<WhenCard> whenCards = new List<WhenCard>();
 
         // "Key=a|b;Key2=c": every condition holds (one of its values)
@@ -151,8 +152,9 @@ namespace RaintileOptions
             foreach (var cond in when.Split(';'))
             {
                 var kv = cond.Split(new[] { '=' }, 2);
-                string v = V(kv[0]).Trim();
-                if (!kv[1].Split('|').Any(x => string.Equals(x, v, StringComparison.OrdinalIgnoreCase))) return false;
+                // (a list, ImportStores "Steam|Folders": one of its values is enough)
+                var have = V(kv[0]).Split('|').Select(x => x.Trim().Replace(".", ""));
+                if (!kv[1].Split('|').Any(x => have.Contains(x, StringComparer.OrdinalIgnoreCase))) return false;
             }
             return true;
         }
@@ -182,6 +184,11 @@ namespace RaintileOptions
             {
                 bool outer = c.Outer == null || WhenHolds(c.Outer), own = c.Own == null || WhenHolds(c.Own);
                 SetCardApplies(c.Card, outer && own, null);
+                // a card with a header switch (Group.Store): what is not a row (the
+                // folders' grid) follows it too, the switch stays usable
+                if (c.Keep != null)
+                    foreach (UIElement x in CardPanel(c.Card).Children)
+                        if (x != c.Keep && !(x is Border) && !(x is TextBlock)) x.IsEnabled = outer && own;
                 if (c.Why != null) c.Why.Visibility = outer && !own ? Visibility.Visible : Visibility.Collapsed;
             }
             foreach (var w in whenRows)
@@ -219,7 +226,7 @@ namespace RaintileOptions
                     case "secret": ((PasswordBox)c.Input).Password = Core.UnprotectSecret(v); break;
                     case "category": ((ComboBox)c.Input).SelectedItem = v; break;
                     case "stores":
-                        foreach (CheckBox cb in c.Panel.Children) cb.IsChecked = v.Split('|').Contains(((string[])cb.Tag)[1]);
+                        foreach (var cb in c.Boxes) cb.IsChecked = v.Split('|').Select(x => x.Trim().Replace(".", "")).Contains(((string[])cb.Tag)[1]);
                         break;
                     case "pad":
                         foreach (ToggleButton tb in c.Panel.Children) tb.IsChecked = Regex.Split(v, @"\s+").Contains(((string[])tb.Tag)[1]);
@@ -343,22 +350,36 @@ namespace RaintileOptions
             return cb;
         }
 
-        UIElement NewStoresControl(string key)
+        // Where to look (ImportStores, "Steam|Epic|..."): a row per store with its
+        // switch, as any other setting; the stores of an item (Item.Stores) in
+        // their group, the folders' one in the header of Your folders. All the
+        // switches write the one list, in the order of Schema.SOURCES.
+        CheckBox NewStoreBox(string key, string store)
         {
-            var wp = new WrapPanel { MaxWidth = FieldWidth.Wrap, HorizontalAlignment = HorizontalAlignment.Right };
+            Ctl c;
+            if (!ctl.TryGetValue(key, out c) || c.Boxes == null) ctl[key] = c = new Ctl { Kind = "stores", Boxes = new List<CheckBox>() };
+            var boxes = c.Boxes;
             var current = V(key).Split('|').Select(x => x.Trim().Replace(".", "")).ToList();
-            foreach (var store in Schema.SOURCES)
+            var cb = new CheckBox { Tag = new[] { key, store }, IsChecked = current.Contains(store), HorizontalAlignment = HorizontalAlignment.Right };
+            cb.Click += (s, e) =>
             {
-                var cb = new CheckBox { Content = Schema.STORE_LABELS[store], Margin = T(Gap.Indent, Gap.Line, 0, Gap.Line), Tag = new[] { key, store }, IsChecked = current.Contains(store) };
-                cb.Click += (s, e) =>
-                {
-                    var on = wp.Children.OfType<CheckBox>().Where(x => x.IsChecked == true).Select(x => ((string[])x.Tag)[1]);
-                    SetValue(key, string.Join("|", on));
-                };
-                wp.Children.Add(cb);
+                var on = boxes.Where(x => x.IsChecked == true).Select(x => ((string[])x.Tag)[1]).ToList();
+                SetValue(key, string.Join("|", Schema.SOURCES.Where(on.Contains)));
+            };
+            boxes.Add(cb);
+            return cb;
+        }
+
+        List<UIElement> NewStoresRows(Item item)
+        {
+            var rows = new List<UIElement>();
+            foreach (var store in item.Stores ?? Schema.SOURCES)
+            {
+                string help;
+                if (!Schema.STORE_HELP.TryGetValue(store, out help)) help = "Games";
+                rows.Add(NewRow(Schema.STORE_LABELS[store], help, NewStoreBox(item.Key, store), null));
             }
-            ctl[key] = new Ctl { Kind = "stores", Panel = wp };
-            return wp;
+            return rows;
         }
 
         UIElement NewPadControl(string key)
@@ -571,6 +592,27 @@ namespace RaintileOptions
             return b;
         }
 
+        // A card whose header is the switch of a source of ImportStores
+        // (Group.Store): the group's title, the switch of that source
+        Border NewStoreSwitchCard(Group group)
+        {
+            var b = new Border { Style = ResStyle("Card") };
+            var sp = NewPanel();
+            b.Child = sp;
+            var g = NewGrid("*", "Auto", Gap.ActionColumn.ToString(CultureInfo.InvariantCulture));
+            g.ColumnDefinitions[1].SetResourceReference(ColumnDefinition.WidthProperty, FieldWidth.ControlKey);
+            g.Margin = T(0, Gap.Group, 0, Gap.Line);
+            var h = NewSectionTitle(group.Title);
+            h.VerticalAlignment = VerticalAlignment.Center;
+            g.Children.Add(h);
+            var control = NewStoreBox("ImportStores", group.Store);
+            control.VerticalAlignment = VerticalAlignment.Center;
+            SetCol(control, 1);
+            g.Children.Add(control);
+            AddTo(sp, g);
+            return b;
+        }
+
         static StackPanel CardPanel(Border card) { return (StackPanel)card.Child; }
 
         // Row of one schema item (null if its settings are not in Settings.inc)
@@ -632,7 +674,6 @@ namespace RaintileOptions
                 case "secret": control = NewSecretControl(k); break;
                 case "font": control = NewFontControl(k); break;
                 case "category": control = NewCategoryControl(k); break;
-                case "stores": control = NewStoresControl(k); break;
                 case "pad": control = NewPadControl(k); break;
                 case "key": control = NewKeyControl(k); break;
                 case "combo": control = NewKeyControl(k, true); break;
@@ -684,8 +725,8 @@ namespace RaintileOptions
             {
                 // a group with a switch: the switch in the header, its label the title
                 var sw = group.Switch == null ? null : group.Items.First(i => i.Key == group.Switch);
-                var card = sw != null ? NewSwitchCard(sw, group.Help) : NewCard(group.Title, group.Help);
-                string own = group.When ?? (sw != null ? sw.Key + "=1" : null);
+                var card = sw != null ? NewSwitchCard(sw, group.Help) : group.Store != null ? NewStoreSwitchCard(group) : NewCard(group.Title, group.Help);
+                string own = group.When ?? (sw != null ? sw.Key + "=1" : group.Store != null ? "ImportStores=" + group.Store : null);
                 string groupWhen = pageWhen == null ? own : own == null ? pageWhen : pageWhen + ";" + own;
                 int rows = 0;
                 if (group.Found)
@@ -718,6 +759,21 @@ namespace RaintileOptions
                     foreach (var item in group.Items)
                     {
                         if (item == sw || item == pageSw) { rows++; continue; }
+                        if (item.Kind == "stores")
+                        {
+                            foreach (var r in NewStoresRows(item)) { CardPanel(card).Children.Add(r); rows++; }
+                            continue;
+                        }
+                        // your folders: a grid as wide as the card (name, folder, kind, category)
+                        if (item.Key == "ImportFolders")
+                        {
+                            var help = NewHelp(item.Help);
+                            help.Margin = T(0, 0, 0, Gap.Control);
+                            AddTo(CardPanel(card), help);
+                            AddTo(CardPanel(card), NewFoldersControl(item.Key));
+                            rows++;
+                            continue;
+                        }
                         var row = NewItemRow(item);
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
                         var b = row as Border;
@@ -727,7 +783,7 @@ namespace RaintileOptions
                 }
                 // (with a switch, no reason: the switch is in the header)
                 if (rows > 0 && groupWhen != null)
-                    whenCards.Add(new WhenCard { Outer = pageWhen, Own = own, Card = card, Why = sw != null || group.When == null ? null : AddCardReason(card, WhenReason(group.When, page)) });
+                    whenCards.Add(new WhenCard { Outer = pageWhen, Own = own, Card = card, Why = sw != null || group.When == null ? null : AddCardReason(card, WhenReason(group.When, page)), Keep = group.Store != null ? ((Grid)CardPanel(card).Children[0]) : null });
                 if (rows > 0) AddTo(sp, card);
             }
             UpdateWhenRows();

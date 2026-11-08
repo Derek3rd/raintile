@@ -394,7 +394,7 @@ Logo placement, framing and the place of the [play time](#play-time) line can al
 
 ## Adding games and apps
 
-Right click on the launcher > **Add games and apps...**, or **Import** in the Options window, shows what is installed on this PC. Nothing is added by itself: tick the games and apps you want and press **Add selected**. They become normal tiles, which you can edit, move and keep even after uninstalling.
+Right click on the launcher > **Add games and apps...**, or **Import > Found** in the Options window, shows what is installed on this PC (**Import** itself holds where to look, your folders and where they go). Nothing is added by itself: tick the games and apps you want and press **Add selected**. They become normal tiles, which you can edit, move and keep even after uninstalling.
 
 The search (`Scripts\Scan.ps1`, in the background) looks in:
 
@@ -407,14 +407,14 @@ The search (`Scripts\Scan.ps1`, in the background) looks in:
 | Battle.net | uninstall entries of its games | Battle.net (`--exec="launch <code>"`), or the game's launcher | SteamGridDB |
 | EA app | uninstall entries of Electronic Arts games | the game exe | SteamGridDB |
 | Xbox / Microsoft Store | Store packages with a `MicrosoftGame.config` | `shell:AppsFolder` | SteamGridDB |
-| Your folders | every `.exe` in the folders of `ImportFolders` (separated by `\|`, e.g. `D:\Games\|E:\Emulators`) and in their subfolders, named after its file; installers, uninstallers, updaters, redistributables, crash reporters and helpers left out. As games or apps: `ImportFoldersKind` | the program | SteamGridDB (games of that name), the program's own icon |
+| Your folders | every `.exe` in the folders of `ImportFolders` and in their subfolders, named after its file; installers, uninstallers, updaters, redistributables, crash reporters and helpers left out. Options > Import > *Your folders* is a grid: per folder its name (shown in the list and offered by its filter), whether its programs are games or apps, and the category they go to (empty: the one of their kind, shown dimmed). The rows are read-only: the pencil next to the **x**, shown with the mouse over a row, edits it, and ends the editing. In `Settings.inc`, separated by `\|`: `Name=Folder>Game>Category`, every part but the folder optional (e.g. `D:\Games\|Emulators=E:\Emu>App>Emulators`) | the program | SteamGridDB (games of that name), the program's own icon |
 | Apps | Start menu: program shortcuts and Store apps, without uninstallers, help files and the games already found | the shortcut / `shell:AppsFolder` | a logo from Dashboard Icons, or SteamGridDB for an app of that very name, else the program's own icon |
 
-- **The list** shows the cover (Steam) or the icon of each item, with its source, and marks the new ones. Filter by type (All, Games, Apps) or by name; *Show added* also lists what is already in the launcher (dimmed, with its category); *Covers* off gives a compact text list.
-- **Where they go**: by type (games to `ImportCategory`, apps to `AppsCategory`; the category is created if missing) or all to one category.
+- **The list** (Import > Found) shows the cover (Steam) or the icon of each item, with its store or the name of its folder, and marks the new ones. Filter by type (All types, Games, Apps), by name, or by store or folder (lists at the top); order by name, the newest found first (the date each one was found the first time is kept in `FirstFound.txt`) or by store or folder; *Show added* also lists what is already in the launcher (dimmed, with its category); *Covers* off gives a compact text list.
+- **Where they go**: by type (games to `ImportCategory`, apps to `AppsCategory`, the programs of a folder with its own category to that one; the category is created if missing) or all to one category.
 - **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. Steam games without local images get theirs from Steam's servers (no key needed). Other games, and Steam games without images there, get background and logo from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Apps get a logo from [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (some 3500 apps and services) or, with the key, from SteamGridDB when it has an app of that very name; otherwise the program's icon. Set the key in Options > Import: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
 - Something already in the launcher, in any category (same name or same command), is not listed again.
-- **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear, and on **Import** in the menu of the Options window. A click on it opens the list.
+- **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear, and on **Import** in the menu of the Options window. A click on it opens the list (Import > Found).
 - **Games no longer installed** are reported by the same search (see below).
 - The added tiles are written at once; **Save and refresh** shows them in the launcher.
 - **Older versions** imported games automatically, in a block below the line `; ===== IMPORTED AUTOMATICALLY =====`. Opening **Import** turns those games into normal tiles, once.
@@ -456,7 +456,8 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 | Keybindings > Keyboard | navigation keys |
 | Keybindings > Gamepad | support, open/close buttons, dead zone, repeat |
 | Widgets | how often they update, the port for temperatures and fans, the example Dashboard, the widget gallery |
-| Import | the games and apps found on this PC, to add; where to look and where they go |
+| Import | where to look (game stores, Start menu apps: a switch each), your folders (a switch, and a grid: name, folder, games or apps, category), where they go, the search on start, the SteamGridDB key |
+| Import > Found | the games and apps found on this PC, to add (filter, order); the tiles of games no longer installed |
 | Advanced | performance, debug log, entries without a page of their own |
 | Categories | the list of categories (create, open, reorder, delete), name and icon of the selected one |
 | Categories > *each category* | its tiles side by side, **All tiles** first (grid, logo size, tile colour and background, framing and logo of every tile); a large preview to frame the background and place the logo; edit, drag a tile onto another category in the menu to move it there, turn imported games into normal tiles |
@@ -496,6 +497,7 @@ Widgets\          custom widgets, installed from the gallery or by hand
 Favorites.txt     your favorite tiles
 Usage.txt         how many times and when each tile was launched (Recent)
 Seen.txt          games and apps already shown in the Import list
+FirstFound.txt    when each game or app was found the first time (the order of Import > Found)
 Update.json       result of the last update check
 ```
 
@@ -733,7 +735,7 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadSearch`, `GamepadOp
 
 ### Games and apps
 
-See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFolders`, `ImportFoldersKind`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
+See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFolders`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
 ### Updates
 

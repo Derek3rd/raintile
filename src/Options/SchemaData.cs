@@ -327,20 +327,35 @@ namespace RaintileOptions
                 {
                 } },
             } },
-            new Page { Id = "import", Title = "Import", Icon = 0xE896, Desc = "Games and apps installed on this PC: pick the ones to add, they become normal tiles with their images. Nothing is added by itself.", Groups = new List<Group>
+            new Page { Id = "import", Title = "Import", Icon = 0xE896, Desc = "Where to look for the games and apps installed on this PC, and where they go. The ones found are on Found, below: pick the ones to add, they become normal tiles with their images. Nothing is added by itself.", Groups = new List<Group>
             {
-                new Group { Title = null, Help = null, Found = true, Items = new List<Item>
+                new Group { Title = "Game stores", Help = null, Items = new List<Item>
                 {
+                    new Item { Kind = "stores", Key = "ImportStores", Label = "Game stores", Help = "", Stores = new[] { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox" } },
+                } },
+                new Group { Title = "Apps", Help = null, Items = new List<Item>
+                {
+                    new Item { Kind = "stores", Key = "ImportStores", Label = "Apps", Help = "", Stores = new[] { "Apps" } },
+                } },
+                new Group { Title = "Your folders", Help = null, Store = "Folders", Items = new List<Item>
+                {
+                    new Item { Kind = "text", Key = "ImportFolders", Label = "Your folders", Help = "Folders of programs (portable games, emulators...): every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out. Each has a name (shown in the list of found ones, and a filter there), whether its programs are games or apps, and the category they go to (empty: the one of their kind, below)." },
+                } },
+                new Group { Title = "Where they go", Help = null, Items = new List<Item>
+                {
+                    new Item { Kind = "category", Key = "ImportCategory", Label = "Games go to", Help = "Unless a folder of yours has its own category." },
+                    new Item { Kind = "category", Key = "AppsCategory", Label = "Apps go to", Help = "Unless a folder of yours has its own category." },
                 } },
                 new Group { Title = "Search", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "stores", Key = "ImportStores", Label = "Where to look", Help = "" },
-                    new Item { Kind = "text", Key = "ImportFolders", Label = "Your folders", Help = "With Your folders on: folders of programs (portable games, emulators...). Every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out. (In Settings.inc: separated by |, e.g. D:\\Games|E:\\Emulators.)" },
-                    new Item { Kind = "choice", Key = "ImportFoldersKind", Label = "They are", Help = "Where the programs of your folders go when added.", Choices = new List<string[]> { new[] { "Game", "Games (Category for games)" }, new[] { "App", "Apps (Category for apps)" } } },
-                    new Item { Kind = "category", Key = "ImportCategory", Label = "Category for games", Help = "" },
-                    new Item { Kind = "category", Key = "AppsCategory", Label = "Category for apps", Help = "" },
                     new Item { Kind = "bool", Key = "ScanOnStart", Label = "Look for new ones on start", Help = "In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear." },
                     new Item { Kind = "secret", Key = "SteamGridDBKey", Label = "SteamGridDB API key", Help = "Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded. Saved encrypted: only your Windows user on this PC can read it." },
+                } },
+            } },
+            new Page { Id = "found", Title = "Found", Icon = 0, Desc = "The games and apps found on this PC: tick the ones to add, then Add selected. Where to look is on Import.", Groups = new List<Group>
+            {
+                new Group { Title = null, Help = null, Found = true, Items = new List<Item>
+                {
                 } },
             } },
             new Page { Id = "advanced", Title = "Advanced", Icon = 0xE90F, Desc = "Performance, diagnostics and the entries that have no page of their own. The updates are on Info.", Groups = new List<Group>
@@ -380,7 +395,7 @@ namespace RaintileOptions
             new NavNode { Page = "animations" },
             new NavNode { Page = "keybindings", Children = new[] { "keys", "gamepad" } },
             new NavNode { Page = "dashboard" },
-            new NavNode { Page = "import" },
+            new NavNode { Page = "import", Children = new[] { "found" } },
             new NavNode { Page = "advanced" },
             new NavNode { Page = "categories", Categories = true },
         };
@@ -453,7 +468,6 @@ namespace RaintileOptions
             { "IconSize", "96" },
             { "ImportCategory", "Games" },
             { "ImportFolders", "" },
-            { "ImportFoldersKind", "Game" },
             { "ImportStores", "Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps" },
             { "InfiniteScroll", "1" },
             { "InfoFontSize", "10" },
@@ -558,6 +572,25 @@ namespace RaintileOptions
 
         public static readonly string[] GAMEPAD_BUTTONS = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };
         public static readonly string[] SOURCES = { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox", "Folders", "Apps" };
+        // the kinds of what Import finds (see ImportKind); the first one is the
+        // kind of a folder without one
+        public static readonly List<ImportKind> IMPORT_KINDS = new List<ImportKind>
+        {
+            new ImportKind { Id = "game", Plural = "Games", Singular = "game", CategoryKey = "ImportCategory", DefaultCategory = "Games", GameArt = true },
+            new ImportKind { Id = "app", Plural = "Apps", Singular = "app", CategoryKey = "AppsCategory", DefaultCategory = "Apps" },
+        };
+        public static ImportKind KindOf(string id)
+        {
+            return IMPORT_KINDS.Find(k => string.Equals(k.Id, id, System.StringComparison.OrdinalIgnoreCase)) ?? IMPORT_KINDS[0];
+        }
+
+        // what each source of Import finds (the help of its switch)
+        public static readonly Dictionary<string, string> STORE_HELP = new Dictionary<string, string>
+        {
+            { "Steam", "Games" }, { "Epic", "Games" }, { "GOG", "Games (GOG Galaxy)" }, { "Ubisoft", "Games (Ubisoft Connect)" },
+            { "Battlenet", "Games" }, { "EA", "Games" }, { "Xbox", "Games of the Xbox app and the Microsoft Store" },
+            { "Folders", "The programs in your folders (below)" }, { "Apps", "The apps of the Start menu" },
+        };
         public static readonly Dictionary<string, string> STORE_LABELS = new Dictionary<string, string>
         {
             { "Apps", "Start menu apps" },

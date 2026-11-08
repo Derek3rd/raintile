@@ -224,6 +224,13 @@ def check_settings_schema():
         fail('the Options schema has %s, which is not in Settings.inc' % key)
     print('  %d settings' % len(settings))
     check_schema_layout(schema)
+    # the kinds of what Import finds: the same in the window and in Scan.ps1
+    ui = re.findall(r'new ImportKind \{ Id = "([a-z]+)"', schema)
+    scan = open(os.path.join(ROOT, '@Resources', 'Scripts', 'Scan.ps1'), encoding='ascii').read()
+    m = re.search(r"^\$IMPORT_KINDS = @\(([^)]*)\)", scan, re.M)
+    ps = re.findall(r"'([a-z]+)'", m.group(1)) if m else []
+    if ui != ps:
+        fail('the kinds of Import differ: IMPORT_KINDS of SchemaData.cs %s, $IMPORT_KINDS of Scan.ps1 %s' % (ui, ps))
 
 
 def check_schema_layout(schema):

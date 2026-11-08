@@ -28,3 +28,48 @@ Test 'Get-TileName: a name never leaves its folder' {
         }
     }
 }
+
+$IMPORT_KINDS = @('game', 'app')
+Import-ScriptFunction (Join-Path $Root '@Resources\Scripts\Scan.ps1') 'Split-FolderEntry'
+Import-ScriptFunction (Join-Path $Root '@Resources\Scripts\Scan.ps1') 'Update-FirstFound'
+
+Test 'Split-FolderEntry: an alias, or the folder name' {
+    $e = Split-FolderEntry 'Emulators=X:\Emulators'
+    Assert-Equal $e.Alias 'Emulators' 'alias'
+    Assert-Equal $e.Path 'X:\Emulators' 'path with an alias'
+    $e = Split-FolderEntry ' My games = "D:\Games\Portable" '
+    Assert-Equal $e.Alias 'My games' 'alias with a space'
+    Assert-Equal $e.Path 'D:\Games\Portable' 'quoted path'
+    $e = Split-FolderEntry 'D:\Games\Portable\'
+    Assert-Equal $e.Alias 'Portable' 'no alias: the folder name'
+    Assert-Equal $e.Path 'D:\Games\Portable\' 'path without alias'
+    # an = in the path is not an alias (the part before it has a \ or :)
+    $e = Split-FolderEntry 'D:\a=b\Games'
+    Assert-Equal $e.Path 'D:\a=b\Games' 'an = inside a path'
+    # its kind and category
+    $e = Split-FolderEntry 'Emulators=E:\Emu>App>Retro games'
+    Assert-Equal $e.Path 'E:\Emu' 'path before the kind'
+    Assert-Equal $e.Kind 'app' 'kind'
+    Assert-Equal $e.Category 'Retro games' 'category'
+    $e = Split-FolderEntry 'E:\Emu>Game'
+    Assert-Equal $e.Kind 'game' 'kind without a category'
+    Assert-Equal $e.Category '' 'no category'
+    Assert-Equal (Split-FolderEntry 'E:\Emu').Kind '' 'no kind: the default one'
+}
+
+Test 'Update-FirstFound: the first date stays, gone items leave' {
+    $dir = New-TestFolder
+    $file = Join-Path $dir 'FirstFound.txt'
+    $a = [pscustomobject]@{ Id = 'Steam:1'; Found = '' }
+    $b = [pscustomobject]@{ Id = 'Folders:x'; Found = '' }
+    Update-FirstFound @($a, $b) $file '2026-01-01T10:00:00'
+    Assert-Equal $a.Found '2026-01-01T10:00:00' 'first date of a'
+    $a2 = [pscustomobject]@{ Id = 'Steam:1'; Found = '' }
+    $c = [pscustomobject]@{ Id = 'Epic:2'; Found = '' }
+    Update-FirstFound @($a2, $c) $file '2026-02-02T10:00:00'
+    Assert-Equal $a2.Found '2026-01-01T10:00:00' 'a keeps its first date'
+    Assert-Equal $c.Found '2026-02-02T10:00:00' 'c found now'
+    $text = [IO.File]::ReadAllText($file)
+    Assert-True ($text -notmatch 'Folders:x') 'an item no longer found is still in the file'
+    Assert-True (-not (Test-Path -LiteralPath "$file.tmp")) 'the .tmp is left'
+}

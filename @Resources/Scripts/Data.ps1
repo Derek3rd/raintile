@@ -38,6 +38,26 @@ function Read-Values([string]$path) {
     return $values
 }
 
+# Settings of older versions that became part of another one, before they go:
+# ImportFoldersKind (one kind for all your folders) is now the kind of each
+# folder in ImportFolders ("Folder>App"), given to the folders without one.
+# Idempotent: once moved the old key is gone, and a folder with a kind keeps it.
+function Convert-OldSettings([hashtable]$values) {
+    if ($values.ContainsKey('ImportFoldersKind')) {
+        $kind = $values['ImportFoldersKind']
+        if ($kind -match '(?i)^app' -and $values.ContainsKey('ImportFolders')) {
+            $entries = @()
+            foreach ($e in $values['ImportFolders'].Split('|')) {
+                $e = $e.Trim()
+                if (-not $e) { continue }
+                if ($e.Contains('>')) { $entries += $e } else { $entries += "$e>App" }
+            }
+            $values['ImportFolders'] = $entries -join '|'
+        }
+        $values.Remove('ImportFoldersKind')
+    }
+}
+
 # The defaults file with the given values in place of the default ones
 function Merge-Settings([string]$defaults, [hashtable]$values) {
     $lines = [IO.File]::ReadAllLines($defaults)
@@ -95,6 +115,7 @@ try {
     $defaults = Join-Path $Resources 'Settings.inc'
     $user = Join-Path $Data 'Settings.inc'
     $values = if (Test-Path -LiteralPath $user) { Read-Values $user } else { Read-Values (Join-Path $source 'Settings.inc') }
+    Convert-OldSettings $values
     $text = Merge-Settings $defaults $values
     $old = if (Test-Path -LiteralPath $user) { [IO.File]::ReadAllText($user) } else { '' }
     if ($text -ne $old) {

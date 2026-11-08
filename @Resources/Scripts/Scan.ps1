@@ -9,8 +9,11 @@
 #
 # Each item: Id, Kind (game/app), Store, Name, Command, Hero and Logo (local
 # images, Steam only), Icon (program icon, extracted to Generated\Found\),
-# SteamAppId, New. New = not among the tiles of any category and not seen yet
-# in the list (Seen.txt in the data folder, written by the Options window).
+# SteamAppId, New, Source (the store, or the alias of one of your folders),
+# Category (a folder's own category, else empty),
+# Found (when it was found the first time, FirstFound.txt in the data folder).
+# New = not among the tiles of any category and not seen yet in the list
+# (Seen.txt in the data folder, written by the Options window).
 # The last output line, read by the skin, is RESULT:NEW=<number of new items>.
 #
 # Tiles of games no longer installed: a tile whose command points to a game of
@@ -41,6 +44,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $imageExts = '.png', '.jpg', '.jpeg', '.bmp', '.ico', '.gif'
+# The kinds of what is found (Kind of an item, of a folder of ImportFolders),
+# the first one the default: the same as IMPORT_KINDS of the Options window
+$IMPORT_KINDS = @('game', 'app')
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $Resources = [IO.Path]::GetFullPath($Resources).TrimEnd('\', '/')
 $Data = if ($Data) { [IO.Path]::GetFullPath($Data).TrimEnd('\', '/') } else { $Resources }
@@ -106,14 +112,19 @@ function Add-Installed([string]$store, [string]$id) {
 $gameDirs = New-Object System.Collections.ArrayList   # install folders: their shortcuts are not apps
 $gameNames = @{}
 
+# $source: where it was found, shown in the list: the store, or the alias of
+# one of your folders (Folders); $category: where it goes when added (a
+# folder's own category), else the one of its kind
 function Add-Item([string]$kind, [string]$store, [string]$id, [string]$name, [string]$command,
-    [string]$hero = '', [string]$logo = '', [string]$iconSource = '', [string]$steamAppId = '') {
+    [string]$hero = '', [string]$logo = '', [string]$iconSource = '', [string]$steamAppId = '', [string]$source = '',
+    [string]$category = '') {
     $name = Get-TileName $name
     if (-not $name -or -not $command) { return }
     if ($kind -eq 'game') { $gameNames[(Get-NameKey $name)] = $true }
+    if (-not $source) { $source = $store }
     [void]$items.Add([pscustomobject]@{
-            Id = "${store}:$id"; Kind = $kind; Store = $store; Name = $name; Command = $command
-            Hero = $hero; Logo = $logo; Icon = ''; IconSource = $iconSource; SteamAppId = $steamAppId; New = $false
+            Id = "${store}:$id"; Kind = $kind; Store = $store; Source = $source; Category = $category; Name = $name; Command = $command
+            Hero = $hero; Logo = $logo; Icon = ''; IconSource = $iconSource; SteamAppId = $steamAppId; New = $false; Found = ''
         })
 }
 
@@ -397,14 +408,39 @@ function Get-SettingValue([string]$key) {
     return ''
 }
 
+# One entry of ImportFolders: "Alias=X:\Folder>Kind>Category", every part but
+# the folder optional: its alias (the folder's own name without one), whether
+# its programs are games or apps (Game / App; without one ImportFoldersKind,
+# a setting of older versions, or Game)
+# and the category they go to (the one of their kind without one). An alias
+# has no \ / : = > or |, a path always has \ and never > (Windows refuses it)
+function Split-FolderEntry([string]$entry) {
+    $entry = $entry.Trim()
+    $alias = ''; $rest = $entry
+    if ($entry -match '^([^\\/:=|>"]+?)\s*=\s*(.+)$') { $alias = $Matches[1].Trim(); $rest = $Matches[2].Trim() }
+    $parts = $rest.Split('>')
+    $path = $parts[0].Trim().Trim('"')
+    $kind = ''; $category = ''
+    if ($parts.Count -gt 1) { $kind = $parts[1].Trim() }
+    if ($parts.Count -gt 2) { $category = $parts[2].Trim() }
+    # one of the kinds (Game, App...; empty: the default one)
+    $k = $kind; $kind = ''
+    foreach ($id in $IMPORT_KINDS) { if ($k -and $id.StartsWith($k.ToLowerInvariant())) { $kind = $id; break } }
+    if (-not $alias) { $alias = @($path.TrimEnd('\', '/') -split '[\\/]')[-1] }
+    return [pscustomobject]@{ Alias = $alias; Path = $path; Kind = $kind; Category = $category }
+}
+
 function Read-Folders {
     $list = if ($Folders) { $Folders } else { Get-SettingValue 'ImportFolders' }
     $kind = if ($FoldersKind) { $FoldersKind } else { Get-SettingValue 'ImportFoldersKind' }
-    $kind = if ($kind -match '(?i)^app') { 'app' } else { 'game' }
+    $k = $kind; $kind = $IMPORT_KINDS[0]
+    foreach ($id in $IMPORT_KINDS) { if ($k -and $id.StartsWith($k.ToLowerInvariant())) { $kind = $id } }
     $names = @{}
     $count = 0; $roots = 0
-    foreach ($root in $list.Split('|')) {
-        $root = [Environment]::ExpandEnvironmentVariables($root.Trim().Trim('"'))
+    foreach ($entry in $list.Split('|')) {
+        if (-not $entry.Trim()) { continue }
+        $folder = Split-FolderEntry $entry
+        $root = [Environment]::ExpandEnvironmentVariables($folder.Path)
         if (-not $root -or -not (Test-Path -LiteralPath $root -PathType Container)) { continue }
         $roots++
         $root = [IO.Path]::GetFullPath($root).TrimEnd('\')
@@ -414,8 +450,9 @@ function Read-Folders {
             $key = Get-NameKey $exe.BaseName
             if (-not $key -or $names[$key]) { continue }
             $names[$key] = $true
-            Add-Item $kind 'Folders' $exe.FullName.ToLowerInvariant() $exe.BaseName ('"{0}"' -f $exe.FullName) '' '' $exe.FullName
-            if ($kind -eq 'game') { [void]$gameDirs.Add($exe.DirectoryName) }
+            $k = if ($folder.Kind) { $folder.Kind } else { $kind }
+            Add-Item $k 'Folders' $exe.FullName.ToLowerInvariant() $exe.BaseName ('"{0}"' -f $exe.FullName) '' '' $exe.FullName '' $folder.Alias $folder.Category
+            if ($k -eq 'game') { [void]$gameDirs.Add($exe.DirectoryName) }
             $count++
         }
     }
@@ -536,6 +573,32 @@ function Test-Present($item, $existing) {
     return $existing.Commands.ContainsKey($item.Command.ToLowerInvariant()) -or $existing.Names.ContainsKey((Get-NameKey $item.Name))
 }
 
+# When each item was found the first time (FirstFound.txt in the data folder,
+# "<id><tab><date>"): the list can show the newest first. Items no longer
+# found leave the file; written only when it changes (.tmp, then moved)
+function Update-FirstFound($items, [string]$file, [string]$now) {
+    $dates = @{}
+    if (Test-Path -LiteralPath $file) {
+        foreach ($l in [IO.File]::ReadAllLines($file)) {
+            $p = $l.Split("`t")
+            if ($p.Count -eq 2 -and $p[0]) { $dates[$p[0]] = $p[1] }
+        }
+    }
+    $changed = $false
+    $keep = @{}
+    foreach ($it in $items) {
+        if (-not $dates.ContainsKey($it.Id)) { $dates[$it.Id] = $now; $changed = $true }
+        $it.Found = $dates[$it.Id]
+        $keep[$it.Id] = $true
+    }
+    foreach ($id in @($dates.Keys)) { if (-not $keep.ContainsKey($id)) { $dates.Remove($id); $changed = $true } }
+    if (-not $changed) { return }
+    $lines = @($dates.Keys | Sort-Object | ForEach-Object { "$_`t$($dates[$_])" })
+    $tmp = "$file.tmp"
+    [IO.File]::WriteAllLines($tmp, [string[]]$lines, (New-Object System.Text.UTF8Encoding $false))
+    Move-Item -LiteralPath $tmp -Destination $file -Force
+}
+
 function Read-Seen {
     $seen = @{}
     if (Test-Path -LiteralPath $seenFile) { foreach ($l in [IO.File]::ReadAllLines($seenFile)) { if ($l) { $seen[$l] = $true } } }
@@ -647,6 +710,7 @@ foreach ($store in 'Steam', 'Epic', 'GOG', 'Ubisoft', 'Battlenet', 'EA', 'Xbox',
 Save-Icons
 
 $existing = Get-ExistingTiles
+Update-FirstFound $items (Join-Path $Data 'FirstFound.txt') (Get-Date).ToString('s')
 $seen = Read-Seen
 $new = 0
 foreach ($it in $items) {
@@ -655,7 +719,7 @@ foreach ($it in $items) {
 }
 
 New-Item -ItemType Directory -Force -Path $generated | Out-Null
-$list = @($items | Sort-Object Kind, Name | Select-Object Id, Kind, Store, Name, Command, Hero, Logo, Icon, SteamAppId, New)
+$list = @($items | Sort-Object Kind, Name | Select-Object Id, Kind, Store, Source, Category, Name, Command, Hero, Logo, Icon, SteamAppId, New, Found)
 $json = ConvertTo-Json -InputObject @{ Scanned = (Get-Date).ToString('s'); Items = $list } -Depth 4
 $tmp = "$foundFile.tmp"
 [IO.File]::WriteAllText($tmp, $json, $utf8)

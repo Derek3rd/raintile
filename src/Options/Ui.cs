@@ -41,6 +41,7 @@ namespace RaintileOptions
         public const int Clear = 0xE711;    // a field emptied (its image or icon file to the Recycle Bin, asked)
         public const int Delete = 0xE74D;   // an entry of a list goes away (list header only): always asked
         public const int Add = 0xE710;
+        public const int Edit = 0xE70F;     // a row of a list shown read-only: edit it in place (Done again)
         public const int Up = 0xE74A, Down = 0xE74B, Left = 0xE72B, Right = 0xE72A;   // move an entry
         public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
         public const int Pin = 0xE718;      // marks a pinned tile (not a button)
@@ -369,6 +370,7 @@ namespace RaintileOptions
 
         // Empties a field (an image or icon file goes to the Recycle Bin: its click asks first)
         public Button NewClearButton(string tip) { return NewActionIcon(Glyph.Clear, tip); }
+        public Button NewEditButton(string tip) { return NewActionIcon(Glyph.Edit, tip); }
 
         // Deletes an entry of a list: its click asks first
         public Button NewDeleteButton(string tip) { return NewActionIcon(Glyph.Delete, tip); }

@@ -136,4 +136,43 @@ function T.list_part_in_the_wheel()
 		string.format('highlight at %d,%d, the row at %d,%d', hx, hy, bx + hit[1], by + hit[2]))
 end
 
+-- Keyboard and pad inside a widget with parts (the rows of its list): from
+-- row to row, out of the tile at the last one, back onto the nearest row
+function T.parts_with_keys()
+	local s = skinWithWidget('Rows=7\r\n')
+	local w = testWidget(s)
+	for i, c in ipairs(s:upvalue('cats')) do
+		for _, tile in ipairs(c.tiles) do
+			if tile == w then s:call('Show()') s:call('SetCategory(' .. i .. ')') end
+		end
+	end
+	t.clean(s)
+	local M, hover = s:upvalue('M'), s:upvalue('hover')
+	local i = w.widget.idx
+	local row1, row2 = 'W' .. i .. 'RowHit1', 'W' .. i .. 'RowHit2'
+	t.ok(w.widget.partsAt[row1] and w.widget.partsAt[row2], 'the test widget has no two rows')
+	s:call("HoverPart('" .. row1 .. "')")
+	t.eq(M.kpart and M.kpart.name, row1, 'the mouse on a row: the keys go on from it')
+	s:call('Nav(0, 1)')
+	t.clean(s)
+	t.eq(M.kpart and M.kpart.name, row2, 'down from the first row')
+	t.eq(hover.toy, w.widget.partsAt[row2][2], 'the highlight on the second row')
+	s:call('Nav(0, -1)')
+	t.eq(M.kpart and M.kpart.name, row1, 'up from the second row')
+	-- up from the first row: out of the tile (onto the one above, if any)
+	local idx = hover.idx
+	s:call('Nav(0, -1)')
+	t.clean(s)
+	t.ok(M.kpart == nil or M.kpart.t ~= w, 'still in the widget past its first row')
+	if hover.idx ~= idx then
+		-- and down again: onto its first row, not the whole tile
+		s:call('Nav(0, 1)')
+		t.clean(s)
+		t.eq(M.kpart and M.kpart.name, row1, 'back down into the widget')
+	end
+	-- Confirm on a row: the row, not the tile (no launch animation)
+	s:call('Confirm()')
+	t.ok(not s:upvalue('launching'), 'Confirm on a row launched the tile')
+end
+
 return T

@@ -115,7 +115,7 @@ Keys are only captured **while the launcher is visible**: when it is hidden they
 | `F` | open the search |
 | `Esc` | close the search, or the launcher |
 
-Mouse and keyboard move the same highlight. Every action has two configurable keys (`NavUp`/`NavUp2`, `NavConfirm`/`NavConfirm2`, ...) using HotKey plugin key names: letters, `UP`, `DOWN`, `LEFT`, `RIGHT`, `SPACE`, `ENTER`, `TAB`, ... `KeyboardNav=0` turns keyboard navigation off. Confirm keys act on **release**, so key repeat and the release itself never reach the game you just launched.
+Mouse and keyboard move the same highlight. On a widget with parts (the rows of a list, e.g. Modrinth) the arrows and the D-pad go from part to part, and on to the next tile past the last one; Enter / `A` presses the part, as a click does. Every action has two configurable keys (`NavUp`/`NavUp2`, `NavConfirm`/`NavConfirm2`, ...) using HotKey plugin key names: letters, `UP`, `DOWN`, `LEFT`, `RIGHT`, `SPACE`, `ENTER`, `TAB`, ... `KeyboardNav=0` turns keyboard navigation off. Confirm keys act on **release**, so key repeat and the release itself never reach the game you just launched.
 
 The keys are registered by two invisible mini-skins, `Raintile\Hotkey` (Esc) and `Raintile\Navigation` (everything else), which the launcher activates when shown and deactivates when hidden. Don't load them by hand.
 

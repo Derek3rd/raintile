@@ -139,3 +139,24 @@ Test 'Data.ps1: the kind of your folders moves onto each folder' {
     $out = Invoke-Data $i
     Assert-True (-not ($out -match '^Settings updated')) 'a second run rewrote Settings.inc'
 }
+
+Test 'Data.ps1: the Steam updates switch becomes UpdateInfo' {
+    $i = New-Install
+    Invoke-Data $i | Out-Null
+    $settings = Join-Path $i.Data 'Settings.inc'
+    foreach ($case in @(@('0', 'Never'), @('1', 'Hover'))) {
+        # an older version: GameUpdates in place of UpdateInfo
+        $text = [IO.File]::ReadAllText($settings) -replace '(?m)^UpdateInfo=.*$', ('GameUpdates=' + $case[0])
+        [IO.File]::WriteAllText($settings, $text)
+        Invoke-Data $i | Out-Null
+        Assert-Equal (Get-Setting $settings 'UpdateInfo') $case[1] ('GameUpdates=' + $case[0])
+        Assert-Equal (Get-Setting $settings 'GameUpdates') $null 'the old setting'
+    }
+    # both there (a file edited by hand): UpdateInfo wins
+    Set-Setting $settings 'UpdateInfo' 'Always'
+    [IO.File]::AppendAllText($settings, "GameUpdates=0`r`n")
+    Invoke-Data $i | Out-Null
+    Assert-Equal (Get-Setting $settings 'UpdateInfo') 'Always' 'UpdateInfo kept'
+    $out = Invoke-Data $i
+    Assert-True (-not ($out -match '^Settings updated')) 'a second run rewrote Settings.inc'
+}

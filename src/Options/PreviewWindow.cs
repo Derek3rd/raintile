@@ -213,7 +213,7 @@ namespace RaintileOptions
         void UpdatePreviewButton()
         {
             if (btnPreview == null) return;
-            btnPreview.Content = previewWin != null ? "Hide preview" : "Preview";
+            SetPadHintText(btnPreview, previewWin != null ? "Hide preview" : "Preview");
         }
 
         // Beside the Options window, as tall as it, as wide as the screen's
@@ -364,7 +364,7 @@ namespace RaintileOptions
                     double h = hz ? p.Cells * (th + gap) - gap : p.Lines * (th + gap) - gap;
                     double x = hz ? line * (tw + gap) : p.Cross * (tw + gap);
                     double y = hz ? p.Cross * (th + gap) : line * (th + gap);
-                    var e = NewPreviewTile(p.Tile, w, h, Math.Min(radius, Math.Min(w, h) / 2), labels, false, g);
+                    var e = NewPreviewTile(p.Tile, w, h, Math.Min(radius, Math.Min(w, h) / 2), labels, false, g, true, false, true);
                     Canvas.SetLeft(e, x); Canvas.SetTop(e, y);
                     grid.Children.Add(e);
                 }

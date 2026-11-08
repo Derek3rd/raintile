@@ -24,11 +24,26 @@ local function withImages(s)
 	end
 end
 
-local function wheel(settings, images)
+-- The background images with a PNG header of w x h (the launcher reads their
+-- size there: framing, the coloured strip of a download)
+local function sizedBackgrounds(s, w, h)
+	local function be(n) return string.char(math.floor(n / 16777216) % 256, math.floor(n / 65536) % 256, math.floor(n / 256) % 256, n % 256) end
+	local head = '\137PNG\r\n\26\n' .. be(13) .. 'IHDR' .. be(w) .. be(h) .. '\8\6\0\0\0'
+	for dir in (host_listdir(s.data .. 'Images') .. '\n'):gmatch('([^\n]+)\n') do
+		local bg = s.data .. 'Images\\' .. dir .. '\\background\\'
+		for file in ((host_listdir(bg) or '') .. '\n'):gmatch('([^\n]+)\n') do
+			if file:lower():match('%.png$') then R.writeFile(bg .. file, head) end
+		end
+	end
+end
+
+-- prepare(s): before the skin loads (after the test images are made)
+local function wheel(settings, images, prepare)
 	settings = settings or {}
 	settings.ScrollMode = 'Wheel'
 	local s = R.new({ settings = settings })
 	if images then withImages(s) end
+	if prepare then prepare(s) end
 	s:start()
 	t.clean(s)
 	t.ok(s:upvalue('ready'), 'the launcher is not ready after loading')
@@ -213,6 +228,320 @@ function T.backdrop_follows_the_selection()
 	s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', WheelBackdrop = 0 })
 	t.ok(s.meters['meterbackdrop1'].hidden and s.meters['meterbackdrop2'].hidden, 'backdrop shown with WheelBackdrop=0')
 	t.ok(s.meters['metertopbar'].hidden, 'band behind the top row without the backdrop')
+	t.clean(s)
+end
+
+-- WheelLogoOn=Background: the selected tile's logo on the backdrop, where it
+-- sits on the tile (centred by default), WheelBackdropLogoSize of the area's
+-- height; not on its tile, still on the others. After a turn, the next one's.
+function T.logo_on_the_backdrop()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelLogoOn = 'Background', WheelBackdropLogoSize = 40, Thumbnails = 0 }, true)
+	local M, V = s:upvalue('M'), s:upvalue('V')
+	local function check(what)
+		local L = #c.tiles
+		local k = s:upvalue('offset')
+		local tl = c.tiles[k % L + 1]
+		t.ok(tl.logo, 'the selected tile has no logo (test images missing)')
+		local slot = slotOf(s, k)
+		t.ok(s.meters['tileicon' .. slot].hidden, what .. ': the logo is still on the selected tile')
+		local logo = s.meters['backdroplogo']
+		t.ok(not logo.hidden, what .. ': no logo on the backdrop')
+		t.eq(logo:opt('ImageName', ''), tl.logoFull, what .. ': the image on the backdrop')
+		local ax, ay, W, H = M.backdropArea()
+		local size = num(logo, 'W')
+		t.eq(size, math.floor(H * 40 / 100 * tl.logoScale + 0.5), what .. ': logo size')
+		t.ok(math.abs(num(logo, 'X') + size / 2 - (ax + W / 2)) <= 1, what .. ': logo not centred across')
+		t.ok(math.abs(num(logo, 'Y') + size / 2 - (ay + H / 2)) <= 1, what .. ': logo not centred down')
+		-- the other tiles keep theirs
+		local side = slotOf(s, k + 1)
+		local st = side and c.tiles[(k + 1) % L + 1]
+		if st and st.logo and st ~= tl then t.ok(not s.meters['tileicon' .. side].hidden, what .. ': a side tile lost its logo') end
+	end
+	check('at first')
+	s:call('Scroll(1)')
+	check('after a turn')
+	s:call('Hide()')
+	t.atRest(s)
+	t.clean(s)
+	-- on the tile (the default): nothing on the backdrop
+	s = wheel({ LauncherMode = 'Fullscreen', Thumbnails = 0 }, true)
+	t.ok(s.meters['backdroplogo'].hidden, 'a logo on the backdrop with WheelLogoOn=Tile')
+	t.clean(s)
+end
+
+-- WheelInfoOn=Background: the selected tile's update line on the backdrop, at
+-- the top left of the area under the top row (InfoPos 0,0); no tile of the
+-- wheel shows its line, also with UpdateInfo=Always
+function T.info_on_the_backdrop()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelInfoOn = 'Background', UpdateInfo = 'Always' })
+	local M, V = s:upvalue('M'), s:upvalue('V')
+	local L = #c.tiles
+	t.ok(L > 2, 'too few tiles')
+	local k = s:upvalue('offset')
+	local tl, next = c.tiles[k % L + 1], c.tiles[(k + 1) % L + 1]
+	t.ok(not tl.widget and not next.widget, 'a widget where a game is wanted')
+	-- the selected tile and the next one with an update
+	tl.steamId, next.steamId = '480', '481'
+	R.writeFile(s.resources .. 'Generated\\GameUpdates.txt',
+		'480|5000000000|0|0|0|steamapps\\appmanifest_480.acf\n481|3000000000|0|0|0|steamapps\\appmanifest_481.acf\n')
+	s:call('OnGameUpdates()')
+	t.ok(s.meters['tileupd' .. slotOf(s, k)].hidden, 'the update line is still on the selected tile')
+	t.ok(s.meters['tileupd' .. slotOf(s, k + 1)].hidden, 'an update line on a side tile')
+	local upd = s.meters['backdropupd']
+	t.ok(not upd.hidden, 'no update line on the backdrop')
+	local ax, ay, W = M.backdropArea()
+	t.eq(num(upd, 'X'), ax + V.LabelPad, 'update line across')
+	t.eq(num(upd, 'Y'), ay + V.LabelPad, 'update line down')
+	-- its own place there (BackInfoPos=): on the right, whatever InfoPos= says
+	tl.infoX, tl.backInfoX = 0, 1
+	s:call('Show()')
+	s:call('Scroll(1)') s:call('Scroll(-1)')
+	t.ok(math.abs(num(upd, 'X') + upd:GetW() - (ax + W - V.LabelPad)) <= 1, 'update line not on the right of the area')
+	tl.backInfoX = 0
+	s:call('Scroll(1)') s:call('Scroll(-1)')
+	local text = upd:opt('Text', '')
+	-- the selection moves on: the next tile's line on the backdrop, none on the
+	-- tile that was selected
+	s:call('Scroll(1)')
+	t.ok(not upd.hidden, 'no update line on the backdrop after a turn')
+	t.ok(upd:opt('Text', '') ~= text, 'the line of the tile selected before stayed')
+	t.ok(s.meters['tileupd' .. slotOf(s, k)].hidden, 'an update line on the tile selected before')
+	t.clean(s)
+end
+
+-- Logos only with the logo on the backdrop: the selected tile shows its art,
+-- not an empty colour; the others their logo on a colour
+function T.logos_only_with_the_logo_on_the_backdrop()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelIconsOnly = 1, WheelLogoOn = 'Background', Thumbnails = 0 }, true)
+	local L = #c.tiles
+	local k = s:upvalue('offset')
+	local tl = c.tiles[k % L + 1]
+	t.ok(tl.logo and tl.background, 'the selected tile has no logo or background (test images missing)')
+	t.eq(s.meters['tile' .. slotOf(s, k)]:opt('ImageName', ''), tl.background, 'image of the selected tile')
+	local side = slotOf(s, k + 1)
+	local st = c.tiles[(k + 1) % L + 1]
+	if side and st.logo and st ~= tl then
+		t.eq(s.meters['tile' .. side]:opt('ImageName', ''), '', 'a side tile shows its background with logos only')
+	end
+	-- turned: the tile that was selected goes back to its logo
+	s:call('Scroll(1)')
+	t.eq(s.meters['tile' .. slotOf(s, k)]:opt('ImageName', ''), '', 'the tile selected before kept its background')
+	t.clean(s)
+end
+
+-- The logo on the backdrop has its own place and size there (BackLogoPos=,
+-- BackLogoScale=: its centre, kept inside the area), whatever its place on
+-- the thumbnail (LogoPos=, LogoScale=)
+function T.logo_on_the_backdrop_at_its_own_place()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelLogoOn = 'Background', WheelBackdropLogoSize = 20, Thumbnails = 0 }, true)
+	local M = s:upvalue('M')
+	local L = #c.tiles
+	local tl = c.tiles[s:upvalue('offset') % L + 1]
+	t.ok(tl.logo, 'the selected tile has no logo (test images missing)')
+	local logo = s.meters['backdroplogo']
+	local ax, ay, W, H = M.backdropArea()
+	-- the place on the thumbnail does not move it
+	tl.logoX, tl.logoY, tl.logoScale, tl.logoRatio = 0, 0, 2, nil
+	tl.backLogoX, tl.backLogoY, tl.backLogoScale = 0, 0, 1
+	M.backdropLogo()
+	t.eq(num(logo, 'W'), math.floor(H * 20 / 100 + 0.5), 'logo size on the backdrop')
+	t.eq(num(logo, 'X'), ax, 'logo not against the left of the area')
+	t.eq(num(logo, 'Y'), ay, 'logo not against the top of the area')
+	-- the bottom right corner
+	tl.backLogoX, tl.backLogoY = 1, 1
+	M.backdropLogo()
+	local size = num(logo, 'W')
+	t.ok(math.abs(num(logo, 'X') + size - (ax + W)) <= 1, 'logo not against the right of the area')
+	t.ok(math.abs(num(logo, 'Y') + size - (ay + H)) <= 1, 'logo not against the bottom of the area')
+	-- 25,75 at half the size: its centre there
+	tl.backLogoX, tl.backLogoY, tl.backLogoScale = 0.25, 0.75, 0.5
+	M.backdropLogo()
+	size = num(logo, 'W')
+	t.eq(size, math.floor(H * 20 / 100 * 0.5 + 0.5), 'logo size with BackLogoScale')
+	t.ok(math.abs(num(logo, 'X') + size / 2 - (ax + 0.25 * W)) <= 1, 'logo centre across')
+	t.ok(math.abs(num(logo, 'Y') + size / 2 - (ay + 0.75 * H)) <= 1, 'logo centre down')
+	t.clean(s)
+end
+
+-- BackLogoPos= and friends, of the tile or its category, read with the tiles
+function T.backdrop_keys_of_the_tile_and_the_category()
+	local s = R.new({ settings = { ScrollMode = 'Wheel' } })
+	local file = s.data .. 'Categories\\Games.ini'
+	local text = R.readFile(file)
+	-- (the section, not the comment at the top that names it)
+	t.ok(text and text:find('\n%[Category%]'), 'no Games category with a [Category] section')
+	text = text:gsub('\n%[Category%]', '\n[Category]\nBackLogoPos=10,20\nBackInfoPos=100,100', 1)
+	R.writeFile(file, text)
+	s:start()
+	t.clean(s)
+	local cats = s:upvalue('cats')
+	local tile
+	for _, c in ipairs(cats) do
+		if not c.virtual and c.file and c.file:lower():find('games') and #c.tiles > 0 then tile = c.tiles[1] end
+	end
+	t.ok(tile, 'no tile in Games')
+	t.eq(tile.backLogoX, 0.1, 'BackLogoPos X of the category')
+	t.eq(tile.backLogoY, 0.2, 'BackLogoPos Y of the category')
+	t.eq(tile.backLogoScale, 1, 'BackLogoScale default')
+	t.eq(tile.backInfoX, 1, 'BackInfoPos X of the category')
+	t.clean(s)
+end
+
+-- The thumbnails' logo is a share of the thumbnail, whatever the grid's
+-- IconSize; the backgrounds' styles are the grid's (the thumbnails are cropped)
+function T.thumbnails_logo_size_and_style()
+	local s = wheel({ LauncherMode = 'Fullscreen', IconSize = 300, BgStyle = 'Parallax' })
+	local V = s:upvalue('V')
+	t.eq(V.IconSize, math.floor(V.TileW * 0.7), 'logo size of the thumbnails')
+	t.eq(V.BgStyle, 'crop', 'background style in the wheel')
+	s = wheel({ LauncherMode = 'Fullscreen', IconSize = 8 })
+	V = s:upvalue('V')
+	t.eq(V.IconSize, math.floor(V.TileW * 0.7), 'logo size of the thumbnails with a small IconSize')
+	t.clean(s)
+end
+
+-- Opened, the wheel highlights its middle tile; the lines on the backdrop
+-- (UpdateInfo=Hover, the default) are there at once and stay while the mouse
+-- is on another tile: the backdrop is the selected tile
+function T.backdrop_lines_without_the_mouse()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelInfoOn = 'Background', WheelHover = 'Highlight' })
+	local hover = s:upvalue('hover')
+	local L = #c.tiles
+	local k = s:upvalue('offset')
+	t.ok(hover.on and hover.idx == k % L + 1, 'the middle tile is not highlighted when the wheel opens')
+	local tl = c.tiles[k % L + 1]
+	t.ok(not tl.widget, 'the selected tile is a widget')
+	tl.steamId = '480'
+	R.writeFile(s.resources .. 'Generated\\GameUpdates.txt', '480|5000000000|0|0|0|steamapps\\appmanifest_480.acf\n')
+	s:call('OnGameUpdates()')
+	local upd = s.meters['backdropupd']
+	t.ok(not upd.hidden, 'no update line on the backdrop without the mouse')
+	s:call('HoverTile(' .. slotOf(s, k + 1) .. ')')
+	t.ok(not upd.hidden, 'the update line left the backdrop with the mouse on another tile')
+	t.clean(s)
+end
+
+-- A game no longer installed: its backdrop greyed out, as its thumbnail
+function T.backdrop_of_a_missing_game()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', Thumbnails = 0 }, true)
+	local M = s:upvalue('M')
+	local L = #c.tiles
+	local k = s:upvalue('offset')
+	local nxt = c.tiles[(k + 1) % L + 1]
+	t.ok(nxt.background and nxt ~= c.tiles[k % L + 1], 'the next tile has no background (test images missing)')
+	nxt.missing = true
+	s:call('Scroll(1)')
+	local front = s.meters['meterbackdrop' .. M.backdrop.front]
+	t.eq(front:opt('ColorMatrix1', ''), '0.3;0.3;0.3;0;0', 'backdrop of a missing game not in greyscale')
+	s:call('Scroll(-1)')
+	front = s.meters['meterbackdrop' .. M.backdrop.front]
+	t.eq(front:opt('ColorMatrix1', ''), '1;0;0;0;0', 'backdrop of an installed game in greyscale')
+	t.clean(s)
+end
+
+-- Another category: the highlight on its middle tile at once, as when the
+-- wheel opens
+function T.highlight_after_a_category_change()
+	local s = wheel({ LauncherMode = 'Fullscreen' })
+	local cats = s:upvalue('cats')
+	local other
+	for i, c in ipairs(cats) do
+		if not c.virtual and #c.tiles > 0 and i ~= s:upvalue('active') then other = i break end
+	end
+	t.ok(other, 'no other category with tiles')
+	s:call('SetCategory(' .. other .. ')')
+	local hover, L = s:upvalue('hover'), #cats[other].tiles
+	t.ok(hover.on and hover.idx == s:upvalue('offset') % L + 1, 'the middle tile is not highlighted after a category change')
+	t.clean(s)
+end
+
+-- The highlight on a side tile: its container cut by the tile nearer the
+-- middle that covers it (drawn over it), and faded as that side tile; on the
+-- middle tile nothing cuts it and it is not faded
+function T.highlight_under_the_nearer_tiles()
+	local s = wheel({ LauncherMode = 'Fullscreen', WheelHover = 'Highlight', WheelSpacing = 50, WheelFade = 60 })
+	local V = s:upvalue('V')
+	local k = s:upvalue('offset')
+	local clip = s.meters['hoverclip']
+	t.eq(clip:opt('Shape2', ''), '', 'the highlight on the middle tile is cut')
+	local function strokeAlpha()
+		local a = s.meters['tilehover']:opt('Shape', ''):match('Stroke Color %d+,%d+,%d+,(%d+)')
+		return tonumber(a or '0')
+	end
+	local middle = strokeAlpha()
+	t.ok(middle > 0, 'no highlight on the middle tile')
+	s:call('HoverTile(' .. slotOf(s, k + 1) .. ')')
+	t.ok(clip:opt('Shape2', ''):find('^Rectangle'), 'the highlight on a side tile is not cut by the middle one')
+	local combine = clip:opt('Shape3', '')
+	t.ok(combine:find('Combine Shape') and combine:find('Exclude Shape2'), 'no combined shape: ' .. combine)
+	t.ok(strokeAlpha() < middle, 'the highlight on a side tile is not faded')
+	-- back on the middle tile: nothing cuts it
+	s:call('HoverTile(' .. slotOf(s, k) .. ')')
+	t.eq(clip:opt('Shape2', ''), '', 'the highlight back on the middle tile is still cut')
+	t.clean(s)
+end
+
+-- The mouse wheel notch (ScrollStep) turns the wheel by that many tiles
+function T.scroll_step_in_the_wheel()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', ScrollStep = 2 })
+	t.ok(#c.tiles > 3, 'too few tiles')
+	local before = s:upvalue('offset')
+	s:call('Scroll(1)')
+	t.eq(s:upvalue('offset'), before + 2, 'offset after one notch with ScrollStep=2')
+	t.clean(s)
+end
+
+-- A download coloured again from the left (DownloadStyle=Greyscale): the
+-- coloured strip of the background on a thumbnail with its image, none on a
+-- thumbnail with logos only (it has no image to colour)
+function T.download_strip_and_logos_only()
+	local function strip(iconsOnly)
+		local s, c = wheel({ LauncherMode = 'Fullscreen', DownloadStyle = 'Greyscale', WheelIconsOnly = iconsOnly, Thumbnails = 0 }, true,
+			function(s) sizedBackgrounds(s, 1920, 1080) end)
+		local L = #c.tiles
+		local k = s:upvalue('offset')
+		local tl = c.tiles[k % L + 1]
+		t.ok(tl.background and tl.logo and not tl.widget, 'the selected tile has no background or logo (test images missing)')
+		tl.steamId = '480'
+		R.writeFile(s.resources .. 'Generated\\GameUpdates.txt', '480|5000000000|2000000000|0|0|steamapps\\appmanifest_480.acf\n')
+		s:call('OnGameUpdates()')
+		-- (the progress fills up when the launcher opens)
+		s:call('Hide()')
+		s:call('Show()')
+		local m = s.meters['tilereveal' .. slotOf(s, k)]
+		t.clean(s)
+		return m ~= nil and not m.hidden
+	end
+	t.ok(strip(0), 'no coloured strip on a thumbnail with its image (the test cannot tell)')
+	t.ok(not strip(1), 'a strip of the background image over a thumbnail with logos only')
+end
+
+-- The grid keeps its backgrounds' style (only the wheel's thumbnails are cropped)
+function T.grid_keeps_its_background_style()
+	local s = R.new({ settings = { BgStyle = 'Parallax' } }):start()
+	t.eq(s:upvalue('V').BgStyle, 'parallax', 'background style in the grid')
+	t.clean(s)
+end
+
+-- Not in the wheel: the settings of the backdrop do nothing
+function T.backdrop_settings_in_the_grid()
+	local s = R.new({ settings = { WheelLogoOn = 'Background', WheelInfoOn = 'Background', Thumbnails = 0 } })
+	withImages(s)
+	s:start()
+	s:call('Show()')
+	local cats = s:upvalue('cats')
+	local best, most = 1, 0
+	for i, c in ipairs(cats) do
+		if not c.virtual and #c.tiles > most then best, most = i, #c.tiles end
+	end
+	s:call('SetCategory(' .. best .. ')')
+	t.ok(s.meters['backdroplogo'].hidden and s.meters['backdropupd'].hidden and s.meters['backdropinfo'].hidden, 'backdrop meters shown in the grid')
+	local shown = 0
+	for slot = 1, s:upvalue('V').Slots do
+		local m = s.meters['tileicon' .. slot]
+		if m and not m.hidden then shown = shown + 1 end
+	end
+	t.ok(shown > 0, 'no logo on the tiles of the grid (test images missing)')
 	t.clean(s)
 end
 

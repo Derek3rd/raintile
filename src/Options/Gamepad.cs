@@ -134,8 +134,18 @@ namespace RaintileOptions
             // a click or a key: mouse and keyboard take over
             EventManager.RegisterClassHandler(typeof(Window), UIElement.PreviewMouseDownEvent, new MouseButtonEventHandler((s, e) => PadModeOff(true)));
             EventManager.RegisterClassHandler(typeof(Window), UIElement.PreviewKeyDownEvent, new KeyEventHandler((s, e) => PadModeOff(true)));
+            AddPadHint((Button)win.FindName("BtnPreview"), Glyph.PadY);
             AddPadHint(btnSave, Glyph.PadStart);
             AddPadHint((Button)win.FindName("BtnClose"), Glyph.PadB);
+        }
+
+        // A new text for a button with a pad hint, its glyph kept
+        static void SetPadHintText(Button b, string text)
+        {
+            var sp = b.Content as StackPanel;
+            var t = sp != null && sp.Children.Count > 0 ? sp.Children[sp.Children.Count - 1] as TextBlock : null;
+            if (t != null) t.Text = text; else b.Content = text;
+            AutomationProperties.SetName(b, text);
         }
 
         // The glyph of the pad button that presses b, before its text, shown only
@@ -360,6 +370,8 @@ namespace RaintileOptions
             else if ((fire & PadB) != 0) PadBack(root);
             else if ((fire & PadLB) != 0 && root == win) PadPage(-1);
             else if ((fire & PadRB) != 0 && root == win) PadPage(1);
+            // the preview beside the window, as its button in the footer
+            else if ((fire & PadY) != 0 && root == win && btnPreview != null) btnPreview.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             else if (start && root == win)
             {
                 // the button takes the focus first, as with a click: fields that

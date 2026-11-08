@@ -101,6 +101,38 @@ namespace RaintileOptions
         public const string ControlKey = "ControlColumn";   // its GridLength in the resources
     }
 
+    // A row of a card (NewRow): the line above it parts it from what comes
+    // before. First: nothing comes before it, the card's border is there.
+    public class CardRow : Border
+    {
+        readonly Brush line;
+        public CardRow(Brush line) { this.line = line; BorderBrush = line; BorderThickness = OptionsApp.T(0, 1, 0, 0); }
+        public bool First
+        {
+            // (only the colour: the row keeps its height)
+            set { var b = value ? Brushes.Transparent : line; if (BorderBrush != b) BorderBrush = b; }
+        }
+    }
+
+    // The panel of a card (NewCard, NewSwitchCard): the first thing shown in it,
+    // when it is a row, has no line, also when what was above it (a reason, a
+    // row of the tile editor) is hidden. docs/OptionsUI.md, "A card".
+    public class CardStack : StackPanel
+    {
+        protected override Size MeasureOverride(Size available)
+        {
+            bool first = true;
+            foreach (UIElement c in InternalChildren)
+            {
+                if (c == null || c.Visibility == Visibility.Collapsed) continue;
+                var row = c as CardRow;
+                if (row != null) row.First = first;
+                first = false;
+            }
+            return base.MeasureOverride(available);
+        }
+    }
+
     // A number: slider + text box + unit (NewNumberField). Show() puts a value in
     // it without reporting a change.
     public class NumberField

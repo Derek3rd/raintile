@@ -264,6 +264,8 @@ function Save-Window([string]$exe, [string]$resources, [string]$dir) {
             $label = @($item.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text))) |
                 ForEach-Object { $_.Current.Name } | Where-Object { $_ -match '[A-Za-z]' }) | Select-Object -Last 1
             $name = '{0:00}-{1}' -f $i, ($label -replace '[^A-Za-z0-9]', '')
+            # a page of a mode not in use (Page.When) is greyed out: it cannot be selected
+            if (-not $item.Current.IsEnabled) { continue }
             Select-Item $item
             Save-Page $win $hwnd $dir $name
             # a category page: also its first tile (after All tiles)

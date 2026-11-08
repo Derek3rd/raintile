@@ -30,10 +30,9 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 | Part of the launcher | Page |
 | --- | --- |
 | Where it shows, its mode (full screen, window, docked), margins, opening and closing | General |
-| Grid or wheel, the tile itself (colour, corners, logo, highlight, label) | Tiles |
-| Rows and columns, scrolling, scrollbar, edge fade | Tiles > Grid |
-| The wheel, its turning, its inner wheel of categories, its backdrop | Tiles > Wheel |
-| Background images of the tiles | Tiles > Backgrounds |
+| Grid or wheel, scrolling and spacing of both, the tile itself in both (colour, corners, inner margin, highlight, label) | Tiles |
+| Rows and columns, the grid tiles' logo size, scroll direction, edge fade, how the background images move, scrollbar | Tiles > Grid |
+| The wheel's shape, its thumbnails, its backdrop, its turning, its inner wheel of categories | Tiles > Wheel |
 | The play time line, Steam updates on the tiles | Tiles > Play time and updates |
 | The category menu and its colours, Favorites, the buttons of the top row | Top row |
 | Recent, Not played yet | Top row > Recent and Not played yet |
@@ -50,6 +49,19 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 
 - A new setting: find its part in the table. A new part gets a row here (and its
   page, or a group on the page of the part it belongs to) in the same PR.
+- **Settings of one layout.** What only the grid uses (rows and columns, `Size=`, the
+  logo size, the backgrounds' styles, the scrollbar) is on Tiles > Grid; what only the
+  wheel uses is on Tiles > Wheel; Tiles holds what both use, with a help that says
+  what it does in each when that differs (the mouse wheel notch: rows, or tiles). A
+  setting of one layout elsewhere has `When = "ScrollMode=..."`. In the tile editor
+  (Categories) a row of the other layout is disabled with its reason
+  (`AddGridOnlyReason`), and the preview shows the tile of the layout in use: the
+  grid's tile, or the wheel's thumbnail. In the wheel the thumbnail is the tile; when
+  the selected tile's logo or lines go on the backdrop, **Place on** switches the
+  preview to the backdrop, whose keys are its own (`BackLogoPos`, `BackLogoScale`,
+  `BackInfoPos`): a place is edited where it is seen, at its real size, and what does
+  not exist there (the framing of the backdrop, a logo kept on the thumbnail) is
+  disabled with its reason (docs/Guide.md, "Grid or wheel").
 - **The switch before what it switches.** A setting that decides which others apply
   (a mode, a choice of layout, a feature on or off) is the first of its page or group;
   the pages of its modes are sub-pages of the page holding it (Grid / Wheel under
@@ -59,7 +71,17 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
   conditions by `;`): while it does not apply its control is disabled (the gamepad
   passes over it), its label dimmed, and the reason shown under it in the accent
   colour, from the labels of the settings it needs ("Only with Layout: Wheel (Tiles
-  page)."). Built by `AddRowReason` / `SetRowApplies` in `Ui.cs`.
+  page)."). Built by `AddRowReason` / `SetRowApplies` in `Ui.cs`. The three cases,
+  and nothing else:
+
+  | The setting does not apply because | It is | The reason |
+  | --- | --- | --- |
+  | another setting (`Item.When`, `Group.When`, `Page.When`), also on another page or in the tile editor | disabled | in the accent colour under its label (the card's title, for a whole card; the menu entry is greyed out, for a page) |
+  | the switch of its card or of its page is off | disabled | none: the switch is right above |
+  | the thing being edited cannot have it (the framing or the logo of a widget tile) | hidden | none: it never applies there |
+
+  So a setting is never hidden because of another setting, and a disabled one
+  always shows why unless its own switch is in view.
 - **The settings of one mode together.** Settings that all apply with the same
   other one, set outside their group (the window's size, the docked side and size
   with Mode), make a group of their own with the `When` on the group
@@ -67,20 +89,37 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
   (`AddCardReason` / `SetCardApplies`), and its settings carry no `When` of that
   mode; a setting of the card that also needs another one keeps its own `When`.
   Their labels do not repeat the group's name (Window > Width, not Window width).
-- **A switch for a whole page goes beside its title.** A bool that turns the whole
-  page on or off (the clock, keyboard navigation, the gamepad) is `Switch = "Key"`
-  on the page (`Page.Switch`, the first setting of its first group): the switch and
-  its reset are at the right of the page title (`PageSwitch` in the window's
-  header), the page title is its label, and every card of the page is disabled while
-  it is off. With the gamepad, right from the menu lands on it first.
-- **A switch for a whole group goes in its header.** A bool that turns a whole
-  group on or off (the clock, the filter bar, keyboard navigation, the gamepad) is
-  `Switch = "Key"` on the group (`Group.Switch`, the first of its items): the card's
-  header is its label, upper case like any card title, with the switch and its
-  reset in the control and action columns (`NewSwitchCard`); its help (or the
-  group's) is under the header; the other settings of the group are disabled while
-  it is off, with no reason under them (the switch is right above). Its label names
-  the part ("Filter bar", "Labels"), not "Show ...": it is the title of the card.
+- **Where a switch goes.** A bool that turns a part of the launcher on or off sits
+  as high as the part it turns off:
+  - the whole page is one part (the clock, keyboard navigation, the gamepad): beside
+    the page title;
+  - the page holds several parts, each with its own switch (Recent and Not played
+    yet; the filter bar on Search; the labels on Tiles): in the header of each card;
+  - the part cannot be turned off (the search bar): no switch, the page starts with
+    its settings.
+- **A switch for a whole page goes beside its title.** It is `Switch = "Key"` on the
+  page (`Page.Switch`, the first setting of its first group): the switch and its
+  reset are at the right of the page title (`PageSwitch` in the window's header), the
+  page title is its label (the setting's own label is only its accessible name), and
+  every card of the page is disabled while it is off. With the gamepad, right from
+  the menu lands on it first.
+- **A switch for a whole group goes in its header.** It is `Switch = "Key"` on the
+  group (`Group.Switch`, the first of its items): the card's header is its label,
+  upper case like any card title, with the switch and its reset in the control and
+  action columns (`NewSwitchCard`); its help (or the group's) is under the header;
+  the other settings of the group are disabled while it is off, with no reason under
+  them (the switch is right above). Its label names the part ("Filter bar",
+  "Labels"), not "Show ...": it is the title of the card.
+- **A card** is, from the top: a header (its title, or its switch), then its help,
+  then its rows; each of the three can be missing. A row draws the line above it,
+  which parts it from what comes before: the first row of a card with no header and
+  no help has none (the card's border is there). `NewCard`, `NewSwitchCard` and
+  `NewRow` do it (`CardStack`, `CardRow` in `Ui.cs`): a card built by hand uses them,
+  never its own lines.
+- **Which cards have a title.** Only the first card of a page may have none: it holds
+  the settings of the page itself (its mode, what the whole page is about), which
+  the page title already names. Every other card has a title or a switch, so the
+  page reads as its parts.
 - **No title twice.** A card title never repeats its page's title, and a page's only
   card has no title (the page has it), unless its header is a switch.
 - **A page for one mode** (Grid, Wheel) has the `When` on the page instead
@@ -103,7 +142,8 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 - `tools/check.py` checks that every `When` (of a setting, a group or a page) names a setting and values it can take,
   that a switch on the same page comes before what it switches, that a group's or a
   page's `Switch` is its first setting and a bool, that no card is titled as its page, that
-  a page's only card has no title, and that every page is in the menu (`NavTree`) once.
+  a page's only card has no title, that every card after the first has a title or a
+  switch, and that every page is in the menu (`NavTree`) once.
 
 ## 1. Nothing only in a tooltip
 
@@ -266,7 +306,11 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 - `DangerButton`: an action that deletes or cannot be undone. It is never the
   default button.
 - Order: the main action first, Cancel or Close last; the window's footer too
-  ("Save and refresh", "Close").
+  ("Save and refresh", "Close"), with "Preview" / "Hide preview" before them, as it
+  saves nothing.
+- Every button of the footer has a pad button, its glyph before the text
+  (`AddPadHint`): Preview `Y`, Save and refresh `Start`, Close `B`. A button whose
+  text changes keeps its glyph (`SetPadHintText`).
 - Dialogs use `ShowDialog`, titled with the action ("Delete tile", "Update Raintile"),
   not "Raintile". A destructive question uses `ShowDialog(..., danger: true)`: its
   first button is red and Cancel is the default (Enter and Escape cancel).

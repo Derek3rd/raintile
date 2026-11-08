@@ -265,11 +265,16 @@ def check_schema_layout(schema):
             if page_of.get(name) == page_of.get(key) and pages[page_of[key]].index(name) > pages[page_of[key]].index(key):
                 fail('Options schema: %s switches %s but comes after it on its page' % (name, key))
     # cards: a switch is a bool and the first of its group; a title never repeats
-    # its page's; a page's only card has no title (the page has it)
+    # its page's; a page's only card has no title (the page has it); only the
+    # first card of a page may have neither a title nor a switch
     for pm in re.finditer(r'new Page \{ Id = "([a-z]+)"[^\n]*?Title = "([^"]*)"(.*?)\n            \} \},', schema, re.S):
-        groups = re.findall(r'new Group \{ Title = (null|"[^"]*"), [^\n]*?(?:Switch = "([A-Za-z0-9]+)", )?Items = new List<Item>\n\s*\{\n(.*?)\n\s*\} \},', pm.group(3), re.S)
-        for title, switch, body in groups:
+        groups = re.findall(r'new Group \{ Title = (null|"[^"]*"), ([^\n]*?)(?:Switch = "([A-Za-z0-9]+)", )?Items = new List<Item>\n\s*\{\n(.*?)\n\s*\} \},', pm.group(3), re.S)
+        groups = [(title, switch, body, head) for title, head, switch, body in groups]
+        for n, (title, switch, body, head) in enumerate(groups):
             first = re.search(r'Kind = "([a-z]+)", Key = "([A-Za-z0-9]*)"', body)
+            # (Dash, Market, Found, Store: cards built by their own code, with their title)
+            if n > 0 and title == 'null' and not switch and not re.search(r'Dash|Market|Found|Store', head):
+                fail('Options schema: page %s: card %d has no title nor switch (only the first card may have none)' % (pm.group(1), n + 1))
             if switch and not (first and first.group(2) == switch and first.group(1) == 'bool'):
                 fail('Options schema: page %s: the switch %s is not the first setting of its group, or not a bool' % (pm.group(1), switch))
             if title.strip('"').lower() == pm.group(2).lower():

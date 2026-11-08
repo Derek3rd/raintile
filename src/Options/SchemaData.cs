@@ -48,15 +48,17 @@ namespace RaintileOptions
             {
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "choice", Key = "ScrollMode", Label = "Layout", Help = "Grid: rows and columns. Wheel: one line of tiles on an arc, the selected one in the middle (all tiles one cell), suggested docked. Each has its page below; the page of the other one is greyed out in the menu.", Choices = new List<string[]> { new[] { "Grid", "Grid" }, new[] { "Wheel", "Wheel" } } },
-                    new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last row the first one comes back; with few tiles they repeat, so it still scrolls round." },
+                    new Item { Kind = "choice", Key = "ScrollMode", Label = "Layout", Help = "Grid: rows and columns. Wheel: one line of square tiles on an arc (the thumbnails), the selected one in the middle and, if you like, as the launcher's backdrop; suggested docked. Each has its page below; the page of the other one is greyed out in the menu.", Choices = new List<string[]> { new[] { "Grid", "Grid" }, new[] { "Wheel", "Wheel" } } },
+                    new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last tile the first one comes back; with few tiles they repeat, so it still scrolls round." },
+                    new Item { Kind = "int", Key = "ScrollStep", Label = "Mouse wheel notch", Help = "Rows (or columns) it scrolls in the grid, tiles it turns in the wheel.", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "size", Key = "Gap", Label = "Space", Help = "Under the top row, and between the tiles of the grid.", Axis = "H" },
                 } },
-                new Group { Title = "Tile", Help = null, Items = new List<Item>
+                new Group { Title = "Tile", Help = "The tiles of the grid and the thumbnails of the wheel.", Items = new List<Item>
                 {
                     new Item { Kind = "color", Key = "TileColor", Label = "Default tile colour", Help = "" },
                     new Item { Kind = "bool", Key = "AutoTileColor", Label = "Colour from the logo", Help = "Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo." },
                     new Item { Kind = "int", Key = "TileRadius", Label = "Rounded corners", Help = "Radius of the corners of the tiles and of the highlight. 0 = square.", Min = 0.0, Max = 60.0, Step = 1.0, Unit = "px" },
-                    new Item { Kind = "size", Key = "IconSize", Label = "Logo size", Help = "Box the tile logo fits in.", Axis = "H" },
+                    new Item { Kind = "size", Key = "LabelPad", Label = "Inner margin", Help = "From the edge of the tile to its label and to the lines of the play time and updates.", Axis = "H" },
                     new Item { Kind = "bool", Key = "LogoGreyscale", Label = "Greyscale logos", Help = "They turn to colour under the mouse." },
                     new Item { Kind = "bool", Key = "TileHover", Label = "Highlight the tile under the mouse", Help = "" },
                 } },
@@ -64,19 +66,24 @@ namespace RaintileOptions
                 {
                     new Item { Kind = "bool", Key = "ShowLabels", Label = "Labels", Help = "" },
                     new Item { Kind = "int", Key = "LabelFontSize", Label = "Font size", Help = "", Min = 6.0, Max = 40.0, Step = 1.0, Unit = "pt" },
-                    new Item { Kind = "size", Key = "LabelPad", Label = "Margin", Help = "", Axis = "H" },
                 } },
             } },
-            new Page { Id = "grid", When = "ScrollMode=Grid", Title = "Grid", Icon = 0, Desc = "Rows and columns, scrolled by rows or columns. Each category can have its own grid (Categories).", Groups = new List<Group>
+            new Page { Id = "grid", When = "ScrollMode=Grid", Title = "Grid", Icon = 0, Desc = "Rows and columns, scrolled by rows or columns, and how the background images of the tiles move. Each category can have its own grid (Categories).", Groups = new List<Group>
             {
                 new Group { Title = "Rows and columns", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "int", Key = "NX", Label = "Columns", Help = "", Min = 1.0, Max = 12.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "int", Key = "NY", Label = "Rows", Help = "", Min = 1.0, Max = 8.0, Step = 1.0, Unit = "" },
-                    new Item { Kind = "size", Key = "Gap", Label = "Space between tiles", Help = "", Axis = "H" },
+                    new Item { Kind = "size", Key = "IconSize", Label = "Logo size", Help = "Box the tile logo fits in (the wheel's thumbnails have their own: a share of the thumbnail).", Axis = "H" },
                     new Item { Kind = "choice", Key = "ScrollDir", Label = "Scroll direction", Help = "", Choices = new List<string[]> { new[] { "V", "Vertical" }, new[] { "H", "Horizontal" } } },
-                    new Item { Kind = "int", Key = "ScrollStep", Label = "Rows per mouse wheel notch", Help = "", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "bool", Key = "EdgeFade", Label = "Fade at the edge of the grid", Help = "Tiles cut by the edge (e.g. a tall tile only partly on screen) fade into the background there, to show they go on." },
+                } },
+                new Group { Title = "Backgrounds", Help = "How the background images of the tiles move. In the wheel the thumbnails are cropped.", Items = new List<Item>
+                {
+                    new Item { Kind = "choice", Key = "BgStyle", Label = "Style", Help = "Crop: fixed. Pan: under the mouse the image slowly slides. Parallax: it moves slower than the tile while scrolling. Zoom: it grows slightly under the mouse.", Choices = new List<string[]> { new[] { "Crop", "Crop" }, new[] { "Pan", "Pan" }, new[] { "Parallax", "Parallax" }, new[] { "Zoom", "Zoom" } } },
+                    new Item { Kind = "float", Key = "BgOverscan", Label = "Overscan", Help = "How much larger than the tile the image is: room to move.", Min = 1.0, Max = 1.5, Step = 0.01, Unit = "\u00D7", When = "BgStyle=Pan|Parallax|Zoom" },
+                    new Item { Kind = "int", Key = "BgPanFrames", Label = "Pan length", Help = "", Min = 30.0, Max = 600.0, Step = 10.0, Unit = "steps", When = "BgStyle=Pan" },
+                    new Item { Kind = "float", Key = "BgHoverZoom", Label = "Zoom amount", Help = "", Min = 1.0, Max = 1.3, Step = 0.01, Unit = "\u00D7", When = "BgStyle=Zoom" },
                 } },
                 new Group { Title = "Scrollbar", Help = null, Items = new List<Item>
                 {
@@ -85,19 +92,32 @@ namespace RaintileOptions
                     new Item { Kind = "color", Key = "ScrollThumbColor", Label = "Scrollbar thumb", Help = "" },
                 } },
             } },
-            new Page { Id = "wheel", When = "ScrollMode=Wheel", Title = "Wheel", Icon = 0xE7AD, Desc = "One line of tiles on an arc, the selected tile in the middle, the categories on an inner wheel. Made for the docked launcher; it works in every mode. The Preview button (at the bottom) shows it as you change it.", Groups = new List<Group>
+            new Page { Id = "wheel", When = "ScrollMode=Wheel", Title = "Wheel", Icon = 0xE7AD, Desc = "One line of square tiles on an arc (the thumbnails), the selected one in the middle, the categories on an inner wheel; the selected tile can also be the launcher's backdrop. Made for the docked launcher; it works in every mode. The Preview button (at the bottom) shows it as you change it.", Groups = new List<Group>
             {
-                new Group { Title = "Shape", Help = "Sizes in percent: of the launcher's length for the radius, of a tile for the spacing, of the screen for the tiles.", Items = new List<Item>
+                new Group { Title = "Shape", Help = "Sizes in percent: of the launcher's length for the radius, of a thumbnail for the spacing.", Items = new List<Item>
                 {
                     new Item { Kind = "choice", Key = "WheelAxis", Label = "Direction", Help = "Auto: along the side when docked, across otherwise.", Choices = new List<string[]> { new[] { "Auto", "Auto" }, new[] { "Vertical", "Vertical" }, new[] { "Horizontal", "Horizontal" } } },
                     new Item { Kind = "choice", Key = "WheelCurve", Label = "Curve", Help = "", Choices = new List<string[]> { new[] { "Out", "Bulging towards the screen" }, new[] { "In", "Hollow" } } },
                     new Item { Kind = "int", Key = "WheelRadius", Label = "Radius", Help = "", Min = 25.0, Max = 300.0, Step = 5.0, Unit = "%" },
                     new Item { Kind = "int", Key = "WheelAnchor", Label = "Place of the selected tile", Help = "Across the launcher, from its docked side.", Min = 10.0, Max = 90.0, Step = 1.0, Unit = "%" },
-                    new Item { Kind = "int", Key = "WheelTileSize", Label = "Tile size", Help = "", Min = 8.0, Max = 40.0, Step = 1.0, Unit = "%" },
                     new Item { Kind = "int", Key = "WheelSpacing", Label = "Space between tiles", Help = "Under 100 the tiles overlap; the middle one stays on top.", Min = 30.0, Max = 160.0, Step = 2.0, Unit = "%" },
                     new Item { Kind = "int", Key = "WheelVisible", Label = "Tiles shown", Help = "", Min = 3.0, Max = 15.0, Step = 2.0, Unit = "" },
                     new Item { Kind = "int", Key = "WheelFade", Label = "Fade at the ends", Help = "", Min = 0.0, Max = 90.0, Step = 1.0, Unit = "%" },
-                    new Item { Kind = "choice", Key = "WheelLabels", Label = "Names", Help = "", Choices = new List<string[]> { new[] { "Center", "Middle tile only" }, new[] { "All", "All tiles" } } },
+                } },
+                new Group { Title = "Thumbnails", Help = "The tiles of the wheel: squares, edited in Categories as the tiles of the grid (logo, framing, play time line); Size, columns and rows are the grid's.", Items = new List<Item>
+                {
+                    new Item { Kind = "int", Key = "WheelTileSize", Label = "Size", Help = "In percent of the smaller side of the screen. The logo is 70% of it, times the logo size of the tile.", Min = 8.0, Max = 40.0, Step = 1.0, Unit = "%" },
+                    new Item { Kind = "bool", Key = "WheelIconsOnly", Label = "Logos only", Help = "The thumbnails show their logo on a colour taken from it. Tiles without a logo keep their background." },
+                    new Item { Kind = "choice", Key = "WheelLabels", Label = "Names", Help = "", Choices = new List<string[]> { new[] { "Center", "Middle tile only" }, new[] { "All", "All tiles" } }, When = "ShowLabels=1" },
+                } },
+                new Group { Title = null, Help = "The launcher's background takes the background image of the selected tile, filling it as a desktop wallpaper (cut from its centre, not framed).", Switch = "WheelBackdrop", Items = new List<Item>
+                {
+                    new Item { Kind = "bool", Key = "WheelBackdrop", Label = "Backdrop", Help = "" },
+                    new Item { Kind = "int", Key = "WheelBackdropOpacity", Label = "Opacity", Help = "Over the launcher's background colour.", Min = 5.0, Max = 100.0, Step = 5.0, Unit = "%" },
+                    new Item { Kind = "choice", Key = "WheelLogoOn", Label = "Logo of the selected tile", Help = "On the backdrop: on the area under the top row, at its own place and size (Categories > the tile > Place on: The backdrop). The other thumbnails keep theirs; with Logos only, the selected one shows its background image.", Choices = new List<string[]> { new[] { "Tile", "On its thumbnail" }, new[] { "Background", "On the backdrop" } } },
+                    new Item { Kind = "int", Key = "WheelBackdropLogoSize", Label = "Logo size on the backdrop", Help = "Its height in percent of the area under the top row, times the size the tile has there.", Min = 5.0, Max = 80.0, Step = 1.0, Unit = "%", When = "WheelLogoOn=Background" },
+                    new Item { Kind = "choice", Key = "WheelInfoOn", Label = "Play time and updates", Help = "On the backdrop: the selected tile's lines, on the area under the top row at their own place (Categories > the tile > Place on: The backdrop), shown as on a highlighted tile; the thumbnails show none. When they show still follows Tiles > Play time and updates.", Choices = new List<string[]> { new[] { "Tile", "On the thumbnails" }, new[] { "Background", "On the backdrop" } } },
+                    new Item { Kind = "color", Key = "TopBarColor", Label = "Band behind the top row", Help = "One rounded band behind the clock, the search and the buttons, so they stay readable over the picture." },
                 } },
                 new Group { Title = "Turning", Help = null, Items = new List<Item>
                 {
@@ -105,28 +125,11 @@ namespace RaintileOptions
                     new Item { Kind = "choice", Key = "WheelHover", Label = "Mouse on a side tile", Help = "", Choices = new List<string[]> { new[] { "Turn", "Turns the wheel to it" }, new[] { "Highlight", "Highlights it" } } },
                     new Item { Kind = "choice", Key = "WheelClick", Label = "Click on a side tile", Help = "", Choices = new List<string[]> { new[] { "Launch", "Launches it" }, new[] { "Center", "Brings it to the middle" } } },
                 } },
-                new Group { Title = "Categories", Help = "Sizes in percent of a tile.", Items = new List<Item>
+                new Group { Title = "Categories", Help = "Sizes in percent of a thumbnail.", Items = new List<Item>
                 {
                     new Item { Kind = "choice", Key = "WheelMenu", Label = "Categories", Help = "Ring: on an inner wheel, Q / E or LB / RB turn it.", Choices = new List<string[]> { new[] { "Ring", "Inner wheel" }, new[] { "Bar", "Menu at the top" } } },
                     new Item { Kind = "int", Key = "WheelMenuGap", Label = "Inner wheel: distance", Help = "From the wheel of tiles.", Min = 10.0, Max = 150.0, Step = 2.0, Unit = "%", When = "WheelMenu=Ring" },
                     new Item { Kind = "int", Key = "WheelMenuSize", Label = "Inner wheel: entries", Help = "", Min = 20.0, Max = 80.0, Step = 1.0, Unit = "%", When = "WheelMenu=Ring" },
-                } },
-                new Group { Title = "Look", Help = null, Items = new List<Item>
-                {
-                    new Item { Kind = "bool", Key = "WheelIconsOnly", Label = "Logos only", Help = "The tiles show their logo on a colour taken from it. Tiles without a logo keep their background." },
-                    new Item { Kind = "bool", Key = "WheelBackdrop", Label = "Background of the selected tile", Help = "The launcher's background takes the background image of the tile in the middle." },
-                    new Item { Kind = "int", Key = "WheelBackdropOpacity", Label = "Its opacity", Help = "Over the launcher's background colour.", Min = 5.0, Max = 100.0, Step = 5.0, Unit = "%", When = "WheelBackdrop=1" },
-                    new Item { Kind = "color", Key = "TopBarColor", Label = "Band behind the top row", Help = "With the wheel showing the selected tile's background: one rounded band behind the clock, the search and the buttons.", When = "WheelBackdrop=1" },
-                } },
-            } },
-            new Page { Id = "backgrounds", Title = "Backgrounds", Icon = 0xE91B, Desc = "How the background images of the tiles move.", Groups = new List<Group>
-            {
-                new Group { Title = null, Help = null, Items = new List<Item>
-                {
-                    new Item { Kind = "choice", Key = "BgStyle", Label = "Style", Help = "Crop: fixed. Pan: under the mouse the image slowly slides. Parallax: it moves slower than the tile while scrolling. Zoom: it grows slightly under the mouse.", Choices = new List<string[]> { new[] { "Crop", "Crop" }, new[] { "Pan", "Pan" }, new[] { "Parallax", "Parallax" }, new[] { "Zoom", "Zoom" } } },
-                    new Item { Kind = "float", Key = "BgOverscan", Label = "Overscan", Help = "How much larger than the tile the image is: room to move.", Min = 1.0, Max = 1.5, Step = 0.01, Unit = "\u00D7", When = "BgStyle=Pan|Parallax|Zoom" },
-                    new Item { Kind = "int", Key = "BgPanFrames", Label = "Pan length", Help = "", Min = 30.0, Max = 600.0, Step = 10.0, Unit = "steps", When = "BgStyle=Pan" },
-                    new Item { Kind = "float", Key = "BgHoverZoom", Label = "Zoom amount", Help = "", Min = 1.0, Max = 1.3, Step = 0.01, Unit = "\u00D7", When = "BgStyle=Zoom" },
                 } },
             } },
             new Page { Id = "playtime", Title = "Play time and updates", Icon = 0, Desc = "The line on the tiles with the play time and the last launch, and the Steam updates waiting.", Groups = new List<Group>
@@ -137,14 +140,14 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "InfoFontSize", Label = "Play time font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt", When = "TileInfo=Hover|Always" },
                     new Item { Kind = "bool", Key = "TrackPlaytime", Label = "Measure play time outside Steam", Help = "The background helper looks for the game a tile starts and counts how long it runs." },
                 } },
-                new Group { Title = null, Help = null, Switch = "GameUpdates", Items = new List<Item>
+                new Group { Title = "Steam updates", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "GameUpdates", Label = "Steam updates waiting", Help = "Steam games with an update to download say so on a line above the play time, always shown, and their tile gets a border. While it downloads the line follows it live." },
-                    new Item { Kind = "text", Key = "DownloadInfo", Label = "What the update line says", Help = "Any of: percent, size (downloaded / total), speed, eta (time left), schedule (when Steam will download it), separated by spaces." },
-                    new Item { Kind = "choice", Key = "DownloadStyle", Label = "Download on the tile", Help = "How the progress of a download shows on its tile.", Choices = new List<string[]> { new[] { "Bar", "A bar along the bottom" }, new[] { "Greyscale", "Background in greyscale, coloured again as it goes" }, new[] { "Both", "Both" } } },
-                    new Item { Kind = "color", Key = "DownloadColor1", Label = "Colour 1", Help = "Border of a tile with an update (a gradient from 1 to 2) and the bar." },
-                    new Item { Kind = "color", Key = "DownloadColor2", Label = "Colour 2", Help = "Other end of the border gradient." },
-                    new Item { Kind = "int", Key = "UpdateGlowTime", Label = "Border turning", Help = "Seconds the border turns when the launcher opens. 0 = it stays still.", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "s" },
+                    new Item { Kind = "choice", Key = "UpdateInfo", Label = "Updates waiting", Help = "A line above the play time on Steam games with an update to download, following it live while it downloads, and a border on their tile. On the highlighted tile: only the line waits for the highlight, the border and the bar are always there. Never: none of it.", Choices = new List<string[]> { new[] { "Hover", "On the highlighted tile" }, new[] { "Always", "Always" }, new[] { "Never", "Never" } } },
+                    new Item { Kind = "text", Key = "DownloadInfo", Label = "What the update line says", Help = "Any of: percent, size (downloaded / total), speed, eta (time left), schedule (when Steam will download it), separated by spaces.", When = "UpdateInfo=Hover|Always" },
+                    new Item { Kind = "choice", Key = "DownloadStyle", Label = "Download on the tile", Help = "How the progress of a download shows on its tile.", Choices = new List<string[]> { new[] { "Bar", "A bar along the bottom" }, new[] { "Greyscale", "Background in greyscale, coloured again as it goes" }, new[] { "Both", "Both" } }, When = "UpdateInfo=Hover|Always" },
+                    new Item { Kind = "color", Key = "DownloadColor1", Label = "Colour 1", Help = "Border of a tile with an update (a gradient from 1 to 2) and the bar.", When = "UpdateInfo=Hover|Always" },
+                    new Item { Kind = "color", Key = "DownloadColor2", Label = "Colour 2", Help = "Other end of the border gradient.", When = "UpdateInfo=Hover|Always" },
+                    new Item { Kind = "int", Key = "UpdateGlowTime", Label = "Border turning", Help = "Seconds the border turns when the launcher opens. 0 = it stays still.", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "s", When = "UpdateInfo=Hover|Always" },
                 } },
             } },
             new Page { Id = "toprow", Title = "Top row", Icon = 0xE700, Desc = "The row at the top: the category menu, Favorites and the buttons; Recent and Not played yet, the clock and the search on the pages below.", Groups = new List<Group>
@@ -251,7 +254,7 @@ namespace RaintileOptions
                 new Group { Title = "Smoothing", Help = "Lower is smoother and slower, 1 is instant.", Items = new List<Item>
                 {
                     new Item { Kind = "float", Key = "AnimSmooth", Label = "Base", Help = "", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "" },
-                    new Item { Kind = "float", Key = "AnimScrollSmooth", Label = "Scrolling", Help = "", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "" },
+                    new Item { Kind = "float", Key = "AnimScrollSmooth", Label = "Scrolling", Help = "The wheel turns in its Turn time.", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "", When = "ScrollMode=Grid" },
                     new Item { Kind = "float", Key = "AnimHoverSmooth", Label = "Highlight", Help = "", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "" },
                     new Item { Kind = "float", Key = "AnimPillSmooth", Label = "Menu pill", Help = "", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "" },
                     new Item { Kind = "float", Key = "AnimLogoSmooth", Label = "Logo zoom and colour", Help = "", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "" },
@@ -389,7 +392,7 @@ namespace RaintileOptions
         public static readonly List<NavNode> NavTree = new List<NavNode>
         {
             new NavNode { Page = "general" },
-            new NavNode { Page = "tiles", Children = new[] { "grid", "wheel", "backgrounds", "playtime" } },
+            new NavNode { Page = "tiles", Children = new[] { "grid", "wheel", "playtime" } },
             new NavNode { Page = "toprow", Children = new[] { "shortcuts", "clock", "search" } },
             new NavNode { Page = "theme" },
             new NavNode { Page = "animations" },
@@ -460,7 +463,6 @@ namespace RaintileOptions
             { "GamepadRepeatRate", "110" },
             { "GamepadSearch", "Y" },
             { "GamepadToggle", "BACK START" },
-            { "GameUpdates", "1" },
             { "Gap", "18" },
             { "HoverCategoryColor", "255,255,255,20" },
             { "HoverColor", "255,255,255,25" },
@@ -548,16 +550,20 @@ namespace RaintileOptions
             { "UnplayedCount", "24" },
             { "UpdateChannel", "Release" },
             { "UpdateGlowTime", "3" },
+            { "UpdateInfo", "Hover" },
             { "WheelAnchor", "69" },
             { "WheelAxis", "Auto" },
             { "WheelBackdrop", "1" },
+            { "WheelBackdropLogoSize", "30" },
             { "WheelBackdropOpacity", "40" },
             { "WheelClick", "Launch" },
             { "WheelCurve", "Out" },
             { "WheelFade", "65" },
             { "WheelHover", "Turn" },
             { "WheelIconsOnly", "0" },
+            { "WheelInfoOn", "Tile" },
             { "WheelLabels", "Center" },
+            { "WheelLogoOn", "Tile" },
             { "WheelMenu", "Ring" },
             { "WheelMenuGap", "50" },
             { "WheelMenuSize", "50" },

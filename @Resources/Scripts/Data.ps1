@@ -40,7 +40,8 @@ function Read-Values([string]$path) {
 
 # Settings of older versions that became part of another one, before they go:
 # ImportFoldersKind (one kind for all your folders) is now the kind of each
-# folder in ImportFolders ("Folder>App"), given to the folders without one.
+# folder in ImportFolders ("Folder>App"), given to the folders without one;
+# GameUpdates is now UpdateInfo.
 # Idempotent: once moved the old key is gone, and a folder with a kind keeps it.
 function Convert-OldSettings([hashtable]$values) {
     if ($values.ContainsKey('ImportFoldersKind')) {
@@ -55,6 +56,14 @@ function Convert-OldSettings([hashtable]$values) {
             $values['ImportFolders'] = $entries -join '|'
         }
         $values.Remove('ImportFoldersKind')
+    }
+    # GameUpdates=0/1 (the Steam updates on or off) is now UpdateInfo=Never or
+    # Hover, its default (the line only on the highlighted tile; also Always)
+    if ($values.ContainsKey('GameUpdates')) {
+        if (-not $values.ContainsKey('UpdateInfo')) {
+            $values['UpdateInfo'] = if ($values['GameUpdates'] -eq '0') { 'Never' } else { 'Hover' }
+        }
+        $values.Remove('GameUpdates')
     }
 }
 

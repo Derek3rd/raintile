@@ -324,8 +324,9 @@ ClockFontSize=18
 ; the games and apps installed on this PC are listed, and the ones you pick
 ; become normal tiles. Nothing is added by itself.
 ; Where to look, separated by |: Steam Epic GOG Ubisoft Battlenet EA Xbox
-; (games), Folders (the programs in ImportFolders) and Apps (the Start menu)
-ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps
+; GooglePlay (games), Folders (the programs in ImportFolders) and Apps (the
+; Start menu)
+ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|GooglePlay|Folders|Apps
 ; Folders of your own (portable games, emulators...), separated by |: every
 ; program (.exe) in them and in their subfolders is listed, named after its
 ; file (installers, uninstallers, redistributables and helpers left out).

@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -130,30 +131,72 @@ namespace RaintileOptions
             UpdateDirty();
             UpdateResets();
             if (keyButtons.ContainsKey(key)) UpdateKeyConflicts();
-            if (key == "LauncherMode") UpdateModeRows();
+            UpdateWhenRows();
             // the wheel's preview follows every setting (sizes, mode, colours)
             if (wheelCanvas != null) DrawWheel();
         }
 
-        // Rows that only matter in one LauncherMode: the window size, the docked side
-        static readonly Dictionary<string, string> MODE_KEYS = new Dictionary<string, string>
-        {
-            { "WindowW", "window" }, { "WindowH", "window" },
-            { "DockSide", "dock" }, { "DockSize", "dock" }, { "DockEdge", "dock" }, { "DockEdgeDelay", "dock" },
-        };
-        readonly Dictionary<string, UIElement> modeRows = new Dictionary<string, UIElement>();
+        // Rows that apply only with other settings (Item.When): disabled, with
+        // the reason under their label, so they are seen and can be found
+        class WhenRow { public string When, GroupWhen; public Border Row; public TextBlock Why; }
+        readonly List<WhenRow> whenRows = new List<WhenRow>();
+        // and whole cards (Group.When)
+        // (Outer: the page's switch, Own: the group's When, whose reason Why shows)
+        class WhenCard { public string Outer, Own; public Border Card; public TextBlock Why; }
+        readonly List<WhenCard> whenCards = new List<WhenCard>();
 
-        void UpdateModeRows()
+        // "Key=a|b;Key2=c": every condition holds (one of its values)
+        bool WhenHolds(string when)
         {
-            string mode = V("LauncherMode").Trim().ToLowerInvariant();
-            foreach (var r in modeRows)
-                r.Value.Visibility = MODE_KEYS[r.Key] == mode ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var cond in when.Split(';'))
+            {
+                var kv = cond.Split(new[] { '=' }, 2);
+                string v = V(kv[0]).Trim();
+                if (!kv[1].Split('|').Any(x => string.Equals(x, v, StringComparison.OrdinalIgnoreCase))) return false;
+            }
+            return true;
+        }
+
+        // "Only with Layout: Wheel (Tiles page)": the settings it needs by their
+        // labels, with their page when it is another one
+        static string WhenReason(string when, Page here)
+        {
+            var parts = new List<string>();
+            foreach (var cond in when.Split(';'))
+            {
+                var kv = cond.Split(new[] { '=' }, 2);
+                Page page; var item = Schema.ItemOf(kv[0], out page);
+                if (item == null) { parts.Add(cond); continue; }
+                string what = item.Kind == "bool" ? item.Label + " on"
+                    : item.Label + ": " + string.Join(" or ", kv[1].Split('|').Select(v =>
+                        { var c = item.Choices == null ? null : item.Choices.FirstOrDefault(x => string.Equals(x[0], v, StringComparison.OrdinalIgnoreCase)); return c != null ? c[1] : v; }));
+                if (page != null && page != here) what += " (" + page.Title + " page)";
+                parts.Add(what);
+            }
+            return "Only with " + string.Join(" and ", parts) + ".";
+        }
+
+        void UpdateWhenRows()
+        {
+            foreach (var c in whenCards)
+            {
+                bool outer = c.Outer == null || WhenHolds(c.Outer), own = c.Own == null || WhenHolds(c.Own);
+                SetCardApplies(c.Card, outer && own, null);
+                if (c.Why != null) c.Why.Visibility = outer && !own ? Visibility.Visible : Visibility.Collapsed;
+            }
+            foreach (var w in whenRows)
+            {
+                // in a card that does not apply: disabled, the reason is the card's
+                bool card = w.GroupWhen == null || WhenHolds(w.GroupWhen), own = WhenHolds(w.When);
+                SetRowApplies(w.Row, card && own, w.Why, card && !own);
+            }
+            UpdateNavApplies();
         }
 
         // Shows the current value of 'key' in its controls (after a reset)
         void UpdateControl(string key)
         {
-            if (key == "LauncherMode") UpdateModeRows();
+            UpdateWhenRows();
             Ctl c;
             if (!ctl.TryGetValue(key, out c)) return;
             string v = V(key);
@@ -496,6 +539,38 @@ namespace RaintileOptions
             return b;
         }
 
+        // A card whose header is a switch (Group.Switch): its label as the title,
+        // the switch and its reset in the control and action columns, its help
+        // (or the group's) below
+        Border NewSwitchCard(Item sw, string help)
+        {
+            var b = new Border { Style = ResStyle("Card") };
+            var sp = NewPanel();
+            b.Child = sp;
+            var g = NewGrid("*", "Auto", Gap.ActionColumn.ToString(CultureInfo.InvariantCulture));
+            g.ColumnDefinitions[1].SetResourceReference(ColumnDefinition.WidthProperty, FieldWidth.ControlKey);
+            g.Margin = T(0, Gap.Group, 0, Gap.Line);
+            var h = NewSectionTitle(sw.Label);
+            h.VerticalAlignment = VerticalAlignment.Center;
+            g.Children.Add(h);
+            var control = NewBoolControl(sw.Key);
+            ((FrameworkElement)control).VerticalAlignment = VerticalAlignment.Center;
+            SetCol(control, 1);
+            g.Children.Add(control);
+            var reset = NewResetButton(new[] { sw.Key });
+            SetCol(reset, 2);
+            g.Children.Add(reset);
+            AddTo(sp, g);
+            string text = !string.IsNullOrEmpty(help) ? help : sw.Help;
+            if (!string.IsNullOrEmpty(text))
+            {
+                var x = NewHelp(text);
+                x.Margin = T(0, 0, 0, Gap.Control);
+                AddTo(sp, x);
+            }
+            return b;
+        }
+
         static StackPanel CardPanel(Border card) { return (StackPanel)card.Child; }
 
         // Row of one schema item (null if its settings are not in Settings.inc)
@@ -588,9 +663,30 @@ namespace RaintileOptions
             StackPanel sp;
             var sv = NewPageScroller(out sp);
             var schemaKeys = new HashSet<string>(Schema.SchemaKeys(), StringComparer.OrdinalIgnoreCase);
+            // the page's switch beside its title (ShowPage), the page applying with it
+            string pageWhen = null;
+            Item pageSw = null;
+            if (page.Switch != null)
+            {
+                pageSw = page.Groups[0].Items.First(i => i.Key == page.Switch);
+                pageWhen = page.Switch + "=1";
+                var head = NewPanel(Orientation.Horizontal);
+                var control = NewBoolControl(page.Switch);
+                AutomationProperties.SetName(control, pageSw.Label);
+                ((FrameworkElement)control).VerticalAlignment = VerticalAlignment.Center;
+                AddTo(head, control);
+                var reset = NewResetButton(new[] { page.Switch });
+                reset.Margin = T(Gap.Icon, 0, 0, 0);
+                AddTo(head, reset);
+                pageSwitches[page.Id] = head;
+            }
             foreach (var group in page.Groups)
             {
-                var card = NewCard(group.Title, group.Help);
+                // a group with a switch: the switch in the header, its label the title
+                var sw = group.Switch == null ? null : group.Items.First(i => i.Key == group.Switch);
+                var card = sw != null ? NewSwitchCard(sw, group.Help) : NewCard(group.Title, group.Help);
+                string own = group.When ?? (sw != null ? sw.Key + "=1" : null);
+                string groupWhen = pageWhen == null ? own : own == null ? pageWhen : pageWhen + ";" + own;
                 int rows = 0;
                 if (group.Found)
                 {
@@ -621,14 +717,20 @@ namespace RaintileOptions
                 {
                     foreach (var item in group.Items)
                     {
+                        if (item == sw || item == pageSw) { rows++; continue; }
                         var row = NewItemRow(item);
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
-                        if (row != null && item.Key != null && MODE_KEYS.ContainsKey(item.Key)) modeRows[item.Key] = row;
+                        var b = row as Border;
+                        if (b != null && !string.IsNullOrEmpty(item.When))
+                            whenRows.Add(new WhenRow { When = item.When, GroupWhen = groupWhen, Row = b, Why = AddRowReason(b, WhenReason(item.When, page)) });
                     }
                 }
+                // (with a switch, no reason: the switch is in the header)
+                if (rows > 0 && groupWhen != null)
+                    whenCards.Add(new WhenCard { Outer = pageWhen, Own = own, Card = card, Why = sw != null || group.When == null ? null : AddCardReason(card, WhenReason(group.When, page)) });
                 if (rows > 0) AddTo(sp, card);
             }
-            UpdateModeRows();
+            UpdateWhenRows();
             return sv;
         }
     }

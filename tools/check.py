@@ -223,6 +223,65 @@ def check_settings_schema():
     for key in sorted(set(re.findall(r'Key = "([^"]+)"', schema)) - seen):
         fail('the Options schema has %s, which is not in Settings.inc' % key)
     print('  %d settings' % len(settings))
+    check_schema_layout(schema)
+
+
+def check_schema_layout(schema):
+    # docs/OptionsUI.md, "Where a setting goes": every When names a setting and
+    # values it can take, the switch comes before what it switches on its page,
+    # and every page is in the menu (NavTree) once
+    items = {}
+    for m in re.finditer(r'new Item \{ Kind = "([a-z]+)", Key = "([A-Za-z0-9]+)"(.*?) \},?\n', schema):
+        choices = re.findall(r'new\[\] \{ "([^"]*)", "', m.group(3))
+        items[m.group(2)] = (m.group(1), choices)
+    pages, order = {}, []
+    for pm in re.finditer(r'new Page \{ Id = "([a-z]+)"(.*?)\n            \} \},', schema, re.S):
+        keys = re.findall(r'Key = "([A-Za-z0-9]+)"', pm.group(2))
+        pages[pm.group(1)] = keys
+        order.append(pm.group(1))
+    page_of = {k: p for p, ks in pages.items() for k in ks}
+    conds = [(m.group(1), m.group(2)) for m in re.finditer(r'Key = "([A-Za-z0-9]+)"[^\n]*When = "([^"]*)"', schema)]
+    conds += [('page ' + m.group(1), m.group(2)) for m in re.finditer(r'new Page \{ Id = "([a-z]+)", When = "([^"]*)"', schema)]
+    # a group: checked as its first setting (the switch must come before it)
+    conds += [(m.group(2), m.group(1)) for m in re.finditer(r'new Group \{ Title = [^\n]*?When = "([^"]*)", Items = new List<Item>\n\s*\{\n\s*new Item \{ Kind = "[a-z]+", Key = "([A-Za-z0-9]+)"', schema)]
+    for key, when in conds:
+        for cond in when.split(';'):
+            name, _, values = cond.partition('=')
+            if name not in items:
+                fail('Options schema: When of %s names %s, which is not a setting' % (key, name))
+                continue
+            kind, choices = items[name]
+            allowed = ['0', '1'] if kind == 'bool' else choices
+            for v in values.split('|'):
+                if allowed and v not in allowed:
+                    fail('Options schema: When of %s: %s cannot be %s (%s)' % (key, name, v, ', '.join(allowed)))
+            if page_of.get(name) == page_of.get(key) and pages[page_of[key]].index(name) > pages[page_of[key]].index(key):
+                fail('Options schema: %s switches %s but comes after it on its page' % (name, key))
+    # cards: a switch is a bool and the first of its group; a title never repeats
+    # its page's; a page's only card has no title (the page has it)
+    for pm in re.finditer(r'new Page \{ Id = "([a-z]+)"[^\n]*?Title = "([^"]*)"(.*?)\n            \} \},', schema, re.S):
+        groups = re.findall(r'new Group \{ Title = (null|"[^"]*"), [^\n]*?(?:Switch = "([A-Za-z0-9]+)", )?Items = new List<Item>\n\s*\{\n(.*?)\n\s*\} \},', pm.group(3), re.S)
+        for title, switch, body in groups:
+            first = re.search(r'Kind = "([a-z]+)", Key = "([A-Za-z0-9]*)"', body)
+            if switch and not (first and first.group(2) == switch and first.group(1) == 'bool'):
+                fail('Options schema: page %s: the switch %s is not the first setting of its group, or not a bool' % (pm.group(1), switch))
+            if title.strip('"').lower() == pm.group(2).lower():
+                fail('Options schema: page %s: a card titled as its page' % pm.group(1))
+        psw = re.match(r'[^\n]*', pm.group(0)).group(0)
+        psw = re.search(r'Switch = "([A-Za-z0-9]+)"', psw)
+        if psw:
+            first = groups and re.search(r'Kind = "([a-z]+)", Key = "([A-Za-z0-9]*)"', groups[0][2])
+            if not (first and first.group(2) == psw.group(1) and first.group(1) == 'bool'):
+                fail('Options schema: page %s: its switch %s is not the first setting of its first group, or not a bool' % (pm.group(1), psw.group(1)))
+        if len(groups) == 1 and groups[0][0] != 'null' and pm.group(1) != 'info' and not re.search(r'Dash|Market|Found|Other', pm.group(3)):
+            fail('Options schema: page %s: its only card has a title (the page has it)' % pm.group(1))
+    nav = re.search(r'NavTree = new List<NavNode>(.*?)\n        \};', schema, re.S).group(1)
+    listed = re.findall(r'Page = "([a-z]+)"', nav) + [c for ch in re.findall(r'Children = new\[\] \{([^}]*)\}', nav) for c in re.findall(r'"([a-z]+)"', ch)]
+    for pid in order:
+        n = listed.count(pid)
+        if pid != 'info' and n != 1:  # Info: at the bottom of the menu, not in NavTree
+            fail('Options schema: page %s is in the menu (NavTree) %d times' % (pid, n))
+    print('  %d pages, %d conditions' % (len(order), len(re.findall(r'When = "', schema))))
 
 
 def lua_runtime():

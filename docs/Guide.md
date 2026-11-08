@@ -74,7 +74,7 @@ Sizes in percent (margins, menu, fonts) are of the area, not of the window, so t
 
 ### Grid or wheel
 
-`ScrollMode` (Options > **Wheel** > *Tiles*) sets how the tiles are laid out, in every mode:
+`ScrollMode` (Options > **Tiles** > *Layout*) sets how the tiles are laid out, in every mode:
 
 - **Grid** (default): rows and columns (`NX`, `NY`), scrolled by rows or columns.
 - **Wheel**: one line of tiles on an arc of a circle. The selected tile stays in the middle and the wheel turns: the mouse wheel, the arrows and the gamepad turn it by one tile, `Enter` / `A` launch the middle one. Best when docked.
@@ -175,7 +175,7 @@ Three categories made of the tiles of the others. They are not in the category m
 - **Not played yet**: the tiles never launched (from Raintile, or with play time on Steam or [measured](#play-time)), the ones added last first: tiles added in the Options window remember the day (`Added=`). Up to `UnplayedCount`; `ShowUnplayed=0` turns it off.
 - **Recent**: the tiles you launched lately (`RecentOrder=Recent`) or most often (`MostUsed`), up to `RecentCount`.
 
-They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Menu).
+They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Top row for Favorites, Top row > Recent and Not played yet for the others).
 
 ## Tags and filter bar
 
@@ -185,7 +185,7 @@ They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off 
 - The store of a tile is taken from `Store=` if it has it, otherwise from `Source=` (written when a game is added from Import) or from the command (`steam://`, the Epic launcher link, GOG Galaxy, `uplay://`, Battle.net, EA).
 - `FilterBar=0` turns the bar off.
 
-Settings (Options > Menu > Filter bar): `FilterBar`, `FilterStores`, `FilterH`, `FilterGap`, `FilterPad`, `FilterFontSize`.
+Settings (Options > Top row > Search > Filter bar): `FilterBar`, `FilterStores`, `FilterH`, `FilterGap`, `FilterPad`, `FilterFontSize`.
 
 ## Play time
 
@@ -194,7 +194,7 @@ A small line on the tile (at the top left unless you move it) tells how long you
 - **Steam games**: the hours played and the last launch come from Steam itself (`userdata\<account>\config\localconfig.vdf`, every account that logged in on this PC), read in the background (`Scripts\Playtime.ps1`) when the skin loads and, at most once a minute, when the launcher opens. The game is recognised by its `steam://rungameid/<id>` command or by `Source=Steam:<id>`.
 - **Other tiles** (`TrackPlaytime=1`): when a tile starts a game, the background helper (the one of the [gamepad](#gamepad)) looks for its process and measures how long it runs: the program of the command (`.exe`), the one it learned the last time, or the first program coming to the foreground that started after the launch (launchers like Epic, GOG, Ubisoft, EA and Battle.net, and parts of Windows, are left out). The minutes go to `TimePlayed.txt` in the data folder, the program found to `GameExe.txt`. Web links and bangs are not measured.
 - Before any time is measured: the last launch counted by Raintile (`Usage.txt`), as `Last played yesterday`.
-- `TileInfo=Hover` (default) shows it only on the highlighted tile (mouse, keyboard or gamepad), `Always` on every tile, `Never` hides it. Size: `InfoFontSize`. Options > Appearance > Text.
+- `TileInfo=Hover` (default) shows it only on the highlighted tile (mouse, keyboard or gamepad), `Always` on every tile, `Never` hides it. Size: `InfoFontSize`. Options > Tiles > Play time and updates.
 - Tiles of [games no longer installed](#games-no-longer-installed) always show **Not installed**.
 - **Steam updates** (`GameUpdates=1`): a Steam game with an update to download says so on a line of its own above the play time, always shown (whatever `TileInfo` says), and its tile gets a border in `DownloadColor1` and `DownloadColor2` that turns for `UpdateGlowTime` seconds when the launcher opens (`0`: it stays still), under the highlight of the mouse.
   - Waiting: `Update 5.4 GB - Sat 06:27` (its size and when Steam scheduled it; `today` / `tomorrow` when close).
@@ -203,7 +203,7 @@ A small line on the tile (at the top left unless you move it) tells how long you
   - The logo of a game downloading (or no longer installed) stays in greyscale, also under the mouse.
   - The progress shows on the tile as `DownloadStyle` says: `Bar` (a bar along the bottom in `DownloadColor1`), `Greyscale` (the background in greyscale, coloured again from the left as far as it got; tiles without a background image show nothing) or `Both`. It fills up when the launcher opens.
   - Where it comes from: Steam's `steamapps\appmanifest_<id>.acf` of every library (`Scripts\GameUpdates.ps1`), read at the same moments as the play time, so it is what Steam knew last (Steam finds new updates only while it runs). While the launcher is open the background helper follows the downloads every second: Steam's log (`logs\content_log.txt`: its state at once, the speed every few seconds) and the appmanifest when Steam rewrites it; between the two the bytes downloaded are worked out from the speed and the time of each line of the log (also for the part of the download before the launcher opened), so the line moves every second while Steam gives the speed every 10-15 seconds. A download started while the launcher is open shows up within a second, from the log. Nothing is followed while the launcher is hidden.
-  - `GameUpdates=0` turns it all off (Options > Appearance > Text; the rest under Appearance > Steam updates).
+  - `GameUpdates=0` turns it all off (Options > Tiles > Play time and updates).
 - **Where**: the top left by default. To move it, drag the sample line in the tile's preview (Options > *the category* > *the tile*), or under **All tiles** for the whole category; the **x** on the **Play time** row gives it back the place of All tiles. It is saved as `InfoPos=X,Y`: where the line goes in the room it leaves inside the margins (`LabelPad`), in %: `0,0` top left, `100,0` top right, `50,50` centre, `100,100` bottom right. The line changes width with what it says, so it stays inside the tile whatever the text.
 
 ## Launching a tile
@@ -436,27 +436,34 @@ Reported tiles are **greyed out** in the launcher, say **Not installed** and do 
 
 The **gear** next to the X, or right click > **Options...**, opens the Options window: the program `Bin\RaintileOptions.exe` (C#, WPF, .NET Framework 4.8, included in Windows 10/11), in the packages of the releases (without it the launcher says it is missing and Raintile should be installed again; a copy of the repository builds it with `tools\dev-build.ps1`). Its look is in `Scripts\Options.xaml`. The **Preview** button at the bottom opens a window beside it (on its right, or its left when the right has no room) with the launcher as the settings make it, before saving: the mode, the sizes, the colours, the grid or the wheel, with the tiles of the category open in Categories (or the one chosen in the window) and every change you make to them. The mouse wheel scrolls it; it is closed with the same button and stays open, or closed, the next time. It follows the Options window until you move or size it by hand: then it stays where you put it, with that size, the next time too; Maximized, it stays so the next time too. **Attach** at its bottom right puts it back beside Options. Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
 
-The sections are in the menu on the left; **Keybindings** and **Categories** open into sub-entries (click them again to close them):
+The sections are in the menu on the left, one per part of the launcher; **Tiles**, **Top row**, **Keybindings** and **Categories** have their own page and open into sub-entries (click them again, when shown, to close them):
 
 | Section | What it holds |
 | --- | --- |
-| General | area covered (whole screen or work area, monitor), opening and closing behaviour, fade |
-| Layout | default grid, scrolling, spacing |
-| Menu | category menu, X and gear buttons |
-| Appearance | fonts, tile colours, launcher colours |
+| General | area covered (whole screen or work area, monitor), mode (full screen, window, docked) and the window's or docked launcher's own settings, margins, opening and closing behaviour, fade |
+| Tiles | grid or wheel, infinite scroll; the tiles' colour, corners, logo, highlight and labels |
+| Tiles > Grid | default grid, scrolling, space between tiles, edge fade, scrollbar |
+| Tiles > Wheel | the wheel, how it turns, the inner wheel of categories, logos only, background of the selected tile |
+| Tiles > Backgrounds | how the background images move |
+| Tiles > Play time and updates | the play time line, play time outside Steam, Steam updates |
+| Top row | category menu (sizes, font, colours), Favorites, X, gear and power buttons |
+| Top row > Recent and Not played yet | Recent, Not played yet |
+| Top row > Clock | time and date |
+| Top row > Search | search bar, filter bar |
+| Theme | font, text colours, background, accent, highlight |
 | Animations | effects, appearing tiles, smoothing, tile launch |
-| Backgrounds | background style and its amounts |
-| Keybindings > Keyboard | open/close shortcut, close key, navigation keys |
+| Keybindings | open/close shortcut, close key, tile hot keys |
+| Keybindings > Keyboard | navigation keys |
 | Keybindings > Gamepad | support, open/close buttons, dead zone, repeat |
-| Search | search bar |
+| Widgets | how often they update, the port for temperatures and fans, the example Dashboard, the widget gallery |
 | Import | the games and apps found on this PC, to add; where to look and where they go |
 | Advanced | performance, debug log, entries without a page of their own |
 | Categories | the list of categories (create, open, reorder, delete), name and icon of the selected one |
 | Categories > *each category* | its tiles side by side, **All tiles** first (grid, logo size, tile colour and background, framing and logo of every tile); a large preview to frame the background and place the logo; edit, drag a tile onto another category in the menu to move it there, turn imported games into normal tiles |
-| Info (at the bottom) | version and updates, your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide |
+| Info (at the bottom) | version and updates (whether to check, releases or nightly builds), your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide |
 
 - Every setting has a fitting control: switches, sliders with their unit (you can also type the value: number boxes take only numbers, and a comma becomes the decimal point), drop-down lists for choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit in the list after the box converts the number for the main screen). The same kind of value has the same control everywhere, in the category editor too. A value that is not valid is outlined in red and not saved until it is fixed.
-- What each setting or field does is written under its name.
+- What each setting or field does is written under its name. A setting that only applies with another one (the sizes of the inner wheel with the inner wheel) is greyed out while it does not apply, with what it needs under it, and so is a whole group (General > Window, General > Docked: only in that mode). A part that can be turned off has its switch beside the title of its page (the clock, keyboard navigation, the gamepad) or in the header of its group (the filter bar, labels, Steam updates), and the rest is greyed out while it is off; the page of the layout not in use (Grid or Wheel) is greyed out in the menu.
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default (in the category editor: from All tiles), and restores it. The **x** empties a field (an image or an icon goes to the Recycle Bin, asked first); the bin in the header of a list deletes the entry selected (a tile, a category), asked first.
 - **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it.
@@ -502,9 +509,9 @@ When an update adds settings, they are added to your `Settings.inc` with their d
 
 If something goes wrong with an update, install the package from the [releases page](https://github.com/Derek3rd/raintile/releases) by hand: your data is in its own folder and stays as it is.
 
-With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps) and on **Info** in the menu of the Options window; a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
+With `CheckUpdates=1` (Options > Info > *Updates*) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps) and on **Info** in the menu of the Options window; a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
 
-**Nightly builds** (`UpdateChannel=Nightly`, Options > Advanced > *Updates*): the check also looks at the pre-release `nightly`, built on every change, and offers the newer of the two. Their versions have four numbers, `1.2.1.5`: the 5th build after the release `1.2.1`; the next release (`1.2.2` or `1.3.0`) gathers them and is newer than all of them. Newer features, not tested as much: a copy of the skin is kept in `Skins\@Backup` before each update. Back to `Release`, the next release brings you back on it.
+**Nightly builds** (`UpdateChannel=Nightly`, Options > Info > *Updates*): the check also looks at the pre-release `nightly`, built on every change, and offers the newer of the two. Their versions have four numbers, `1.2.1.5`: the 5th build after the release `1.2.1`; the next release (`1.2.2` or `1.3.0`) gathers them and is newer than all of them. Newer features, not tested as much: a copy of the skin is kept in `Skins\@Backup` before each update. Back to `Release`, the next release brings you back on it.
 
 - **Direct update** downloads the release's `.rmskin` and installs it by itself: a copy of the current skin folder goes to `Skins\@Backup\Raintile-<version>-<date>` (Rainmeter does not load folders starting with @), the package's files replace the ones of the skin folder, then Rainmeter reloads every skin and the launcher opens. `@Resources\Generated` (thumbnails, lists) stays, the plugins are not touched, and a file in use (the Options program itself) is renamed and replaced; the old copy goes at the next start. If something fails, the files of the backup are put back. The package is refused if it does not hold `Skins/Raintile/Raintile.ini` or a path leaves its folder.
 - **Rainmeter Update** downloads the same package and opens it with the Rainmeter installer instead; the Options window closes. Keep the installer's default options.
@@ -590,7 +597,7 @@ See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
 | `WheelBackdrop` | `1` | the launcher's background takes the selected tile's background image |
 | `WheelBackdropOpacity` | `40` | its opacity over `BgColor`, % |
 | `WheelIconsOnly` | `0` | tiles show only their logo, on a colour taken from it |
-| `TopBarColor` | `0,0,0,255` | with `WheelBackdrop`: the band behind the row at the top (Options > Appearance) |
+| `TopBarColor` | `0,0,0,255` | with `WheelBackdrop`: the band behind the row at the top (Options > Tiles > Wheel) |
 
 ### Spacing
 
@@ -715,7 +722,7 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadSearch`, `GamepadOp
 
 ### Clock
 
-<a id="clock"></a>Time and date at the top left (Options > Menu > Clock). They are updated once a minute, only while the launcher is visible: at rest it still uses no CPU.
+<a id="clock"></a>Time and date at the top left (Options > Top row > Clock). They are updated once a minute, only while the launcher is visible: at rest it still uses no CPU.
 
 | Setting | Default | Description |
 | --- | --- | --- |

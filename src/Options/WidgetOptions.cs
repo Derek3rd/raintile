@@ -113,6 +113,7 @@ namespace RaintileOptions
             pageHost.Children.Add(NewWidgetPage(id));
             string name = WidgetInfo(id, "Name");
             pageTitle.Text = name != "" ? name : id;
+            pageSwitch.Content = null;
             pageDesc.Text = "Widgets\\" + id + ": its settings, saved in its folder (settings.inc). The settings of a single tile (e.g. which game) are in the tile, as its Widget setting.";
         }
 

@@ -1978,7 +1978,7 @@ namespace RaintileOptions
             infoChip = NewChip();
             btnInfoReset = NewResetIcon("Back to the play time placement of All tiles");
             var infoBlock = placeBlock("Play time", infoPosText, infoChip, btnInfoReset);
-            var infoHelp = NewHelp("The line with the play time and the last launch (Appearance > Text): drag it in the preview.");
+            var infoHelp = NewHelp("The line with the play time and the last launch (Tiles > Play time and updates): drag it in the preview.");
             infoHelp.Margin = T(0, Gap.Help, 0, 0);
             infoBlock.Children.Insert(1, infoHelp);
             infoRow = infoBlock;

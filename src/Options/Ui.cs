@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
@@ -289,6 +290,59 @@ namespace RaintileOptions
         public TextBlock NewSectionTitle(string title)
         {
             return NewText((title ?? "").ToUpperInvariant(), Fs.Section, ResBrush("DimBrush"), true);
+        }
+
+        // A row that applies only with other settings (Item.When): the reason under
+        // its label, shown while it does not apply (SetRowApplies)
+        public TextBlock AddRowReason(Border row, string reason)
+        {
+            var left = (StackPanel)((Grid)row.Child).Children[0];
+            var why = NewHelp(reason, ResBrush("AccentBrush"));
+            why.Margin = T(0, Gap.Help, 0, 0);
+            AddTo(left, why);
+            return why;
+        }
+
+        // A row that does not apply: its controls disabled (the gamepad passes
+        // over them), its label dimmed, the reason shown
+        public void SetRowApplies(Border row, bool on, TextBlock why)
+        {
+            SetRowApplies(row, on, why, !on);
+        }
+
+        // explain: the reason shown (not when the whole card does not apply: it
+        // says why under its title)
+        public void SetRowApplies(Border row, bool on, TextBlock why, bool explain)
+        {
+            var g = (Grid)row.Child;
+            var left = (StackPanel)g.Children[0];
+            var label = (TextBlock)left.Children[0];
+            if (on) label.ClearValue(TextBlock.ForegroundProperty);
+            else label.Foreground = ResBrush("DimBrush");
+            foreach (UIElement c in g.Children) if (c != left) c.IsEnabled = on;
+            if (why != null) why.Visibility = explain ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // A card (group) that applies only with other settings (Group.When): the
+        // reason under its title, shown while it does not apply (SetCardApplies)
+        public TextBlock AddCardReason(Border card, string reason)
+        {
+            var sp = (StackPanel)card.Child;
+            var why = NewHelp(reason, ResBrush("AccentBrush"));
+            why.Margin = T(0, 0, 0, Gap.Control);
+            // under the title (the first child when the card has one)
+            sp.Children.Insert(sp.Children.Count > 0 && sp.Children[0] is TextBlock ? 1 : 0, why);
+            return why;
+        }
+
+        // A card that does not apply: every row of it as SetRowApplies, the reason
+        // under the title instead of under each row
+        public void SetCardApplies(Border card, bool on, TextBlock why)
+        {
+            foreach (var row in ((StackPanel)card.Child).Children.Cast<UIElement>().OfType<Border>())
+                if (row.Child is Grid && ((Grid)row.Child).Children.Count > 0 && ((Grid)row.Child).Children[0] is StackPanel)
+                    SetRowApplies(row, on, null, false);
+            if (why != null) why.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         }
 
         // Label with its help below: the left part of a row, or the top of a stacked one

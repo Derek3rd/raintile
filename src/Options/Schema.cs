@@ -20,11 +20,20 @@ namespace RaintileOptions
         public double Min, Max, Step = 1;
         public string Unit = "", Axis = "H";
         public bool NoSlider;
+        // the settings this one applies with, "Key=value" (values separated by
+        // |, conditions by ;): otherwise disabled, with the reason under it
+        public string When;
     }
 
     public class Group
     {
         public string Title, Help;
+        // the settings the whole group applies with (as Item.When): otherwise
+        // the card is disabled, with the reason under its title
+        public string When;
+        // a bool (one of Items) that turns the whole group on or off: in the
+        // card's header, its label as the card's title; the rest applies with it
+        public string Switch;
         public bool Found, Other, Market, Dash;
         public List<Item> Items = new List<Item>();
     }
@@ -33,10 +42,15 @@ namespace RaintileOptions
     {
         public string Id, Title, Desc;
         public int Icon;
+        // a page for one mode (as Item.When): its menu entry is disabled otherwise
+        public string When;
+        // a bool that turns the whole page on or off (the first setting of its
+        // first group): beside the page title, the page disabled while it is off
+        public string Switch;
         public List<Group> Groups = new List<Group>();
     }
 
-    // Menu on the left: a page, a group with sub-pages, or the categories
+    // Menu on the left: a page (with its sub-pages, Children), or the categories
     public class NavNode
     {
         public string Page, Id, Title;
@@ -50,6 +64,17 @@ namespace RaintileOptions
         public static Page ById(string id)
         {
             return Pages.FirstOrDefault(p => p.Id == id);
+        }
+
+        // The item of a Settings.inc key and its page (null when no page shows it)
+        public static Item ItemOf(string key, out Page page)
+        {
+            foreach (var p in Pages)
+                foreach (var g in p.Groups)
+                    foreach (var it in g.Items)
+                        if (string.Equals(it.Key, key, System.StringComparison.OrdinalIgnoreCase)) { page = p; return it; }
+            page = null;
+            return null;
         }
 
         // Settings.inc keys the schema shows on a page

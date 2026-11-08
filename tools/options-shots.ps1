@@ -22,7 +22,9 @@
 # one content of the window's sources (src\Options, @Resources, Raintile.ini) with
 # the inputs below, and the same content is never shot twice. A ref already shot
 # (the nightly branch, the last commit, a branch merged as it was) costs nothing; only
-# what changed is built and shot. The last 12 contents are kept.
+# what changed is built and shot. The last 12 contents are kept. Shots taken by an
+# older version of this script, which reached the pages otherwise, are not reused
+# ($shotsVersion below): the first run after such a change shoots both refs again.
 #
 # The inputs are frozen in inputs\ at the first run: a copy of the data folder and of
 # @Resources\Generated (the games found), so that shots taken days apart differ only
@@ -37,6 +39,11 @@
 # RaintileShots, so nothing is saved and no bang reaches the skin.
 # Pages are reached with UI Automation: every entry of the menu, every screen of a
 # page scrolled, and on a category page also its first tile. Dialogs are not shot.
+# The menu is walked to its end: an entry out of its view is scrolled into it first,
+# as a click would need. Before a page is shot, the title over it must be the name of
+# the entry selected (and the first tile of a category selected, before its shots):
+# a selection that did not take is tried again, and after 3 tries the run stops, so
+# the shots of another page never go into the cache as this one's.
 param(
     [string]$Base = '',     # git ref to compare with; empty: only the shots of this checkout
     [string]$Out = '',
@@ -50,6 +57,10 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $Out) { $Out = Join-Path $repo 'build\options-shots' }
 $windowFiles = @('src/Options', '@Resources/Scripts/Options.xaml')
+# Part of every key: raised when this script shoots the same content otherwise (other
+# entries reached, a page shown another way), so that shots cached before are not
+# compared with the new ones. 2: the entries out of the menu's view reached too.
+$shotsVersion = 2
 
 # An entry's name as the report writes it, lower case: what -Page is matched with
 function Get-PageName([string]$s) {
@@ -188,9 +199,8 @@ function Get-Key([string]$ref, [string]$inputsId) {
         $lines = @(for ($i = 0; $i -lt $files.Count; $i++) { $hashes[$i] + ' ' + $files[$i] })
     }
     [Array]::Sort($lines, [StringComparer]::Ordinal)
-    $text = $inputsId + "`n" + $Width + 'x' + $Height + "`n" + ($lines -join "`n")
-    # the shots of some pages: a content of their own (see -Page above); without
-    # -Page the text, so the key, is the one of the shots before -Page
+    $text = 'shots ' + $shotsVersion + "`n" + $inputsId + "`n" + $Width + 'x' + $Height + "`n" + ($lines -join "`n")
+    # the shots of some pages: a content of their own (see -Page above)
     if ($pageNames.Count -gt 0) { $text = 'pages ' + ($pageNames -join ',') + "`n" + $text }
     $sha = New-Object System.Security.Cryptography.SHA1Managed
     $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text))
@@ -234,6 +244,83 @@ function Get-ListItems($win) {
 function Select-Item($item) {
     $item.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
     Start-Sleep -Milliseconds 1500
+}
+
+# The menu: the lists left of the pages, in their order (Info, at the bottom, is a
+# list of its own and comes first). They are virtualized: an entry scrolled out of
+# the menu may not be in the tree at all, so the entries are walked with
+# ItemContainerPattern, not looked for among the descendants.
+function Find-MenuEntry($win, [int]$n) {
+    $lists = @($win.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::List))) |
+        Where-Object { $_.Current.BoundingRectangle.X -lt 200 })
+    foreach ($list in $lists) {
+        $ic = $list.GetCurrentPattern([System.Windows.Automation.ItemContainerPattern]::Pattern)
+        $item = $ic.FindItemByProperty($null, $null, $null)
+        while ($item -and $n -gt 0) { $n--; $item = $ic.FindItemByProperty($item, $null, $null) }
+        if ($item) { return $item }
+    }
+    return $null
+}
+
+function Test-Offscreen($item) {
+    # a virtualized entry has no state to read until it is realized
+    try { return $item.Current.IsOffscreen } catch { return $true }
+}
+
+# Entry n of the menu (from 0), scrolled into view first when it is out of it, as a
+# click on it would need; $null after the last one
+function Get-MenuEntry($win, [int]$n) {
+    $item = Find-MenuEntry $win $n
+    if (-not $item -or -not (Test-Offscreen $item)) { return $item }
+    $p = $null
+    if ($item.TryGetCurrentPattern([System.Windows.Automation.VirtualizedItemPattern]::Pattern, [ref]$p)) { $p.Realize() }
+    elseif ($item.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$p)) { $p.ScrollIntoView() }
+    else { throw "menu entry ${n}: out of view, and it cannot be scrolled into it" }
+    Start-Sleep -Milliseconds 400
+    $item = Find-MenuEntry $win $n
+    if (-not $item -or (Test-Offscreen $item)) { throw "menu entry ${n}: still out of view after scrolling to it" }
+    return $item
+}
+
+function Get-PageTitle($win) {
+    $t = $win.FindFirst($Scope::Descendants, (New-Condition $UA::AutomationIdProperty 'PageTitle'))
+    if ($t) { return $t.Current.Name }
+    return '(no title found)'
+}
+
+# Selects entry n of the menu and waits for its page: the title over the page is the
+# name of the entry (pages, categories and widgets alike). A selection may not take
+# while the window is busy, and the shots of the page left on screen would be cached
+# as this entry's: it is selected again, and a page that never shows stops the run.
+function Show-MenuEntry($win, [int]$n, [string]$label) {
+    $want = $label -replace '[^A-Za-z0-9]', ''
+    $title = ''
+    for ($try = 0; $try -lt 3; $try++) {
+        # found again: building a page may rebuild the menu
+        Select-Item (Get-MenuEntry $win $n)
+        for ($w = 0; $w -lt 10; $w++) {
+            $title = Get-PageTitle $win
+            if (($title -replace '[^A-Za-z0-9]', '') -ceq $want) { return }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    throw ('menu entry {0} ({1}): the page on screen is still "{2}" after 3 tries' -f $n, $label, $title)
+}
+
+# The tiles of the category page on screen (the strip right of the menu)
+function Get-TileStrip($win) {
+    return @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -gt 300 -and $_.Current.BoundingRectangle.Width -lt 200 })
+}
+
+# Selects the first tile of the category on screen (after All tiles), checked as the
+# entries of the menu are
+function Show-FirstTile($win, [string]$label) {
+    for ($try = 0; $try -lt 3; $try++) {
+        Select-Item (Get-TileStrip $win)[1]
+        $strip = Get-TileStrip $win
+        if ($strip.Count -gt 1 -and $strip[1].GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) { return }
+    }
+    throw "the first tile of ${label}: not selected after 3 tries"
 }
 
 # The page on screen and the rest of it scrolled, one shot per screen
@@ -284,11 +371,12 @@ function Save-Window([string]$exe, [string]$resources, [string]$dir) {
         $hwnd = [IntPtr]$win.Current.NativeWindowHandle
         [void][ShotsWin32]::MoveWindow($hwnd, 0, 0, $Width, $Height, $true)
         Start-Sleep -Milliseconds 2500   # the first page is built after the window shows
-        $menu = @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -lt 200 })
         $entries = New-Object System.Collections.Generic.List[string]
-        for ($i = 0; $i -lt $menu.Count; $i++) {
+        for ($i = 0; ; $i++) {
+            if ($i -ge 200) { throw 'more than 200 entries in the menu: the walk does not end' }
             # the entries are found again: building a page may rebuild the menu
-            $item = @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -lt 200 })[$i]
+            $item = Get-MenuEntry $win $i
+            if (-not $item) { break }
             $label = @($item.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text))) |
                 ForEach-Object { $_.Current.Name } | Where-Object { $_ -match '[A-Za-z]' }) | Select-Object -Last 1
             $name = '{0:00}-{1}' -f $i, ($label -replace '[^A-Za-z0-9]', '')
@@ -297,12 +385,11 @@ function Save-Window([string]$exe, [string]$resources, [string]$dir) {
             if ($enabled) { $entries.Add($name) } else { $entries.Add("$name greyed") }
             if (-not $enabled) { continue }
             if ($pageNames.Count -gt 0 -and $pageNames -notcontains (Get-PageName $label)) { continue }
-            Select-Item $item
+            Show-MenuEntry $win $i $label
             Save-Page $win $hwnd $dir $name
             # a category page: also its first tile (after All tiles)
-            $strip = @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -gt 300 -and $_.Current.BoundingRectangle.Width -lt 200 })
-            if ($strip.Count -gt 1) {
-                Select-Item $strip[1]
+            if ((Get-TileStrip $win).Count -gt 1) {
+                Show-FirstTile $win $label
                 Save-Page $win $hwnd $dir "$name-tile"
             }
         }

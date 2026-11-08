@@ -307,25 +307,28 @@ function T.logos_only_with_the_logo_on_the_backdrop()
 	t.clean(s)
 end
 
--- The logo on the backdrop sits where it looks on its tile in the grid: its
--- centre at LogoPos= is kept inside the tile, so a large logo near a corner
--- touches it, and it touches the corner of the backdrop's area too
-function T.logo_on_the_backdrop_in_the_corner()
+-- The logo on the backdrop: LogoPos= as on a tile, on the area (its centre
+-- there, kept inside it; the tile editor shows that area in this mode), with
+-- no grid tile or Size= in between
+function T.logo_on_the_backdrop_where_logopos_puts_it()
 	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelLogoOn = 'Background', Thumbnails = 0 }, true)
 	local M = s:upvalue('M')
 	local L = #c.tiles
 	local tl = c.tiles[s:upvalue('offset') % L + 1]
 	t.ok(tl.logo, 'the selected tile has no logo (test images missing)')
-	-- 5,5 with a logo of 1.6 times the size: against the top left corner of the tile
-	tl.logoX, tl.logoY, tl.logoScale, tl.logoRatio = 0.05, 0.05, 1.6, nil
-	local qx, qy = M.logoShare(tl)
-	t.eq(qx, 0, 'share across on the tile')
-	t.eq(qy, 0, 'share down on the tile')
-	M.backdropLogo()
 	local logo = s.meters['backdroplogo']
-	local ax, ay = M.backdropArea()
+	local ax, ay, W, H = M.backdropArea()
+	-- the top left corner: kept inside, against it
+	tl.logoX, tl.logoY, tl.logoScale, tl.logoRatio, tl.cols = 0, 0, 1.6, nil, 2
+	M.backdropLogo()
 	t.eq(num(logo, 'X'), ax, 'logo not against the left of the area')
 	t.eq(num(logo, 'Y'), ay, 'logo not against the top of the area')
+	-- 25,75: its centre there
+	tl.logoX, tl.logoY = 0.25, 0.75
+	M.backdropLogo()
+	local size = num(logo, 'W')
+	t.ok(math.abs(num(logo, 'X') + size / 2 - (ax + 0.25 * W)) <= 1, 'logo centre across')
+	t.ok(math.abs(num(logo, 'Y') + size / 2 - (ay + 0.75 * H)) <= 1, 'logo centre down')
 	t.clean(s)
 end
 

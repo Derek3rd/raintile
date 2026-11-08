@@ -314,13 +314,11 @@ namespace RaintileOptions
                 if (WheelLogoBack() && sel.Logo != null)
                 {
                     double size = g.GH * Math.Min(80, Math.Max(5, WNum("WheelBackdropLogoSize", 30))) / 100 * sel.LogoScale;
-                    var share = PreviewLogoShare(sel, g);
-                    var vis = PreviewLogoVisible(sel, size);
-                    double cx = g.GW > vis.Width ? vis.Width / 2 + share.X * (g.GW - vis.Width) : g.GW / 2;
-                    double cy = g.GH > vis.Height ? vis.Height / 2 + share.Y * (g.GH - vis.Height) : g.GH / 2;
+                    // LogoPos= as on a tile, on the area (M.backdropLogo)
+                    var at = PreviewLogoCentre(sel, size, g.GW, g.GH);
                     // (the image larger than the tiles' copy: it is much larger here)
                     var logo = new Image { Source = GetBitmap(sel.LogoPath, 640) ?? sel.Logo, Width = size, Height = size, Stretch = Stretch.Uniform };
-                    Canvas.SetLeft(logo, cx - size / 2); Canvas.SetTop(logo, cy - size / 2);
+                    Canvas.SetLeft(logo, at.X - size / 2); Canvas.SetTop(logo, at.Y - size / 2);
                     area.Children.Add(logo);
                 }
                 if (WheelInfoBack())
@@ -457,21 +455,16 @@ namespace RaintileOptions
         bool WheelLogoBack() { return IsWheel() && WNum("WheelBackdrop", 1) != 0 && WWord("WheelLogoOn", "tile") == "background"; }
         bool WheelInfoBack() { return IsWheel() && WNum("WheelBackdrop", 1) != 0 && WWord("WheelInfoOn", "tile") == "background"; }
 
-        // The logo size of the category in the grid (IconSize= of it, or of Settings.inc)
-        double PreviewGridIcon(WheelGeo g)
+        // The logo size of the category's tiles (IconSize= of it, or of
+        // Settings.inc); in the wheel at most most of its square tile (M.wheelGeometry)
+        double PreviewIcon(WheelGeo g)
         {
             string own = wheelCatIdx >= 0 && wheelCatIdx < wheelCats.Count
                 ? Core.GetKey(Core.GetCategorySection(GetModel(wheelCats[wheelCatIdx].File)), "IconSize").Trim() : "";
             double icon = WSize("IconSize", g.MonH, 96), n;
             if (own != "" && double.TryParse(own.TrimEnd('%'), NumberStyles.Float, CultureInfo.InvariantCulture, out n))
                 icon = own.EndsWith("%") ? n * g.MonH / 100 : n;
-            return icon;
-        }
-
-        // ... and on its tiles: in the wheel at most most of its square tile (M.wheelGeometry)
-        double PreviewIcon(WheelGeo g)
-        {
-            return IsWheel() ? Math.Min(PreviewGridIcon(g), Math.Floor(g.S * 0.7)) : PreviewGridIcon(g);
+            return IsWheel() ? Math.Min(icon, Math.Floor(g.S * 0.7)) : icon;
         }
 
         // The part of a logo's square box its image fills (M.logoVisible)
@@ -489,20 +482,6 @@ namespace RaintileOptions
             var v = PreviewLogoVisible(t, size);
             Func<double, double, double, double> place = (p, n, total) => n >= total ? total / 2 : Math.Min(total - n / 2, Math.Max(n / 2, p * total));
             return new Point(place(t.LogoX, v.Width, w), place(t.LogoY, v.Height, h));
-        }
-
-        // Where a tile's logo sits on its tile in the grid, as a share of the room
-        // it can move in there (M.logoShare): the backdrop puts it at the same share
-        Point PreviewLogoShare(WheelTile t, WheelGeo g)
-        {
-            int nx = GridNx(), ny = GridNy();
-            double gap = WSize("Gap", g.MonH, 18);
-            double cw = (g.GW - (nx - 1) * gap) / nx, ch = (g.GH - (ny - 1) * gap) / ny;
-            double w = Math.Min(nx, t.Cols) * (cw + gap) - gap, h = Math.Min(ny, t.Rows) * (ch + gap) - gap;
-            double size = PreviewGridIcon(g) * t.LogoScale;
-            var v = PreviewLogoVisible(t, size);
-            var c = PreviewLogoCentre(t, size, w, h);
-            return new Point(w > v.Width ? (c.X - v.Width / 2) / (w - v.Width) : 0.5, h > v.Height ? (c.Y - v.Height / 2) / (h - v.Height) : 0.5);
         }
 
         // A tile's lines as the launcher draws them (M.infoBlock): the update line

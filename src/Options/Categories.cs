@@ -72,7 +72,7 @@ namespace RaintileOptions
         Button btnFrameReset, btnLogoReset;
         // the play time line (InfoPos): its sample in the preview and its row
         Border previewInfo, infoChip;
-        TextBlock infoPosText, infoWhy;
+        TextBlock infoPosText, infoWhy, placeHow;
         Button btnInfoReset;
         Panel infoRow;
         ScrollViewer previewScroll;
@@ -689,21 +689,74 @@ namespace RaintileOptions
         readonly LogoState logoPlace = new LogoState();
         readonly InfoState infoPlace = new InfoState();
 
-        // Size in pixels of a tile of category 'file' (only its proportions count)
-        double[] GetTileSize(string file)
+        // The grid area of the launcher (under the top row, inside the margins):
+        // width, height, gap
+        double[] GetArea()
         {
-            double[] area = null;
             try
             {
                 var parts = File.ReadAllText(Path.Combine(Core.Generated, "Area.txt")).Trim().Split(',');
-                if (parts.Length == 3) area = parts.Select(p => double.Parse(p, Inv)).ToArray();
+                if (parts.Length == 3) return parts.Select(p => double.Parse(p, Inv)).ToArray();
             }
             catch { }
-            if (area == null)
+            // skin not loaded yet: the screen without menu and margins, roughly
+            return new[] { screenPx[0] * 0.96, screenPx[1] * 0.88, 16 };
+        }
+
+        // Where the logo and the lines of a tile are placed, as the launcher draws
+        // them: width, height and logo box (before LogoScale=), in pixels.
+        //  - the grid: the tile of the category (NX, NY, its Size=), its IconSize;
+        //  - the wheel: its square tile (WheelTileSize), the logo at most most of it
+        //    (M.wheelGeometry); Size= means nothing there;
+        //  - the wheel with the logo or the lines on the background (WheelLogoOn,
+        //    WheelInfoOn): the area under the top row, the logo
+        //    WheelBackdropLogoSize percent of its height (M.backdropLogo).
+        double[] GetPlaceShape(string file, IniSection s, bool all)
+        {
+            var area = GetArea();
+            if (!V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase))
             {
-                // skin not loaded yet: the screen without menu and margins, roughly
-                area = new[] { screenPx[0] * 0.96, screenPx[1] * 0.88, 16 };
+                var size = GetTileSize(file, area);
+                // a tile of more cells (Size=): its own proportions (gaps left out)
+                var span = Regex.Match(s != null && !all ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
+                if (span.Success)
+                    size = new[] { size[0] * Math.Max(1, int.Parse(span.Groups[1].Value)), size[1] * Math.Max(1, int.Parse(span.Groups[2].Value)) };
+                return new[] { size[0], size[1], GetLogoBox(file) };
             }
+            if (OnBackdrop())
+            {
+                double pct = 30, p;
+                if (double.TryParse(V("WheelBackdropLogoSize").Trim(), NumberStyles.Float, Inv, out p)) pct = Math.Min(80, Math.Max(5, p));
+                return new[] { area[0], area[1], Math.Max(8, area[1] * pct / 100) };
+            }
+            double ts = 25, q;
+            if (double.TryParse(V("WheelTileSize").Trim(), NumberStyles.Float, Inv, out q)) ts = Math.Min(80, Math.Max(3, q));
+            double sz = Math.Max(16, Math.Min(Math.Floor(ts * Math.Min(screenPx[0], screenPx[1]) / 100), Math.Floor(Math.Min(area[0], area[1]))));
+            return new[] { sz, sz, Math.Min(GetLogoBox(file), Math.Floor(sz * 0.7)) };
+        }
+
+        // How the preview of the tile editor works, and what it shows (GetPlaceShape)
+        string PlaceHowText()
+        {
+            string shape = !V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase)
+                ? "The preview has the proportions of this category's tiles on this screen."
+                : OnBackdrop()
+                    ? "The preview is the wheel's background under the top row, where the selected tile's logo and lines go (Tiles > Wheel); the background is cut from its centre there."
+                    : "The preview is a tile of the wheel: a square, whatever its size in the grid.";
+            return "Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. With the gamepad: A on the preview. " +
+                shape + " A tile follows All tiles until you move something on it (Own); its reset gives it back the placement of All tiles.";
+        }
+
+        // The wheel puts the selected tile's logo or lines on the background
+        bool OnBackdrop()
+        {
+            return V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase) && V("WheelBackdrop") != "0"
+                && (V("WheelLogoOn").Equals("background", StringComparison.OrdinalIgnoreCase) || V("WheelInfoOn").Equals("background", StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Size in pixels of a tile of category 'file' in the grid (only its proportions count)
+        double[] GetTileSize(string file, double[] area)
+        {
             var c = Core.GetCategorySection(GetModel(file));
             var n = new Dictionary<string, int>();
             foreach (var k in new[] { "NX", "NY" })
@@ -1204,17 +1257,13 @@ namespace RaintileOptions
             if (bgKey == null) bgFrame.Bitmap = null;
             if (all) s = currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null;
             ReadFraming(s);
-            var size = currentFile != null ? GetTileSize(currentFile) : new double[] { 16, 9 };
-            // a tile of more cells (Size=): its own proportions (gaps left out)
-            var span = Regex.Match(s != null && !all ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
-            if (span.Success)
-            {
-                size = new[] { size[0] * Math.Max(1, int.Parse(span.Groups[1].Value)), size[1] * Math.Max(1, int.Parse(span.Groups[2].Value)) };
-            }
-            bgFrame.TW = size[0]; bgFrame.TH = size[1];
+            // the tile in the grid, the square of the wheel, or the wheel's background
+            var shape = currentFile != null ? GetPlaceShape(currentFile, s, all) : new double[] { 16, 9, 96 };
+            bgFrame.TW = shape[0]; bgFrame.TH = shape[1];
+            if (placeHow != null) placeHow.Text = PlaceHowText();
             previewLogo.Source = all && sample == null ? GetPlaceholderLogo() : GetBitmap(logo, 384);
             ReadLogoPlace(s);
-            logoPlace.Box = currentFile != null ? GetLogoBox(currentFile) : 96.0;
+            logoPlace.Box = shape[2];
             ReadInfoPlace(s);
             // the lines are not drawn with TileInfo and UpdateInfo Never, nor on
             // widgets (the place is the block of both: the update line and the
@@ -1944,9 +1993,9 @@ namespace RaintileOptions
             // with the pad: A on the preview moves its parts
             AddPadArea(preview, StartPlace);
             AddTo(left, NewPlaceHint());
-            var how = NewHelp("Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. With the gamepad: A on the preview. The preview has the proportions of this category's tiles on this screen. " +
-                "A tile follows All tiles until you move something on it (Own); its reset gives it back the placement of All tiles.");
+            var how = NewHelp(PlaceHowText());
             how.Margin = T(0, Gap.Control, 0, Gap.Line);
+            placeHow = how;
             AddTo(left, how);
 
             // framing, logo, play time: the name and the chip (Own / From All tiles) on

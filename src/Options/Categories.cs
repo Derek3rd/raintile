@@ -73,6 +73,8 @@ namespace RaintileOptions
         // the play time line (InfoPos): its sample in the preview and its row
         Border previewInfo, infoChip;
         TextBlock infoPosText, infoWhy, placeHow;
+        // rows of the grid only (Size=, NX, NY, IconSize) and their reason (UpdateGridOnlyRows)
+        readonly List<Tuple<Grid, TextBlock>> gridOnlyRows = new List<Tuple<Grid, TextBlock>>();
         Button btnInfoReset;
         Panel infoRow;
         ScrollViewer previewScroll;
@@ -703,18 +705,18 @@ namespace RaintileOptions
             return new[] { screenPx[0] * 0.96, screenPx[1] * 0.88, 16 };
         }
 
+        bool IsWheelLayout() { return V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase); }
+
         // Where the logo and the lines of a tile are placed, as the launcher draws
         // them: width, height and logo box (before LogoScale=), in pixels.
         //  - the grid: the tile of the category (NX, NY, its Size=), its IconSize;
-        //  - the wheel: its square tile (WheelTileSize), the logo at most most of it
-        //    (M.wheelGeometry); Size= means nothing there;
-        //  - the wheel with the logo or the lines on the background (WheelLogoOn,
-        //    WheelInfoOn): the area under the top row, the logo
-        //    WheelBackdropLogoSize percent of its height (M.backdropLogo).
+        //  - the wheel: its thumbnail, a square (WheelTileSize), the logo 70% of it
+        //    (M.wheelGeometry); Size=, NX, NY and IconSize are the grid's. The
+        //    backdrop puts the logo and the lines where they sit on the thumbnail.
         double[] GetPlaceShape(string file, IniSection s, bool all)
         {
             var area = GetArea();
-            if (!V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase))
+            if (!IsWheelLayout())
             {
                 var size = GetTileSize(file, area);
                 // a tile of more cells (Size=): its own proportions (gaps left out)
@@ -723,35 +725,53 @@ namespace RaintileOptions
                     size = new[] { size[0] * Math.Max(1, int.Parse(span.Groups[1].Value)), size[1] * Math.Max(1, int.Parse(span.Groups[2].Value)) };
                 return new[] { size[0], size[1], GetLogoBox(file) };
             }
-            if (OnBackdrop())
-            {
-                double pct = 30, p;
-                if (double.TryParse(V("WheelBackdropLogoSize").Trim(), NumberStyles.Float, Inv, out p)) pct = Math.Min(80, Math.Max(5, p));
-                return new[] { area[0], area[1], Math.Max(8, area[1] * pct / 100) };
-            }
             double ts = 25, q;
             if (double.TryParse(V("WheelTileSize").Trim(), NumberStyles.Float, Inv, out q)) ts = Math.Min(80, Math.Max(3, q));
             double sz = Math.Max(16, Math.Min(Math.Floor(ts * Math.Min(screenPx[0], screenPx[1]) / 100), Math.Floor(Math.Min(area[0], area[1]))));
-            return new[] { sz, sz, Math.Min(GetLogoBox(file), Math.Floor(sz * 0.7)) };
+            return new[] { sz, sz, Math.Floor(sz * 0.7) };
         }
 
         // How the preview of the tile editor works, and what it shows (GetPlaceShape)
         string PlaceHowText()
         {
-            string shape = !V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase)
+            string shape = !IsWheelLayout()
                 ? "The preview has the proportions of this category's tiles on this screen."
-                : OnBackdrop()
-                    ? "The preview is the wheel's background under the top row, where the selected tile's logo and lines go (Tiles > Wheel); the background is cut from its centre there."
-                    : "The preview is a tile of the wheel: a square, whatever its size in the grid.";
+                : "The preview is a thumbnail of the wheel: a square, whatever its size in the grid. On the backdrop (Tiles > Wheel) the selected tile's logo and lines go where they sit here.";
             return "Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. With the gamepad: A on the preview. " +
                 shape + " A tile follows All tiles until you move something on it (Own); its reset gives it back the placement of All tiles.";
         }
 
-        // The wheel puts the selected tile's logo or lines on the background
-        bool OnBackdrop()
+        // A stacked row of the editor that applies only with the grid (Size=, NX,
+        // NY, IconSize): the reason under its help, shown in the wheel
+        // (docs/OptionsUI.md, "What does not apply")
+        TextBlock AddGridOnlyReason(Grid row)
         {
-            return V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase) && V("WheelBackdrop") != "0"
-                && (V("WheelLogoOn").Equals("background", StringComparison.OrdinalIgnoreCase) || V("WheelInfoOn").Equals("background", StringComparison.OrdinalIgnoreCase));
+            var help = FormHelp(row);
+            row.Children.Remove(help);
+            var why = NewHelp(WhenReason("ScrollMode=Grid", null), ResBrush("AccentBrush"));
+            why.Margin = T(0, Gap.Help, 0, 0);
+            var both = NewPanel();
+            AddTo(both, help);
+            AddTo(both, why);
+            Grid.SetRow(both, 1);
+            row.Children.Add(both);
+            gridOnlyRows.Add(new Tuple<Grid, TextBlock>(row, why));
+            return why;
+        }
+
+        // The rows of the grid only: disabled in the wheel, with the reason
+        void UpdateGridOnlyRows()
+        {
+            bool on = !IsWheelLayout();
+            foreach (var r in gridOnlyRows)
+            {
+                var label = (TextBlock)r.Item1.Children[0];
+                if (on) label.ClearValue(TextBlock.ForegroundProperty);
+                else label.Foreground = ResBrush("DimBrush");
+                foreach (UIElement c in r.Item1.Children)
+                    if (Grid.GetRow(c) == 2) c.IsEnabled = on;
+                r.Item2.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            }
         }
 
         // Size in pixels of a tile of category 'file' in the grid (only its proportions count)
@@ -1261,6 +1281,7 @@ namespace RaintileOptions
             var shape = currentFile != null ? GetPlaceShape(currentFile, s, all) : new double[] { 16, 9, 96 };
             bgFrame.TW = shape[0]; bgFrame.TH = shape[1];
             if (placeHow != null) placeHow.Text = PlaceHowText();
+            UpdateGridOnlyRows();
             previewLogo.Source = all && sample == null ? GetPlaceholderLogo() : GetBitmap(logo, 384);
             ReadLogoPlace(s);
             logoPlace.Box = shape[2];
@@ -1431,9 +1452,9 @@ namespace RaintileOptions
             SetActionVisible(gridColsReset, key("NX") != "");
             SetActionVisible(gridRowsReset, key("NY") != "");
             SetActionVisible(catLogoSizeReset, key("IconSize") != "");
-            SetFormHelp(gridColsHint, "Empty = the default (" + V("NX") + ", from Layout).");
-            SetFormHelp(gridRowsHint, "Empty = the default (" + V("NY") + ", from Layout).");
-            SetFormHelp(sizeHint, "Pixels or % of the screen height. Empty = the default (" + V("IconSize") + ", from Layout).");
+            SetFormHelp(gridColsHint, "Empty = the default (" + V("NX") + ", Tiles > Grid).");
+            SetFormHelp(gridRowsHint, "Empty = the default (" + V("NY") + ", Tiles > Grid).");
+            SetFormHelp(sizeHint, "Pixels or % of the screen height. Empty = the default (" + V("IconSize") + ", Tiles > Grid).");
             catTileColor.Text = key("TileColor");
             SetSwatch(catColorSwatch, catTileColor.Text);
             SetActionVisible(catColorClear, catTileColor.Text.Trim() != "");
@@ -2210,19 +2231,22 @@ namespace RaintileOptions
                 SetActionVisible(reset, value != "");
                 UpdateTilePreview();   // the tile's proportions and logo size
             };
-            // grid and logo size as in Layout; empty = the default of Layout (help set by ShowAllTiles)
-            gridColsReset = NewResetIcon("Back to the default (Layout)");
-            gridRowsReset = NewResetIcon("Back to the default (Layout)");
-            catLogoSizeReset = NewResetIcon("Back to the default (Layout)");
+            // grid and logo size as on Tiles > Grid; empty = its default (help set by ShowAllTiles)
+            gridColsReset = NewResetIcon("Back to the default (Tiles > Grid)");
+            gridRowsReset = NewResetIcon("Back to the default (Tiles > Grid)");
+            catLogoSizeReset = NewResetIcon("Back to the default (Tiles > Grid)");
             gridCols = NewNumberField(1, 12, 1, "", t => setCatKey("NX", t, gridColsReset));
             gridRows = NewNumberField(1, 8, 1, "", t => setCatKey("NY", t, gridRowsReset));
             catLogoSize = NewSizeField("H", v => setCatKey("IconSize", v, catLogoSizeReset));
             var colsRow = AddTo(af, NewFormRow("Columns", gridCols.Root, "", null, gridColsReset));
             gridColsHint = FormHelp(colsRow);
+            AddGridOnlyReason(colsRow);
             var rowsRow = AddTo(af, NewFormRow("Rows", gridRows.Root, "", null, gridRowsReset));
             gridRowsHint = FormHelp(rowsRow);
+            AddGridOnlyReason(rowsRow);
             var sizeFormRow = AddTo(af, NewFormRow("Logo size", catLogoSize.Root, "", null, catLogoSizeReset));
             sizeHint = FormHelp(sizeFormRow);
+            AddGridOnlyReason(sizeFormRow);
             Func<string, double> layout = k => { double n; return Core.TryNumber(V(k), out n) ? n : 1; };
             gridColsReset.Click += (s, e) => { setCatKey("NX", "", gridColsReset); gridCols.Show("", layout("NX")); };
             gridRowsReset.Click += (s, e) => { setCatKey("NY", "", gridRowsReset); gridRows.Show("", layout("NY")); };
@@ -2232,7 +2256,7 @@ namespace RaintileOptions
             catColorClear = NewClearButton("Clear the colour: the default tile colour");
             catColorClear.Click += (s, e) => catTileColor.Text = "";   // TextChanged writes it
             var catColorRow = NewFieldRow(catColorSwatch, catTileColor, null);
-            AddTo(af, NewFormRow("Colour", catColorRow, "Colour of the tiles without one of their own (their Colour), used when there is no background image. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent.", null, catColorClear));
+            AddTo(af, NewFormRow("Colour", catColorRow, "Colour of the tiles without one of their own (their Colour), used when there is no background image. Empty = the default tile colour (Tiles page). R,G,B,A: the A makes it transparent.", null, catColorClear));
             catColorSwatch.Click += (s, e) =>
             {
                 if (currentFile == null) return;
@@ -2370,8 +2394,8 @@ namespace RaintileOptions
             };
             sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged);
             sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged);
-            AddTo(f, NewFormRow("Width", sizeCols.Root, "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Search, Favorites and Recent show it in one cell."));
-            AddTo(f, NewFormRow("Height", sizeRows.Root));
+            AddGridOnlyReason(AddTo(f, NewFormRow("Width", sizeCols.Root, "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Search, Favorites and Recent show it in one cell.")));
+            AddGridOnlyReason(AddTo(f, NewFormRow("Height", sizeRows.Root)));
             tagSuggestions = new WrapPanel();
             AddTo(f, NewFormRow("Tags", tileFields["Tags"], "Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", tagSuggestions));
             AddTo(f, NewPinRow());

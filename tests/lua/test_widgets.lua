@@ -27,8 +27,8 @@ local WIDGET = table.concat({
 }, '\r\n')
 
 -- A skin whose Dashboard has one more tile: the test widget
-local function skinWithWidget(settings)
-	local s = R.new({})
+local function skinWithWidget(settings, skin)
+	local s = R.new({ settings = skin })
 	local dir = s.data .. 'Widgets\\TestW\\'
 	host_mkdir(s.data .. 'Widgets')
 	host_mkdir(dir)
@@ -103,6 +103,37 @@ function T.list_y()
 	local hit = w.widget.partsAt['W' .. w.widget.idx .. 'RowHit1']
 	t.ok(hit, 'the first row is not a part of the tile')
 	t.eq(hit[2], math.floor(api.listY), 'the first row does not start at ListY=')
+end
+
+-- The wheel: the highlight goes onto a row of the list (a part of the tile),
+-- in pixels from the tile (in the wheel a fraction of a line is a place on
+-- the arc, not a distance in the tile)
+function T.list_part_in_the_wheel()
+	local s = skinWithWidget(nil, { ScrollMode = 'Wheel', LauncherMode = 'Dock', DockSide = 'Left' })
+	local w = testWidget(s)
+	for i, c in ipairs(s:upvalue('cats')) do
+		for _, tile in ipairs(c.tiles) do
+			if tile == w then s:call('Show()') s:call('SetCategory(' .. i .. ')') end
+		end
+	end
+	t.clean(s)
+	local name = 'W' .. w.widget.idx .. 'RowHit1'
+	s:call('HoverPart(\'' .. name .. '\')')
+	t.clean(s)
+	local M, V = s:upvalue('M'), s:upvalue('V')
+	local slot
+	for sl, e in pairs(M.wv) do
+		if s:upvalue('tileAt')(sl) == w and (not slot or math.abs(e.d) < math.abs(M.wv[slot].d)) then slot = sl end
+	end
+	t.ok(slot, 'the widget is not on the wheel')
+	local hit = w.widget.partsAt[name]
+	t.ok(hit, 'the first row is not a part of the tile')
+	local box, hl = s.meters['tilebox' .. slot], s.meters['tilehover']
+	local bx, by = tonumber(box:opt('X', '0')) - V.PadX, tonumber(box:opt('Y', '0')) - V.GridY
+	local hx, hy = tonumber(hl:opt('X', '0')), tonumber(hl:opt('Y', '0'))
+	t.ok(not hl.hidden, 'no highlight on the row')
+	t.ok(math.abs(hx - (bx + hit[1])) <= 1 and math.abs(hy - (by + hit[2])) <= 1,
+		string.format('highlight at %d,%d, the row at %d,%d', hx, hy, bx + hit[1], by + hit[2]))
 end
 
 return T

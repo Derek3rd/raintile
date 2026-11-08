@@ -23,7 +23,8 @@ local laidOut = false -- menu already measured and centred
 local appear = nil    -- steps since the tiles started appearing (nil = none)
 -- Highlight of the tile under the mouse, in grid units (column, row) so it
 -- follows the tiles while scrolling; a = opacity 0-1.
-local hover = { idx = 0, on = false, gx = 0, gy = 0, tx = 0, ty = 0, a = 0, w = 0, h = 0, tw = 0, th = 0, anchor = 0 }
+local hover = { idx = 0, on = false, gx = 0, gy = 0, tx = 0, ty = 0, a = 0, w = 0, h = 0, tw = 0, th = 0, anchor = 0,
+	ox = 0, oy = 0, tox = 0, toy = 0 } -- o: a part of a widget, in pixels from its tile
 local pillPos = nil   -- { x, w } of the active category pill
 -- Tiles whose logo is (or is going back from being) lit by hover: [tile] = true.
 -- tile.zoom (0-1) is the progress, used for the logo's zoom and colour.
@@ -3892,6 +3893,7 @@ local function placeHover()
 		return
 	end
 	local x, y = gridToPx(hover.gx, hover.gy)
+	x, y = x + hover.ox, y + hover.oy
 	set('TileHover', 'X', tostring(math.floor(x + 0.5)))
 	set('TileHover', 'Y', tostring(math.floor(y + 0.5)))
 	set('TileHover', 'Shape', string.format(
@@ -4123,6 +4125,10 @@ local function advance()
 		hover.w, moving = approach(hover.w, hover.tw, 0.5, V.AnimHoverSmooth)
 		busy = busy or moving
 		hover.h, moving = approach(hover.h, hover.th, 0.5, V.AnimHoverSmooth)
+		busy = busy or moving
+		hover.ox, moving = approach(hover.ox, hover.tox, 0.5, V.AnimHoverSmooth)
+		busy = busy or moving
+		hover.oy, moving = approach(hover.oy, hover.toy, 0.5, V.AnimHoverSmooth)
 		busy = busy or moving
 		hover.a, moving = approach(hover.a, hover.on and 1 or 0, 0.02, V.AnimHoverSmooth)
 		busy = busy or moving
@@ -5453,15 +5459,19 @@ end
 -- Moves the highlight (mouse or keyboard) to tile t, index idx, at grid
 -- coordinates tx, ty.
 -- (w, h: the size of a part of the tile, M.hoverPart; otherwise the tile's)
-local function focus(t, idx, tx, ty, w, h)
+local function focus(t, idx, tx, ty, w, h, ox, oy)
 	if not w then w, h = tileSize(t) end
-	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty and hover.tw == w and hover.th == h then return end
+	ox, oy = ox or 0, oy or 0
+	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty and hover.tw == w and hover.th == h
+		and hover.tox == ox and hover.toy == oy then return end
 	hover.tx, hover.ty = tx, ty
 	hover.tw, hover.th = w, h
+	hover.tox, hover.toy = ox, oy
 	if hover.a < 0.05 or not V.AnimHover then
 		-- it was off: appear directly on the new tile
 		hover.gx, hover.gy = hover.tx, hover.ty
 		hover.w, hover.h = hover.tw, hover.th
+		hover.ox, hover.oy = ox, oy
 	end
 	hover.idx, hover.on = idx, true
 
@@ -5535,7 +5545,9 @@ function HoverPart(name)
 	if not m then return end
 	local slot
 	for s = 1, V.Slots do
-		if tileAt(s) == t then slot = s break end
+		-- the wheel repeating few tiles: the copy with the widget (nearest the middle)
+		if tileAt(s) == t and (not slot or not V.Wheel or math.abs((M.wv[s] or {}).d or 1e9) < math.abs((M.wv[slot] or {}).d or 1e9)) then slot = s end
+		if slot and not V.Wheel then break end
 	end
 	if not slot then return end
 	M.picked = nil
@@ -5559,7 +5571,10 @@ function M.focusPart(t, slot, name)
 	hover.anchor = V.Horizontal and ty or tx
 	local p = M.widgetParts(t)[name]
 	local px, py = p and p[1] or m:GetX(), p and p[2] or m:GetY()
-	focus(t, indexAt(slot), tx + px / V.StepX, ty + py / V.StepY, p and p[3] or m:GetW(), p and p[4] or m:GetH())
+	-- (from the tile, in pixels: in the wheel a fraction of a line is a
+	-- place on the arc, not a distance in the tile)
+	focus(t, indexAt(slot), tx, ty, p and p[3] or m:GetW(), p and p[4] or m:GetH(), px, py)
+	if V.Wheel then M.wheelHover(V.Horizontal and tx or ty) end
 end
 
 function LeavePart(name)

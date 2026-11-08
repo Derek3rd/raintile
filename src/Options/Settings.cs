@@ -137,8 +137,11 @@ namespace RaintileOptions
 
         // Rows that apply only with other settings (Item.When): disabled, with
         // the reason under their label, so they are seen and can be found
-        class WhenRow { public string When; public Border Row; public TextBlock Why; }
+        class WhenRow { public string When, GroupWhen; public Border Row; public TextBlock Why; }
         readonly List<WhenRow> whenRows = new List<WhenRow>();
+        // and whole cards (Group.When)
+        class WhenCard { public string When; public Border Card; public TextBlock Why; }
+        readonly List<WhenCard> whenCards = new List<WhenCard>();
 
         // "Key=a|b;Key2=c": every condition holds (one of its values)
         bool WhenHolds(string when)
@@ -173,7 +176,13 @@ namespace RaintileOptions
 
         void UpdateWhenRows()
         {
-            foreach (var w in whenRows) SetRowApplies(w.Row, WhenHolds(w.When), w.Why);
+            foreach (var c in whenCards) SetCardApplies(c.Card, WhenHolds(c.When), c.Why);
+            foreach (var w in whenRows)
+            {
+                // in a card that does not apply: disabled, the reason is the card's
+                bool card = w.GroupWhen == null || WhenHolds(w.GroupWhen), own = WhenHolds(w.When);
+                SetRowApplies(w.Row, card && own, w.Why, card && !own);
+            }
             UpdateNavApplies();
         }
 
@@ -652,9 +661,11 @@ namespace RaintileOptions
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
                         var b = row as Border;
                         if (b != null && !string.IsNullOrEmpty(item.When))
-                            whenRows.Add(new WhenRow { When = item.When, Row = b, Why = AddRowReason(b, WhenReason(item.When, page)) });
+                            whenRows.Add(new WhenRow { When = item.When, GroupWhen = group.When, Row = b, Why = AddRowReason(b, WhenReason(item.When, page)) });
                     }
                 }
+                if (rows > 0 && !string.IsNullOrEmpty(group.When))
+                    whenCards.Add(new WhenCard { When = group.When, Card = card, Why = AddCardReason(card, WhenReason(group.When, page)) });
                 if (rows > 0) AddTo(sp, card);
             }
             UpdateWhenRows();

@@ -242,6 +242,8 @@ def check_schema_layout(schema):
     page_of = {k: p for p, ks in pages.items() for k in ks}
     conds = [(m.group(1), m.group(2)) for m in re.finditer(r'Key = "([A-Za-z0-9]+)"[^\n]*When = "([^"]*)"', schema)]
     conds += [('page ' + m.group(1), m.group(2)) for m in re.finditer(r'new Page \{ Id = "([a-z]+)", When = "([^"]*)"', schema)]
+    # a group: checked as its first setting (the switch must come before it)
+    conds += [(m.group(2), m.group(1)) for m in re.finditer(r'new Group \{ Title = [^\n]*?When = "([^"]*)", Items = new List<Item>\n\s*\{\n\s*new Item \{ Kind = "[a-z]+", Key = "([A-Za-z0-9]+)"', schema)]
     for key, when in conds:
         for cond in when.split(';'):
             name, _, values = cond.partition('=')

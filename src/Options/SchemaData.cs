@@ -16,12 +16,18 @@ namespace RaintileOptions
                 {
                     new Item { Kind = "screen", Key = "ScreenX", Label = "Area", Help = "Where the launcher shows: a monitor, or its work area (the taskbar stays free)." },
                     new Item { Kind = "choice", Key = "LauncherMode", Label = "Mode", Help = "Full screen: all of the area. Window: drag an empty part of it to move it; it stays open when you click elsewhere. Docked: on a side of the screen, it comes in from there.", Choices = new List<string[]> { new[] { "Fullscreen", "Full screen" }, new[] { "Window", "Window" }, new[] { "Dock", "Docked on a side" } } },
-                    new Item { Kind = "size", Key = "WindowW", Label = "Window width", Help = "", Axis = "W", When = "LauncherMode=Window" },
-                    new Item { Kind = "size", Key = "WindowH", Label = "Window height", Help = "", Axis = "H", When = "LauncherMode=Window" },
-                    new Item { Kind = "choice", Key = "DockSide", Label = "Docked side", Help = "", Choices = new List<string[]> { new[] { "Left", "Left" }, new[] { "Right", "Right" }, new[] { "Top", "Top" }, new[] { "Bottom", "Bottom" } }, When = "LauncherMode=Dock" },
-                    new Item { Kind = "size", Key = "DockSize", Label = "Docked size", Help = "Width when docked left or right; height (of the screen height) when docked at the top or bottom.", Axis = "W", When = "LauncherMode=Dock" },
-                    new Item { Kind = "bool", Key = "DockEdge", Label = "Open from the edge", Help = "Docked: it also opens when the mouse rests on that edge of the screen. Not while a full-screen program (e.g. a game) is in front.", When = "LauncherMode=Dock" },
-                    new Item { Kind = "int", Key = "DockEdgeDelay", Label = "Edge delay", Help = "How long the mouse rests on the edge before it opens.", Min = 0.0, Max = 2000.0, Step = 50.0, Unit = "ms", When = "LauncherMode=Dock;DockEdge=1" },
+                } },
+                new Group { Title = "Window", Help = null, When = "LauncherMode=Window", Items = new List<Item>
+                {
+                    new Item { Kind = "size", Key = "WindowW", Label = "Width", Help = "", Axis = "W" },
+                    new Item { Kind = "size", Key = "WindowH", Label = "Height", Help = "", Axis = "H" },
+                } },
+                new Group { Title = "Docked", Help = null, When = "LauncherMode=Dock", Items = new List<Item>
+                {
+                    new Item { Kind = "choice", Key = "DockSide", Label = "Side", Help = "", Choices = new List<string[]> { new[] { "Left", "Left" }, new[] { "Right", "Right" }, new[] { "Top", "Top" }, new[] { "Bottom", "Bottom" } } },
+                    new Item { Kind = "size", Key = "DockSize", Label = "Size", Help = "Width when docked left or right; height (of the screen height) when docked at the top or bottom.", Axis = "W" },
+                    new Item { Kind = "bool", Key = "DockEdge", Label = "Open from the edge", Help = "It also opens when the mouse rests on that edge of the screen. Not while a full-screen program (e.g. a game) is in front." },
+                    new Item { Kind = "int", Key = "DockEdgeDelay", Label = "Edge delay", Help = "How long the mouse rests on the edge before it opens.", Min = 0.0, Max = 2000.0, Step = 50.0, Unit = "ms", When = "DockEdge=1" },
                 } },
                 new Group { Title = "Margins", Help = "In pixels, or as a percentage of the screen.", Items = new List<Item>
                 {

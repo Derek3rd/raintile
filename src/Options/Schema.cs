@@ -28,6 +28,9 @@ namespace RaintileOptions
     public class Group
     {
         public string Title, Help;
+        // the settings the whole group applies with (as Item.When): otherwise
+        // the card is disabled, with the reason under its title
+        public string When;
         public bool Found, Other, Market, Dash;
         public List<Item> Items = new List<Item>();
     }

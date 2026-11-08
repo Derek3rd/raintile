@@ -57,6 +57,13 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
   passes over it), its label dimmed, and the reason shown under it in the accent
   colour, from the labels of the settings it needs ("Only with Layout: Wheel (Tiles
   page)."). Built by `AddRowReason` / `SetRowApplies` in `Ui.cs`.
+- **The settings of one mode together.** Settings that all apply with the same
+  other one, set outside their group (the window's size, the docked side and size
+  with Mode), make a group of their own with the `When` on the group
+  (`Group.When`): the whole card is disabled, the reason once under its title
+  (`AddCardReason` / `SetCardApplies`), and its settings carry no `When` of that
+  mode; a setting of the card that also needs another one keeps its own `When`.
+  Their labels do not repeat the group's name (Window > Width, not Window width).
 - **A page for one mode** (Grid, Wheel) has the `When` on the page instead
   (`Page.When`): while the mode is not in use its menu entry is greyed out and
   passed over (keyboard, gamepad), and its settings carry no `When` of that mode.
@@ -68,7 +75,7 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
   settings joins the page of its part as a group.
 - Two menu levels at most. A menu entry with sub-pages is a page of its own (the
   switch and what the sub-pages share), never only a folder.
-- `tools/check.py` checks that every `When` (of a setting or a page) names a setting and values it can take,
+- `tools/check.py` checks that every `When` (of a setting, a group or a page) names a setting and values it can take,
   that a switch on the same page comes before what it switches, and that every
   page is in the menu (`NavTree`) once.
 

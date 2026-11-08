@@ -30,4 +30,5 @@ The Options window of Raintile as a Windows program: C#, WPF, .NET Framework 4.8
 | `PadPlace.cs` | framing, logo and play time line of the tile preview with the controller |
 | `TileAction.cs` | the tile menu's Run as administrator and Remove (`-Action`) |
 | `WidgetOptions.cs` | the settings of each installed widget (Widgets > the widget) |
-| `WheelPreview.cs` | the live preview of the wheel (Wheel page), with the launcher's formulas |
+| `PreviewWindow.cs` | the preview window beside the Options window (Preview button): the launcher with the settings and tiles not saved yet, the grid |
+| `WheelPreview.cs` | the preview's drawing: the screen, the launcher, the wheel and the inner ring with the launcher's formulas |

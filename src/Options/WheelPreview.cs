@@ -1,7 +1,8 @@
-// Raintile Options: the live preview of the wheel (Wheel page). The launcher
-// as the settings shape it (mode, docked side, sizes, margins) on the main
-// screen, with the tiles of a category on their arc and the categories on the
-// inner wheel, drawn with the formulas of the launcher (M.wheelFrame,
+// Raintile Options: the preview of the launcher (its window: PreviewWindow.cs)
+// and of the wheel. The launcher as the settings shape it (mode, docked side,
+// sizes, margins) on the main screen; with ScrollMode=Wheel the tiles of a
+// category on their arc and the categories on the inner wheel, drawn with the
+// formulas of the launcher (M.wheelFrame,
 // M.wheelPx, M.wheelAssign, M.ringRender in Raintile.lua): the same numbers
 // give the same picture. It turns like the launcher: the mouse wheel, a click,
 // the mouse resting on a side tile, the arrows and Q / E; every change of a
@@ -24,7 +25,7 @@ namespace RaintileOptions
 {
     public partial class OptionsApp
     {
-        class WheelTile { public string Name, Label, LogoPath; public ImageSource Bg, Logo, BgFull; public Brush Color, LogoColor; }
+        class WheelTile { public string Name, Label, LogoPath; public ImageSource Bg, Logo, BgFull; public Brush Color, LogoColor; public int Cols = 1, Rows = 1; }
         class WheelCat { public string File, Name; public ImageSource Icon; }
 
         Canvas wheelCanvas;
@@ -44,56 +45,16 @@ namespace RaintileOptions
         // the still mouse with the turn does not turn it again
         Point wheelTurnMouse = new Point(double.NaN, double.NaN);
 
-        // The preview card, at the top of the Wheel page
-        Border NewWheelPreviewCard()
-        {
-            var card = NewCard("Preview", "The launcher with these settings on your main screen. Turn it with the mouse wheel, the arrows or a click; Q / E turn the inner wheel. Nothing is launched.");
-            var f = CardPanel(card);
-            wheelCatBox = new ComboBox { HorizontalAlignment = HorizontalAlignment.Left, MinWidth = FieldWidth.M };
-            wheelCatBox.SelectionChanged += (s, e) =>
-            {
-                if (wheelCatBox.SelectedIndex < 0 || wheelCatBox.SelectedIndex == wheelCatIdx) return;
-                SetWheelCategory(wheelCatBox.SelectedIndex);
-            };
-            AddTo(f, NewFormRow("Category", wheelCatBox, "The tiles shown in the preview."));
-            wheelCanvas = new Canvas { ClipToBounds = true, Focusable = true, Background = Brushes.Transparent };
-            wheelBox = new Viewbox { Stretch = Stretch.Uniform, Child = wheelCanvas, StretchDirection = StretchDirection.Both };
-            var frame = new Border { Child = wheelBox, BorderBrush = ResBrush("LineBrush"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(Gap.Line), ClipToBounds = true, Margin = T(0, Gap.Control, 0, 0) };
-            frame.Cursor = Cursors.Hand;
-            AddTo(f, frame);
-            wheelCanvas.MouseWheel += (s, e) => { e.Handled = true; WheelStep(e.Delta < 0 ? 1 : -1); };
-            wheelCanvas.MouseDown += (s, e) => wheelCanvas.Focus();
-            wheelCanvas.KeyDown += (s, e) =>
-            {
-                bool vertical = WheelVertical();
-                if (e.Key == (vertical ? Key.Down : Key.Right)) { WheelStep(1); e.Handled = true; }
-                else if (e.Key == (vertical ? Key.Up : Key.Left)) { WheelStep(-1); e.Handled = true; }
-                else if (e.Key == Key.Q || e.Key == Key.PageUp) { RingStep(-1); e.Handled = true; }
-                else if (e.Key == Key.E || e.Key == Key.PageDown) { RingStep(1); e.Handled = true; }
-            };
-            wheelDwell = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
-            wheelDwell.Tick += (s, e) =>
-            {
-                wheelDwell.Stop();
-                if (wheelAnimating) return;
-                wheelTurnMouse = Mouse.GetPosition(wheelCanvas);
-                WheelTurnTo(wheelDwellK);
-            };
-            LoadWheelCategories();
-            card.Loaded += (s, e) => DrawWheel();
-            return card;
-        }
-
         // --- data ---------------------------------------------------------------------
 
         void LoadWheelCategories()
         {
             wheelCats.Clear();
-            wheelCatBox.Items.Clear();
+            if (wheelCatBox != null) wheelCatBox.Items.Clear();
             foreach (var e in GetCategoryMenuEntries())
             {
                 wheelCats.Add(new WheelCat { File = e.File, Name = e.Name, Icon = GetBitmap(e.Icon, 128) });
-                wheelCatBox.Items.Add(e.Name);
+                if (wheelCatBox != null) wheelCatBox.Items.Add(e.Name);
             }
             wheelCatIdx = -1;
             if (wheelCats.Count > 0)
@@ -110,12 +71,13 @@ namespace RaintileOptions
             }
         }
 
-        void SetWheelCategory(int i)
+        // keep: the same category drawn again (a tile changed): where it was
+        void SetWheelCategory(int i, bool keep = false)
         {
             if (i < 0 || i >= wheelCats.Count) return;
-            int prev = wheelCatIdx;
+            int prev = keep ? -1 : wheelCatIdx;
             wheelCatIdx = i;
-            if (wheelCatBox.SelectedIndex != i) wheelCatBox.SelectedIndex = i;
+            if (wheelCatBox != null && wheelCatBox.SelectedIndex != i) wheelCatBox.SelectedIndex = i;
             var model = GetModel(wheelCats[i].File);
             string b = System.IO.Path.GetFileNameWithoutExtension(wheelCats[i].File);
             wheelTiles = Core.GetTiles(model).Select(t => new WheelTile
@@ -130,8 +92,9 @@ namespace RaintileOptions
                     ?? NewColorBrush(V("TileColor")) ?? ResBrush("FieldBg"),
                 // the colour taken from the logo (Generated\Colors.txt), unless the tile or its category sets one
                 LogoColor = NewColorBrush(Core.GetKey(t, "Color")) ?? NewColorBrush(Core.GetKey(Core.GetCategorySection(model), "TileColor")) ?? WheelLogoColor(Core.GetTileImage(b, t, "Logo")),
+                Cols = TileSpan(Core.GetKey(t, "Size"), 0), Rows = TileSpan(Core.GetKey(t, "Size"), 1),
             }).ToList();
-            wheelPos = wheelTarget = 0;
+            if (!keep) { wheelPos = wheelTarget = 0; gridScroll = 0; }
             // the ring turns the shorter way round to the new category
             int n = wheelCats.Count;
             if (prev >= 0 && n > 0)
@@ -142,6 +105,14 @@ namespace RaintileOptions
                 StartWheelAnimation();
             }
             DrawWheel();
+        }
+
+        // Size=2x1: the columns (part 0) or the rows (part 1) a tile takes
+        static int TileSpan(string size, int part)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(size ?? "", @"^\s*(\d+)\s*[xX*]\s*(\d+)");
+            int n;
+            return m.Success && int.TryParse(m.Groups[part + 1].Value, out n) ? Math.Max(1, n) : 1;
         }
 
         Brush WheelLogoColor(string logo)
@@ -252,8 +223,7 @@ namespace RaintileOptions
             wheelCanvas.Children.Clear();
             wheelCanvas.Width = g.MonW;
             wheelCanvas.Height = g.MonH;
-            // fits the card: as wide as it is, at most about half as tall as the window
-            wheelBox.MaxHeight = Math.Max(Fs.Title * 8, (win != null ? win.ActualHeight : 800) * 0.45);
+            bool wheel = IsWheel();
             // the screen and the launcher on it
             wheelCanvas.Children.Add(new Rectangle { Width = g.MonW, Height = g.MonH, Fill = new LinearGradientBrush(
                 Color.FromRgb(0x24, 0x40, 0x5a), Color.FromRgb(0x0b, 0x12, 0x1a), 60) });
@@ -261,7 +231,7 @@ namespace RaintileOptions
             Canvas.SetLeft(launcher, g.LX); Canvas.SetTop(launcher, g.LY);
             wheelCanvas.Children.Add(launcher);
             // the selected tile's background over it (WheelBackdrop)
-            if (WNum("WheelBackdrop", 1) != 0 && wheelTiles.Count > 0)
+            if (wheel && WNum("WheelBackdrop", 1) != 0 && wheelTiles.Count > 0)
             {
                 int L = wheelTiles.Count;
                 var sel = wheelTiles[(((int)Math.Round(wheelTarget)) % L + L) % L];
@@ -278,7 +248,7 @@ namespace RaintileOptions
             var bar = new Rectangle { Width = Math.Max(1, g.GW), Height = menuH, RadiusX = menuH / 2, RadiusY = menuH / 2, Fill = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)) };
             Canvas.SetLeft(bar, g.GX); Canvas.SetTop(bar, g.LY + padY);
             // with the selected tile's background: one band behind the whole top row (TopBarColor)
-            if (WNum("WheelBackdrop", 1) != 0)
+            if (wheel && WNum("WheelBackdrop", 1) != 0)
             {
                 // (as MeterTopBar: from the search to the close button, a little larger than the menu's pills)
                 double padX = WSize("PadX", g.MonW, 40), r = WSize("MenuRadius", g.MonH, 22) + 6;
@@ -291,9 +261,10 @@ namespace RaintileOptions
             // the grid area clips the tiles, as GridClip
             var grid = new Canvas { Width = g.GW, Height = g.GH, ClipToBounds = true };
             Canvas.SetLeft(grid, g.GX); Canvas.SetTop(grid, g.GY);
-            if (WWord("WheelMenu", "ring") != "bar") DrawRing(g);
+            bool ring = wheel && WWord("WheelMenu", "ring") != "bar";
+            if (ring) DrawRing(g); else DrawMenu(g);
             wheelCanvas.Children.Add(grid);
-            DrawTiles(g, grid);
+            if (wheel) DrawTiles(g, grid); else DrawGridTiles(g, grid);
         }
 
         void DrawTiles(WheelGeo g, Canvas grid)
@@ -305,8 +276,6 @@ namespace RaintileOptions
             bool labelsAll = WWord("WheelLabels", "center") == "all" && WNum("ShowLabels", 1) != 0;
             bool labels = WNum("ShowLabels", 1) != 0;
             double radius = Math.Min(WSize("TileRadius", g.MonH, 0), g.S / 2);
-            double labelPx = Math.Max(1, WNum("LabelFontSize", 14) * 4 / 3);
-            double labelPad = WSize("LabelPad", g.MonH, 14);
             var list = new List<double[]>(); // k, d, alpha
             for (int k = (int)Math.Ceiling(wheelPos - g.Half - 1); k <= (int)Math.Floor(wheelPos + g.Half + 1); k++)
             {
@@ -322,22 +291,9 @@ namespace RaintileOptions
                 int k = (int)e[0];
                 var tile = wheelTiles[((k % L) + L) % L];
                 var p = WheelPoint(g, g.R, e[1] * g.Step);
-                var box = new Grid { Width = g.S, Height = g.S, Opacity = e[2], Cursor = Cursors.Hand };
-                box.Clip = new RectangleGeometry(new Rect(0, 0, g.S, g.S), radius, radius);
-                // logos only (WheelIconsOnly): the logo on its colour
-                bool iconsOnly = WNum("WheelIconsOnly", 0) != 0 && tile.Logo != null;
-                box.Children.Add(new Rectangle { Fill = iconsOnly ? (tile.LogoColor ?? tile.Color) : tile.Color });
-                if (tile.Bg != null && !iconsOnly) box.Children.Add(new Image { Source = tile.Bg, Stretch = Stretch.UniformToFill });
-                if (tile.Logo != null)
-                    box.Children.Add(new Image { Source = tile.Logo, Width = g.S * 0.5, Height = g.S * 0.5, Stretch = Stretch.Uniform });
-                if (labels && (labelsAll || Math.Abs(e[1]) < 0.5))
-                {
-                    var name = new TextBlock { Text = tile.Label, Foreground = Brushes.White, FontSize = labelPx, FontWeight = FontWeights.SemiBold,
-                        VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis };
-                    name.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = labelPx / 2, ShadowDepth = 0, Opacity = 0.8 };
-                    var holder = new Border { Child = name, Padding = new Thickness(labelPad) };
-                    box.Children.Add(holder);
-                }
+                var box = NewPreviewTile(tile, g.S, g.S, radius, labels && (labelsAll || Math.Abs(e[1]) < 0.5), WNum("WheelIconsOnly", 0) != 0, g);
+                box.Opacity = e[2];
+                box.Cursor = Cursors.Hand;
                 Canvas.SetLeft(box, p.X - g.S / 2);
                 Canvas.SetTop(box, p.Y - g.S / 2);
                 int kk = k;
@@ -353,6 +309,31 @@ namespace RaintileOptions
                 box.MouseLeave += (s, ev) => wheelDwell.Stop();
                 grid.Children.Add(box);
             }
+        }
+
+        // A tile as the launcher draws it: its colour, its background (not with
+        // logos only), its logo (IconSize, at most most of the tile), its name
+        Grid NewPreviewTile(WheelTile tile, double w, double h, double radius, bool label, bool iconsOnly, WheelGeo g)
+        {
+            var box = new Grid { Width = w, Height = h };
+            box.Clip = new RectangleGeometry(new Rect(0, 0, w, h), radius, radius);
+            iconsOnly = iconsOnly && tile.Logo != null;
+            box.Children.Add(new Rectangle { Fill = iconsOnly ? (tile.LogoColor ?? tile.Color) : tile.Color });
+            if (tile.Bg != null && !iconsOnly) box.Children.Add(new Image { Source = tile.Bg, Stretch = Stretch.UniformToFill });
+            if (tile.Logo != null)
+            {
+                double ls = Math.Min(WSize("IconSize", g.MonH, 96), Math.Min(w, h) * (IsWheel() ? 0.7 : 0.9));
+                box.Children.Add(new Image { Source = tile.Logo, Width = ls, Height = ls, Stretch = Stretch.Uniform });
+            }
+            if (label)
+            {
+                double labelPx = Math.Max(1, WNum("LabelFontSize", 14) * 4 / 3);
+                var name = new TextBlock { Text = tile.Label, Foreground = NewColorBrush(V("TextColor")) ?? Brushes.White, FontSize = labelPx, FontWeight = FontWeights.SemiBold,
+                    VerticalAlignment = VerticalAlignment.Bottom, HorizontalAlignment = HorizontalAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis };
+                name.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = labelPx / 2, ShadowDepth = 0, Opacity = 0.8 };
+                box.Children.Add(new Border { Child = name, Padding = new Thickness(WSize("LabelPad", g.MonH, 14)) });   // ui-exempt: preview of the launcher (its LabelPad)
+            }
+            return box;
         }
 
         // The inner wheel of categories (M.ringRender)

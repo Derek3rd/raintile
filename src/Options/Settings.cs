@@ -632,7 +632,6 @@ namespace RaintileOptions
                     continue;
                 }
                 if (group.Dash) { AddTo(sp, NewDashCard()); continue; }
-                if (group.Wheel) { AddTo(sp, NewWheelPreviewCard()); continue; }
                 if (group.Market)
                 {
                     // widgets to download (its own card)

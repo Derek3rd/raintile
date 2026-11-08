@@ -53,11 +53,8 @@ namespace RaintileOptions
                     new Item { Kind = "size", Key = "ScrollBarSize", Label = "Scrollbar thickness", Help = "", Axis = "H" },
                 } },
             } },
-            new Page { Id = "wheel", Title = "Wheel", Icon = 0xE7AD, Desc = "The tiles on a wheel instead of a grid: one line on an arc, the selected tile in the middle, the categories on an inner wheel. Made for the docked launcher; it works in every mode.", Groups = new List<Group>
+            new Page { Id = "wheel", Title = "Wheel", Icon = 0xE7AD, Desc = "The tiles on a wheel instead of a grid: one line on an arc, the selected tile in the middle, the categories on an inner wheel. Made for the docked launcher; it works in every mode. The Preview button (at the bottom) shows it as you change it.", Groups = new List<Group>
             {
-                new Group { Title = null, Help = null, Wheel = true, Items = new List<Item>
-                {
-                } },
                 new Group { Title = "Wheel", Help = "Sizes in percent: of the launcher's length for the radius, of a tile for the spacing and the inner wheel, of the screen for the tiles.", Items = new List<Item>
                 {
                     new Item { Kind = "choice", Key = "ScrollMode", Label = "Tiles", Help = "Wheel: one line of tiles on an arc, the selected one in the middle (all tiles one cell). Suggested docked.", Choices = new List<string[]> { new[] { "Grid", "Grid" }, new[] { "Wheel", "Wheel" } } },

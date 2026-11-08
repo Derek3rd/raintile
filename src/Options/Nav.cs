@@ -158,6 +158,7 @@ namespace RaintileOptions
             };
             win.SourceInitialized += (s, e) => SetDarkTitle(win);
             InitGamepad();
+            InitPreview();
             // Started without a console: bring the window to the foreground explicitly
             win.ContentRendered += (s, e) =>
             {
@@ -508,6 +509,7 @@ namespace RaintileOptions
             if (!pages.ContainsKey("category")) pages["category"] = NewCategoryPage();
             currentFile = file;
             ShowCategory();
+            PreviewFollow(file);
             pageHost.Children.Clear();
             pageHost.Children.Add(pages["category"]);
             var c = Core.GetCategorySection(GetModel(file));

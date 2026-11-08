@@ -40,6 +40,7 @@ namespace RaintileOptions
       <Border Grid.Row=""2"" BorderBrush=""{StaticResource LineBrush}"" BorderThickness=""0,1,0,0"" Padding=""36,12"">
         <DockPanel>
           <StackPanel DockPanel.Dock=""Right"" Orientation=""Horizontal"">
+            <Button x:Name=""BtnPreview"" Content=""Preview"" MinWidth=""90"" Margin=""0,0,8,0"" ToolTip=""The launcher with these settings, in a window beside this one""/>
             <Button x:Name=""BtnSave"" Content=""Save and refresh"" Style=""{StaticResource AccentButton}"" ToolTip=""Ctrl+S""/>
             <Button x:Name=""BtnClose"" Content=""Close"" MinWidth=""90"" Margin=""8,0,0,0""/>
           </StackPanel>

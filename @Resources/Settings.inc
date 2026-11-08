@@ -377,12 +377,14 @@ InfoFontSize=10
 ; background helper looks for the game started by the tile and counts how
 ; long it runs (TimePlayed.txt in the data folder)
 TrackPlaytime=1
-; 1 = Steam games with an update waiting say so on a line above the play
-; time, always shown: "Update 5.4 GB - Sat 06:27" (size and time Steam
-; scheduled it), "Downloading 40% - 25.3 MB/s - 2:35 left" while it
-; downloads (followed live while the launcher is open). Their tile gets a
-; border in DownloadColor1 and DownloadColor2.
-GameUpdates=1
+; Steam games with an update waiting say so on a line above the play time:
+; "Update 5.4 GB - Sat 06:27" (size and time Steam scheduled it),
+; "Downloading 40% - 25.3 MB/s - 2:35 left" while it downloads (followed live
+; while the launcher is open), and their tile gets a border in DownloadColor1
+; and DownloadColor2. Always (the line on every such tile), Hover (the line
+; only on the highlighted tile; the border and the bar always) or Never
+; (none of it).
+UpdateInfo=Always
 ; What the update line says, in any order: percent, size (downloaded / total),
 ; speed, eta (time left), schedule (when Steam will download it)
 DownloadInfo=percent speed eta size schedule

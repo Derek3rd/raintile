@@ -3608,6 +3608,18 @@ function M.placeUpdate(slot, t, st, x, y, f, op)
 	end
 end
 
+-- Opacity of a line on the tile of a slot that shows 'always', 'hover' (only
+-- on the highlighted tile, fading with the highlight) or 'never'; nil when it
+-- is not shown
+function M.lineAlpha(mode, slot, f)
+	if mode == 'never' then return nil end
+	if mode ~= 'hover' then return f end
+	if indexAt(slot) == hover.idx and (hover.on or hover.a > 0) then
+		return f * (V.TileHover and hover.a or (hover.on and 1 or 0))
+	end
+	return nil
+end
+
 -- Position, opacity and visibility of the slots (also on every animation step).
 -- Rounded corners (TileRadius > 0): the grid container (GridClip) takes the
 -- shape of the visible tiles, rounded rectangles, within the grid area: what
@@ -3737,8 +3749,8 @@ local function placeSlots()
 			local sr, sg, sb, sa = solid:match('^(%d+),(%d+),(%d+),(%d+)$')
 			if sa and tonumber(sa) < 1 then solid = sr .. ',' .. sg .. ',' .. sb .. ',1' end
 			set(tile, 'SolidColor', solid)
-			-- Steam update: the border, the progress, the first line (always
-			-- shown), the background in greyscale while it downloads
+			-- Steam update: the border, the progress, the first line
+			-- (UpdateInfo), the background in greyscale while it downloads
 			local tileRows = (missing or M.greyWindow(t, st, x + wx, y + wy)) and GREY_ROWS or IDENTITY_ROWS
 			set(tile, 'ColorMatrix1', tileRows[1])
 			set(tile, 'ColorMatrix2', tileRows[2])
@@ -3771,20 +3783,18 @@ local function placeSlots()
 				set(label, 'FontColor', fade(V.TextColor, f))
 				set(label, 'FontEffectColor', fade('0,0,0,200', f))
 			end
+			-- the update line and the play time: always, only on the
+			-- highlighted tile (fading with the highlight) or never (UpdateInfo,
+			-- TileInfo); "Not installed" always
 			local updText = st and M.updateInfo(t)
+			local updAlpha = updText and M.lineAlpha(V.UpdateInfo, slot, f) or 0
+			if updAlpha <= 0.01 then updText = nil end
 			M.placeUpdate(slot, t, st, x, y, f, op)
-			-- play time / last launch: always, only on the highlighted tile
-			-- (fading with the highlight) or never; "Not installed" always
 			local infoAlpha = f
 			local infoText, sticky = tileInfo(t)
-			if not sticky and V.TileInfo == 'never' then infoText = nil end
-			if infoText and not sticky and V.TileInfo == 'hover' then
-				local idx = indexAt(slot)
-				if idx == hover.idx and (hover.on or hover.a > 0) then
-					infoAlpha = f * (V.TileHover and hover.a or (hover.on and 1 or 0))
-				else
-					infoText = nil
-				end
+			if infoText and not sticky then
+				infoAlpha = M.lineAlpha(V.TileInfo, slot, f) or 0
+				if infoAlpha <= 0 then infoText = nil end
 			end
 			local hasInfo = infoText ~= nil and infoAlpha > 0.01
 			if hasInfo or updText then
@@ -3807,8 +3817,8 @@ local function placeSlots()
 				if updText then
 					set(updMeter, 'X', tostring(bx + math.floor(t.infoX * (bw - uw) + 0.5)))
 					set(updMeter, 'Y', tostring(by))
-					set(updMeter, 'FontColor', fade(V.TextColor, f))
-					set(updMeter, 'SolidColor', fade('0,0,0,150', f))
+					set(updMeter, 'FontColor', fade(V.TextColor, updAlpha))
+					set(updMeter, 'SolidColor', fade('0,0,0,150', updAlpha))
 				end
 				if hasInfo then
 					set(infoMeter, 'X', tostring(bx + math.floor(t.infoX * (bw - iw) + 0.5)))
@@ -3817,7 +3827,7 @@ local function placeSlots()
 					set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
 				end
 			end
-			show('TileUpd' .. slot, updText ~= nil and updText ~= false)
+			show('TileUpd' .. slot, updText ~= nil)
 			show(tile, true)
 			show(icon, t.logo ~= nil and not t.widget)
 			show(label, hasLabel and (not t.widget or not live))
@@ -4440,7 +4450,15 @@ function Initialize()
 	V.ShowClock = num('ShowClock', 1) ~= 0
 	V.ShowPower = num('ShowPower', 1) ~= 0
 	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
-	V.GameUpdates = num('GameUpdates', 1) ~= 0
+	-- Steam updates waiting: the line always, on the highlighted tile only
+	-- (hover) or never (no border nor bar either). GameUpdates=0/1: the
+	-- setting it replaced, still there in a settings file Data.ps1 has not
+	-- merged yet (UpdateInfo then comes from the defaults)
+	local upd = SKIN:GetVariable('UpdateInfo', ''):lower()
+	local old = SKIN:GetVariable('GameUpdates', '')
+	if old ~= '' then upd = (tonumber(old) or 1) ~= 0 and 'always' or 'never' end
+	V.UpdateInfo = (upd == 'hover' or upd == 'never') and upd or 'always'
+	V.GameUpdates = V.UpdateInfo ~= 'never'
 	-- Steam downloads: what the update line says, the colours of the border
 	-- and the bar, how the progress shows, how long the border turns
 	V.DownloadInfo = {}

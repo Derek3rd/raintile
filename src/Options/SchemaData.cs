@@ -137,14 +137,14 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "InfoFontSize", Label = "Play time font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt", When = "TileInfo=Hover|Always" },
                     new Item { Kind = "bool", Key = "TrackPlaytime", Label = "Measure play time outside Steam", Help = "The background helper looks for the game a tile starts and counts how long it runs." },
                 } },
-                new Group { Title = null, Help = null, Switch = "GameUpdates", Items = new List<Item>
+                new Group { Title = "Steam updates", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "GameUpdates", Label = "Steam updates waiting", Help = "Steam games with an update to download say so on a line above the play time, always shown, and their tile gets a border. While it downloads the line follows it live." },
-                    new Item { Kind = "text", Key = "DownloadInfo", Label = "What the update line says", Help = "Any of: percent, size (downloaded / total), speed, eta (time left), schedule (when Steam will download it), separated by spaces." },
-                    new Item { Kind = "choice", Key = "DownloadStyle", Label = "Download on the tile", Help = "How the progress of a download shows on its tile.", Choices = new List<string[]> { new[] { "Bar", "A bar along the bottom" }, new[] { "Greyscale", "Background in greyscale, coloured again as it goes" }, new[] { "Both", "Both" } } },
-                    new Item { Kind = "color", Key = "DownloadColor1", Label = "Colour 1", Help = "Border of a tile with an update (a gradient from 1 to 2) and the bar." },
-                    new Item { Kind = "color", Key = "DownloadColor2", Label = "Colour 2", Help = "Other end of the border gradient." },
-                    new Item { Kind = "int", Key = "UpdateGlowTime", Label = "Border turning", Help = "Seconds the border turns when the launcher opens. 0 = it stays still.", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "s" },
+                    new Item { Kind = "choice", Key = "UpdateInfo", Label = "Updates waiting", Help = "A line above the play time on Steam games with an update to download, following it live while it downloads, and a border on their tile. On the highlighted tile: only the line waits for the highlight, the border and the bar are always there. Never: none of it.", Choices = new List<string[]> { new[] { "Hover", "On the highlighted tile" }, new[] { "Always", "Always" }, new[] { "Never", "Never" } } },
+                    new Item { Kind = "text", Key = "DownloadInfo", Label = "What the update line says", Help = "Any of: percent, size (downloaded / total), speed, eta (time left), schedule (when Steam will download it), separated by spaces.", When = "UpdateInfo=Hover|Always" },
+                    new Item { Kind = "choice", Key = "DownloadStyle", Label = "Download on the tile", Help = "How the progress of a download shows on its tile.", Choices = new List<string[]> { new[] { "Bar", "A bar along the bottom" }, new[] { "Greyscale", "Background in greyscale, coloured again as it goes" }, new[] { "Both", "Both" } }, When = "UpdateInfo=Hover|Always" },
+                    new Item { Kind = "color", Key = "DownloadColor1", Label = "Colour 1", Help = "Border of a tile with an update (a gradient from 1 to 2) and the bar.", When = "UpdateInfo=Hover|Always" },
+                    new Item { Kind = "color", Key = "DownloadColor2", Label = "Colour 2", Help = "Other end of the border gradient.", When = "UpdateInfo=Hover|Always" },
+                    new Item { Kind = "int", Key = "UpdateGlowTime", Label = "Border turning", Help = "Seconds the border turns when the launcher opens. 0 = it stays still.", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "s", When = "UpdateInfo=Hover|Always" },
                 } },
             } },
             new Page { Id = "toprow", Title = "Top row", Icon = 0xE700, Desc = "The row at the top: the category menu, Favorites and the buttons; Recent and Not played yet, the clock and the search on the pages below.", Groups = new List<Group>
@@ -460,7 +460,6 @@ namespace RaintileOptions
             { "GamepadRepeatRate", "110" },
             { "GamepadSearch", "Y" },
             { "GamepadToggle", "BACK START" },
-            { "GameUpdates", "1" },
             { "Gap", "18" },
             { "HoverCategoryColor", "255,255,255,20" },
             { "HoverColor", "255,255,255,25" },
@@ -548,6 +547,7 @@ namespace RaintileOptions
             { "UnplayedCount", "24" },
             { "UpdateChannel", "Release" },
             { "UpdateGlowTime", "3" },
+            { "UpdateInfo", "Always" },
             { "WheelAnchor", "69" },
             { "WheelAxis", "Auto" },
             { "WheelBackdrop", "1" },

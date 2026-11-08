@@ -1216,10 +1216,12 @@ namespace RaintileOptions
             ReadLogoPlace(s);
             logoPlace.Box = currentFile != null ? GetLogoBox(currentFile) : 96.0;
             ReadInfoPlace(s);
-            // the line is not drawn with TileInfo=Never, nor on widgets: a widget
-            // has none (its row hidden), with Never the row says why it is off
+            // the lines are not drawn with TileInfo and UpdateInfo Never, nor on
+            // widgets (the place is the block of both: the update line and the
+            // play time): a widget has none (its row hidden), with both Never
+            // the row says why it is off
             bool lineKind = currentFile != null && !IsWidget(all ? null : s);
-            bool lineOn = !V("TileInfo").Equals("never", StringComparison.OrdinalIgnoreCase);
+            bool lineOn = !(V("TileInfo").Equals("never", StringComparison.OrdinalIgnoreCase) && V("UpdateInfo").Equals("never", StringComparison.OrdinalIgnoreCase));
             previewInfo.Visibility = lineKind && lineOn ? Visibility.Visible : Visibility.Collapsed;
             infoRow.Visibility = lineKind ? Visibility.Visible : Visibility.Collapsed;
             SetPlaceApplies(infoRow, lineOn, infoWhy);
@@ -1997,11 +1999,17 @@ namespace RaintileOptions
             infoChip = NewChip();
             btnInfoReset = NewResetIcon("Back to the play time placement of All tiles");
             var infoBlock = placeBlock("Play time", infoPosText, infoChip, btnInfoReset);
-            var infoHelp = NewHelp("The line with the play time and the last launch (Tiles > Play time and updates): drag it in the preview.");
+            var infoHelp = NewHelp("The line with the play time and the last launch, and the Steam update above it (Tiles > Play time and updates): drag it in the preview.");
             infoHelp.Margin = T(0, Gap.Help, 0, 0);
             infoBlock.Children.Insert(1, infoHelp);
-            // with TileInfo=Never: disabled, with the reason (docs/OptionsUI.md, 0)
-            infoWhy = NewHelp(WhenReason("TileInfo=Hover|Always", null), ResBrush("AccentBrush"));
+            // with TileInfo and UpdateInfo Never: disabled, with the reason
+            // (docs/OptionsUI.md, 0): either of the two is enough, their page once
+            Page linesPage;
+            Schema.ItemOf("TileInfo", out linesPage);
+            string either = WhenReason("TileInfo=Hover|Always", linesPage).TrimEnd('.') + ", or "
+                + WhenReason("UpdateInfo=Hover|Always", linesPage).Substring("Only with ".Length).TrimEnd('.')
+                + (linesPage != null ? " (" + linesPage.Title + " page)." : ".");
+            infoWhy = NewHelp(either, ResBrush("AccentBrush"));
             infoWhy.Margin = T(0, Gap.Help, 0, 0);
             infoBlock.Children.Insert(2, infoWhy);
             infoRow = infoBlock;

@@ -79,6 +79,28 @@ ListY=
 
 Raintile writes no title on a custom widget's tile (the tile's `Label=` is not used): the whole tile is the widget's, and a widget that wants a title draws it with a meter of its own.
 
+The widgets of the gallery with a list (Modrinth, Steam achievements) draw a title like the one of the system widgets, small and dimmed at the top left, with the launcher's font and colour, and start their rows under it:
+
+```ini
+[Raintile]
+List=list.txt
+ListY=(Clamp(#WIDGETH#/18,9,20)*2+12)
+
+[Title]
+Meter=String
+X=12
+Y=10
+W=(#WIDGETW#-24)
+ClipString=1
+FontFace=#FontFace#
+FontSize=(Clamp(#WIDGETH#/18,9,20))
+FontColor=#TextDimColor#
+AntiAlias=1
+Text=Modrinth
+```
+
+`ListY=` takes `#WIDGETW#` and `#WIDGETH#` and Rainmeter's functions (`Clamp`, `Min`, `Max`), not the launcher's variables; the meters take both.
+
 ### OnShow and OnHide
 
 Bangs run when the widget's category comes on screen (the launcher opens on it, or the menu goes to it) and when it leaves the screen (another category, the launcher hidden). This is where a widget starts its work: reading its data, loading something. Nothing runs while the launcher is hidden.

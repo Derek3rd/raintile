@@ -136,4 +136,25 @@ function T.list_part_in_the_wheel()
 		string.format('highlight at %d,%d, the row at %d,%d', hx, hy, bx + hit[1], by + hit[2]))
 end
 
+-- The list widgets of the gallery (widgets/): a title of their own at the top,
+-- the rows under it (ListY=, read with Clamp as Rainmeter does)
+function T.gallery_titles()
+	for _, id in ipairs({ 'Modrinth', 'SteamAchievements' }) do
+		local s = R.new({})
+		host_mkdir(s.data .. 'Widgets')
+		host_copytree(s.repo .. '\\widgets\\' .. id, s.data .. 'Widgets\\' .. id, '')
+		local cat = s.data .. 'Categories\\Dashboard.ini'
+		R.writeFile(cat, R.readFile(cat) .. '\r\n[Gallery widget]\r\nWidget=custom\r\nParam=' .. id .. '\r\n')
+		s:start()
+		t.clean(s)
+		local w
+		for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == id then w = x end end
+		t.ok(w, id .. ': the widget tile is missing')
+		local api = s:upvalue('M').widgetInfo(w)
+		-- (the title is 9 to 20 pt: the rows start two of its lines and 12 px down)
+		t.ok(api.listY and api.listY >= 30 and api.listY <= 52, id .. ': ListY= not under the title: ' .. tostring(api.listY))
+		t.ok(grid(s):find('Text=' .. (id == 'Modrinth' and 'Modrinth' or 'Steam achievements'), 1, true), id .. ': no title meter in Grid.inc')
+	end
+end
+
 return T

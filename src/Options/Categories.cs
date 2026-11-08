@@ -75,7 +75,7 @@ namespace RaintileOptions
         TextBlock infoPosText;
         Button btnInfoReset;
         Panel infoRow;
-        Panel previewColumn;
+        ScrollViewer previewScroll;
         BitmapSource placeholderBg, placeholderLogo;
 
         // Widgets: kind, label in the list, what Param= means
@@ -943,8 +943,13 @@ namespace RaintileOptions
 
         void UpdateFraming()
         {
-            // as large as the preview column allows (it follows the window)
-            double maxW = previewColumn != null && previewColumn.ActualWidth > 0 ? Math.Min(640.0, previewColumn.ActualWidth) : 384;
+            // as large as the preview column allows (it follows the window). Taken
+            // from the scroller, whose width the scroll bar does not change, less
+            // the room kept for the bar, the card's padding and its border: the
+            // inner column narrows while the bar shows, and a preview following it
+            // got shorter, hid the bar, grew and showed it again, over and over.
+            double col = previewScroll != null ? previewScroll.ActualWidth - Gap.ScrollBar - 2 * Gap.CardPadding - 2 : 0;
+            double maxW = col > 0 ? Math.Min(640.0, col) : 384;
             double k = Math.Min(maxW / bgFrame.TW, 440 / bgFrame.TH);
             preview.Width = Math.Max(40.0, Math.Round(bgFrame.TW * k));
             preview.Height = Math.Max(40.0, Math.Round(bgFrame.TH * k));
@@ -1869,9 +1874,9 @@ namespace RaintileOptions
             KeepScrollBarRoom(leftScroll, previewCard);
             var left = NewPanel();
             previewCard.Child = left;
-            previewColumn = left;
-            // the preview follows the width of the column
-            left.SizeChanged += (s, e) => { if (e.WidthChanged && preview != null) { UpdateFraming(); UpdateLogoPlace(); UpdateInfoPlace(); } };
+            previewScroll = leftScroll;
+            // the preview follows the width of the column (UpdateFraming)
+            leftScroll.SizeChanged +=(s, e) => { if (e.WidthChanged && preview != null) { UpdateFraming(); UpdateLogoPlace(); UpdateInfoPlace(); } };
 
             // All tiles: the tile whose images show the category's values
             var por = NewPanel(Orientation.Horizontal);

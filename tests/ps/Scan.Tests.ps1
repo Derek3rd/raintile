@@ -29,6 +29,7 @@ Test 'Get-TileName: a name never leaves its folder' {
     }
 }
 
+$IMPORT_KINDS = @('game', 'app')
 Import-ScriptFunction (Join-Path $Root '@Resources\Scripts\Scan.ps1') 'Split-FolderEntry'
 Import-ScriptFunction (Join-Path $Root '@Resources\Scripts\Scan.ps1') 'Update-FirstFound'
 

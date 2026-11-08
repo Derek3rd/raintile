@@ -572,6 +572,18 @@ namespace RaintileOptions
 
         public static readonly string[] GAMEPAD_BUTTONS = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };
         public static readonly string[] SOURCES = { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox", "Folders", "Apps" };
+        // the kinds of what Import finds (see ImportKind); the first one is the
+        // kind of a folder without one
+        public static readonly List<ImportKind> IMPORT_KINDS = new List<ImportKind>
+        {
+            new ImportKind { Id = "game", Plural = "Games", Singular = "game", CategoryKey = "ImportCategory", DefaultCategory = "Games", GameArt = true },
+            new ImportKind { Id = "app", Plural = "Apps", Singular = "app", CategoryKey = "AppsCategory", DefaultCategory = "Apps" },
+        };
+        public static ImportKind KindOf(string id)
+        {
+            return IMPORT_KINDS.Find(k => string.Equals(k.Id, id, System.StringComparison.OrdinalIgnoreCase)) ?? IMPORT_KINDS[0];
+        }
+
         // what each source of Import finds (the help of its switch)
         public static readonly Dictionary<string, string> STORE_HELP = new Dictionary<string, string>
         {

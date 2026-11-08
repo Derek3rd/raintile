@@ -191,11 +191,13 @@ namespace RaintileOptions
 
         void UpdateFoundStatus(string extra = "")
         {
-            int games = foundItems.Count(i => i.Kind == "game"), apps = foundItems.Count(i => i.Kind == "app");
+            // "12 games and 30 apps found": each kind, in the order of the table
+            var counts = Schema.IMPORT_KINDS.Select(k => foundItems.Count(i => Schema.KindOf(i.Kind) == k) + " " + k.Plural.ToLowerInvariant()).ToList();
+            string what = counts.Count > 1 ? string.Join(", ", counts.Take(counts.Count - 1)) + " and " + counts.Last() : counts.FirstOrDefault();
             string when = "";
             DateTime d;
             if (DateTime.TryParse(foundScanned, out d)) when = ", searched " + d.ToString("g");
-            foundStatus.Text = foundScanned != "" ? games + " games and " + apps + " apps found" + when + "." : "Not searched yet.";
+            foundStatus.Text = foundScanned != "" ? what + " found" + when + "." : "Not searched yet.";
             if (extra != "") foundStatus.Text = extra + " " + foundStatus.Text;
         }
 
@@ -244,7 +246,7 @@ namespace RaintileOptions
             SetCol(t, 1);
             title.Children.Add(t);
             AddTo(texts, title);
-            AddTo(texts, NewText(it.Source + "   " + Dot + "   " + (it.Kind == "game" ? "game" : "app"), Fs.Help, ResBrush("DimBrush")));
+            AddTo(texts, NewText(it.Source + "   " + Dot + "   " + Schema.KindOf(it.Kind).Singular, Fs.Help, ResBrush("DimBrush")));
             SetCol(texts, 2);
             g.Children.Add(texts);
             if (inCategory != null)
@@ -298,7 +300,7 @@ namespace RaintileOptions
                 var words = Regex.Split(foundFilter.ToLowerInvariant(), @"\s+").Where(w => w != "").ToList();
                 foreach (var it in SortedFound())
                 {
-                    if (foundKind != "all" && it.Kind != foundKind) continue;
+                    if (foundKind != "all" && Schema.KindOf(it.Kind).Id != foundKind) continue;
                     if (foundSource != "" && it.Source != foundSource) continue;
                     string inCat = GetPresentIn(it, present);
                     if (inCat != null) foundSelected.Remove(it.Id);
@@ -445,8 +447,8 @@ namespace RaintileOptions
                     // by type: a folder's own category first, then the one of its kind
                     string b = target != "auto" ? Path.GetFileNameWithoutExtension(target)
                         : !string.IsNullOrEmpty(it.Category) ? Core.GetTileName(it.Category)
-                        : it.Kind == "game" ? V("ImportCategory") : V("AppsCategory");
-                    if (b == "") b = it.Kind == "game" ? "Games" : "Apps";
+                        : V(Schema.KindOf(it.Kind).CategoryKey);
+                    if (b == "") b = Schema.KindOf(it.Kind).DefaultCategory;
                     string file = GetCategoryFileFor(b);
                     var m = GetModel(file);
                     string name = Core.GetTileName(it.Name);
@@ -467,7 +469,7 @@ namespace RaintileOptions
                         {
                             string local = kind == "background" ? it.Hero : it.Logo;
                             if (local != "" && File.Exists(local)) { Core.CopyTileImage(b, kind, name, local); continue; }
-                            if (it.Kind == "game")
+                            if (Schema.KindOf(it.Kind).GameArt)
                             {
                                 if (DownloadTileImage(Art.SteamImage(it.SteamAppId, kind), b, kind, name)) continue;
                                 if (key != "")
@@ -534,14 +536,14 @@ namespace RaintileOptions
 
             // filters: type, text, already added, covers
             var filters = new WrapPanel { Margin = T(0, 0, 0, Gap.Text) };
-            foreach (var k in new[] { new[] { "all", "All" }, new[] { "game", "Games" }, new[] { "app", "Apps" } })
-            {
-                var rb = new RadioButton { Style = ResStyle("Segment"), Content = k[1], GroupName = "found_kind", IsChecked = foundKind == k[0] };
-                string kind = k[0];
-                rb.Click += (s, e) => { foundKind = kind; RefreshFoundList(); };
-                filters.Children.Add(rb);
-            }
-            var search = new TextBox { Width = FieldWidth.M, Margin = T(Gap.Text, 0, Gap.Group, 0), VerticalAlignment = VerticalAlignment.Center };
+            // the kind (a list: there can be more kinds than games and apps)
+            var kinds = new[] { new[] { "all", "All types" } }.Concat(Schema.IMPORT_KINDS.Select(k => new[] { k.Id, k.Plural }));
+            var kindBox = NewChoiceBox(kinds, foundKind, v => { foundKind = v ?? "all"; RefreshFoundList(); });
+            kindBox.Width = FieldWidth.S;
+            kindBox.Margin = T(0, 0, Gap.Control, 0);
+            kindBox.VerticalAlignment = VerticalAlignment.Center;
+            filters.Children.Add(kindBox);
+            var search = new TextBox { Width = FieldWidth.M, Margin = T(0, 0, Gap.Control, 0), VerticalAlignment = VerticalAlignment.Center };
             search.TextChanged += (s, e) => { foundFilter = search.Text; RefreshFoundList(); };
             filters.Children.Add(search);
             // where they were found, and the order
@@ -593,7 +595,7 @@ namespace RaintileOptions
             all.Click += (s, e) => { foreach (ListBoxItem i in foundList.Items) if (i.IsEnabled) i.IsSelected = true; };
             none.Click += (s, e) => { foundList.UnselectAll(); foundSelected.Clear(); UpdateFoundCount(); };
             foundTarget = new ComboBox { Width = FieldWidth.L, Margin = T(0, 0, Gap.Control, 0) };
-            foundTarget.Items.Add(new ComboBoxItem { Content = "By type: games to " + V("ImportCategory") + ", apps to " + V("AppsCategory") + " (or their folder's own)", Tag = "auto" });
+            foundTarget.Items.Add(new ComboBoxItem { Content = "By type: " + string.Join(", ", Schema.IMPORT_KINDS.Select(k => k.Plural.ToLowerInvariant() + " to " + V(k.CategoryKey))) + " (or their folder's own)", Tag = "auto" });
             foreach (var e in GetCategoryEntries()) foundTarget.Items.Add(new ComboBoxItem { Content = "All to " + e.Name, Tag = e.File });
             foundTarget.SelectedIndex = 0;
             SetCol(foundTarget, 3);

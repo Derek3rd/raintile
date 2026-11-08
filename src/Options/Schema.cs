@@ -55,6 +55,18 @@ namespace RaintileOptions
         public List<Group> Groups = new List<Group>();
     }
 
+    // A kind of the games and apps found (Import): its id in Found.json and in
+    // ImportFolders, its names, the setting of the category it goes to (and
+    // that category without one), and whether its images are looked for as a
+    // game's (Steam, SteamGridDB) or as an app's (Dashboard Icons, its icon).
+    // Schema.IMPORT_KINDS lists them: a new kind is one more entry there (and
+    // in $IMPORT_KINDS of Scan.ps1); the window offers only those.
+    public class ImportKind
+    {
+        public string Id, Plural, Singular, CategoryKey, DefaultCategory;
+        public bool GameArt;
+    }
+
     // Menu on the left: a page (with its sub-pages, Children), or the categories
     public class NavNode
     {

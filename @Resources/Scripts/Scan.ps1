@@ -44,6 +44,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $imageExts = '.png', '.jpg', '.jpeg', '.bmp', '.ico', '.gif'
+# The kinds of what is found (Kind of an item, of a folder of ImportFolders),
+# the first one the default: the same as IMPORT_KINDS of the Options window
+$IMPORT_KINDS = @('game', 'app')
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $Resources = [IO.Path]::GetFullPath($Resources).TrimEnd('\', '/')
 $Data = if ($Data) { [IO.Path]::GetFullPath($Data).TrimEnd('\', '/') } else { $Resources }
@@ -420,7 +423,9 @@ function Split-FolderEntry([string]$entry) {
     $kind = ''; $category = ''
     if ($parts.Count -gt 1) { $kind = $parts[1].Trim() }
     if ($parts.Count -gt 2) { $category = $parts[2].Trim() }
-    if ($kind -match '(?i)^app') { $kind = 'app' } elseif ($kind -match '(?i)^game') { $kind = 'game' } else { $kind = '' }
+    # one of the kinds (Game, App...; empty: the default one)
+    $k = $kind; $kind = ''
+    foreach ($id in $IMPORT_KINDS) { if ($k -and $id.StartsWith($k.ToLowerInvariant())) { $kind = $id; break } }
     if (-not $alias) { $alias = @($path.TrimEnd('\', '/') -split '[\\/]')[-1] }
     return [pscustomobject]@{ Alias = $alias; Path = $path; Kind = $kind; Category = $category }
 }
@@ -428,7 +433,8 @@ function Split-FolderEntry([string]$entry) {
 function Read-Folders {
     $list = if ($Folders) { $Folders } else { Get-SettingValue 'ImportFolders' }
     $kind = if ($FoldersKind) { $FoldersKind } else { Get-SettingValue 'ImportFoldersKind' }
-    $kind = if ($kind -match '(?i)^app') { 'app' } else { 'game' }
+    $k = $kind; $kind = $IMPORT_KINDS[0]
+    foreach ($id in $IMPORT_KINDS) { if ($k -and $id.StartsWith($k.ToLowerInvariant())) { $kind = $id } }
     $names = @{}
     $count = 0; $roots = 0
     foreach ($entry in $list.Split('|')) {

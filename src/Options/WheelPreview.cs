@@ -24,7 +24,7 @@ namespace RaintileOptions
 {
     public partial class OptionsApp
     {
-        class WheelTile { public string Name, Label; public ImageSource Bg, Logo; public Brush Color; }
+        class WheelTile { public string Name, Label, LogoPath; public ImageSource Bg, Logo, BgFull; public Brush Color, LogoColor; }
         class WheelCat { public string File, Name; public ImageSource Icon; }
 
         Canvas wheelCanvas;
@@ -123,8 +123,13 @@ namespace RaintileOptions
                 Name = t.Name,
                 Label = Core.GetKey(t, "Label") != "" ? Core.GetKey(t, "Label") : t.Name,
                 Bg = GetBitmap(Core.GetTileImage(b, t, "Background"), 320),
+                BgFull = GetBitmap(Core.GetTileImage(b, t, "Background"), 960),
                 Logo = GetBitmap(Core.GetTileImage(b, t, "Logo"), 160),
-                Color = NewColorBrush(Core.GetKey(t, "Color")) ?? NewColorBrush(V("TileColor")) ?? ResBrush("FieldBg"),
+                LogoPath = Core.GetTileImage(b, t, "Logo"),
+                Color = NewColorBrush(Core.GetKey(t, "Color")) ?? NewColorBrush(Core.GetKey(Core.GetCategorySection(model), "TileColor"))
+                    ?? NewColorBrush(V("TileColor")) ?? ResBrush("FieldBg"),
+                // the colour taken from the logo (Generated\Colors.txt), unless the tile or its category sets one
+                LogoColor = NewColorBrush(Core.GetKey(t, "Color")) ?? NewColorBrush(Core.GetKey(Core.GetCategorySection(model), "TileColor")) ?? WheelLogoColor(Core.GetTileImage(b, t, "Logo")),
             }).ToList();
             wheelPos = wheelTarget = 0;
             // the ring turns the shorter way round to the new category
@@ -137,6 +142,14 @@ namespace RaintileOptions
                 StartWheelAnimation();
             }
             DrawWheel();
+        }
+
+        Brush WheelLogoColor(string logo)
+        {
+            if (logo == null) return null;
+            string c;
+            try { if (logoColors.TryGetValue(System.IO.Path.GetFullPath(logo), out c)) return NewColorBrush(c); } catch { }
+            return null;
         }
 
         // --- settings, as the launcher reads them -------------------------------------
@@ -247,6 +260,19 @@ namespace RaintileOptions
             var launcher = new Rectangle { Width = g.LW, Height = g.LH, Fill = NewColorBrush(V("BgColor")) ?? new SolidColorBrush(Color.FromArgb(200, 8, 8, 12)) };
             Canvas.SetLeft(launcher, g.LX); Canvas.SetTop(launcher, g.LY);
             wheelCanvas.Children.Add(launcher);
+            // the selected tile's background over it (WheelBackdrop)
+            if (WNum("WheelBackdrop", 1) != 0 && wheelTiles.Count > 0)
+            {
+                int L = wheelTiles.Count;
+                var sel = wheelTiles[(((int)Math.Round(wheelTarget)) % L + L) % L];
+                if (sel.BgFull != null)
+                {
+                    var back = new Image { Source = sel.BgFull, Stretch = Stretch.UniformToFill, Width = g.LW, Height = g.LH,
+                        Opacity = Math.Min(100, Math.Max(0, WNum("WheelBackdropOpacity", 40))) / 100, ClipToBounds = true };
+                    Canvas.SetLeft(back, g.LX); Canvas.SetTop(back, g.LY);
+                    wheelCanvas.Children.Add(back);
+                }
+            }
             // what stays of the menu at the top: a faint bar
             double padY = WSize("PadY", g.MonH, 24), menuH = WSize("MenuH", g.MonH, 44);
             var bar = new Rectangle { Width = Math.Max(1, g.GW), Height = menuH, RadiusX = menuH / 2, RadiusY = menuH / 2, Fill = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255)) };
@@ -288,8 +314,10 @@ namespace RaintileOptions
                 var p = WheelPoint(g, g.R, e[1] * g.Step);
                 var box = new Grid { Width = g.S, Height = g.S, Opacity = e[2], Cursor = Cursors.Hand };
                 box.Clip = new RectangleGeometry(new Rect(0, 0, g.S, g.S), radius, radius);
-                box.Children.Add(new Rectangle { Fill = tile.Color });
-                if (tile.Bg != null) box.Children.Add(new Image { Source = tile.Bg, Stretch = Stretch.UniformToFill });
+                // logos only (WheelIconsOnly): the logo on its colour
+                bool iconsOnly = WNum("WheelIconsOnly", 0) != 0 && tile.Logo != null;
+                box.Children.Add(new Rectangle { Fill = iconsOnly ? (tile.LogoColor ?? tile.Color) : tile.Color });
+                if (tile.Bg != null && !iconsOnly) box.Children.Add(new Image { Source = tile.Bg, Stretch = Stretch.UniformToFill });
                 if (tile.Logo != null)
                     box.Children.Add(new Image { Source = tile.Logo, Width = g.S * 0.5, Height = g.S * 0.5, Stretch = Stretch.Uniform });
                 if (labels && (labelsAll || Math.Abs(e[1]) < 0.5))

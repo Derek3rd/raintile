@@ -608,7 +608,9 @@ local function loadCategory(file)
 			}
 			local opacity = tonumber(trim(k.opacity or '')) or c.tileOpacity or 100
 			t.opacity = math.max(0, math.min(100, opacity)) / 100
-			if V.AutoTileColor and not color and not c.tileColor and t.logo and not t.background then
+			-- (the wheel with logos only: always, the background is not shown)
+			local iconsOnly = V.Wheel and V.WheelIconsOnly
+			if (V.AutoTileColor or iconsOnly) and not color and not c.tileColor and t.logo and (not t.background or iconsOnly) then
 				autoColor(t, t.logo)
 			end
 			-- originals, used full screen by the launch animation
@@ -1858,6 +1860,9 @@ function M.readWheel()
 	V.WheelRing = word('WheelMenu', 'ring') ~= 'bar'
 	V.WheelMenuGap = math.max(0, num('WheelMenuGap', 50))
 	V.WheelMenuSize = math.min(150, math.max(10, num('WheelMenuSize', 50)))
+	V.WheelBackdrop = num('WheelBackdrop', 1) ~= 0
+	V.WheelBackdropOpacity = math.min(100, math.max(0, num('WheelBackdropOpacity', 40)))
+	V.WheelIconsOnly = num('WheelIconsOnly', 0) ~= 0
 	if not V.Wheel then return end
 	-- along which axis: Auto follows the docked side
 	local vertical
@@ -1947,13 +1952,53 @@ function M.wheelAssign()
 			M.wv[slot] = e
 			if not old[slot] or old[slot].idx ~= e.idx or base ~= 0 then
 				local t = tiles[e.idx]
-				set('Tile' .. slot, 'ImageName', t.background or '')
+				-- logos only (WheelIconsOnly): the tile's colour behind the logo
+				set('Tile' .. slot, 'ImageName', (V.WheelIconsOnly and t.logo) and '' or (t.background or ''))
 				if t.logo then set('TileIcon' .. slot, 'ImageName', t.logo) end
 				if t.label then set('TileLabel' .. slot, 'Text', t.label) end
 			end
 		end
 	end
 	base = 0 -- (contents set: a reset (base = -1) refills every slot once)
+	M.backdropUpdate()
+end
+
+-- The launcher's background takes the selected tile's (WheelBackdrop): the
+-- image of the tile the wheel turns to goes on the other backdrop meter and
+-- fades in while the current one fades out (WheelStepTime x 1.5)
+M.backdrop = { img = nil, front = 1, f = 1, t = 0 }
+function M.backdropUpdate()
+	if not V.WheelBackdrop then return end
+	local tiles = cur().tiles
+	local L = #tiles
+	local t = L > 0 and tiles[math.floor(offset + 0.5) % L + 1]
+	local img = t and not t.widget and (t.backgroundFull or t.background) or ''
+	local b = M.backdrop
+	if img == b.img then return end
+	b.prev, b.img = b.img or '', img
+	b.front = 3 - b.front
+	set('MeterBackdrop' .. b.front, 'ImageName', img)
+	b.f, b.t = 0, 0
+	if V.AnimScroll and ready then M.startTicker() else b.f = 1 end
+	M.backdropAlpha()
+end
+function M.backdropAlpha()
+	local b = M.backdrop
+	local a = 255 * V.WheelBackdropOpacity / 100
+	local front, back = 'MeterBackdrop' .. b.front, 'MeterBackdrop' .. (3 - b.front)
+	set(front, 'ImageAlpha', tostring(math.floor(a * b.f + 0.5)))
+	set(back, 'ImageAlpha', tostring(math.floor(a * (1 - b.f) + 0.5)))
+	show(front, b.img ~= '' and b.f > 0)
+	show(back, b.f < 1 and (b.prev or '') ~= '')
+end
+function M.backdropAdvance()
+	local b = M.backdrop
+	if b.f >= 1 then return false end
+	b.t = b.t + 16 * M.animScale
+	b.f = math.min(1, b.t / (V.WheelStepTime * 1.5))
+	M.animFast = true
+	M.backdropAlpha()
+	return b.f < 1
 end
 
 -- Time-based turn towards offset: WheelStepTime per tile (a little less each
@@ -3937,6 +3982,7 @@ local function advance()
 	if V.Wheel then moving = M.wheelAdvance() else pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth) end
 	busy = busy or moving or fadeMoving
 	if M.ringOn() and M.ringAdvance() then busy = true end
+	if V.Wheel and V.WheelBackdrop and M.backdropAdvance() then busy = true end
 
 	-- Steam updates, when the launcher opens: progress filling up, borders turning
 	if M.dl.anim then
@@ -4007,6 +4053,8 @@ function Tick(list)
 	M.animFast = false
 	local busy = advance()
 	frame()
+	-- a backdrop fade that started in this frame (the wheel just stopped on a tile)
+	if V.Wheel and M.backdrop.f < 1 then busy = true end
 	if busy then
 		M.tickMs = (M.animFast or fadeMoving) and (V.FrameMs or 16) or 50
 		tickList = tickListFor(M.tickMs)

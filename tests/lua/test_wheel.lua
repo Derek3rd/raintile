@@ -4,10 +4,32 @@ local t = require('t')
 
 local T = {}
 
-local function wheel(settings)
+-- Background and logo files for every tile of every category (empty files:
+-- the launcher only needs them to exist), before the skin loads
+local function withImages(s)
+	for file in (host_listdir(s.data .. 'Categories') .. '\n'):gmatch('([^\n]+)\n') do
+		local base = file:match('^(.+)%.[iI][nN][iI]$')
+		local text = base and R.readFile(s.data .. 'Categories\\' .. file)
+		if text then
+			host_mkdir(s.data .. 'Images\\' .. base)
+			for _, kind in ipairs({ 'background', 'logo' }) do
+				host_mkdir(s.data .. 'Images\\' .. base .. '\\' .. kind)
+				for name in ('\n' .. text):gmatch('\n%[([^%]\r\n]+)%]') do
+					if name:lower() ~= 'category' then
+						R.writeFile(s.data .. 'Images\\' .. base .. '\\' .. kind .. '\\' .. name .. '.png', '')
+					end
+				end
+			end
+		end
+	end
+end
+
+local function wheel(settings, images)
 	settings = settings or {}
 	settings.ScrollMode = 'Wheel'
-	local s = R.new({ settings = settings }):start()
+	local s = R.new({ settings = settings })
+	if images then withImages(s) end
+	s:start()
 	t.clean(s)
 	t.ok(s:upvalue('ready'), 'the launcher is not ready after loading')
 	s:call('Show()')
@@ -151,6 +173,52 @@ function T.still_mouse_turns_once()
 	t.eq(s:upvalue('offset'), start + 1, 'the still mouse turned the wheel again')
 	s:call("HoverTile(" .. slotOf(s, start + 2) .. ", '205', '330')")
 	t.eq(s:upvalue('offset'), start + 2, 'the moved mouse did not turn the wheel')
+	t.clean(s)
+end
+
+-- WheelBackdrop: the launcher's background takes the selected tile's
+-- background image; after a turn, the next tile's, faded in
+function T.backdrop_follows_the_selection()
+	local s, c = wheel({ LauncherMode = 'Dock', DockSide = 'Left', WheelBackdrop = 1, Thumbnails = 0 }, true)
+	local M = s:upvalue('M')
+	local function selected()
+		local L = #c.tiles
+		local tl = c.tiles[s:upvalue('offset') % L + 1]
+		return tl.backgroundFull or tl.background or ''
+	end
+	local function shown()
+		local m = s.meters['meterbackdrop' .. M.backdrop.front]
+		return m:opt('ImageName', '')
+	end
+	t.ok(selected() ~= '', 'the selected tile has no background (test images missing)')
+	t.eq(M.backdrop.img, selected(), 'backdrop of the selected tile')
+	t.eq(shown(), selected(), 'backdrop meter image')
+	s:call('Scroll(1)')
+	t.eq(M.backdrop.img, selected(), 'backdrop after a turn')
+	t.eq(M.backdrop.f, 1, 'the fade did not finish')
+	s:call('Hide()')
+	t.atRest(s)
+	t.clean(s)
+	-- off: nothing over the background colour
+	s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', WheelBackdrop = 0 })
+	t.ok(s.meters['meterbackdrop1'].hidden and s.meters['meterbackdrop2'].hidden, 'backdrop shown with WheelBackdrop=0')
+	t.clean(s)
+end
+
+-- WheelIconsOnly: tiles with a logo show no background image
+function T.logos_only()
+	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', WheelIconsOnly = 1, Thumbnails = 0 }, true)
+	local M, V = s:upvalue('M'), s:upvalue('V')
+	local tiles = s:upvalue('cur')().tiles
+	local checked = 0
+	for slot = 1, V.Slots do
+		local e = M.wv[slot]
+		if e and tiles[e.idx].logo then
+			t.eq(s.meters['tile' .. slot]:opt('ImageName', ''), '', 'background shown on ' .. tiles[e.idx].name)
+			checked = checked + 1
+		end
+	end
+	t.ok(checked > 0, 'no tile with a logo was checked (test images missing)')
 	t.clean(s)
 end
 

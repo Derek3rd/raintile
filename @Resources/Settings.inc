@@ -78,6 +78,14 @@ WheelMenu=Ring
 ; percent of a tile
 WheelMenuGap=50
 WheelMenuSize=50
+; 1 = the launcher's background takes the background image of the selected
+; tile (fading from one to the next), at WheelBackdropOpacity percent over BgColor
+WheelBackdrop=1
+WheelBackdropOpacity=40
+; 1 = the tiles of the wheel show only their logo, on a colour taken from it
+; (as AutoTileColor; a Color= of the tile or the category still wins). Tiles
+; without a logo keep their background.
+WheelIconsOnly=0
 
 ; --- Spacing --------------------------------------------------------------------
 ; Sizes are written in pixels (e.g. 40) or as a percentage of the screen

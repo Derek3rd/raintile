@@ -351,9 +351,22 @@ function T.menu_bar()
 	t.clean(s)
 end
 
--- Widgets: in their own container, drawn over the tiles (in GridClip they
--- were under every tile, so the one in the middle was covered); live in the
--- middle, a plain tile with its name at the sides, where tiles overlap
+-- Rainmeter draws a container meter with no meters in it as a plain shape:
+-- every container shown has meters in it
+local function noEmptyContainers(s, what)
+	local used = {}
+	for _, m in pairs(s.meters) do
+		local c = m:opt('Container', '')
+		if c ~= '' then used[c:lower()] = true end
+	end
+	for _, name in ipairs({ 'gridclip', 'hoverclip', 'widgetclip' }) do
+		local m = s.meters[name]
+		if m and not m.hidden then t.ok(used[name], what .. ': ' .. name .. ' shown with nothing in it (a black rectangle)') end
+	end
+end
+
+-- Widgets: in their own container (WidgetClip), drawn after the tiles; each
+-- seen only where its tile is (cut by the nearer tiles), faded like it
 local function dashboard(settings)
 	settings.LauncherMode, settings.DockSide = 'Dock', 'Left'
 	local s = wheel(settings)
@@ -373,30 +386,21 @@ end
 
 function T.widgets_over_the_tiles()
 	local s, live = dashboard({})
-	t.ok(s.meters.widgetclip, 'no WidgetClip container in the wheel')
-	t.ok(not s.meters.widgetclip.hidden, 'WidgetClip hidden with a widget in the middle')
-	-- with no widget in it Rainmeter draws the container: a black rectangle
-	for i, c in ipairs(s:upvalue('cats')) do
-		if c.name ~= 'Dashboard' and not c.virtual and #c.tiles > 0 and not c.widgets then
-			s:call('SetCategory(' .. i .. ')')
-			break
-		end
+	noEmptyContainers(s, 'Dashboard')
+	t.ok(not s.meters.widgetclip.hidden, 'WidgetClip hidden with widgets')
+	t.ok(live > 1, 'only ' .. live .. ' widget drawn: the side ones too')
+	-- the mask: a tile each, the side ones cut by the nearer tiles
+	local mask = {}
+	for k = 1, 200 do
+		local v = s.meters.widgetclip:opt(k == 1 and 'Shape' or ('Shape' .. k), '')
+		if v ~= '' then mask[#mask + 1] = v end
 	end
-	t.clean(s)
-	t.ok(s.meters.widgetclip.hidden, 'WidgetClip shown with no widget: a black rectangle')
-	s = dashboard({})
-	t.eq(live, 1, 'widgets drawn (only the one in the middle)')
-	local pos = s:upvalue('pos')
-	local mid, side = slotOf(s, pos), slotOf(s, pos + 1)
-	t.eq(s.meters['tilelabel' .. mid].hidden, true, 'name of the widget in the middle')
-	t.eq(s.meters['tilelabel' .. side].hidden, false, 'name of the widget beside it')
-	-- tiles apart: every widget is live
-	s, live = dashboard({ WheelSpacing = 110 })
-	t.ok(live > 1, 'tiles apart: only ' .. live .. ' widget drawn')
-	-- a widget repeated (few tiles): its meters with one copy, the others named
+	local text = table.concat(mask, '\n')
+	t.ok(text:find('Exclude'), 'side widgets not cut by the nearer tiles:\n' .. text)
+	-- a widget repeated (few tiles): its data on one copy, the others named
 	local M = s:upvalue('M')
 	local copies, named = {}, 0
-	for slot, e in pairs(M.wv) do
+	for slot in pairs(M.wv) do
 		local tile = s:upvalue('tileAt')(slot)
 		if tile and tile.widget and not s.meters['tile' .. slot].hidden and num(s.meters['tile' .. slot], 'ImageAlpha') ~= 0 then
 			copies[tile.widget.idx] = (copies[tile.widget.idx] or 0) + 1
@@ -407,6 +411,16 @@ function T.widgets_over_the_tiles()
 	for _, n in pairs(copies) do extra = extra + n - 1 end
 	t.ok(extra > 0, 'no widget repeated in the test')
 	t.ok(named >= extra, 'repeated widgets without their name: ' .. named .. ' of ' .. extra)
+	-- a category without widgets: nothing shown with nothing in it
+	for i, c in ipairs(s:upvalue('cats')) do
+		if c.name ~= 'Dashboard' and not c.virtual and #c.tiles > 0 and not c.widgets then
+			s:call('SetCategory(' .. i .. ')')
+			break
+		end
+	end
+	t.clean(s)
+	noEmptyContainers(s, 'no widgets')
+	t.ok(s.meters.widgetclip.hidden, 'WidgetClip shown with no widget')
 end
 
 return T

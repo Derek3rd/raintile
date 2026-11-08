@@ -1245,7 +1245,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 19
+local GRID_VERSION = 20
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1899,6 +1899,10 @@ function M.readWheel()
 	V.WheelIconsOnly = num('WheelIconsOnly', 0) ~= 0
 	-- the band behind the top row: with the selected tile's background only
 	SKIN:Bang('!SetOption', 'MeterTopBar', 'Hidden', (V.Wheel and V.WheelBackdrop) and '0' or '1')
+	-- the wheel: every tile in its own container (TileBox), the widgets in
+	-- WidgetClip; GridClip, with no meters in it, would be drawn by Rainmeter
+	-- as a plain shape (a black rectangle over the grid)
+	set('GridClip', 'Hidden', V.Wheel and '1' or '0')
 	if not V.Wheel then return end
 	-- along which axis: Auto follows the docked side
 	local vertical
@@ -1945,9 +1949,6 @@ function M.wheelFrame()
 	f.step = (V.TileW * V.WheelSpacing / 100) / R
 	f.half = (V.WheelVisible - 1) / 2
 	M.wf = f
-	set('WidgetClip', 'X', tostring(math.floor(V.PadX)))
-	set('WidgetClip', 'Y', tostring(math.floor(V.GridY)))
-	set('WidgetClip', 'Shape', string.format('Rectangle 0,0,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', math.floor(W), math.floor(H)))
 	return f
 end
 
@@ -2053,6 +2054,43 @@ function M.placeBox(slot, x, y)
 		-math.floor(x), -math.floor(y), math.floor(V.ClipW or V.AreaW), math.floor(V.ClipH or V.AreaH)))
 	set(box, 'Shape3', 'Combine Shape | Intersect Shape2')
 	show(box, true)
+end
+
+-- The wheel: the widgets' container (WidgetClip, drawn after the tiles) lets
+-- each widget show only where its tile is seen: its rounded tile, in the
+-- grid, minus the tiles nearer the middle that cover it (drawn after it).
+-- boxes: slot -> { x, y } of the tiles shown; live: slots of the widgets.
+-- With no widget it is hidden and empty: a container with none of its
+-- meters shown is drawn by Rainmeter as a plain (black) shape.
+function M.widgetMask(boxes, live)
+	local r = math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))
+	local fill = ' | Fill Color 0,0,0,255 | StrokeWidth 0'
+	-- where the grid is, as GridClip (the widgets are placed in its coordinates)
+	set('WidgetClip', 'X', tostring(math.floor(V.PadX)))
+	set('WidgetClip', 'Y', tostring(math.floor(V.GridY)))
+	local n = 0
+	local function add(text)
+		n = n + 1
+		set('WidgetClip', n == 1 and 'Shape' or ('Shape' .. n), text)
+		return n == 1 and 'Shape' or ('Shape' .. n)
+	end
+	local function box(b) return string.format('Rectangle %d,%d,%d,%d,%d', b[1], b[2], V.TileW, V.TileH, r) .. fill end
+	local grid = string.format('Rectangle 0,0,%d,%d', math.floor(V.ClipW or V.AreaW), math.floor(V.ClipH or V.AreaH)) .. fill
+	for _, slot in ipairs(live) do
+		local b = boxes[slot]
+		local ops = { 'Combine ' .. add(box(b)), 'Intersect ' .. add(grid) }
+		-- slots after this one are nearer the middle, drawn over it
+		for other, o in pairs(boxes) do
+			if other > slot and math.abs(o[1] - b[1]) < V.TileW and math.abs(o[2] - b[2]) < V.TileH then
+				ops[#ops + 1] = 'Exclude ' .. add(box(o))
+			end
+		end
+		add(table.concat(ops, ' | '))
+	end
+	if n == 0 then add('Rectangle 0,0,1,1 | Fill Color 0,0,0,0 | StrokeWidth 0') end
+	for k = n + 1, M.maskShapes or 0 do set('WidgetClip', 'Shape' .. k, '') end
+	M.maskShapes = n
+	show('WidgetClip', #live > 0)
 end
 
 -- Time-based turn towards offset: WheelStepTime per tile (a little less each
@@ -3600,6 +3638,7 @@ local function placeSlots()
 	dash.shown = {}
 	dash.skinsWanted = {}
 	dash.customShown = {}
+	local wboxes, wlive = {}, {} -- the wheel: where each tile is, widgets shown
 	-- the wheel repeating few tiles: a widget has one set of meters, for the
 	-- copy nearest the middle
 	local nearest = {}
@@ -3619,10 +3658,9 @@ local function placeSlots()
 		if e then extra = e.line >= base + visibleLines() end
 		local wv = V.Wheel and M.wv[slot]
 		if V.Wheel then extra = false end
-		-- a widget is live (drawn over the tiles) in the middle, or anywhere when
-		-- the tiles do not overlap (WheelSpacing 100 or more); elsewhere a plain tile
-		local live = not wv or ((V.WheelSpacing >= 100 or math.abs(wv.d) < 0.5)
-			and not (t and t.widget and nearest[t.widget.idx] ~= slot))
+		-- a widget repeated (few tiles): its data on the copy nearest the
+		-- middle, the others plain tiles with its title
+		local live = not (wv and t and t.widget and nearest[t.widget.idx] ~= slot)
 		local visible = t and (not extra or frac > 0) and (not V.Wheel or (wv and wv.a > 0.01))
 		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
 		local infoMeter = 'TileInfo' .. slot
@@ -3647,6 +3685,8 @@ local function placeSlots()
 			if wv then
 				f = f * wv.a
 				M.placeBox(slot, x, y)
+				wboxes[slot] = { x, y }
+				if t.widget and live then wlive[#wlive + 1] = slot end
 				wx, wy, x, y = x, y, 0, 0
 			end
 			local alpha = tostring(math.floor(255 * f + 0.5))
@@ -3843,9 +3883,7 @@ local function placeSlots()
 		end
 		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
-	-- a container with none of its meters shown is drawn as a shape (black):
-	-- shown only with a widget in it
-	if V.Wheel then show('WidgetClip', next(dash.shown) ~= nil) end
+	if V.Wheel then M.widgetMask(wboxes, wlive) end
 end
 
 local function placeHover()

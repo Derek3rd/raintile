@@ -131,6 +131,8 @@ namespace RaintileOptions
             UpdateResets();
             if (keyButtons.ContainsKey(key)) UpdateKeyConflicts();
             if (key == "LauncherMode") UpdateModeRows();
+            // the wheel's preview follows every setting (sizes, mode, colours)
+            if (wheelCanvas != null) DrawWheel();
         }
 
         // Rows that only matter in one LauncherMode: the window size, the docked side

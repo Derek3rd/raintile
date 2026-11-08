@@ -128,7 +128,7 @@ namespace RaintileOptions
             return m;
         }
 
-        void SetChanged(string file) { changedFiles[file] = true; UpdateDirty(); }
+        void SetChanged(string file) { changedFiles[file] = true; UpdateDirty(); PreviewChanged(file); }
 
         // Square thumbnail: image (or colour) in a rounded box
         Border NewThumb(double size)

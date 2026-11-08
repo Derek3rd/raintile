@@ -425,7 +425,8 @@ function Meter:measure()
 		for _, key in ipairs(self:shapeKeys()) do
 			local def = self:opt(key, '')
 			local name, rest = def:match('^%s*(%a+)%s+([^|]*)')
-			if name then
+			-- Combine joins shapes defined in other keys: no size of its own
+			if name and name:lower() ~= 'combine' then
 				local a = args(rest)
 				local n = {}
 				for k = 1, #a do n[k] = self.skin:number(a[k], 0) or 0 end

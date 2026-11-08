@@ -399,12 +399,6 @@ local function logoPlacement(t, pos, scale)
 	end
 end
 
--- Centre of tile t's logo in the tile, in pixels, for a logo box of the
--- given size. The box is square and the image fits inside it, so the
--- visible part is what has to stay in the tile: the slots are clipped by the
--- grid, not by the tile, and the logo would spill onto the next one. A
--- centred logo stays centred, also when larger than the tile. W, H: another
--- area than the tile (the wheel's backdrop, WheelLogoOn=Background).
 -- The visible part of tile t's logo in a square box of the given size: the
 -- image fits inside it (width, height)
 function M.logoVisible(t, size)
@@ -415,13 +409,19 @@ function M.logoVisible(t, size)
 	return vw, vh
 end
 
-local function logoCentre(t, size, W, H)
+-- Centre of tile t's logo in the tile, in pixels, for a logo box of the
+-- given size. The box is square and the image fits inside it, so the
+-- visible part is what has to stay in the tile: the slots are clipped by the
+-- grid, not by the tile, and the logo would spill onto the next one. A
+-- centred logo stays centred, also when larger than the tile. W, H, px, py:
+-- another area and place than the tile's (the wheel's backdrop: BackLogoPos=).
+local function logoCentre(t, size, W, H, px, py)
 	local vw, vh = M.logoVisible(t, size)
 	local function place(p, n, total)
 		if n >= total then return total / 2 end
 		return math.min(total - n / 2, math.max(n / 2, p * total))
 	end
-	return place(t.logoX, vw, W or V.TileW), place(t.logoY, vh, H or V.TileH)
+	return place(px or t.logoX, vw, W or V.TileW), place(py or t.logoY, vh, H or V.TileH)
 end
 
 -- Placement of the play time line (TileInfo): InfoPos=X,Y is where it goes in
@@ -432,6 +432,28 @@ local function infoPlacement(t, pos)
 	local x, y = trim(pos or ''):match('^([%d%.]+)%s*,%s*([%d%.]+)$')
 	t.infoX = math.min(100, math.max(0, tonumber(x) or 0)) / 100
 	t.infoY = math.min(100, math.max(0, tonumber(y) or 0)) / 100
+end
+
+-- Placement of the logo and of the lines on the wheel's backdrop (WheelLogoOn,
+-- WheelInfoOn = Background), of the tile or its category, as LogoPos=,
+-- LogoScale= and InfoPos= are on the tile: BackLogoPos= (the logo's centre,
+-- default the middle), BackLogoScale= (times WheelBackdropLogoSize),
+-- BackInfoPos= (default the top left). Their own keys: the backdrop is a
+-- much larger place than the thumbnail. Sets t.backLogoX, t.backLogoY,
+-- t.backLogoScale, t.backInfoX, t.backInfoY (0-1).
+function M.backPlacement(t, logoPos, logoScale, infoPos)
+	local function pair(v, def)
+		local x, y = trim(v or ''):match('^([%d%.]+)%s*,%s*([%d%.]+)$')
+		return math.min(100, math.max(0, tonumber(x) or def)) / 100, math.min(100, math.max(0, tonumber(y) or def)) / 100
+	end
+	t.backLogoX, t.backLogoY = pair(logoPos, 50)
+	t.backLogoScale = math.min(3, math.max(0.25, tonumber(trim(logoScale or '')) or 1))
+	t.backInfoX, t.backInfoY = pair(infoPos, 0)
+	-- (the logo's proportions, to keep what is visible of it inside: logoPlacement)
+	if t.logo and not t.logoRatio and (t.backLogoX ~= 0.5 or t.backLogoY ~= 0.5) then
+		local d = imageSize(t.logo)
+		if d then t.logoRatio = d[1] / d[2] end
+	end
 end
 
 -- Automatic tile colour (AutoTileColor=1): a tile without a background image
@@ -594,6 +616,7 @@ local function loadCategory(file)
 	c.bgFocus, c.bgZoom = own(catKeys.bgfocus), own(catKeys.bgzoom)
 	c.logoPos, c.logoScale = own(catKeys.logopos), own(catKeys.logoscale)
 	c.infoPos = own(catKeys.infopos)
+	c.back = { own(catKeys.backlogopos), own(catKeys.backlogoscale), own(catKeys.backinfopos) }
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -635,6 +658,7 @@ local function loadCategory(file)
 				pw, ph, V.BgThumbMode, t.frame)
 			logoPlacement(t, own(k.logopos) or c.logoPos, own(k.logoscale) or c.logoScale)
 			infoPlacement(t, own(k.infopos) or c.infoPos)
+			M.backPlacement(t, own(k.backlogopos) or c.back[1], own(k.backlogoscale) or c.back[2], own(k.backinfopos) or c.back[3])
 			-- logo thumbnails are made at the largest size (zoom included)
 			local logoMax = math.floor(c.iconSize * t.logoScale * V.HoverLogoScale + 0.5)
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
@@ -2078,24 +2102,11 @@ function M.backdropArea()
 	return V.PadX, V.GridY, V.ClipW or V.AreaW, V.ClipH or V.AreaH
 end
 
--- Where tile t's logo of the given size sits in a W x H tile, as a share of
--- the room it can move in there (0: against the left or top edge, 1: the
--- right or bottom one; 0.5 when it does not fit). LogoPos= is the logo's
--- centre, kept inside the tile: a large logo near a corner touches it.
-function M.logoShare(t, size, W, H)
-	local vw, vh = M.logoVisible(t, size)
-	local lx, ly = logoCentre(t, size, W, H)
-	local function share(p, n, total) return total > n and (p - n / 2) / (total - n) or 0.5 end
-	return share(lx, vw, W), share(ly, vh, H)
-end
-
--- The selected tile's logo on the backdrop (WheelLogoOn=Background): where it
--- sits on its thumbnail (the tile of the wheel, edited in the tile editor),
--- as a share of the room it can move in (M.logoShare), so against a corner
--- of the thumbnail is against the corner of the area; WheelBackdropLogoSize
--- percent of the area's height times LogoScale=; the full-size image, not
--- the tile's thumbnail. b.logo: its box { cx, cy, size }, where the launch
--- animation starts.
+-- The selected tile's logo on the backdrop (WheelLogoOn=Background): at its
+-- own place there (BackLogoPos=, M.backPlacement; the tile editor shows the
+-- backdrop to place it), WheelBackdropLogoSize percent of the area's height
+-- times BackLogoScale=; the full-size image, not the tile's thumbnail.
+-- b.logo: its box { cx, cy, size }, where the launch animation starts.
 function M.backdropLogo()
 	local b = M.backdrop
 	local t = b.tile
@@ -2105,11 +2116,8 @@ function M.backdropLogo()
 		return
 	end
 	local ax, ay, W, H = M.backdropArea()
-	local size = math.max(8, math.floor(H * V.WheelBackLogoSize / 100 * t.logoScale + 0.5))
-	local qx, qy = M.logoShare(t, V.IconSize * t.logoScale, V.TileW, V.TileH)
-	local vw, vh = M.logoVisible(t, size)
-	local lx = W > vw and vw / 2 + qx * (W - vw) or W / 2
-	local ly = H > vh and vh / 2 + qy * (H - vh) or H / 2
+	local size = math.max(8, math.floor(H * V.WheelBackLogoSize / 100 * t.backLogoScale + 0.5))
+	local lx, ly = logoCentre(t, size, W, H, t.backLogoX, t.backLogoY)
 	b.logo = { cx = ax + lx, cy = ay + ly, size = size }
 	set('BackdropLogo', 'ImageName', t.logoFull or t.logo)
 	set('BackdropLogo', 'X', tostring(math.floor(ax + lx - size / 2)))
@@ -2126,14 +2134,16 @@ function M.backdropLogo()
 end
 
 -- Top left of the block of the update line (uw x uh) over the play time
--- (iw x ih) in an area W x H, and its width: InfoPos= places it in the room
--- it leaves inside the margins (LabelPad), 0,0 the top left
-function M.infoBlock(t, uw, uh, iw, ih, W, H)
+-- (iw x ih) in an area W x H, and its width: InfoPos= (or px, py: the
+-- backdrop's BackInfoPos=) places it in the room it leaves inside the
+-- margins (LabelPad), 0,0 the top left
+function M.infoBlock(t, uw, uh, iw, ih, W, H, px, py)
+	px, py = px or t.infoX, py or t.infoY
 	local bw, bh = math.max(uw, iw), uh + ih
 	local bx, by = V.LabelPad, V.LabelPad
-	if (t.infoX > 0 or t.infoY > 0) and not t.widget then
-		bx = bx + math.floor(t.infoX * math.max(0, W - 2 * V.LabelPad - bw) + 0.5)
-		by = by + math.floor(t.infoY * math.max(0, H - 2 * V.LabelPad - bh) + 0.5)
+	if (px > 0 or py > 0) and not t.widget then
+		bx = bx + math.floor(px * math.max(0, W - 2 * V.LabelPad - bw) + 0.5)
+		by = by + math.floor(py * math.max(0, H - 2 * V.LabelPad - bh) + 0.5)
 	end
 	return bx, by, bw
 end
@@ -2156,16 +2166,17 @@ function M.backdropInfo(t, updText, updAlpha, infoText, infoAlpha)
 		iw, ih = M.lineSize('BackdropInfo', infoText)
 	end
 	local ax, ay, W, H = M.backdropArea()
-	local bx, by, bw = M.infoBlock(t, uw, uh, iw, ih, W, H)
+	local px, py = t.backInfoX or 0, t.backInfoY or 0
+	local bx, by, bw = M.infoBlock(t, uw, uh, iw, ih, W, H, px, py)
 	bx, by = ax + bx, ay + by
 	if hasUpd then
-		set('BackdropUpd', 'X', tostring(bx + math.floor(t.infoX * (bw - uw) + 0.5)))
+		set('BackdropUpd', 'X', tostring(bx + math.floor(px * (bw - uw) + 0.5)))
 		set('BackdropUpd', 'Y', tostring(by))
 		set('BackdropUpd', 'FontColor', fade(V.TextColor, updAlpha))
 		set('BackdropUpd', 'SolidColor', fade('0,0,0,150', updAlpha))
 	end
 	if hasInfo then
-		set('BackdropInfo', 'X', tostring(bx + math.floor(t.infoX * (bw - iw) + 0.5)))
+		set('BackdropInfo', 'X', tostring(bx + math.floor(px * (bw - iw) + 0.5)))
 		set('BackdropInfo', 'Y', tostring(by + uh))
 		set('BackdropInfo', 'FontColor', fade(V.TextColor, infoAlpha))
 		set('BackdropInfo', 'SolidColor', fade('0,0,0,150', infoAlpha))

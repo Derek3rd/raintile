@@ -274,9 +274,16 @@ function T.info_on_the_backdrop()
 	t.ok(s.meters['tileupd' .. slotOf(s, k + 1)].hidden, 'an update line on a side tile')
 	local upd = s.meters['backdropupd']
 	t.ok(not upd.hidden, 'no update line on the backdrop')
-	local ax, ay = M.backdropArea()
+	local ax, ay, W = M.backdropArea()
 	t.eq(num(upd, 'X'), ax + V.LabelPad, 'update line across')
 	t.eq(num(upd, 'Y'), ay + V.LabelPad, 'update line down')
+	-- its own place there (BackInfoPos=): on the right, whatever InfoPos= says
+	tl.infoX, tl.backInfoX = 0, 1
+	s:call('Show()')
+	s:call('Scroll(1)') s:call('Scroll(-1)')
+	t.ok(math.abs(num(upd, 'X') + upd:GetW() - (ax + W - V.LabelPad)) <= 1, 'update line not on the right of the area')
+	tl.backInfoX = 0
+	s:call('Scroll(1)') s:call('Scroll(-1)')
 	local text = upd:opt('Text', '')
 	-- the selection moves on: the next tile's line on the backdrop, none on the
 	-- tile that was selected
@@ -307,35 +314,61 @@ function T.logos_only_with_the_logo_on_the_backdrop()
 	t.clean(s)
 end
 
--- The logo on the backdrop sits where it sits on its thumbnail (the tile of
--- the wheel), as a share of the room it can move in: against a corner of the
--- thumbnail is against the corner of the area; a logo that does not fit the
--- thumbnail (always centred there) is centred
-function T.logo_on_the_backdrop_where_it_sits_on_the_thumbnail()
-	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelLogoOn = 'Background', Thumbnails = 0 }, true)
+-- The logo on the backdrop has its own place and size there (BackLogoPos=,
+-- BackLogoScale=: its centre, kept inside the area), whatever its place on
+-- the thumbnail (LogoPos=, LogoScale=)
+function T.logo_on_the_backdrop_at_its_own_place()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelLogoOn = 'Background', WheelBackdropLogoSize = 20, Thumbnails = 0 }, true)
 	local M = s:upvalue('M')
 	local L = #c.tiles
 	local tl = c.tiles[s:upvalue('offset') % L + 1]
 	t.ok(tl.logo, 'the selected tile has no logo (test images missing)')
 	local logo = s.meters['backdroplogo']
 	local ax, ay, W, H = M.backdropArea()
-	-- the top left corner of the thumbnail
-	tl.logoX, tl.logoY, tl.logoScale, tl.logoRatio = 0, 0, 1, nil
+	-- the place on the thumbnail does not move it
+	tl.logoX, tl.logoY, tl.logoScale, tl.logoRatio = 0, 0, 2, nil
+	tl.backLogoX, tl.backLogoY, tl.backLogoScale = 0, 0, 1
 	M.backdropLogo()
+	t.eq(num(logo, 'W'), math.floor(H * 20 / 100 + 0.5), 'logo size on the backdrop')
 	t.eq(num(logo, 'X'), ax, 'logo not against the left of the area')
 	t.eq(num(logo, 'Y'), ay, 'logo not against the top of the area')
 	-- the bottom right corner
-	tl.logoX, tl.logoY = 1, 1
+	tl.backLogoX, tl.backLogoY = 1, 1
 	M.backdropLogo()
 	local size = num(logo, 'W')
 	t.ok(math.abs(num(logo, 'X') + size - (ax + W)) <= 1, 'logo not against the right of the area')
 	t.ok(math.abs(num(logo, 'Y') + size - (ay + H)) <= 1, 'logo not against the bottom of the area')
-	-- twice the size: larger than the thumbnail, centred there and here
-	tl.logoX, tl.logoY, tl.logoScale = 0, 0, 2
+	-- 25,75 at half the size: its centre there
+	tl.backLogoX, tl.backLogoY, tl.backLogoScale = 0.25, 0.75, 0.5
 	M.backdropLogo()
 	size = num(logo, 'W')
-	t.ok(math.abs(num(logo, 'X') + size / 2 - (ax + W / 2)) <= 1, 'large logo not centred across')
-	t.ok(math.abs(num(logo, 'Y') + size / 2 - (ay + H / 2)) <= 1, 'large logo not centred down')
+	t.eq(size, math.floor(H * 20 / 100 * 0.5 + 0.5), 'logo size with BackLogoScale')
+	t.ok(math.abs(num(logo, 'X') + size / 2 - (ax + 0.25 * W)) <= 1, 'logo centre across')
+	t.ok(math.abs(num(logo, 'Y') + size / 2 - (ay + 0.75 * H)) <= 1, 'logo centre down')
+	t.clean(s)
+end
+
+-- BackLogoPos= and friends, of the tile or its category, read with the tiles
+function T.backdrop_keys_of_the_tile_and_the_category()
+	local s = R.new({ settings = { ScrollMode = 'Wheel' } })
+	local file = s.data .. 'Categories\\Games.ini'
+	local text = R.readFile(file)
+	-- (the section, not the comment at the top that names it)
+	t.ok(text and text:find('\n%[Category%]'), 'no Games category with a [Category] section')
+	text = text:gsub('\n%[Category%]', '\n[Category]\nBackLogoPos=10,20\nBackInfoPos=100,100', 1)
+	R.writeFile(file, text)
+	s:start()
+	t.clean(s)
+	local cats = s:upvalue('cats')
+	local tile
+	for _, c in ipairs(cats) do
+		if not c.virtual and c.file and c.file:lower():find('games') and #c.tiles > 0 then tile = c.tiles[1] end
+	end
+	t.ok(tile, 'no tile in Games')
+	t.eq(tile.backLogoX, 0.1, 'BackLogoPos X of the category')
+	t.eq(tile.backLogoY, 0.2, 'BackLogoPos Y of the category')
+	t.eq(tile.backLogoScale, 1, 'BackLogoScale default')
+	t.eq(tile.backInfoX, 1, 'BackInfoPos X of the category')
 	t.clean(s)
 end
 

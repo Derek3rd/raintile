@@ -10,8 +10,11 @@ namespace RaintileOptions
     {
         public static readonly List<Page> Pages = new List<Page>
         {
-            new Page { Id = "general", Title = "General", Icon = 0xE713, Desc = "Where the launcher appears, its margins, and how it opens and closes.", Groups = new List<Group>
+            new Page { Id = "general", Title = "General", Icon = 0xE713, Desc = "Saved sets of all these settings, where the launcher appears, its margins, and how it opens and closes.", Groups = new List<Group>
             {
+                new Group { Title = "Profiles", Help = null, Profiles = true, Items = new List<Item>
+                {
+                } },
                 new Group { Title = "Screen", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "screen", Key = "ScreenX", Label = "Area", Help = "Where the launcher shows: a monitor, or its work area (the taskbar stays free)." },
@@ -575,6 +578,18 @@ namespace RaintileOptions
             { "WindowH", "70%" },
             { "WindowW", "60%" },
         };
+
+        // Settings a profile does not hold (Options > General > Profiles): the
+        // SteamGridDB key (encrypted for one Windows user), where Import looks and
+        // where it puts what it adds (the games, not the look), the updates, the
+        // diagnostics, the sensors' port (this PC) and the play time measured
+        // (data). tools/check.py checks that they are settings, and that every
+        // secret is here.
+        public static readonly string[] PROFILE_EXCLUDED = { "SteamGridDBKey", "ImportStores", "ImportFolders", "ScanOnStart", "ImportCategory", "AppsCategory", "CheckUpdates", "UpdateChannel", "DebugLog", "SensorPort", "TrackPlaytime" };
+        // The look of a category ([Category] of its file) a profile holds: not its
+        // name, icon, place, Hidden or Sort, nor its tiles. tools/check.py checks
+        // them against the [Category] keys Raintile.lua reads.
+        public static readonly string[] CATEGORY_LOOK = { "NX", "NY", "IconSize", "TileColor", "TileOpacity", "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos" };
 
         public static readonly string[] GAMEPAD_BUTTONS = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };
         public static readonly string[] SOURCES = { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox", "GooglePlay", "Folders", "Apps" };

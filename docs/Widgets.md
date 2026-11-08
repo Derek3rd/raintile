@@ -171,7 +171,7 @@ Default=6
 | `Help` | a line under it |
 | `When` | `<Name>=<value>`: the setting applies only while another one of the widget has that value (`When=ShowTitle=1`; a `bool` is `1` or `0`); otherwise it is greyed out, with the reason under it |
 
-The values are saved in the widget's folder, `settings.inc`, one `<Name>=<value>` per line (an update from the gallery keeps the file). The launcher writes them in place of `#OPTION:<Name>#` in the `.ini` (the file is read again when the settings change), and scripts read the file: pass it as `-Settings "#WIDGETPATH#settings.inc"`. A `secret` is never written into the launcher; see [Keys of the user's](#keys-of-the-users).
+The values are saved in the widget's folder, `settings.inc`, one `<Name>=<value>` per line, by **Save and refresh** like the other settings (an update from the gallery keeps the file; a value never set is not written, so the option follows its `Default`). Profiles (Options > General > Profiles) hold them too, not the secrets. The launcher writes them in place of `#OPTION:<Name>#` in the `.ini` (the file is read again when the settings change), and scripts read the file: pass it as `-Settings "#WIDGETPATH#settings.inc"`. A `secret` is never written into the launcher; see [Keys of the user's](#keys-of-the-users).
 
 Settings of one tile only (which game, which folder) go in its `WidgetOption=` instead ([`#WIDGETOPTION#`](#variables-raintile-fills-in)).
 

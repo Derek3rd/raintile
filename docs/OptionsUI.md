@@ -8,7 +8,7 @@ Most rules are already code: the constants and helpers in `src/Options/Ui.cs`
 (`Glyph`, `Fs`, `Gap`, `FieldWidth`, `NewHelp`, `NewSectionTitle`, `NewLabelBlock`,
 `NewClearButton`, `NewDeleteButton`, `NewResetIcon`, `SetActionVisible`,
 `MarkInvalid`, `SetTrimmed`, `NewNumberField`, `NewSizeField`, `NewChoiceBox` with
-`SelectChoice` / `ChoiceValue`, `NumericOnly`, `NewEqualButtons`, `ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
+`SelectChoice` / `ChoiceValue` / `SetChoices`, `NumericOnly`, `NewEqualButtons`, `AddRowNote`, `ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
 `SetFormHelp`. Build new UI with them: no glyph codes,
 font sizes or margins written by hand. When a page needs something the helpers do
 not have, add it to `Ui.cs` and to this page, not to the page's own file.
@@ -29,6 +29,7 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 
 | Part of the launcher | Page |
 | --- | --- |
+| Saved sets of the settings (profiles): pick, load, save, delete | General (its first card) |
 | Where it shows, its mode (full screen, window, docked), margins, opening and closing | General |
 | Grid or wheel, scrolling and spacing of both, the tile itself in both (colour, corners, inner margin, highlight, label) | Tiles |
 | Rows and columns, the grid tiles' logo size, scroll direction, edge fade, how the background images move, scrollbar | Tiles > Grid |
@@ -158,6 +159,10 @@ always possible.
   - the full text of something cut with an ellipsis (always: `SetTrimmed` shows it
     only when the text is actually cut);
   - a keyboard shortcut (Ctrl+S on Save).
+- A state to notice that is not a setting's value (General > Profiles: the settings in
+  the window differ from the profile shown) is a note in the accent colour under the
+  label of its row (`AddRowNote`, as the reason of a row that does not apply), shown
+  only while it holds.
 
 ## 2. One glyph, one action
 
@@ -345,8 +350,11 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 - Changes wait for "Save and refresh" (the status says "Unsaved changes."), and
   closing the window asks.
 - Operations on files that happen at once (sending an image or a category to the
-  Recycle Bin, adding tiles from Import or the widget gallery) say so in their help,
-  and the destructive ones ask first.
+  Recycle Bin, adding tiles from Import or the widget gallery, saving or deleting a
+  profile) say so in their help, and the destructive ones ask first.
+- The settings of a widget wait too (`widgetValues`, written by `SaveAll`), and so
+  does a profile picked or loaded: it only puts its values in the window, as if they
+  had been set by hand.
 
 ## 11. Checklist for a change to the window
 

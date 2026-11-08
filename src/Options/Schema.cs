@@ -39,7 +39,8 @@ namespace RaintileOptions
         // a source of ImportStores (Folders) that turns the group on or off: its
         // switch in the card's header, as Switch
         public string Store;
-        public bool Found, Other, Market, Dash;
+        // Profiles: the card of the saved sets of settings (Profiles.cs)
+        public bool Found, Other, Market, Dash, Profiles;
         public List<Item> Items = new List<Item>();
     }
 

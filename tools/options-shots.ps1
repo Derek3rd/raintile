@@ -309,12 +309,12 @@ function Get-ShotsByPage([string]$dir) {
         })
     $byPage = @{}
     foreach ($s in $shots) {
-        $page = $s.Label
+        $pageKey = $s.Label
         $before = @($shots | Where-Object { $_.Label -eq $s.Label -and $_.Index -lt $s.Index } | ForEach-Object { $_.Index } | Sort-Object -Unique).Count
-        if ($before -gt 0) { $page += '~' + ($before + 1) }
-        $page += $s.Rest + '.png'
-        if ($byPage.ContainsKey($page)) { throw ('two shots of the same page in ' + $dir + ': ' + $byPage[$page].File + ', ' + $s.File) }
-        $byPage[$page] = $s
+        if ($before -gt 0) { $pageKey += '~' + ($before + 1) }
+        $pageKey += $s.Rest + '.png'
+        if ($byPage.ContainsKey($pageKey)) { throw ('two shots of the same page in ' + $dir + ': ' + $byPage[$pageKey].File + ', ' + $s.File) }
+        $byPage[$pageKey] = $s
     }
     return $byPage
 }
@@ -384,15 +384,15 @@ if ($Base) {
         Sort-Object { if ($pb.ContainsKey($_)) { $pb[$_].Index } else { $pa[$_].Index } }, { $_ })
     $same = 0
     $moved = 0
-    foreach ($page in $pages) {
-        if (-not $pa.ContainsKey($page)) { $report.Add(('  {0,-34} only in this checkout' -f $pb[$page].File)); continue }
-        if (-not $pb.ContainsKey($page)) { $report.Add(('  {0,-34} only in {1}' -f $pa[$page].File, $Base)); continue }
-        $fa = $pa[$page].File
-        $f = $pb[$page].File
+    foreach ($pageKey in $pages) {
+        if (-not $pa.ContainsKey($pageKey)) { $report.Add(('  {0,-34} only in this checkout' -f $pb[$pageKey].File)); continue }
+        if (-not $pb.ContainsKey($pageKey)) { $report.Add(('  {0,-34} only in {1}' -f $pa[$pageKey].File, $Base)); continue }
+        $fa = $pa[$pageKey].File
+        $f = $pb[$pageKey].File
         # the name at the other ref, when it is another one
         $was = ''
         if ($fa -cne $f) { $was = "  ($fa in $Base)" }
-        if ($pa[$page].Index -ne $pb[$page].Index) { $moved++ }
+        if ($pa[$pageKey].Index -ne $pb[$pageKey].Index) { $moved++ }
         $r = [ShotsDiff]::Compare((Join-Path $a $fa), (Join-Path $b $f), (Join-Path $diffDir $f))
         if ($r[0] -lt 0) { $report.Add(('  {0,-34} another size' -f $f) + $was) }
         # on 2 rows at most: a border cut at the edge of a scrolled view, drawn a

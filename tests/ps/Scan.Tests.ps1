@@ -74,7 +74,7 @@ Test 'Update-FirstFound: the first date stays, gone items leave' {
     Assert-True (-not (Test-Path -LiteralPath "$file.tmp")) 'the .tmp is left'
 }
 
-foreach ($fn in 'Read-GooglePlay', 'Add-Installed', 'Add-Item', 'Get-NameKey', 'Test-CommandMissing') {
+foreach ($fn in 'Read-GooglePlay', 'Get-GooglePlayArt', 'Add-Installed', 'Add-Item', 'Get-NameKey', 'Test-CommandMissing') {
     Import-ScriptFunction (Join-Path $Root '@Resources\Scripts\Scan.ps1') $fn
 }
 $GPG_LINK = '(?i)googleplaygames://launch/?\?(?:[^"\s]*?&)?id=([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)'
@@ -113,4 +113,17 @@ Test 'Read-GooglePlay: the shortcuts of its games' {
     # a tile of a game no longer there is told missing
     Assert-Equal (Test-CommandMissing 'googleplaygames://launch/?id=com.supercell.clashofclans') 'present' 'an installed game'
     Assert-Equal (Test-CommandMissing 'googleplaygames://launch/?id=com.gone.game') 'missing' 'a game no longer installed'
+}
+
+Test 'Get-GooglePlayArt: the background and icon it keeps' {
+    $cache = New-TestFolder
+    foreach ($f in 'com.example.game.appicon.ico', 'com.example.game.appicon.png', 'com.example.game.background.png') {
+        [IO.File]::WriteAllBytes((Join-Path $cache $f), [byte[]](1, 2, 3))
+    }
+    $art = Get-GooglePlayArt (Join-Path $cache 'com.example.game.appicon.ico') 'com.example.game'
+    Assert-Equal $art.Hero (Join-Path $cache 'com.example.game.background.png') 'background'
+    Assert-Equal $art.Icon (Join-Path $cache 'com.example.game.appicon.png') 'icon'
+    $none = Get-GooglePlayArt (Join-Path $cache 'com.other.appicon.ico') 'com.other'
+    Assert-Equal $none.Hero '' 'no background of another game'
+    Assert-Equal (Get-GooglePlayArt '' 'x').Hero '' 'no icon, no images'
 }

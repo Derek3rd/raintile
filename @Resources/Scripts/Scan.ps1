@@ -345,8 +345,25 @@ function Read-Xbox {
 # it makes for each installed game, in the Start menu and on the desktop
 # (.url or .lnk), open googleplaygames://launch/?id=<package> (e.g.
 # com.supercell.clashofclans). The package is the id; the game starts with
-# that link, through the Google Play Games client.
+# that link, through the Google Play Games client. Its background comes from
+# the images the client keeps (Get-GooglePlayArt).
 $GPG_LINK = '(?i)googleplaygames://launch/?\?(?:[^"\s]*?&)?id=([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)'
+# The images Google Play Games keeps of a game, next to the icon its shortcut
+# shows (...\image_cache\<package>.appicon.ico): <package>.background.png
+# (the tile's background) and <package>.appicon.png (its icon, sharper than
+# the .ico). Local files: nothing is downloaded
+function Get-GooglePlayArt([string]$icon, [string]$id) {
+    $art = @{ Hero = ''; Icon = '' }
+    if (-not $icon) { return $art }
+    $dir = [IO.Path]::GetDirectoryName($icon)
+    if (-not $dir -or -not (Test-Path -LiteralPath $dir)) { return $art }
+    $bg = Join-Path $dir "$id.background.png"
+    $png = Join-Path $dir "$id.appicon.png"
+    if (Test-Path -LiteralPath $bg) { $art.Hero = $bg }
+    if (Test-Path -LiteralPath $png) { $art.Icon = $png }
+    return $art
+}
+
 function Read-GooglePlay {
     $roots = if ($StartMenu) { @($StartMenu) } else {
         @((Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'),
@@ -380,10 +397,12 @@ function Read-GooglePlay {
             if ($ids[$id.ToLowerInvariant()]) { continue }
             $ids[$id.ToLowerInvariant()] = $true
             Add-Installed 'GooglePlay' $id
-            # its icon: the shortcut's, else the shortcut itself (the shell draws it)
-            $iconSource = if ($icon -and (Test-Path -LiteralPath $icon)) { $icon } else { $f.FullName }
+            # its images (Get-GooglePlayArt); the icon, else the shortcut's, else
+            # the shortcut itself (the shell draws it)
+            $art = Get-GooglePlayArt $icon $id
+            $iconSource = if ($art.Icon) { $art.Icon } elseif ($icon -and (Test-Path -LiteralPath $icon)) { $icon } else { $f.FullName }
             $name = $f.BaseName -replace '(?i)\s*-\s*Google Play (Games|Giochi|Spiele|Jeux|Juegos)\s*$', ''
-            Add-Item 'game' 'GooglePlay' $id $name ('googleplaygames://launch/?id={0}' -f $id) '' '' $iconSource
+            Add-Item 'game' 'GooglePlay' $id $name ('googleplaygames://launch/?id={0}' -f $id) $art.Hero '' $iconSource
             $count++
         }
     }

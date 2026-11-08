@@ -5543,18 +5543,126 @@ function HoverPart(name)
 	local t = n and widgets[n]
 	local m = t and SKIN:GetMeter(name)
 	if not m then return end
-	local slot
-	for s = 1, V.Slots do
-		-- the wheel repeating few tiles: the copy with the widget (nearest the middle)
-		if tileAt(s) == t and (not slot or not V.Wheel or math.abs((M.wv[s] or {}).d or 1e9) < math.abs((M.wv[slot] or {}).d or 1e9)) then slot = s end
-		if slot and not V.Wheel then break end
-	end
+	local slot = M.slotOfTile(t)
 	if not slot then return end
 	M.picked = nil
 	setPointed(t)
 	hover.part = name
 	hover.lastPart = { t = t, name = name }
 	M.focusPart(t, slot, name)
+	-- the keyboard and the pad go on from this part
+	M.kpart = { t = t, name = name }
+end
+
+-- The slot of tile t; the wheel repeating few tiles: the copy with the widget
+-- (nearest the middle)
+function M.slotOfTile(t)
+	local slot
+	for s = 1, V.Slots do
+		if tileAt(s) == t and (not slot or not V.Wheel or math.abs((M.wv[s] or {}).d or 1e9) < math.abs((M.wv[slot] or {}).d or 1e9)) then slot = s end
+		if slot and not V.Wheel then break end
+	end
+	return slot
+end
+
+-- Keyboard and pad inside a widget with parts (its meters with Part=1, the
+-- rows of its list): the highlight goes from part to part as from tile to
+-- tile. Coming onto the tile it lands on the part nearest the side it comes
+-- from; with no part further that way it leaves the tile; Confirm presses the
+-- part. M.kpart: the part highlighted, { t = tile, name = meter }.
+M.kpart = nil
+
+-- The parts of tile t as rectangles in the tile: { name, x, y, w, h }
+function M.partRects(t)
+	local list = {}
+	for name, p in pairs(M.widgetParts(t)) do
+		local m = SKIN:GetMeter(name)
+		local w, h = p[3] or (m and m:GetW()) or 0, p[4] or (m and m:GetH()) or 0
+		if w > 0 and h > 0 then list[#list + 1] = { name, p[1], p[2], w, h } end
+	end
+	-- (the same order every time: by place)
+	table.sort(list, function(a, b) if a[3] ~= b[3] then return a[3] < b[3] end return a[2] < b[2] end)
+	return list
+end
+
+-- The part of t to land on coming in direction dx, dy (0, 0: the first one)
+function M.partEnter(t, dx, dy)
+	local best, bs
+	for _, r in ipairs(M.partRects(t)) do
+		local cx, cy = r[2] + r[4] / 2, r[3] + r[5] / 2
+		-- coming down: the top one (then the left); up: the bottom one; right:
+		-- the left one (then the top); left: the right one
+		local score = dy > 0 and cy * 1e4 + cx or dy < 0 and -cy * 1e4 + cx
+			or dx > 0 and cx * 1e4 + cy or dx < 0 and -cx * 1e4 + cy or cy * 1e4 + cx
+		if not bs or score < bs then best, bs = r[1], score end
+	end
+	return best
+end
+
+-- The next part from the highlighted one in direction dx, dy (nil: none)
+function M.partNext(t, name, dx, dy)
+	local rects, cur = M.partRects(t), nil
+	for _, r in ipairs(rects) do if r[1] == name then cur = r end end
+	if not cur then return nil end
+	local cx, cy = cur[2] + cur[4] / 2, cur[3] + cur[5] / 2
+	local best, bs
+	for _, r in ipairs(rects) do
+		if r ~= cur then
+			local rx, ry = r[2] + r[4] / 2, r[3] + r[5] / 2
+			local along, across = (rx - cx) * dx + (ry - cy) * dy, math.abs(dx ~= 0 and ry - cy or rx - cx)
+			if along > 1 then
+				local score = along + 2 * across
+				if not bs or score < bs then best, bs = r[1], score end
+			end
+		end
+	end
+	return best
+end
+
+-- Nav inside the highlighted widget: true when the highlight stayed in it
+function M.partStep(dx, dy)
+	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
+	if not (t and t.widget and next(M.widgetParts(t))) then M.kpart = nil return false end
+	local slot = M.slotOfTile(t)
+	if not slot then return false end
+	local kp, name = M.kpart, nil
+	if kp and kp.t == t then
+		if dx == 0 and dy == 0 then return true end
+		name = M.partNext(t, kp.name, dx, dy)
+		if not name then M.kpart = nil return false end   -- out of the tile
+	else
+		-- the whole tile highlighted (its parts placed only now): into it
+		name = M.partEnter(t, dx, dy)
+		if not name then return false end
+	end
+	M.kpart = { t = t, name = name }
+	hover.part = nil
+	M.focusPart(t, slot, name)
+	return true
+end
+
+-- After Nav moved onto a widget with parts: onto its part nearest that side
+function M.partArrive(dx, dy)
+	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
+	M.kpart = nil
+	if not (t and t.widget and next(M.widgetParts(t))) then return end
+	local slot, name = M.slotOfTile(t), M.partEnter(t, dx, dy)
+	if not (slot and name) then return end
+	M.kpart = { t = t, name = name }
+	M.focusPart(t, slot, name)
+end
+
+-- Confirm on a part: what a click on it does
+function M.partPress()
+	local kp = M.kpart
+	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
+	if not (kp and kp.t == t) then return false end
+	local i, k = kp.name:match('^W(%d+)RowHit(%d+)$')
+	if i then WidgetRowClick(tonumber(i), tonumber(k)) return true end
+	local m = SKIN:GetMeter(kp.name)
+	local action = m and m:GetOption('LeftMouseUpAction', '') or ''
+	if action ~= '' then SKIN:Bang(action) end
+	return true
 end
 
 -- Where the parts of widget tile t are (its meters with Part=1, and its rows)
@@ -5941,7 +6049,13 @@ function Nav(dx, dy)
 	if osk.open then oskMove(dx, dy) return end
 	local tiles = cur().tiles
 	if #tiles == 0 then return end
-	if cur().pack then return navPacked(dx, dy, cur().pack) end
+	-- inside a widget with parts: from part to part first
+	if M.partStep(dx, dy) then return end
+	if cur().pack then
+		navPacked(dx, dy, cur().pack)
+		M.partArrive(dx, dy)
+		return
+	end
 	local L, per, vis = lineCount(), (V.Horizontal and V.NY or V.NX), visibleLines()
 
 	-- line = row (or column, when horizontal) along the scroll direction
@@ -5974,6 +6088,7 @@ function Nav(dx, dy)
 	else
 		focus(tiles[idx], idx, cross, line)
 	end
+	M.partArrive(dx, dy)
 end
 
 -- Launches the highlighted tile (or, if there is none, highlights the first).
@@ -5986,6 +6101,7 @@ function Confirm()
 		Nav(0, 0)
 		return
 	end
+	if M.partPress() then return end
 	local x, y = gridToPx(hover.tx, hover.ty)
 	launchTile(cur().tiles[hover.idx], x, y)
 end

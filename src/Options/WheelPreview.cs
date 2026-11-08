@@ -33,6 +33,8 @@ namespace RaintileOptions
             public double LogoX = 0.5, LogoY = 0.5, LogoScale = 1, InfoX, InfoY;
             // BgFocus= (0-1) and BgZoom=: the framing of the background on the tile
             public double FX = 0.5, FY = 0.5, Zoom = 1;
+            // BackLogoPos=, BackLogoScale=, BackInfoPos=: the place on the wheel's backdrop
+            public double BackLogoX = 0.5, BackLogoY = 0.5, BackLogoScale = 1, BackInfoX, BackInfoY;
             public string Update;   // the update line of a Steam game with one waiting, or null
         }
         class WheelCat { public string File, Name; public ImageSource Icon; }
@@ -109,6 +111,9 @@ namespace RaintileOptions
                 InfoX = PreviewPos(TileOrCat(t, cs, "InfoPos"), 0, 0), InfoY = PreviewPos(TileOrCat(t, cs, "InfoPos"), 1, 0),
                 FX = PreviewPos(TileOrCat(t, cs, "BgFocus"), 0, 0.5), FY = PreviewPos(TileOrCat(t, cs, "BgFocus"), 1, 0.5),
                 Zoom = Math.Min(4, Math.Max(1, PreviewNum(TileOrCat(t, cs, "BgZoom"), 1))),
+                BackLogoX = PreviewPos(TileOrCat(t, cs, "BackLogoPos"), 0, 0.5), BackLogoY = PreviewPos(TileOrCat(t, cs, "BackLogoPos"), 1, 0.5),
+                BackLogoScale = Math.Min(3, Math.Max(0.25, PreviewNum(TileOrCat(t, cs, "BackLogoScale"), 1))),
+                BackInfoX = PreviewPos(TileOrCat(t, cs, "BackInfoPos"), 0, 0), BackInfoY = PreviewPos(TileOrCat(t, cs, "BackInfoPos"), 1, 0),
                 Update = PreviewUpdate(updates, Art.SteamId(Core.GetKey(t, "Command").Trim(), Core.GetKey(t, "Source").Trim())),
             }).ToList();
             if (!keep) { wheelPos = wheelTarget = 0; gridScroll = 0; }
@@ -304,10 +309,17 @@ namespace RaintileOptions
             {
                 int L = wheelTiles.Count;
                 var sel = wheelTiles[(((int)Math.Round(wheelTarget)) % L + L) % L];
-                if (sel.BgFull != null)
+                var full = sel.BgFull as BitmapSource;
+                if (full != null && full.PixelWidth > 0)
                 {
-                    var back = new Image { Source = sel.BgFull, Stretch = Stretch.UniformToFill, Width = g.LW, Height = g.LH,
-                        Opacity = Math.Min(100, Math.Max(0, WNum("WheelBackdropOpacity", 40))) / 100, ClipToBounds = true };
+                    // filling the launcher, cut from the centre of the image
+                    // (PreserveAspectRatio=2; a stretched Image would keep its left edge)
+                    var v = FrameWindowOf(full.PixelWidth, full.PixelHeight, g.LW, g.LH, 0.5, 0.5, 1);
+                    var img = new Image { Source = full, Stretch = Stretch.Fill, Width = v.IW * v.S, Height = v.IH * v.S };
+                    var back = new Canvas { Width = g.LW, Height = g.LH, ClipToBounds = true,
+                        Opacity = Math.Min(100, Math.Max(0, WNum("WheelBackdropOpacity", 40))) / 100 };
+                    Canvas.SetLeft(img, -v.X * v.S); Canvas.SetTop(img, -v.Y * v.S);
+                    back.Children.Add(img);
                     Canvas.SetLeft(back, g.LX); Canvas.SetTop(back, g.LY);
                     wheelCanvas.Children.Add(back);
                 }
@@ -317,25 +329,17 @@ namespace RaintileOptions
                 Canvas.SetLeft(area, g.GX); Canvas.SetTop(area, g.GY);
                 if (WheelLogoBack() && sel.Logo != null)
                 {
-                    double size = g.GH * Math.Min(80, Math.Max(5, WNum("WheelBackdropLogoSize", 30))) / 100 * sel.LogoScale;
-                    // where it sits on its thumbnail, as a share of the room it can
-                    // move in (M.logoShare, M.backdropLogo)
-                    double ts = PreviewIcon(g) * sel.LogoScale;
-                    var tv = PreviewLogoVisible(sel, ts);
-                    var tc = PreviewLogoCentre(sel, ts, g.S, g.S);
-                    double qx = g.S > tv.Width ? (tc.X - tv.Width / 2) / (g.S - tv.Width) : 0.5;
-                    double qy = g.S > tv.Height ? (tc.Y - tv.Height / 2) / (g.S - tv.Height) : 0.5;
-                    var vis = PreviewLogoVisible(sel, size);
-                    double cx = g.GW > vis.Width ? vis.Width / 2 + qx * (g.GW - vis.Width) : g.GW / 2;
-                    double cy = g.GH > vis.Height ? vis.Height / 2 + qy * (g.GH - vis.Height) : g.GH / 2;
+                    // at its own place and size there (BackLogoPos, BackLogoScale: M.backdropLogo)
+                    double size = g.GH * Math.Min(80, Math.Max(5, WNum("WheelBackdropLogoSize", 30))) / 100 * sel.BackLogoScale;
+                    var at = PreviewLogoCentre(sel, size, g.GW, g.GH, sel.BackLogoX, sel.BackLogoY);
                     // (the image larger than the tiles' copy: it is much larger here)
                     var logo = new Image { Source = GetBitmap(sel.LogoPath, 640) ?? sel.Logo, Width = size, Height = size, Stretch = Stretch.Uniform };
-                    Canvas.SetLeft(logo, cx - size / 2); Canvas.SetTop(logo, cy - size / 2);
+                    Canvas.SetLeft(logo, at.X - size / 2); Canvas.SetTop(logo, at.Y - size / 2);
                     area.Children.Add(logo);
                 }
                 if (WheelInfoBack())
                 {
-                    var lines = NewPreviewLines(sel, g.GW, g.GH, g, true);
+                    var lines = NewPreviewLines(sel, g.GW, g.GH, g, true, sel.BackInfoX, sel.BackInfoY);
                     if (lines != null) area.Children.Add(lines);
                 }
                 wheelCanvas.Children.Add(area);
@@ -499,21 +503,24 @@ namespace RaintileOptions
             return r >= 1 ? new Size(size, size / r) : new Size(size * r, size);
         }
 
-        // Centre of a tile's logo in a w x h tile: LogoPos= kept inside it (logoCentre)
-        static Point PreviewLogoCentre(WheelTile t, double size, double w, double h)
+        // Centre of a tile's logo in a w x h tile: LogoPos= (or x, y: the backdrop's
+        // BackLogoPos=) kept inside it (logoCentre)
+        static Point PreviewLogoCentre(WheelTile t, double size, double w, double h, double? x = null, double? y = null)
         {
             var v = PreviewLogoVisible(t, size);
             Func<double, double, double, double> place = (p, n, total) => n >= total ? total / 2 : Math.Min(total - n / 2, Math.Max(n / 2, p * total));
-            return new Point(place(t.LogoX, v.Width, w), place(t.LogoY, v.Height, h));
+            return new Point(place(x ?? t.LogoX, v.Width, w), place(y ?? t.LogoY, v.Height, h));
         }
 
         // A tile's lines as the launcher draws them (M.infoBlock): the update line
         // over the play time, each shown always or only on the highlighted tile
-        // (UpdateInfo, TileInfo), the block placed by InfoPos= in the room it
-        // leaves inside the margins of a w x h area. The play time is a sample, as
-        // in the tile editor; the update line only on Steam games with one waiting.
-        Canvas NewPreviewLines(WheelTile tile, double w, double h, WheelGeo g, bool lit)
+        // (UpdateInfo, TileInfo), the block placed by InfoPos= (or ix, iy: the
+        // backdrop's BackInfoPos=) in the room it leaves inside the margins of a
+        // w x h area. The play time is a sample, as in the tile editor; the update
+        // line only on Steam games with one waiting.
+        Canvas NewPreviewLines(WheelTile tile, double w, double h, WheelGeo g, bool lit, double? ix = null, double? iy = null)
         {
+            double infoX = ix ?? tile.InfoX, infoY = iy ?? tile.InfoY;
             var texts = new List<string>();
             string upd = WWord("UpdateInfo", "hover"), info = WWord("TileInfo", "hover");
             if (tile.Update != null && (upd == "always" || (upd == "hover" && lit))) texts.Add(tile.Update);
@@ -529,11 +536,11 @@ namespace RaintileOptions
             }).ToList();
             foreach (var l in lines) l.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
             double bw = lines.Max(l => l.DesiredSize.Width), bh = lines.Sum(l => l.DesiredSize.Height);
-            double bx = pad + tile.InfoX * Math.Max(0, w - 2 * pad - bw), y = pad + tile.InfoY * Math.Max(0, h - 2 * pad - bh);
+            double bx = pad + infoX * Math.Max(0, w - 2 * pad - bw), y = pad + infoY * Math.Max(0, h - 2 * pad - bh);
             var c = new Canvas { Width = w, Height = h, IsHitTestVisible = false };
             foreach (var l in lines)
             {
-                Canvas.SetLeft(l, bx + tile.InfoX * (bw - l.DesiredSize.Width));
+                Canvas.SetLeft(l, bx + infoX * (bw - l.DesiredSize.Width));
                 Canvas.SetTop(l, y);
                 y += l.DesiredSize.Height;
                 c.Children.Add(l);

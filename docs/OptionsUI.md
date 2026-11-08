@@ -56,8 +56,12 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
   setting of one layout elsewhere has `When = "ScrollMode=..."`. In the tile editor
   (Categories) a row of the other layout is disabled with its reason
   (`AddGridOnlyReason`), and the preview shows the tile of the layout in use: the
-  grid's tile, or the wheel's thumbnail. In the wheel the thumbnail is the tile; the
-  backdrop is not edited, it follows the thumbnail (docs/Guide.md, "Grid or wheel").
+  grid's tile, or the wheel's thumbnail. In the wheel the thumbnail is the tile; when
+  the selected tile's logo or lines go on the backdrop, **Place on** switches the
+  preview to the backdrop, whose keys are its own (`BackLogoPos`, `BackLogoScale`,
+  `BackInfoPos`): a place is edited where it is seen, at its real size, and what does
+  not exist there (the framing of the backdrop, a logo kept on the thumbnail) is
+  disabled with its reason (docs/Guide.md, "Grid or wheel").
 - **The switch before what it switches.** A setting that decides which others apply
   (a mode, a choice of layout, a feature on or off) is the first of its page or group;
   the pages of its modes are sub-pages of the page holding it (Grid / Wheel under

@@ -90,14 +90,14 @@ WheelBackdrop=1
 WheelBackdropOpacity=40
 ; With WheelBackdrop=1, where the selected tile shows its logo and its lines
 ; (the update line and the play time): Tile (on its thumbnail) or Background
-; (on the backdrop, under the top row, where they sit on the thumbnail: against
-; a corner of the thumbnail is against the corner of that area). The other
+; (on the backdrop, under the top row, at their own place: BackLogoPos=,
+; BackLogoScale=, BackInfoPos= of the tile or the category). The other
 ; thumbnails keep their logo (with WheelIconsOnly the selected one shows its
 ; background image instead); with the lines on the backdrop no thumbnail
 ; shows any.
 WheelLogoOn=Tile
 ; Height of the logo on the backdrop, in percent of the area under the top
-; row (times LogoScale= of the tile)
+; row (times BackLogoScale= of the tile)
 WheelBackdropLogoSize=30
 WheelInfoOn=Tile
 ; 1 = the tiles of the wheel show only their logo, on a colour taken from it

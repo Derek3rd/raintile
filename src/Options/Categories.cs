@@ -66,7 +66,11 @@ namespace RaintileOptions
         FrameworkElement widgetRow, widgetParamRow, placementRow;
         // the category page: preview column, All tiles card, inheritance chips
         Border allCard, previewCard, frameChip, logoChip;
-        FrameworkElement previewOnRow;
+        FrameworkElement previewOnRow, placeOnRow;
+        ComboBox placeOn;
+        Button resetFramingAll;   // All tiles: Reset every tile > Framing (none on the backdrop)
+        TextBlock frameWhy, logoWhy;
+        string infoNeverWhy;
         ComboBox previewOn;
         TextBlock allNote;
         Button btnFrameReset, btnLogoReset;
@@ -422,7 +426,7 @@ namespace RaintileOptions
 
         // Keys a tile can take from All tiles (framing, logo, play time line, TileColor,
         // TileOpacity): a tile with one of them has settings of its own (the dot in the strip)
-        static readonly string[] OWN_KEYS = { "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "Color", "Opacity" };
+        static readonly string[] OWN_KEYS = { "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos", "Color", "Opacity" };
 
         static bool HasOwnValues(IniSection s)
         {
@@ -725,6 +729,14 @@ namespace RaintileOptions
                     size = new[] { size[0] * Math.Max(1, int.Parse(span.Groups[1].Value)), size[1] * Math.Max(1, int.Parse(span.Groups[2].Value)) };
                 return new[] { size[0], size[1], GetLogoBox(file) };
             }
+            if (placeBack)
+            {
+                // the backdrop (Place on): the area under the top row, the logo
+                // WheelBackdropLogoSize percent of its height (M.backdropLogo)
+                double pct = 30, p;
+                if (double.TryParse(V("WheelBackdropLogoSize").Trim(), NumberStyles.Float, Inv, out p)) pct = Math.Min(80, Math.Max(5, p));
+                return new[] { area[0], area[1], Math.Max(8, area[1] * pct / 100) };
+            }
             double ts = 25, q;
             if (double.TryParse(V("WheelTileSize").Trim(), NumberStyles.Float, Inv, out q)) ts = Math.Min(80, Math.Max(3, q));
             double sz = Math.Max(16, Math.Min(Math.Floor(ts * Math.Min(screenPx[0], screenPx[1]) / 100), Math.Floor(Math.Min(area[0], area[1]))));
@@ -736,7 +748,9 @@ namespace RaintileOptions
         {
             string shape = !IsWheelLayout()
                 ? "The preview has the proportions of this category's tiles on this screen."
-                : "The preview is a thumbnail of the wheel: a square, whatever its size in the grid. On the backdrop (Tiles > Wheel) the selected tile's logo and lines go where they sit here.";
+                : placeBack
+                    ? "The preview is the wheel's backdrop under the top row: the selected tile's logo and lines go there, at their own place and size (Place on: Its thumbnail places them on the thumbnail). The backdrop is not framed: its image fills it from the centre."
+                    : "The preview is a thumbnail of the wheel: a square, whatever its size in the grid.";
             return "Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. With the gamepad: A on the preview. " +
                 shape + " A tile follows All tiles until you move something on it (Own); its reset gives it back the placement of All tiles.";
         }
@@ -817,15 +831,29 @@ namespace RaintileOptions
         static string FormatFactor(double z) { return Math.Round(z, 2).ToString("0.##", Inv); }
 
         // Point of a placement key when nobody sets it: the centre, the top left for
-        // the play time line
-        static string DefaultPos(string key) { return key == "InfoPos" ? "0,0" : "50,50"; }
+        // the play time line (InfoPos, BackInfoPos)
+        static string DefaultPos(string key) { return key.EndsWith("InfoPos") ? "0,0" : "50,50"; }
+
+        // The place being edited: in the wheel with the logo or the lines on the
+        // backdrop, the backdrop (Place on), with its own keys; otherwise the tile
+        // (the grid's, or the wheel's thumbnail)
+        bool placeBack;
+        string LogoPosKey { get { return placeBack ? "BackLogoPos" : "LogoPos"; } }
+        string LogoScaleKey { get { return placeBack ? "BackLogoScale" : "LogoScale"; } }
+        string InfoPosKey { get { return placeBack ? "BackInfoPos" : "InfoPos"; } }
+
+        // The wheel's backdrop shows the selected tile's logo, its lines (WheelLogoOn,
+        // WheelInfoOn = Background, with WheelBackdrop: M.readWheel)
+        bool BackdropOn() { return IsWheelLayout() && V("WheelBackdrop") != "0"; }
+        bool LogoOnBack() { return BackdropOn() && V("WheelLogoOn").Equals("background", StringComparison.OrdinalIgnoreCase); }
+        bool InfoOnBack() { return BackdropOn() && V("WheelInfoOn").Equals("background", StringComparison.OrdinalIgnoreCase); }
 
         // The category's value of a key, formatted as saved (the default point or "1" when it has none)
         static string GetCategoryPlace(CategoryModel model, string key)
         {
             string raw = Core.GetKey(Core.GetCategorySection(model), key);
             double x, y;
-            if (key == "BgFocus" || key == "LogoPos" || key == "InfoPos")
+            if (key == "BgFocus" || key.EndsWith("Pos"))
                 return ParsePair(raw, out x, out y) ? FormatPair(Math.Min(100.0, x) / 100, Math.Min(100.0, y) / 100) : DefaultPos(key);
             if (!double.TryParse(raw, NumberStyles.Float, Inv, out x)) return "1";
             return FormatFactor(key == "BgZoom" ? Math.Min(4.0, Math.Max(1.0, x)) : Math.Min(3.0, Math.Max(0.25, x)));
@@ -906,17 +934,17 @@ namespace RaintileOptions
             var t = GetCurrentTile();
             var c = currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null;
             Func<IniSection, string, string, bool> has = (s, a, b) => s != null && (Core.GetKey(s, a) != "" || Core.GetKey(s, b) != "");
-            bool frameOwn = has(t, "BgFocus", "BgZoom"), logoOwn = has(t, "LogoPos", "LogoScale");
+            bool frameOwn = has(t, "BgFocus", "BgZoom"), logoOwn = has(t, LogoPosKey, LogoScaleKey);
             SetChip(frameChip, all ? null : (bool?)frameOwn);
             SetChip(logoChip, all ? null : (bool?)logoOwn);
             // a reset that would change nothing is hidden (docs/OptionsUI.md, 2)
             SetActionVisible(btnFrameReset, all ? has(c, "BgFocus", "BgZoom") : frameOwn);
-            SetActionVisible(btnLogoReset, all ? has(c, "LogoPos", "LogoScale") : logoOwn);
+            SetActionVisible(btnLogoReset, all ? has(c, LogoPosKey, LogoScaleKey) : logoOwn);
             btnFrameReset.ToolTip = all ? "Back to the centre, at zoom 1" : "Back to the framing of All tiles";
             btnLogoReset.ToolTip = all ? "Back to the centre, at the normal size" : "Back to the logo placement of All tiles";
-            bool infoOwn = t != null && Core.GetKey(t, "InfoPos") != "";
+            bool infoOwn = t != null && Core.GetKey(t, InfoPosKey) != "";
             SetChip(infoChip, all ? null : (bool?)infoOwn);
-            SetActionVisible(btnInfoReset, all ? c != null && Core.GetKey(c, "InfoPos") != "" : infoOwn);
+            SetActionVisible(btnInfoReset, all ? c != null && Core.GetKey(c, InfoPosKey) != "" : infoOwn);
             btnInfoReset.ToolTip = all ? "Back to the top left" : "Back to the play time placement of All tiles";
         }
 
@@ -987,8 +1015,9 @@ namespace RaintileOptions
                 int own = tiles.Count(t => Core.GetKey(t, pos) != "" || (size != null && Core.GetKey(t, size) != ""));
                 return text + (own > 0 ? " (" + own + (own == 1 ? " tile has its own)" : " tiles have their own)") : "");
             };
-            SetFormHelp(placementHint, "Puts every tile back at the default place (the centre, the top left for the play time), the ones with their own included. Now: logos " +
-                describe("LogoPos", "LogoScale") + "; framing " + describe("BgFocus", "BgZoom") + "; play time " + describe("InfoPos", null) + ".");
+            SetFormHelp(placementHint, "Puts every tile back at the default place (the centre, the top left for the play time), the ones with their own included" +
+                (placeBack ? ", on the backdrop (Place on)" : "") + ". Now: logos " +
+                describe(LogoPosKey, LogoScaleKey) + (placeBack ? "" : "; framing " + describe("BgFocus", "BgZoom")) + "; play time " + describe(InfoPosKey, null) + ".");
         }
 
         void ReadFraming(IniSection section)
@@ -996,6 +1025,8 @@ namespace RaintileOptions
             bgFrame.FX = 0.5; bgFrame.FY = 0.5; bgFrame.Zoom = 1.0;
             if (section == null) return;
             double x, y, z;
+            // the backdrop is not framed: the image fills it from its centre
+            if (placeBack) return;
             if (ParsePair(GetPlaceKey(section, "BgFocus"), out x, out y)) { bgFrame.FX = Math.Min(100.0, x) / 100; bgFrame.FY = Math.Min(100.0, y) / 100; }
             if (double.TryParse(GetPlaceKey(section, "BgZoom"), NumberStyles.Float, Inv, out z)) bgFrame.Zoom = Math.Min(4.0, Math.Max(1.0, z));
         }
@@ -1044,7 +1075,7 @@ namespace RaintileOptions
             preview.Height = Math.Max(40.0, Math.Round(bgFrame.TH * k));
             previewBg.Source = bgFrame.Bitmap;
             bool has = bgFrame.Bitmap != null;
-            frameRow.IsEnabled = has;
+            frameRow.IsEnabled = has && !placeBack;   // (the backdrop is not framed)
             preview.Cursor = has || previewLogo.Source != null || previewInfo.Visibility == Visibility.Visible ? Cursors.SizeAll : null;
             zoomField.Show(bgFrame.Zoom.ToString("0.00", Inv), bgFrame.Zoom);
             if (!has) return;
@@ -1101,8 +1132,8 @@ namespace RaintileOptions
             logoPlace.X = 0.5; logoPlace.Y = 0.5; logoPlace.Scale = 1.0;
             if (section == null) return;
             double x, y, z;
-            if (ParsePair(GetPlaceKey(section, "LogoPos"), out x, out y)) { logoPlace.X = Math.Min(100.0, x) / 100; logoPlace.Y = Math.Min(100.0, y) / 100; }
-            if (double.TryParse(GetPlaceKey(section, "LogoScale"), NumberStyles.Float, Inv, out z)) logoPlace.Scale = Math.Min(3.0, Math.Max(0.25, z));
+            if (ParsePair(GetPlaceKey(section, LogoPosKey), out x, out y)) { logoPlace.X = Math.Min(100.0, x) / 100; logoPlace.Y = Math.Min(100.0, y) / 100; }
+            if (double.TryParse(GetPlaceKey(section, LogoScaleKey), NumberStyles.Float, Inv, out z)) logoPlace.Scale = Math.Min(3.0, Math.Max(0.25, z));
         }
 
         // Logo size of category 'file' in pixels (IconSize: pixels or % of the
@@ -1147,14 +1178,14 @@ namespace RaintileOptions
         // Point of the preview on the logo (a little margin for small logos)
         bool TestOnLogo(Point pt)
         {
-            if (previewLogo.Source == null) return false;
+            if (previewLogo.Source == null || previewLogo.Visibility != Visibility.Visible) return false;
             var r = GetLogoRect();
             return Math.Abs(pt.X - r.CX) <= r.VW / 2 + 6 && Math.Abs(pt.Y - r.CY) <= r.VH / 2 + 6;
         }
 
         void UpdateLogoPlace()
         {
-            bool has = previewLogo.Source != null;
+            bool has = previewLogo.Source != null && previewLogo.Visibility == Visibility.Visible;
             logoRow.IsEnabled = has;
             logoField.Show(logoPlace.Scale.ToString("0.00", Inv), logoPlace.Scale);
             if (!has) return;
@@ -1169,7 +1200,7 @@ namespace RaintileOptions
         // by default) removes them
         void SaveLogoPlace()
         {
-            SavePlace("LogoPos", "LogoScale", FormatPair(logoPlace.X, logoPlace.Y), FormatFactor(logoPlace.Scale));
+            SavePlace(LogoPosKey, LogoScaleKey, FormatPair(logoPlace.X, logoPlace.Y), FormatFactor(logoPlace.Scale));
         }
 
         // The position is not limited here: a logo pushed into a corner stays there
@@ -1191,7 +1222,7 @@ namespace RaintileOptions
             infoPlace.X = 0; infoPlace.Y = 0;
             if (section == null) return;
             double x, y;
-            if (ParsePair(GetPlaceKey(section, "InfoPos"), out x, out y)) { infoPlace.X = Math.Min(100.0, x) / 100; infoPlace.Y = Math.Min(100.0, y) / 100; }
+            if (ParsePair(GetPlaceKey(section, InfoPosKey), out x, out y)) { infoPlace.X = Math.Min(100.0, x) / 100; infoPlace.Y = Math.Min(100.0, y) / 100; }
         }
 
         // Preview pixels per screen pixel, and the margin of the line (LabelPad: pixels
@@ -1260,7 +1291,7 @@ namespace RaintileOptions
 
         void SaveInfoPlace()
         {
-            SavePlace("InfoPos", null, FormatPair(infoPlace.X, infoPlace.Y), null);
+            SavePlace(InfoPosKey, null, FormatPair(infoPlace.X, infoPlace.Y), null);
         }
 
         void UpdateTilePreview()
@@ -1281,6 +1312,11 @@ namespace RaintileOptions
             if (bgFrame.Path != bgKey) { bgFrame.Path = bgKey; bgFrame.Bitmap = bgKey == "*placeholder" ? GetPlaceholderBackground() : GetBitmap(bg, 1200); }
             if (bgKey == null) bgFrame.Bitmap = null;
             if (all) s = currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null;
+            // the wheel with the logo or the lines on the backdrop: Place on chooses
+            // the thumbnail or the backdrop, each with its keys
+            bool canBack = currentFile != null && (LogoOnBack() || InfoOnBack());
+            placeOnRow.Visibility = canBack ? Visibility.Visible : Visibility.Collapsed;
+            placeBack = canBack && placeOn.SelectedIndex == 1;
             ReadFraming(s);
             // the tile in the grid, the square of the wheel, or the wheel's background
             var shape = currentFile != null ? GetPlaceShape(currentFile, s, all) : new double[] { 16, 9, 96 };
@@ -1297,9 +1333,18 @@ namespace RaintileOptions
             // the row says why it is off
             bool lineKind = currentFile != null && !IsWidget(all ? null : s);
             bool lineOn = !(V("TileInfo").Equals("never", StringComparison.OrdinalIgnoreCase) && V("UpdateInfo").Equals("never", StringComparison.OrdinalIgnoreCase));
-            previewInfo.Visibility = lineKind && lineOn ? Visibility.Visible : Visibility.Collapsed;
+            // in the wheel the lines are on the thumbnails or on the backdrop, not both
+            bool lineHere = placeBack ? InfoOnBack() : !InfoOnBack();
+            infoWhy.Text = !lineOn ? infoNeverWhy : WhenReason(placeBack ? "WheelInfoOn=Background" : "WheelInfoOn=Tile", null);
+            previewInfo.Visibility = lineKind && lineOn && lineHere ? Visibility.Visible : Visibility.Collapsed;
             infoRow.Visibility = lineKind ? Visibility.Visible : Visibility.Collapsed;
-            SetPlaceApplies(infoRow, lineOn, infoWhy);
+            SetPlaceApplies(infoRow, lineOn && lineHere, infoWhy);
+            // the backdrop: not framed; the logo only when it goes there
+            bool logoHere = !placeBack || LogoOnBack();
+            previewLogo.Visibility = logoHere ? Visibility.Visible : Visibility.Collapsed;
+            SetPlaceApplies(frameRow, !placeBack, frameWhy);
+            SetPlaceApplies(logoRow, logoHere, logoWhy);
+            if (resetFramingAll != null) resetFramingAll.IsEnabled = !placeBack;
             UpdateFraming();
             UpdateLogoPlace();
             UpdateInfoPlace();
@@ -1307,7 +1352,8 @@ namespace RaintileOptions
             string label = s != null && !all ? Core.GetKey(s, "Label") : "";
             if (label == "" && s != null && !all && bg == null && logo == null) label = s.Name;
             previewLabel.Text = label;
-            previewLabel.Visibility = label != "" && V("ShowLabels") != "0" ? Visibility.Visible : Visibility.Collapsed;
+            // (the label is on the tile, never on the backdrop)
+            previewLabel.Visibility = label != "" && V("ShowLabels") != "0" && !placeBack ? Visibility.Visible : Visibility.Collapsed;
             if (all) return;
             SetThumb(bgThumb, bg);
             SetThumb(logoThumb, logo);
@@ -1981,6 +2027,23 @@ namespace RaintileOptions
             AddTo(left, por);
             previewOn.SelectionChanged += (s, e) => { if (!loading && IsAllSelected()) UpdateTilePreview(); };
 
+            // The wheel with the logo or the lines on the backdrop: placed on the
+            // thumbnail (LogoPos, LogoScale, InfoPos) or on the backdrop (BackLogoPos,
+            // BackLogoScale, BackInfoPos)
+            var pon = NewPanel(Orientation.Horizontal);
+            pon.Margin = T(0, 0, 0, Gap.Group);
+            var ponl = NewText("Place on", Fs.Label);
+            ponl.VerticalAlignment = VerticalAlignment.Center;
+            ponl.Margin = T(0, 0, Gap.Control, 0);
+            placeOn = new ComboBox { MinWidth = FieldWidth.M, Height = FieldHeight };
+            placeOn.Items.Add(new ComboBoxItem { Content = "Its thumbnail" });
+            placeOn.Items.Add(new ComboBoxItem { Content = "The backdrop" });
+            placeOn.SelectedIndex = 1;
+            AddTo(pon, ponl); AddTo(pon, placeOn);
+            placeOnRow = pon;
+            AddTo(left, pon);
+            placeOn.SelectionChanged += (s, e) => { if (!loading) { UpdateTilePreview(); UpdatePlacementHint(); } };
+
             // the background sits on a canvas, positioned by the framing (sized by UpdateFraming)
             preview = new Border
             {
@@ -2047,13 +2110,17 @@ namespace RaintileOptions
             zoomField = NewNumberField(1, 4, 0.01, Times, t =>
             {
                 double n;
-                if (bgFrame.Bitmap == null || GetPlaceTarget() == null || !Core.TryNumber(t, out n)) return;
+                if (bgFrame.Bitmap == null || placeBack || GetPlaceTarget() == null || !Core.TryNumber(t, out n)) return;
                 SetFrameZoom(n);
             }, true, 0.05);
             FitFieldHeight(zoomField.Root);
             frameChip = NewChip();
             btnFrameReset = NewResetIcon("Back to the framing of All tiles");
             var frameBlock = placeBlock("Framing", zoomField.Root, frameChip, btnFrameReset);
+            // on the backdrop: off, with the reason
+            frameWhy = NewHelp("The backdrop is not framed: its image fills it from the centre. The framing is the thumbnail's.", ResBrush("AccentBrush"));
+            frameWhy.Margin = T(0, Gap.Help, 0, 0);
+            frameBlock.Children.Insert(1, frameWhy);
             frameRow = frameBlock;
             AddTo(left, frameBlock);
             logoField = NewNumberField(0.25, 3, 0.01, Times, t =>
@@ -2066,6 +2133,10 @@ namespace RaintileOptions
             logoChip = NewChip();
             btnLogoReset = NewResetIcon("Back to the logo placement of All tiles");
             var logoBlock = placeBlock("Logo", logoField.Root, logoChip, btnLogoReset);
+            // on the backdrop with the logo on the thumbnail: off, with the reason
+            logoWhy = NewHelp(WhenReason("WheelLogoOn=Background", null), ResBrush("AccentBrush"));
+            logoWhy.Margin = T(0, Gap.Help, 0, 0);
+            logoBlock.Children.Insert(1, logoWhy);
             logoRow = logoBlock;
             AddTo(left, logoBlock);
             // play time line: only a place, shown as text where the others have a slider
@@ -2084,6 +2155,7 @@ namespace RaintileOptions
             string either = WhenReason("TileInfo=Hover|Always", linesPage).TrimEnd('.') + ", or "
                 + WhenReason("UpdateInfo=Hover|Always", linesPage).Substring("Only with ".Length).TrimEnd('.')
                 + (linesPage != null ? " (" + linesPage.Title + " page)." : ".");
+            infoNeverWhy = either;
             infoWhy = NewHelp(either, ResBrush("AccentBrush"));
             infoWhy.Margin = T(0, Gap.Help, 0, 0);
             infoBlock.Children.Insert(2, infoWhy);
@@ -2110,7 +2182,7 @@ namespace RaintileOptions
                 }
                 else
                 {
-                    if (bgFrame.Bitmap == null) return;
+                    if (bgFrame.Bitmap == null || placeBack) return;
                     LimitFocus();
                     bgFrame.Dragging = true; bgFrame.DragPoint = pt; bgFrame.DragFX = bgFrame.FX; bgFrame.DragFY = bgFrame.FY;
                     bgFrame.Moved = false;
@@ -2173,7 +2245,7 @@ namespace RaintileOptions
                     SetLogoScale(logoPlace.Scale * Math.Pow(1.1, e.Delta / 120.0));
                     return;
                 }
-                if (bgFrame.Bitmap == null) return;
+                if (bgFrame.Bitmap == null || placeBack) return;
                 e.Handled = true;   // the page must not scroll
                 SetFrameZoom(bgFrame.Zoom * Math.Pow(1.1, e.Delta / 120.0), pt);
             };
@@ -2188,8 +2260,8 @@ namespace RaintileOptions
                 UpdateTilePreview();
             };
             btnFrameReset.Click += (s, e) => resetPlace(new[] { "BgFocus", "BgZoom" });
-            btnLogoReset.Click += (s, e) => resetPlace(new[] { "LogoPos", "LogoScale" });
-            btnInfoReset.Click += (s, e) => resetPlace(new[] { "InfoPos" });
+            btnLogoReset.Click += (s, e) => resetPlace(new[] { LogoPosKey, LogoScaleKey });
+            btnInfoReset.Click += (s, e) => resetPlace(new[] { InfoPosKey });
 
             // Row 1, right: the settings of the tile, or of the category under All tiles
             var sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
@@ -2286,7 +2358,7 @@ namespace RaintileOptions
             // framing, logo and play time line of every tile back to their default place,
             // the ones with their own too; the buttons share the column
             var btnResetLogos = NewButton("Logos");
-            var btnResetFraming = NewButton("Framing");
+            var btnResetFraming = resetFramingAll = NewButton("Framing");
             var btnResetInfo = NewButton("Play time");
             var placeFormRow = NewFormRow("Reset every tile", NewEqualButtons(btnResetLogos, btnResetFraming, btnResetInfo));
             placementHint = FormHelp(placeFormRow);   // what the buttons do and the current placement
@@ -2295,9 +2367,9 @@ namespace RaintileOptions
             autoArtRow = NewAutoArtRow();
             AddTo(af, autoArtRow);
             AddTo(af, NewSortRow());
-            btnResetLogos.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "logo placement", new[] { "LogoPos", "LogoScale" }); };
+            btnResetLogos.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, placeBack ? "logo placement on the backdrop" : "logo placement", new[] { LogoPosKey, LogoScaleKey }); };
             btnResetFraming.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "background framing", new[] { "BgFocus", "BgZoom" }); };
-            btnResetInfo.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "play time placement", new[] { "InfoPos" }, "the top left"); };
+            btnResetInfo.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, placeBack ? "play time placement on the backdrop" : "play time placement", new[] { InfoPosKey }, "the top left"); };
 
             // Tile card
             tileCard = NewCard("Tile", "");

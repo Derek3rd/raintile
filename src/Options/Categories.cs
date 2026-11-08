@@ -72,7 +72,7 @@ namespace RaintileOptions
         Button btnFrameReset, btnLogoReset;
         // the play time line (InfoPos): its sample in the preview and its row
         Border previewInfo, infoChip;
-        TextBlock infoPosText;
+        TextBlock infoPosText, infoWhy;
         Button btnInfoReset;
         Panel infoRow;
         ScrollViewer previewScroll;
@@ -847,6 +847,17 @@ namespace RaintileOptions
             btnInfoReset.ToolTip = all ? "Back to the top left" : "Back to the play time placement of All tiles";
         }
 
+        // A placement row of the tile editor that does not apply (as SetRowApplies):
+        // its controls disabled, its name dimmed, the reason shown
+        void SetPlaceApplies(Panel block, bool on, TextBlock why)
+        {
+            var name = (TextBlock)((Grid)block.Children[0]).Children[0];
+            if (on) name.ClearValue(TextBlock.ForegroundProperty);
+            else name.Foreground = ResBrush("DimBrush");
+            foreach (UIElement c in block.Children) if (c != block.Children[0] && c != why) c.IsEnabled = on;
+            why.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        }
+
         // own: true = Own, false = From All tiles, null = hidden (All tiles itself)
         void SetChip(Border chip, bool? own)
         {
@@ -1205,10 +1216,13 @@ namespace RaintileOptions
             ReadLogoPlace(s);
             logoPlace.Box = currentFile != null ? GetLogoBox(currentFile) : 96.0;
             ReadInfoPlace(s);
-            // the line is not drawn with TileInfo=Never, nor on widgets
-            bool info = currentFile != null && !IsWidget(all ? null : s) && !V("TileInfo").Equals("never", StringComparison.OrdinalIgnoreCase);
-            previewInfo.Visibility = info ? Visibility.Visible : Visibility.Collapsed;
-            infoRow.Visibility = info ? Visibility.Visible : Visibility.Collapsed;
+            // the line is not drawn with TileInfo=Never, nor on widgets: a widget
+            // has none (its row hidden), with Never the row says why it is off
+            bool lineKind = currentFile != null && !IsWidget(all ? null : s);
+            bool lineOn = !V("TileInfo").Equals("never", StringComparison.OrdinalIgnoreCase);
+            previewInfo.Visibility = lineKind && lineOn ? Visibility.Visible : Visibility.Collapsed;
+            infoRow.Visibility = lineKind ? Visibility.Visible : Visibility.Collapsed;
+            SetPlaceApplies(infoRow, lineOn, infoWhy);
             UpdateFraming();
             UpdateLogoPlace();
             UpdateInfoPlace();
@@ -1986,6 +2000,10 @@ namespace RaintileOptions
             var infoHelp = NewHelp("The line with the play time and the last launch (Tiles > Play time and updates): drag it in the preview.");
             infoHelp.Margin = T(0, Gap.Help, 0, 0);
             infoBlock.Children.Insert(1, infoHelp);
+            // with TileInfo=Never: disabled, with the reason (docs/OptionsUI.md, 0)
+            infoWhy = NewHelp(WhenReason("TileInfo=Hover|Always", null), ResBrush("AccentBrush"));
+            infoWhy.Margin = T(0, Gap.Help, 0, 0);
+            infoBlock.Children.Insert(2, infoWhy);
             infoRow = infoBlock;
             AddTo(left, infoBlock);
 

@@ -537,13 +537,13 @@ namespace RaintileOptions
             }
             else Grid.SetColumnSpan(left, 3);   // text only: the whole row
             if (reset != null) { SetCol(reset, 2); g.Children.Add(reset); }
-            return new Border { BorderBrush = ResBrush("LineBrush"), BorderThickness = T(0, 1, 0, 0), Child = g };
+            return new CardRow(ResBrush("LineBrush")) { Child = g };
         }
 
         public Border NewCard(string title, string help)
         {
             var b = new Border { Style = ResStyle("Card") };
-            var sp = NewPanel();
+            var sp = new CardStack();
             b.Child = sp;
             if (!string.IsNullOrEmpty(title))
             {
@@ -566,7 +566,7 @@ namespace RaintileOptions
         Border NewSwitchCard(Item sw, string help)
         {
             var b = new Border { Style = ResStyle("Card") };
-            var sp = NewPanel();
+            var sp = new CardStack();
             b.Child = sp;
             var g = NewGrid("*", "Auto", Gap.ActionColumn.ToString(CultureInfo.InvariantCulture));
             g.ColumnDefinitions[1].SetResourceReference(ColumnDefinition.WidthProperty, FieldWidth.ControlKey);
@@ -597,7 +597,7 @@ namespace RaintileOptions
         Border NewStoreSwitchCard(Group group)
         {
             var b = new Border { Style = ResStyle("Card") };
-            var sp = NewPanel();
+            var sp = new CardStack();
             b.Child = sp;
             var g = NewGrid("*", "Auto", Gap.ActionColumn.ToString(CultureInfo.InvariantCulture));
             g.ColumnDefinitions[1].SetResourceReference(ColumnDefinition.WidthProperty, FieldWidth.ControlKey);

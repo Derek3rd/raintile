@@ -213,7 +213,7 @@ namespace RaintileOptions
         void UpdatePreviewButton()
         {
             if (btnPreview == null) return;
-            btnPreview.Content = previewWin != null ? "Hide preview" : "Preview";
+            SetPadHintText(btnPreview, previewWin != null ? "Hide preview" : "Preview");
         }
 
         // Beside the Options window, as tall as it, as wide as the screen's

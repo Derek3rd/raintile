@@ -216,6 +216,91 @@ function T.backdrop_follows_the_selection()
 	t.clean(s)
 end
 
+-- WheelLogoOn=Background: the selected tile's logo on the backdrop, where it
+-- sits on the tile (centred by default), WheelBackdropLogoSize of the area's
+-- height; not on its tile, still on the others. After a turn, the next one's.
+function T.logo_on_the_backdrop()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelLogoOn = 'Background', WheelBackdropLogoSize = 40, Thumbnails = 0 }, true)
+	local M, V = s:upvalue('M'), s:upvalue('V')
+	local function check(what)
+		local L = #c.tiles
+		local k = s:upvalue('offset')
+		local tl = c.tiles[k % L + 1]
+		t.ok(tl.logo, 'the selected tile has no logo (test images missing)')
+		local slot = slotOf(s, k)
+		t.ok(s.meters['tileicon' .. slot].hidden, what .. ': the logo is still on the selected tile')
+		local logo = s.meters['backdroplogo']
+		t.ok(not logo.hidden, what .. ': no logo on the backdrop')
+		t.eq(logo:opt('ImageName', ''), tl.logoFull, what .. ': the image on the backdrop')
+		local ax, ay, W, H = M.backdropArea()
+		local size = num(logo, 'W')
+		t.eq(size, math.floor(H * 40 / 100 * tl.logoScale + 0.5), what .. ': logo size')
+		t.ok(math.abs(num(logo, 'X') + size / 2 - (ax + W / 2)) <= 1, what .. ': logo not centred across')
+		t.ok(math.abs(num(logo, 'Y') + size / 2 - (ay + H / 2)) <= 1, what .. ': logo not centred down')
+		-- the other tiles keep theirs
+		local side = slotOf(s, k + 1)
+		local st = side and c.tiles[(k + 1) % L + 1]
+		if st and st.logo and st ~= tl then t.ok(not s.meters['tileicon' .. side].hidden, what .. ': a side tile lost its logo') end
+	end
+	check('at first')
+	s:call('Scroll(1)')
+	check('after a turn')
+	s:call('Hide()')
+	t.atRest(s)
+	t.clean(s)
+	-- on the tile (the default): nothing on the backdrop
+	s = wheel({ LauncherMode = 'Fullscreen', Thumbnails = 0 }, true)
+	t.ok(s.meters['backdroplogo'].hidden, 'a logo on the backdrop with WheelLogoOn=Tile')
+	t.clean(s)
+end
+
+-- WheelInfoOn=Background: the selected tile's update line on the backdrop, at
+-- the top left of the area under the top row (InfoPos 0,0), not on its tile
+function T.info_on_the_backdrop()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelInfoOn = 'Background' })
+	local M, V = s:upvalue('M'), s:upvalue('V')
+	local L = #c.tiles
+	local k = s:upvalue('offset')
+	local tl = c.tiles[k % L + 1]
+	t.ok(not tl.widget, 'the selected tile is a widget')
+	tl.steamId = '480'
+	R.writeFile(s.resources .. 'Generated\\GameUpdates.txt', '480|5000000000|0|0|0|steamapps\\appmanifest_480.acf\n')
+	s:call('OnGameUpdates()')
+	local slot = slotOf(s, k)
+	t.ok(s.meters['tileupd' .. slot].hidden, 'the update line is still on the selected tile')
+	local upd = s.meters['backdropupd']
+	t.ok(not upd.hidden, 'no update line on the backdrop')
+	local ax, ay = M.backdropArea()
+	t.eq(num(upd, 'X'), ax + V.LabelPad, 'update line across')
+	t.eq(num(upd, 'Y'), ay + V.LabelPad, 'update line down')
+	-- the selection moves on: the line goes (that tile has no update)
+	s:call('Scroll(1)')
+	t.ok(upd.hidden, 'the update line stayed on the backdrop after a turn')
+	t.clean(s)
+end
+
+-- Not in the wheel: the settings of the backdrop do nothing
+function T.backdrop_settings_in_the_grid()
+	local s = R.new({ settings = { WheelLogoOn = 'Background', WheelInfoOn = 'Background', Thumbnails = 0 } })
+	withImages(s)
+	s:start()
+	s:call('Show()')
+	local cats = s:upvalue('cats')
+	local best, most = 1, 0
+	for i, c in ipairs(cats) do
+		if not c.virtual and #c.tiles > most then best, most = i, #c.tiles end
+	end
+	s:call('SetCategory(' .. best .. ')')
+	t.ok(s.meters['backdroplogo'].hidden and s.meters['backdropupd'].hidden and s.meters['backdropinfo'].hidden, 'backdrop meters shown in the grid')
+	local shown = 0
+	for slot = 1, s:upvalue('V').Slots do
+		local m = s.meters['tileicon' .. slot]
+		if m and not m.hidden then shown = shown + 1 end
+	end
+	t.ok(shown > 0, 'no logo on the tiles of the grid (test images missing)')
+	t.clean(s)
+end
+
 -- WheelIconsOnly: tiles with a logo show no background image
 function T.logos_only()
 	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', WheelIconsOnly = 1, Thumbnails = 0 }, true)

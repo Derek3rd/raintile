@@ -403,8 +403,9 @@ end
 -- given size. The box is square and the image fits inside it, so the
 -- visible part is what has to stay in the tile: the slots are clipped by the
 -- grid, not by the tile, and the logo would spill onto the next one. A
--- centred logo stays centred, also when larger than the tile.
-local function logoCentre(t, size)
+-- centred logo stays centred, also when larger than the tile. W, H: another
+-- area than the tile (the wheel's backdrop, WheelLogoOn=Background).
+local function logoCentre(t, size, W, H)
 	local vw, vh = size, size
 	if t.logoRatio then
 		if t.logoRatio >= 1 then vh = size / t.logoRatio else vw = size * t.logoRatio end
@@ -413,7 +414,7 @@ local function logoCentre(t, size)
 		if n >= total then return total / 2 end
 		return math.min(total - n / 2, math.max(n / 2, p * total))
 	end
-	return place(t.logoX, vw, V.TileW), place(t.logoY, vh, V.TileH)
+	return place(t.logoX, vw, W or V.TileW), place(t.logoY, vh, H or V.TileH)
 end
 
 -- Placement of the play time line (TileInfo): InfoPos=X,Y is where it goes in
@@ -1898,6 +1899,11 @@ function M.readWheel()
 	V.WheelBackdrop = num('WheelBackdrop', 1) ~= 0
 	V.WheelBackdropOpacity = math.min(100, math.max(0, num('WheelBackdropOpacity', 40)))
 	V.WheelIconsOnly = num('WheelIconsOnly', 0) ~= 0
+	-- the logo and the lines of the selected tile on the backdrop (M.backdropLogo,
+	-- M.backdropInfo) instead of on its tile
+	V.WheelLogoBack = V.Wheel and V.WheelBackdrop and word('WheelLogoOn', 'tile') == 'background'
+	V.WheelInfoBack = V.Wheel and V.WheelBackdrop and word('WheelInfoOn', 'tile') == 'background'
+	V.WheelBackLogoSize = math.min(80, math.max(5, num('WheelBackdropLogoSize', 30)))
 	-- the band behind the top row: with the selected tile's background only
 	SKIN:Bang('!SetOption', 'MeterTopBar', 'Hidden', (V.Wheel and V.WheelBackdrop) and '0' or '1')
 	-- the wheel: every tile in its own container (TileBox), the widgets in
@@ -2017,6 +2023,12 @@ function M.backdropUpdate()
 	local t = L > 0 and tiles[math.floor(offset + 0.5) % L + 1]
 	local img = t and not t.widget and (t.backgroundFull or t.background) or ''
 	local b = M.backdrop
+	-- the logo follows the tile, and the area (the filter bar changes it)
+	local area = table.concat({ M.backdropArea() }, ',')
+	if (t or nil) ~= b.tile or area ~= b.area then
+		b.tile, b.area = t or nil, area
+		M.backdropLogo()
+	end
 	if img == b.img then return end
 	b.prev, b.img = b.img or '', img
 	b.front = 3 - b.front
@@ -2033,6 +2045,91 @@ function M.backdropAlpha()
 	set(back, 'ImageAlpha', tostring(math.floor(a * (1 - b.f) + 0.5)))
 	show(front, b.img ~= '' and b.f > 0)
 	show(back, b.f < 1 and (b.prev or '') ~= '')
+	-- the logo on it comes with the new background
+	if b.logo then set('BackdropLogo', 'ImageAlpha', tostring(math.floor(255 * b.f + 0.5))) end
+end
+
+-- The area of the backdrop where the logo and the lines go: under the top
+-- row, where the wheel is (x, y on the skin, W, H)
+function M.backdropArea()
+	return V.PadX, V.GridY, V.ClipW or V.AreaW, V.ClipH or V.AreaH
+end
+
+-- The selected tile's logo on the backdrop (WheelLogoOn=Background): where
+-- LogoPos= puts it on the tile, WheelBackdropLogoSize percent of the area's
+-- height times LogoScale=; the full-size image, not the tile's thumbnail.
+-- b.logo: its box { cx, cy, size }, where the launch animation starts.
+function M.backdropLogo()
+	local b = M.backdrop
+	local t = b.tile
+	b.logo = nil
+	if not (V.WheelLogoBack and t and t.logo and not t.widget) then
+		show('BackdropLogo', false)
+		return
+	end
+	local ax, ay, W, H = M.backdropArea()
+	local size = math.max(8, math.floor(H * V.WheelBackLogoSize / 100 * t.logoScale + 0.5))
+	local lx, ly = logoCentre(t, size, W, H)
+	b.logo = { cx = ax + lx, cy = ay + ly, size = size }
+	set('BackdropLogo', 'ImageName', t.logoFull or t.logo)
+	set('BackdropLogo', 'X', tostring(math.floor(ax + lx - size / 2)))
+	set('BackdropLogo', 'Y', tostring(math.floor(ay + ly - size / 2)))
+	set('BackdropLogo', 'W', tostring(size))
+	set('BackdropLogo', 'H', tostring(size))
+	set('BackdropLogo', 'ImageAlpha', tostring(math.floor(255 * b.f + 0.5)))
+	-- a game no longer installed: in greyscale, as on its tile
+	local rows = t.missing and M.GREY_ROWS or M.IDENTITY_ROWS
+	set('BackdropLogo', 'ColorMatrix1', rows[1])
+	set('BackdropLogo', 'ColorMatrix2', rows[2])
+	set('BackdropLogo', 'ColorMatrix3', rows[3])
+	show('BackdropLogo', true)
+end
+
+-- Top left of the block of the update line (uw x uh) over the play time
+-- (iw x ih) in an area W x H, and its width: InfoPos= places it in the room
+-- it leaves inside the margins (LabelPad), 0,0 the top left
+function M.infoBlock(t, uw, uh, iw, ih, W, H)
+	local bw, bh = math.max(uw, iw), uh + ih
+	local bx, by = V.LabelPad, V.LabelPad
+	if (t.infoX > 0 or t.infoY > 0) and not t.widget then
+		bx = bx + math.floor(t.infoX * math.max(0, W - 2 * V.LabelPad - bw) + 0.5)
+		by = by + math.floor(t.infoY * math.max(0, H - 2 * V.LabelPad - bh) + 0.5)
+	end
+	return bx, by, bw
+end
+
+-- The selected tile's lines on the backdrop (WheelInfoOn=Background), with
+-- the texts and opacities its slot worked out (placeSlots); t nil: none
+function M.backdropInfo(t, updText, updAlpha, infoText, infoAlpha)
+	local hasUpd = t ~= nil and updText ~= nil and updText ~= false
+	local hasInfo = t ~= nil and not t.widget and infoText ~= nil and infoAlpha > 0.01
+	show('BackdropUpd', hasUpd)
+	show('BackdropInfo', hasInfo)
+	if not (hasUpd or hasInfo) then return end
+	local uw, uh, iw, ih = 0, 0, 0, 0
+	if hasUpd then
+		set('BackdropUpd', 'Text', updText)
+		uw, uh = M.lineSize('BackdropUpd', updText)
+	end
+	if hasInfo then
+		set('BackdropInfo', 'Text', infoText)
+		iw, ih = M.lineSize('BackdropInfo', infoText)
+	end
+	local ax, ay, W, H = M.backdropArea()
+	local bx, by, bw = M.infoBlock(t, uw, uh, iw, ih, W, H)
+	bx, by = ax + bx, ay + by
+	if hasUpd then
+		set('BackdropUpd', 'X', tostring(bx + math.floor(t.infoX * (bw - uw) + 0.5)))
+		set('BackdropUpd', 'Y', tostring(by))
+		set('BackdropUpd', 'FontColor', fade(V.TextColor, updAlpha))
+		set('BackdropUpd', 'SolidColor', fade('0,0,0,150', updAlpha))
+	end
+	if hasInfo then
+		set('BackdropInfo', 'X', tostring(bx + math.floor(t.infoX * (bw - iw) + 0.5)))
+		set('BackdropInfo', 'Y', tostring(by + uh))
+		set('BackdropInfo', 'FontColor', fade(V.TextColor, infoAlpha))
+		set('BackdropInfo', 'SolidColor', fade('0,0,0,150', infoAlpha))
+	end
 end
 function M.backdropAdvance()
 	local b = M.backdrop
@@ -3520,6 +3617,7 @@ end
 -- Colour matrices (rows 1-3) of a normal image and of a greyed-out one
 local IDENTITY_ROWS = { '1;0;0;0;0', '0;1;0;0;0', '0;0;1;0;0' }
 local GREY_ROWS = { '0.3;0.3;0.3;0;0', '0.59;0.59;0.59;0;0', '0.11;0.11;0.11;0;0' }
+M.IDENTITY_ROWS, M.GREY_ROWS = IDENTITY_ROWS, GREY_ROWS -- (for the code above this)
 
 -- Size of a line whose text changes often (the download line): only its last
 -- text is kept, not one size per text like infoSize
@@ -3678,6 +3776,7 @@ local function placeSlots()
 	dash.skinsWanted = {}
 	dash.customShown = {}
 	local wboxes, wlive = {}, {} -- the wheel: where each tile is, widgets shown
+	local backLines = false -- the selected tile's lines went to the backdrop
 	-- the wheel repeating few tiles: a widget has one set of meters, for the
 	-- copy nearest the middle
 	local nearest = {}
@@ -3721,6 +3820,8 @@ local function placeSlots()
 			-- the wheel: fading towards the ends; the slot's meters in its own
 			-- rounded container (TileBox), at 0,0 in it (wx, wy: where it is)
 			local wx, wy = 0, 0
+			-- the selected tile: its logo and lines may be on the backdrop
+			local sel = wv and wv.k == math.floor(offset + 0.5)
 			if wv then
 				f = f * wv.a
 				M.placeBox(slot, x, y)
@@ -3796,6 +3897,11 @@ local function placeSlots()
 				infoAlpha = M.lineAlpha(V.TileInfo, slot, f) or 0
 				if infoAlpha <= 0 then infoText = nil end
 			end
+			if sel and V.WheelInfoBack then
+				M.backdropInfo(t, updText, f, infoText, infoAlpha)
+				backLines = true
+				updText, infoText = nil, nil
+			end
 			local hasInfo = infoText ~= nil and infoAlpha > 0.01
 			if hasInfo or updText then
 				-- the lines as a block: the update above, the play time below;
@@ -3808,12 +3914,8 @@ local function placeSlots()
 				local placed = (t.infoX > 0 or t.infoY > 0) and not t.widget
 				if updText then uw, uh = M.lineSize(updMeter, updText) end
 				if hasInfo and (placed or updText) then iw, ih = infoSize(infoMeter, infoText) end
-				local bw, bh = math.max(uw, iw), uh + ih
-				local bx, by = x + V.LabelPad, y + V.LabelPad
-				if placed then
-					bx = bx + math.floor(t.infoX * math.max(0, V.TileW - 2 * V.LabelPad - bw) + 0.5)
-					by = by + math.floor(t.infoY * math.max(0, V.TileH - 2 * V.LabelPad - bh) + 0.5)
-				end
+				local bx, by, bw = M.infoBlock(t, uw, uh, iw, ih, V.TileW, V.TileH)
+				bx, by = x + bx, y + by
 				if updText then
 					set(updMeter, 'X', tostring(bx + math.floor(t.infoX * (bw - uw) + 0.5)))
 					set(updMeter, 'Y', tostring(by))
@@ -3829,7 +3931,7 @@ local function placeSlots()
 			end
 			show('TileUpd' .. slot, updText ~= nil)
 			show(tile, true)
-			show(icon, t.logo ~= nil and not t.widget)
+			show(icon, t.logo ~= nil and not t.widget and not (sel and V.WheelLogoBack))
 			show(label, hasLabel and (not t.widget or not live))
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
 			if t.widget and live then D.placeWidget(t, x + wx, y + wy, f) end
@@ -3868,6 +3970,7 @@ local function placeSlots()
 			M.placeUpdate(slot, nil)
 		end
 	end
+	if V.WheelInfoBack and not backLines then M.backdropInfo(nil) end
 	roundClip(rects)
 	-- one fade per line, as strong as its tiles are cut: lines next to each
 	-- other touch, so a tile of more cells is covered all along
@@ -5857,7 +5960,15 @@ local function drawSplash(p)
 	set('SplashBg', 'W', tostring(w))
 	set('SplashBg', 'H', tostring(h))
 	local cx, cy = x + math.floor(w / 2), y + math.floor(h / 2)
-	if a.tile.logoFull then
+	if a.tile.logoFull and a.logo then
+		-- the logo was on the backdrop (WheelLogoOn=Background): from there to
+		-- the centre of the screen
+		local size = lerp(a.logo.size, V.LaunchLogoSize)
+		set('SplashLogo', 'X', tostring(lerp(a.logo.cx, V.ScreenW / 2) - math.floor(size / 2)))
+		set('SplashLogo', 'Y', tostring(lerp(a.logo.cy, V.ScreenH / 2) - math.floor(size / 2)))
+		set('SplashLogo', 'W', tostring(size))
+		set('SplashLogo', 'H', tostring(size))
+	elseif a.tile.logoFull then
 		local t = a.tile
 		local size = lerp(V.IconSize * t.logoScale, V.LaunchLogoSize)
 		-- the logo starts where it sits in the tile and ends at the centre
@@ -5947,6 +6058,8 @@ local function launchTile(t, x, y)
 	stopTicker()
 	local tw, th = tileSize(t)
 	launching = { tile = t, x = V.PadX + math.floor(x), y = V.GridY + math.floor(y), w = tw, h = th, frame = 0 }
+	-- the selected tile's logo on the backdrop: the animation takes it from there
+	if V.WheelLogoBack and M.backdrop.tile == t then launching.logo = M.backdrop.logo end
 	hover.on, hover.a = false, 0
 	show('TileHover', false)
 

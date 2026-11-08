@@ -83,6 +83,15 @@ WheelMenuSize=50
 ; tile (fading from one to the next), at WheelBackdropOpacity percent over BgColor
 WheelBackdrop=1
 WheelBackdropOpacity=40
+; With WheelBackdrop=1, where the selected tile shows its logo and its lines
+; (the update line and the play time): Tile (on the tile in the wheel) or
+; Background (on the background, under the top row, where LogoPos= and
+; InfoPos= put them on the tile). The other tiles keep theirs.
+WheelLogoOn=Tile
+; Height of the logo on the background, in percent of the area under the top
+; row (times LogoScale= of the tile)
+WheelBackdropLogoSize=30
+WheelInfoOn=Tile
 ; 1 = the tiles of the wheel show only their logo, on a colour taken from it
 ; (as AutoTileColor; a Color= of the tile or the category still wins). Tiles
 ; without a logo keep their background.

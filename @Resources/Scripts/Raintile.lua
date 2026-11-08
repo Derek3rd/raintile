@@ -2092,6 +2092,32 @@ function M.widgetMask(boxes, live)
 	for k = n + 1, M.maskShapes or 0 do set('WidgetClip', 'Shape' .. k, '') end
 	M.maskShapes = n
 	show('WidgetClip', #live > 0)
+	-- custom widgets: their own container (CW<i>Box, at the tile, drawn after
+	-- the tiles) cut the same way, by the nearer tiles (D.placeWidget gave it
+	-- the whole tile)
+	M.cwShapes = M.cwShapes or {}
+	for _, slot in ipairs(live) do
+		local b, t = boxes[slot], boxes[slot][3]
+		if t and t.widget and t.widget.kind == 'custom' and t.widget.boxed then
+			local name, k = 'CW' .. t.widget.idx .. 'Box', 1
+			local ops = { 'Combine Shape' }
+			-- (the same as D.placeWidget's, so the two do not set it in turn)
+			set(name, 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 255,255,255,255 | StrokeWidth 0', V.TileW, V.TileH, r))
+			for other, o in pairs(boxes) do
+				if other > slot and math.abs(o[1] - b[1]) < V.TileW and math.abs(o[2] - b[2]) < V.TileH then
+					k = k + 1
+					set(name, 'Shape' .. k, box({ o[1] - b[1], o[2] - b[2] }))
+					ops[#ops + 1] = 'Exclude Shape' .. k
+				end
+			end
+			if k > 1 then
+				k = k + 1
+				set(name, 'Shape' .. k, table.concat(ops, ' | '))
+			end
+			for j = k + 1, M.cwShapes[name] or 0 do set(name, 'Shape' .. j, '') end
+			M.cwShapes[name] = k
+		end
+	end
 end
 
 -- Time-based turn towards offset: WheelStepTime per tile (a little less each
@@ -3686,7 +3712,7 @@ local function placeSlots()
 			if wv then
 				f = f * wv.a
 				M.placeBox(slot, x, y)
-				wboxes[slot] = { x, y }
+				wboxes[slot] = { x, y, t }
 				if t.widget and live then wlive[#wlive + 1] = slot end
 				wx, wy, x, y = x, y, 0, 0
 			end

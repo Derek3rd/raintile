@@ -18,7 +18,7 @@ namespace RaintileOptions
 {
     class WidgetOptionDef
     {
-        public string Name, Label, Kind, Help, Default;
+        public string Name, Label, Kind, Help, Default, When;
         public string[] Choices;
     }
 
@@ -64,7 +64,7 @@ namespace RaintileOptions
                 list.Add(new WidgetOptionDef
                 {
                     Name = name, Kind = kind, Label = label != "" ? label : name,
-                    Help = Core.GetKey(s, "Help").Trim(), Default = Core.GetKey(s, "Default").Trim(),
+                    Help = Core.GetKey(s, "Help").Trim(), Default = Core.GetKey(s, "Default").Trim(), When = Core.GetKey(s, "When").Trim(),
                     Choices = Core.GetKey(s, "Choices").Split('|').Select(c => c.Trim()).Where(c => c != "").ToArray(),
                 });
             }
@@ -114,50 +114,60 @@ namespace RaintileOptions
             string name = WidgetInfo(id, "Name");
             pageTitle.Text = name != "" ? name : id;
             pageSwitch.Content = null;
-            pageDesc.Text = "Widgets\\" + id + ": its settings, saved in its folder (settings.inc). The settings of a single tile (e.g. which game) are in the tile, as its Widget setting.";
+            // what the widget is, then where its settings go
+            string info = WidgetInfo(id, "Information");
+            pageDesc.Text = (info != "" ? info.TrimEnd('.') + ". " : "") + "Its settings are saved in its folder (settings.inc); what a single tile shows (e.g. which game) is its Widget setting, in the tile editor.";
         }
 
+        // The settings of a widget, as the rows of the other pages: its name and
+        // help on the left, the control and its reset on the right; a setting
+        // with When= (Name=value) disabled while the other one is not so
         UIElement NewWidgetPage(string id)
         {
-            var sp = NewPanel();
-            var card = NewCard("Settings", WidgetInfo(id, "Information"));
+            StackPanel sp;
+            var sv = NewPageScroller(out sp);
+            var card = NewCard(null, null);
             var f = CardPanel(card);
             AddTo(sp, card);
             var defs = WidgetOptions(id);
             var values = ReadWidgetSettings(id);
-            Action<string, string> save = (name, value) =>
+            Func<WidgetOptionDef, string> value = d => { string v; return values.TryGetValue(d.Name, out v) ? v : d.Default; };
+            var whens = new List<Action>();
+            Action updateWhens = () => { foreach (var a in whens) a(); };
+            Action<string, string> save = (name, v) =>
             {
-                values[name] = value;
+                values[name] = v;
                 try { WriteWidgetSettings(id, values); }
                 catch (Exception ex) { ShowDialog("Raintile", "The settings could not be saved: " + ex.Message); return; }
                 // the launcher writes the values into its widgets when it loads
                 needsRefresh = true;
                 UpdateDirty();
+                updateWhens();
             };
             foreach (var d in defs)
             {
                 var def = d;
-                string v;
-                if (!values.TryGetValue(def.Name, out v)) v = def.Default;
+                string v = value(def);
                 FrameworkElement control;
+                Action<string> show;   // the control showing a value again (reset)
                 switch (def.Kind)
                 {
                     case "secret":
                         var pb = new PasswordBox { Password = Core.UnprotectSecret(v) };
                         pb.LostFocus += (s, e) => save(def.Name, pb.Password == "" ? "" : Core.ProtectSecret(pb.Password));
                         control = pb;
+                        show = x => pb.Password = Core.UnprotectSecret(x);
                         break;
                     case "bool":
-                        var cb = new CheckBox { IsChecked = v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase), VerticalAlignment = VerticalAlignment.Center };
+                        var cb = new CheckBox { IsChecked = v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase), HorizontalAlignment = HorizontalAlignment.Right };
                         cb.Click += (s, e) => save(def.Name, cb.IsChecked == true ? "1" : "0");
                         control = cb;
+                        show = x => cb.IsChecked = x == "1" || x.Equals("true", StringComparison.OrdinalIgnoreCase);
                         break;
                     case "choice":
-                        var box = new ComboBox();
-                        foreach (var c in def.Choices) box.Items.Add(c);
-                        box.SelectedItem = def.Choices.FirstOrDefault(c => c.Equals(v, StringComparison.OrdinalIgnoreCase)) ?? def.Choices.FirstOrDefault();
-                        box.SelectionChanged += (s, e) => { if (box.SelectedItem != null) save(def.Name, (string)box.SelectedItem); };
+                        var box = NewChoiceBox(def.Choices.Select(c => new[] { c, c }), def.Choices.FirstOrDefault(c => c.Equals(v, StringComparison.OrdinalIgnoreCase)) ?? def.Choices.FirstOrDefault(), x => save(def.Name, x));
                         control = box;
+                        show = x => SelectChoice(box, x);
                         break;
                     default:
                         var tb = new TextBox { Text = v };
@@ -169,19 +179,41 @@ namespace RaintileOptions
                             // what is still not a number (a lone "-") keeps the red border and is not saved
                             bool bad = def.Kind == "number" && t != "" && !Core.TryNumber(t, out n);
                             MarkInvalid(tb, bad);
-                            if (!bad) save(def.Name, t);
+                            if (!bad && t != value(def)) save(def.Name, t);
                         };
                         control = tb;
+                        show = x => { tb.Text = x; MarkInvalid(tb, false); };
                         break;
                 }
-                AddTo(f, NewFormRow(def.Label, control, def.Help + (def.Kind == "secret" ? " Saved encrypted: only your Windows user on this PC can read it." : "")));
+                // a secret has no default to go back to
+                Button reset = null;
+                if (def.Kind != "secret")
+                {
+                    reset = NewResetIcon("Restore default");
+                    Action showReset = () => SetActionVisible(reset, value(def) != def.Default);
+                    reset.Click += (s, e) => { show(def.Default); save(def.Name, def.Default); };
+                    whens.Add(showReset);
+                }
+                var row = NewRow(def.Label, def.Help + (def.Kind == "secret" ? " Saved encrypted: only your Windows user on this PC can read it." : ""), control, reset);
+                AddTo(f, row);
+                var kv = def.When.Split(new[] { '=' }, 2);
+                var other = kv.Length == 2 ? defs.FirstOrDefault(x => x.Name.Equals(kv[0].Trim(), StringComparison.OrdinalIgnoreCase)) : null;
+                if (other != null)
+                {
+                    string want = kv[1].Trim();
+                    var why = AddRowReason(row, "Only with " + other.Label + (other.Kind == "bool" ? " on." : ": " + want + "."));
+                    whens.Add(() => SetRowApplies(row, value(other).Equals(want, StringComparison.OrdinalIgnoreCase), why));
+                }
             }
-            var folder = NewButton("Open its folder", "LinkButton");
-            folder.HorizontalAlignment = HorizontalAlignment.Left;
-            folder.Margin = T(0, Gap.Control, 0, Gap.Line);
+            updateWhens();
+            // its folder: a card of its own
+            var files = NewCard("Files", null);
+            var folder = NewButton("Open the folder");
+            folder.HorizontalAlignment = HorizontalAlignment.Right;
             folder.Click += (s, e) => System.Diagnostics.Process.Start("explorer.exe", "\"" + Path.Combine(WidgetsDir, id) + "\"");
-            AddTo(f, folder);
-            return sp;
+            AddTo(CardPanel(files), NewRow("Its folder", "Widgets\\" + id + ": its files and settings.inc. An update from the gallery keeps settings.inc.", folder, null));
+            AddTo(sp, files);
+            return sv;
         }
     }
 }

@@ -89,6 +89,10 @@ acts on a whole entry of a list, in the list's header. A field never has a bin.
   start (only where the value can be negative: a slider whose minimum is below 0, a
   widget's number; never a size), one decimal point (a comma becomes it). The on-screen keyboard shows a number pad on them with the same rule
   (`NumericChars`): the keys that cannot type there are dimmed and skipped.
+- With the gamepad every control is a stop the ring passes over, a slider too: `A`
+  starts changing it (the ring goes, its thumb turns accent), left and right change
+  it, `A` keeps the value and `B` puts it back. Left and right never change a value
+  by themselves, or the control after it could not be reached.
 - The same kind of value gets the same control on every page (a grid size, an
   opacity, a zoom look the same in Settings and in the category editor).
 - A value that is not valid gets the red border (`MarkInvalid`) and is not saved

@@ -113,6 +113,10 @@ namespace RaintileOptions
         Win32.Point padCursor;
         ComboBox padCombo;            // list opened with A
         int padComboStart;
+        Slider padSlider;             // slider being changed: A on it, until A or B
+        double padSliderStart;
+        // Tag of the slider being changed: its thumb turns accent (Options.xaml)
+        const string PadEditTag = "PadEdit";
         readonly List<TextBlock> padHints = new List<TextBlock>();   // glyphs of the pad buttons on buttons
         readonly uint padProcess = (uint)Process.GetCurrentProcess().Id;
 
@@ -184,12 +188,14 @@ namespace RaintileOptions
             padTimer.Stop();
             CloseOsk(true);
             EndPlace(true);
+            EndSliderEdit(true);
             padCombo = null;
         }
 
         void PadModeOff(bool closeOsk)
         {
             if (closeOsk) { CloseOsk(true); EndPlace(true); }
+            EndSliderEdit(true);
             if (!padMode) return;
             padMode = false;
             HideRing();
@@ -327,6 +333,7 @@ namespace RaintileOptions
                 if (padCombo.IsDropDownOpen) { PadComboInput(fire); return; }
                 padCombo = null;
             }
+            if (padSlider != null) { PadSliderInput(fire); return; }
             if (placePart >= 0 && root == win) { PadPlaceInput(fire, start, dt); return; }
             if (rx != 0 || ry != 0) PadScroll(root, rx, ry);
             if (padMode)
@@ -370,13 +377,6 @@ namespace RaintileOptions
             return fe is ButtonBase || fe is TextBox || fe is PasswordBox || fe is ComboBox || fe is Slider || fe is ListBoxItem || padAreas.ContainsKey(fe);
         }
 
-        // The field next to a slider: the pad changes the value with the slider
-        static bool IsSliderField(FrameworkElement fe)
-        {
-            var p = VisualTreeHelper.GetParent(fe) as Panel;
-            return fe is TextBox && p != null && p.Children.OfType<Slider>().Any();
-        }
-
         static void CollectPadTargets(DependencyObject d, List<FrameworkElement> list)
         {
             var fe = d as FrameworkElement;
@@ -385,7 +385,7 @@ namespace RaintileOptions
                 if (!fe.IsVisible || !fe.IsEnabled || fe is ScrollBar) return;
                 if (IsPadTarget(fe))
                 {
-                    if (fe.Focusable && !IsSliderField(fe)) list.Add(fe);
+                    if (fe.Focusable) list.Add(fe);
                     return;
                 }
             }
@@ -429,8 +429,9 @@ namespace RaintileOptions
         {
             if (!padMode || padFocus == null) return;
             // in the menu the background of the selected entry is enough (the
-            // ring would be cut by the list at its sides)
-            if (InMenu(padFocus)) { HideRing(); return; }
+            // ring would be cut by the list at its sides); a slider being changed
+            // shows it with its thumb
+            if (InMenu(padFocus) || padSlider != null) { HideRing(); return; }
             if (padRing != null && padRing.AdornedElement == padFocus) return;
             HideRing();
             var layer = AdornerLayer.GetAdornerLayer(padFocus);
@@ -592,13 +593,6 @@ namespace RaintileOptions
 
         void PadMove(Window root, int dir)
         {
-            // a slider changes with left and right
-            var slider = padFocus as Slider;
-            if (slider != null && (dir == PadLeft || dir == PadRight))
-            {
-                (dir == PadRight ? Slider.IncreaseSmall : Slider.DecreaseSmall).Execute(null, slider);
-                return;
-            }
             // the menu: up and down select (round its end), right goes into the page
             if (root == win && InMenu(padFocus))
             {
@@ -656,6 +650,8 @@ namespace RaintileOptions
                 cb.IsDropDownOpen = true;
                 return;
             }
+            var slider = fe as Slider;
+            if (slider != null) { StartSliderEdit(slider); return; }
             var tb = fe as TextBox;
             if ((tb != null && !tb.IsReadOnly) || fe is PasswordBox) { OpenOsk(fe); return; }
             var item = fe as ListBoxItem;
@@ -724,6 +720,37 @@ namespace RaintileOptions
                 cb.IsDropDownOpen = false;
                 padCombo = null;
             }
+        }
+
+        // A slider is passed over like any control: A starts changing it (the ring
+        // goes, its thumb turns accent), left / right change it, A keeps the value,
+        // B puts back the one it had. So the number box next to it can be reached.
+        void StartSliderEdit(Slider s)
+        {
+            padSlider = s;
+            padSliderStart = s.Value;
+            s.Tag = PadEditTag;
+            HideRing();
+        }
+
+        void EndSliderEdit(bool keep)
+        {
+            var s = padSlider;
+            if (s == null) return;
+            padSlider = null;
+            if (!keep && s.Value != padSliderStart) s.Value = padSliderStart;
+            s.ClearValue(FrameworkElement.TagProperty);
+            ShowRing();
+        }
+
+        void PadSliderInput(int fire)
+        {
+            // gone (page rebuilt): the value stays as it is
+            if (!padSlider.IsVisible) { EndSliderEdit(true); return; }
+            int d = FirstDir(fire);
+            if (d == PadLeft || d == PadRight) (d == PadRight ? Slider.IncreaseSmall : Slider.DecreaseSmall).Execute(null, padSlider);
+            else if ((fire & PadA) != 0) EndSliderEdit(true);
+            else if ((fire & PadB) != 0) EndSliderEdit(false);
         }
 
         // Right stick: scrolls the area the pad is in (or the page)

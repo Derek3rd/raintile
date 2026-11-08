@@ -24,11 +24,26 @@ local function withImages(s)
 	end
 end
 
-local function wheel(settings, images)
+-- The background images with a PNG header of w x h (the launcher reads their
+-- size there: framing, the coloured strip of a download)
+local function sizedBackgrounds(s, w, h)
+	local function be(n) return string.char(math.floor(n / 16777216) % 256, math.floor(n / 65536) % 256, math.floor(n / 256) % 256, n % 256) end
+	local head = '\137PNG\r\n\26\n' .. be(13) .. 'IHDR' .. be(w) .. be(h) .. '\8\6\0\0\0'
+	for dir in (host_listdir(s.data .. 'Images') .. '\n'):gmatch('([^\n]+)\n') do
+		local bg = s.data .. 'Images\\' .. dir .. '\\background\\'
+		for file in ((host_listdir(bg) or '') .. '\n'):gmatch('([^\n]+)\n') do
+			if file:lower():match('%.png$') then R.writeFile(bg .. file, head) end
+		end
+	end
+end
+
+-- prepare(s): before the skin loads (after the test images are made)
+local function wheel(settings, images, prepare)
 	settings = settings or {}
 	settings.ScrollMode = 'Wheel'
 	local s = R.new({ settings = settings })
 	if images then withImages(s) end
+	if prepare then prepare(s) end
 	s:start()
 	t.clean(s)
 	t.ok(s:upvalue('ready'), 'the launcher is not ready after loading')
@@ -421,6 +436,64 @@ function T.backdrop_of_a_missing_game()
 	s:call('Scroll(-1)')
 	front = s.meters['meterbackdrop' .. M.backdrop.front]
 	t.eq(front:opt('ColorMatrix1', ''), '1;0;0;0;0', 'backdrop of an installed game in greyscale')
+	t.clean(s)
+end
+
+-- Another category: the highlight on its middle tile at once, as when the
+-- wheel opens
+function T.highlight_after_a_category_change()
+	local s = wheel({ LauncherMode = 'Fullscreen' })
+	local cats = s:upvalue('cats')
+	local other
+	for i, c in ipairs(cats) do
+		if not c.virtual and #c.tiles > 0 and i ~= s:upvalue('active') then other = i break end
+	end
+	t.ok(other, 'no other category with tiles')
+	s:call('SetCategory(' .. other .. ')')
+	local hover, L = s:upvalue('hover'), #cats[other].tiles
+	t.ok(hover.on and hover.idx == s:upvalue('offset') % L + 1, 'the middle tile is not highlighted after a category change')
+	t.clean(s)
+end
+
+-- The mouse wheel notch (ScrollStep) turns the wheel by that many tiles
+function T.scroll_step_in_the_wheel()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', ScrollStep = 2 })
+	t.ok(#c.tiles > 3, 'too few tiles')
+	local before = s:upvalue('offset')
+	s:call('Scroll(1)')
+	t.eq(s:upvalue('offset'), before + 2, 'offset after one notch with ScrollStep=2')
+	t.clean(s)
+end
+
+-- A download coloured again from the left (DownloadStyle=Greyscale): the
+-- coloured strip of the background on a thumbnail with its image, none on a
+-- thumbnail with logos only (it has no image to colour)
+function T.download_strip_and_logos_only()
+	local function strip(iconsOnly)
+		local s, c = wheel({ LauncherMode = 'Fullscreen', DownloadStyle = 'Greyscale', WheelIconsOnly = iconsOnly, Thumbnails = 0 }, true,
+			function(s) sizedBackgrounds(s, 1920, 1080) end)
+		local L = #c.tiles
+		local k = s:upvalue('offset')
+		local tl = c.tiles[k % L + 1]
+		t.ok(tl.background and tl.logo and not tl.widget, 'the selected tile has no background or logo (test images missing)')
+		tl.steamId = '480'
+		R.writeFile(s.resources .. 'Generated\\GameUpdates.txt', '480|5000000000|2000000000|0|0|steamapps\\appmanifest_480.acf\n')
+		s:call('OnGameUpdates()')
+		-- (the progress fills up when the launcher opens)
+		s:call('Hide()')
+		s:call('Show()')
+		local m = s.meters['tilereveal' .. slotOf(s, k)]
+		t.clean(s)
+		return m ~= nil and not m.hidden
+	end
+	t.ok(strip(0), 'no coloured strip on a thumbnail with its image (the test cannot tell)')
+	t.ok(not strip(1), 'a strip of the background image over a thumbnail with logos only')
+end
+
+-- The grid keeps its backgrounds' style (only the wheel's thumbnails are cropped)
+function T.grid_keeps_its_background_style()
+	local s = R.new({ settings = { BgStyle = 'Parallax' } }):start()
+	t.eq(s:upvalue('V').BgStyle, 'parallax', 'background style in the grid')
 	t.clean(s)
 end
 

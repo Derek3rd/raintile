@@ -1936,7 +1936,8 @@ function M.wheelGeometry(c, iconSize)
 	c.nx, c.ny = 1, 1
 	c.tw, c.th = sz, sz
 	c.rows, c.cols = 1, V.WheelVisible + 2
-	c.iconSize = math.min(math.floor(iconSize or V.DefIconSize), math.floor(sz * 0.7))
+	-- the logo: a share of the thumbnail (IconSize is the grid's)
+	c.iconSize = math.floor(sz * 0.7)
 end
 
 -- The circle, in the coordinates of the grid (GridClip): its centre C, radius
@@ -2048,6 +2049,12 @@ function M.backdropUpdate()
 	b.prev, b.img = b.img or '', img
 	b.front = 3 - b.front
 	set('MeterBackdrop' .. b.front, 'ImageName', img)
+	-- a game no longer installed: greyed out and dimmed, as its thumbnail
+	local missing = t and t.missing
+	b.dim = b.dim or { 1, 1 }
+	b.dim[b.front] = missing and 0.45 or 1
+	local rows = missing and M.GREY_ROWS or M.IDENTITY_ROWS
+	for n = 1, 3 do set('MeterBackdrop' .. b.front, 'ColorMatrix' .. n, rows[n]) end
 	b.f, b.t = 0, 0
 	if V.AnimScroll and ready then M.startTicker() else b.f = 1 end
 	M.backdropAlpha()
@@ -2055,9 +2062,10 @@ end
 function M.backdropAlpha()
 	local b = M.backdrop
 	local a = 255 * V.WheelBackdropOpacity / 100
+	local dim = b.dim or { 1, 1 }
 	local front, back = 'MeterBackdrop' .. b.front, 'MeterBackdrop' .. (3 - b.front)
-	set(front, 'ImageAlpha', tostring(math.floor(a * b.f + 0.5)))
-	set(back, 'ImageAlpha', tostring(math.floor(a * (1 - b.f) + 0.5)))
+	set(front, 'ImageAlpha', tostring(math.floor(a * dim[b.front] * b.f + 0.5)))
+	set(back, 'ImageAlpha', tostring(math.floor(a * dim[3 - b.front] * (1 - b.f) + 0.5)))
 	show(front, b.img ~= '' and b.f > 0)
 	show(back, b.f < 1 and (b.prev or '') ~= '')
 	-- the logo on it comes with the new background
@@ -2070,11 +2078,24 @@ function M.backdropArea()
 	return V.PadX, V.GridY, V.ClipW or V.AreaW, V.ClipH or V.AreaH
 end
 
--- The selected tile's logo on the backdrop (WheelLogoOn=Background): LogoPos=
--- as on a tile, on the area (the tile editor shows that area in this mode),
--- WheelBackdropLogoSize percent of the area's height times LogoScale=; the
--- full-size image, not the tile's thumbnail. b.logo: its box { cx, cy, size },
--- where the launch animation starts.
+-- Where tile t's logo of the given size sits in a W x H tile, as a share of
+-- the room it can move in there (0: against the left or top edge, 1: the
+-- right or bottom one; 0.5 when it does not fit). LogoPos= is the logo's
+-- centre, kept inside the tile: a large logo near a corner touches it.
+function M.logoShare(t, size, W, H)
+	local vw, vh = M.logoVisible(t, size)
+	local lx, ly = logoCentre(t, size, W, H)
+	local function share(p, n, total) return total > n and (p - n / 2) / (total - n) or 0.5 end
+	return share(lx, vw, W), share(ly, vh, H)
+end
+
+-- The selected tile's logo on the backdrop (WheelLogoOn=Background): where it
+-- sits on its thumbnail (the tile of the wheel, edited in the tile editor),
+-- as a share of the room it can move in (M.logoShare), so against a corner
+-- of the thumbnail is against the corner of the area; WheelBackdropLogoSize
+-- percent of the area's height times LogoScale=; the full-size image, not
+-- the tile's thumbnail. b.logo: its box { cx, cy, size }, where the launch
+-- animation starts.
 function M.backdropLogo()
 	local b = M.backdrop
 	local t = b.tile
@@ -2085,7 +2106,10 @@ function M.backdropLogo()
 	end
 	local ax, ay, W, H = M.backdropArea()
 	local size = math.max(8, math.floor(H * V.WheelBackLogoSize / 100 * t.logoScale + 0.5))
-	local lx, ly = logoCentre(t, size, W, H)
+	local qx, qy = M.logoShare(t, V.IconSize * t.logoScale, V.TileW, V.TileH)
+	local vw, vh = M.logoVisible(t, size)
+	local lx = W > vw and vw / 2 + qx * (W - vw) or W / 2
+	local ly = H > vh and vh / 2 + qy * (H - vh) or H / 2
 	b.logo = { cx = ax + lx, cy = ay + ly, size = size }
 	set('BackdropLogo', 'ImageName', t.logoFull or t.logo)
 	set('BackdropLogo', 'X', tostring(math.floor(ax + lx - size / 2)))
@@ -3667,7 +3691,7 @@ function M.greyWindow(t, st, x, y)
 	if st.phase ~= 'download' and st.phase ~= 'paused' and st.phase ~= 'install' then return nil end
 	return bgWindow(t, x, y)
 end
-function M.placeUpdate(slot, t, st, x, y, f, op)
+function M.placeUpdate(slot, t, st, x, y, f, op, noImage)
 	local glow, bar, reveal = 'TileGlow' .. slot, 'TileBar' .. slot, 'TileReveal' .. slot
 	if not st then
 		show(glow, false) show(bar, false) show(reveal, false)
@@ -3700,8 +3724,9 @@ function M.placeUpdate(slot, t, st, x, y, f, op)
 	end
 	-- greyscale background, coloured up to 'part' from the left: the tile in
 	-- grey, its coloured copy cut to that width over it (the same part of
-	-- the image: the left of the tile's window on it)
-	local win = M.greyWindow(t, st, x, y)
+	-- the image: the left of the tile's window on it). noImage: the tile
+	-- shows no image (the wheel with logos only), so neither does this
+	local win = not noImage and M.greyWindow(t, st, x, y)
 	if win then
 		local cx, cy, cw, ch = win:match('^(%-?%d+),(%-?%d+),(%d+),(%d+)$')
 		local rw = math.floor(w * part + 0.5)
@@ -3908,7 +3933,7 @@ local function placeSlots()
 			local updText = st and M.updateInfo(t)
 			local updAlpha = updText and M.lineAlpha(V.UpdateInfo, slot, f) or 0
 			if updAlpha <= 0.01 then updText = nil end
-			M.placeUpdate(slot, t, st, x, y, f, op)
+			M.placeUpdate(slot, t, st, x, y, f, op, wv and M.wheelImage(t, sel) == '')
 			local infoAlpha = f
 			local infoText, sticky = tileInfo(t)
 			if infoText and not sticky then
@@ -3916,10 +3941,15 @@ local function placeSlots()
 				if infoAlpha <= 0 then infoText = nil end
 			end
 			-- the lines on the backdrop: the selected tile's there, none on the
-			-- tiles of the wheel
+			-- tiles of the wheel. The backdrop shows the selected tile, so its
+			-- lines are those of a highlighted tile (Hover as Always), wherever
+			-- the mouse is
 			if wv and V.WheelInfoBack then
 				if sel then
-					M.backdropInfo(t, updText, updAlpha, infoText, infoAlpha)
+					local u = st and V.UpdateInfo ~= 'never' and M.updateInfo(t) or nil
+					local i, sticky = tileInfo(t)
+					if i and not sticky and V.TileInfo == 'never' then i = nil end
+					M.backdropInfo(t, u, f, i, f)
 					backLines = true
 				end
 				updText, infoText = nil, nil
@@ -4651,6 +4681,9 @@ function Initialize()
 	V.LogoGreyscale = num('LogoGreyscale', 1) ~= 0
 	local bg = SKIN:GetVariable('BgStyle', 'Crop'):lower()
 	V.BgStyle = (bg == 'pan' or bg == 'parallax' or bg == 'zoom') and bg or 'crop'
+	-- the styles are the grid's: the thumbnails of the wheel are cropped (a
+	-- parallax across a "grid" one tile wide stayed at one end)
+	if V.Wheel then V.BgStyle = 'crop' end
 	V.BgOverscan = math.max(1, num('BgOverscan', 1.15))
 	V.BgPanFrames = math.max(1, math.floor(num('BgPanFrames', 180)))
 	V.BgHoverZoom = math.max(1, num('BgHoverZoom', 1.08))
@@ -5031,6 +5064,7 @@ function Show()
 	end
 	updateEmptyHint()
 	if V.AnimOpen then appear = 0 end
+	M.focusSelected()
 	-- Steam updates: the progress fills up and the borders turn (M.placeUpdate),
 	-- and the helper follows the downloads while the launcher is open
 	M.dl.f = 0
@@ -5917,6 +5951,7 @@ function SetCategory(i)
 		appear = 0
 		startTicker()
 	end
+	M.focusSelected()
 	M.reveal()
 	render(true)
 	updateDashState()
@@ -5944,6 +5979,17 @@ function HoverCategory(i)
 	SKIN:Bang('!Redraw')
 end
 
+-- The wheel: the highlight on the selected tile, the middle one (after a
+-- turn, and when the launcher opens or the category changes, so the tile in
+-- the middle is highlighted from the start)
+function M.focusSelected()
+	if not V.Wheel then return end
+	local tiles = cur().tiles
+	if #tiles == 0 then return end
+	local idx = offset % #tiles + 1
+	if V.Horizontal then focus(tiles[idx], idx, offset, 0) else focus(tiles[idx], idx, 0, offset) end
+end
+
 function Scroll(delta)
 	if not ready or launching then return end
 	local new = offset + delta * V.ScrollStep
@@ -5951,11 +5997,7 @@ function Scroll(delta)
 	if new ~= offset then
 		offset = new
 		-- the wheel: the highlight goes with the selection (the middle tile)
-		if V.Wheel then
-			local tiles = cur().tiles
-			local idx = offset % #tiles + 1
-			if V.Horizontal then focus(tiles[idx], idx, offset, 0) else focus(tiles[idx], idx, 0, offset) end
-		end
+		M.focusSelected()
 		if V.AnimScroll then
 			startTicker()
 		else

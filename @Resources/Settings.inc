@@ -34,7 +34,7 @@ NX=4
 NY=2
 ; Scroll direction: V (vertical, by rows) or H (horizontal, by columns)
 ScrollDir=V
-; Rows/columns scrolled per mouse wheel notch
+; Mouse wheel notch: rows/columns scrolled in the grid, tiles turned in the wheel
 ScrollStep=1
 ; 1 = infinite scroll: after the last row the first comes back; with fewer
 ; tiles than fit on screen they repeat, so it still scrolls round; 0 = stop at
@@ -43,8 +43,10 @@ InfiniteScroll=1
 
 ; --- Wheel ----------------------------------------------------------------------
 ; Grid: the tiles in rows and columns (NX, NY, ScrollDir). Wheel: one line of
-; tiles on an arc; the selected tile stays in the middle and the wheel turns.
-; Every tile is one cell (Size= is not used); best when docked.
+; square tiles on an arc (the thumbnails); the selected tile stays in the
+; middle and the wheel turns, and it can be the launcher's backdrop
+; (WheelBackdrop). Every thumbnail is one cell (Size=, NX, NY, IconSize and
+; BgStyle are the grid's); best when docked.
 ScrollMode=Grid
 ; Auto: along the docked side (vertical docked left or right, horizontal
 ; otherwise); Vertical or Horizontal
@@ -58,7 +60,8 @@ WheelRadius=70
 WheelSpacing=50
 ; Place of the selected tile across the launcher, in percent from its docked side
 WheelAnchor=69
-; Size of the tiles, in percent of the smaller side of the screen
+; Size of the thumbnails, in percent of the smaller side of the screen; their
+; logo is 70% of it (times LogoScale= of the tile)
 WheelTileSize=25
 ; Tiles shown (odd): the selected one and as many on each side
 WheelVisible=11
@@ -79,18 +82,21 @@ WheelMenu=Ring
 ; percent of a tile
 WheelMenuGap=50
 WheelMenuSize=50
-; 1 = the launcher's background takes the background image of the selected
-; tile (fading from one to the next), at WheelBackdropOpacity percent over BgColor
+; 1 = the backdrop: the launcher's background takes the background image of
+; the selected tile, filling it as a desktop wallpaper (cut from its centre,
+; not framed; fading from one to the next), at WheelBackdropOpacity percent
+; over BgColor
 WheelBackdrop=1
 WheelBackdropOpacity=40
 ; With WheelBackdrop=1, where the selected tile shows its logo and its lines
-; (the update line and the play time): Tile (on the tile in the wheel) or
-; Background (on the background, under the top row, where LogoPos= and
-; InfoPos= put them on the tile). The other tiles keep their logo (with
-; WheelIconsOnly the selected one shows its background image instead); with
-; the lines on the background no tile of the wheel shows any.
+; (the update line and the play time): Tile (on its thumbnail) or Background
+; (on the backdrop, under the top row, where they sit on the thumbnail: against
+; a corner of the thumbnail is against the corner of that area). The other
+; thumbnails keep their logo (with WheelIconsOnly the selected one shows its
+; background image instead); with the lines on the backdrop no thumbnail
+; shows any.
 WheelLogoOn=Tile
-; Height of the logo on the background, in percent of the area under the top
+; Height of the logo on the backdrop, in percent of the area under the top
 ; row (times LogoScale= of the tile)
 WheelBackdropLogoSize=30
 WheelInfoOn=Tile
@@ -103,12 +109,16 @@ WheelIconsOnly=0
 ; Sizes are written in pixels (e.g. 40) or as a percentage of the screen
 ; (e.g. 2%): of the width for PadX, SearchW, MenuItemPad, MenuGap and
 ; MenuIconGap, of the height for all the others.
+; Gap: under the top row, and between the tiles of the grid
 Gap=18
 ; Outer margins: PadX holds the vertical scrollbar, PadY the horizontal one.
 PadX=40
 PadY=24
-; Side of the logo box in the tiles (per category: IconSize= in [Category])
+; Side of the logo box in the tiles of the grid (per category: IconSize= in
+; [Category]); the wheel's thumbnails have their own (WheelTileSize)
 IconSize=96
+; Inner margin of a tile: from its edge to the label and to the lines of the
+; play time and updates
 LabelPad=14
 ScrollBarSize=4
 
@@ -250,6 +260,7 @@ AnimLogoSmooth=0.2
 ; LaunchAnimFrames (launch expansion)
 
 ; --- Tile backgrounds -----------------------------------------------------------
+; In the grid (the wheel's thumbnails are always cropped):
 ; BgStyle: Crop     = fixed crop at the centre of the image
 ;          Pan      = under the mouse the tile slowly slides over the image
 ;          Parallax = while scrolling the image moves slower than the tile

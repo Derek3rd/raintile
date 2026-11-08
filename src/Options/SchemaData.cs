@@ -147,7 +147,7 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "UpdateGlowTime", Label = "Border turning", Help = "Seconds the border turns when the launcher opens. 0 = it stays still.", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "s" },
                 } },
             } },
-            new Page { Id = "toprow", Title = "Top row", Icon = 0xE700, Desc = "The row at the top: the category menu and the buttons; the shortcuts, the clock and the search on the pages below.", Groups = new List<Group>
+            new Page { Id = "toprow", Title = "Top row", Icon = 0xE700, Desc = "The row at the top: the category menu, Favorites and the buttons; Recent and Not played yet, the clock and the search on the pages below.", Groups = new List<Group>
             {
                 new Group { Title = "Category menu", Help = null, Items = new List<Item>
                 {
@@ -163,18 +163,18 @@ namespace RaintileOptions
                     new Item { Kind = "color", Key = "ActiveCategoryColor", Label = "Active category", Help = "" },
                     new Item { Kind = "color", Key = "HoverCategoryColor", Label = "Category under the mouse", Help = "" },
                 } },
+                new Group { Title = null, Help = null, Switch = "ShowFavorites", Items = new List<Item>
+                {
+                    new Item { Kind = "bool", Key = "ShowFavorites", Label = "Favorites", Help = "A category made of the tiles you pick: right click a tile > Add to Favorites. Its icon button is right of the clock." },
+                } },
                 new Group { Title = "Buttons", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "int", Key = "CloseSize", Label = "Size of the X and gear buttons", Help = "", Min = 8.0, Max = 40.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "bool", Key = "ShowPower", Label = "Power button", Help = "Left of the gear: Lock, Sleep, Restart, Shut down. Restart and Shut down want a second click." },
                 } },
             } },
-            new Page { Id = "shortcuts", Title = "Favorites and Recent", Icon = 0, Desc = "Categories made of the tiles of the others: the icon buttons right of the clock.", Groups = new List<Group>
+            new Page { Id = "shortcuts", Title = "Recent and Not played yet", Icon = 0, Desc = "Categories filled by themselves with the tiles of the others: the icon buttons right of the clock.", Groups = new List<Group>
             {
-                new Group { Title = null, Help = null, Switch = "ShowFavorites", Items = new List<Item>
-                {
-                    new Item { Kind = "bool", Key = "ShowFavorites", Label = "Favorites", Help = "Right click a tile > Add to Favorites." },
-                } },
                 new Group { Title = null, Help = null, Switch = "ShowRecent", Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "ShowRecent", Label = "Recent", Help = "" },
@@ -312,15 +312,16 @@ namespace RaintileOptions
             } },
             new Page { Id = "dashboard", Title = "Widgets", Icon = 0xE9D2, Desc = "Tiles that show something instead of starting it, in any category: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>
             {
-                new Group { Title = null, Help = null, Dash = true, Items = new List<Item>
-                {
-                } },
-                new Group { Title = "Data", Help = "Any tile becomes a widget with Widget in the tile editor (Categories > the category > the tile), with its size and background.", Items = new List<Item>
+                new Group { Title = "Data", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "int", Key = "DashInterval", Label = "Update every", Help = "Only while a category with widgets is on screen.", Min = 250.0, Max = 5000.0, Step = 250.0, Unit = "ms" },
-                    new Item { Kind = "info", Key = "", Label = "Temperatures and fans", Help = "From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours)." },
+                } },
+                new Group { Title = "Temperatures and fans", Help = "From LibreHardwareMonitor (free, open source): keep it running with Options > Remote Web Server > Run on (and Run On Windows Startup). Without it, from HWiNFO with Settings > Shared Memory Support on (its free version turns it off after 12 hours).", Items = new List<Item>
+                {
                     new Item { Kind = "int", Key = "SensorPort", Label = "LibreHardwareMonitor port", Help = "The port of its web server: Options > Remote Web Server > Port in LibreHardwareMonitor (8085 unless changed).", Min = 1.0, Max = 65535.0, Step = 1.0, Unit = "", NoSlider = true },
-                    new Item { Kind = "info", Key = "", Label = "Custom widgets", Help = "Rainmeter .ini files in the Widgets folder of your data: Widget=custom, Param=<file name>." },
+                } },
+                new Group { Title = null, Help = null, Dash = true, Items = new List<Item>
+                {
                 } },
                 new Group { Title = null, Help = null, Market = true, Items = new List<Item>
                 {
@@ -342,17 +343,12 @@ namespace RaintileOptions
                     new Item { Kind = "secret", Key = "SteamGridDBKey", Label = "SteamGridDB API key", Help = "Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded. Saved encrypted: only your Windows user on this PC can read it." },
                 } },
             } },
-            new Page { Id = "advanced", Title = "Advanced", Icon = 0xE90F, Desc = "Performance, diagnostics and the entries that have no page of their own.", Groups = new List<Group>
+            new Page { Id = "advanced", Title = "Advanced", Icon = 0xE90F, Desc = "Performance, diagnostics and the entries that have no page of their own. The updates are on Info.", Groups = new List<Group>
             {
                 new Group { Title = "Performance", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "Thumbnails", Label = "Thumbnails", Help = "Uses copies of the images at the exact displayed size, made in the background." },
                     new Item { Kind = "choice", Key = "FrameRate", Label = "Animation steps", Help = "Rainmeter draws the whole window on every step: on very large screens fewer steps keep the animations smooth. Automatic: 30 per second from about 3 million pixels (e.g. 3440x1440), otherwise 60. Animations last the same either way.", Choices = new List<string[]> { new[] { "Auto", "Automatic" }, new[] { "60", "60 per second" }, new[] { "30", "30 per second" } } },
-                } },
-                new Group { Title = null, Help = null, Switch = "CheckUpdates", Items = new List<Item>
-                {
-                    new Item { Kind = "bool", Key = "CheckUpdates", Label = "Check for updates", Help = "Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info." },
-                    new Item { Kind = "choice", Key = "UpdateChannel", Label = "Updates", Help = "Nightly: also the build made on every change (e.g. 1.2.1.5, the 5th after the release 1.2.1): the newest features, not tested as much. A copy of the skin is kept in Skins\\@Backup before each update.", Choices = new List<string[]> { new[] { "Release", "Releases" }, new[] { "Nightly", "Nightly builds" } } },
                 } },
                 new Group { Title = "Diagnostics", Help = null, Items = new List<Item>
                 {
@@ -362,8 +358,13 @@ namespace RaintileOptions
                 {
                 } },
             } },
-            new Page { Id = "info", Title = "Info", Icon = 0xE946, Desc = "About Raintile, and its files.", Groups = new List<Group>
+            new Page { Id = "info", Title = "Info", Icon = 0xE946, Desc = "About Raintile, its updates, and its files.", Groups = new List<Group>
             {
+                new Group { Title = "Updates", Help = null, Items = new List<Item>
+                {
+                    new Item { Kind = "bool", Key = "CheckUpdates", Label = "Check for updates", Help = "Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info." },
+                    new Item { Kind = "choice", Key = "UpdateChannel", Label = "Channel", Help = "Nightly: also the build made on every change (e.g. 1.2.1.5, the 5th after the release 1.2.1): the newest features, not tested as much. A copy of the skin is kept in Skins\\@Backup before each update.", Choices = new List<string[]> { new[] { "Release", "Releases" }, new[] { "Nightly", "Nightly builds" } } },
+                } },
             } },
             new Page { Id = "categories", Title = "Categories", Icon = 0xECA5, Desc = "One file per category in Categories\\. Select a category to edit it; double-click it, or pick it in the menu, for its tiles.", Groups = new List<Group>
             {

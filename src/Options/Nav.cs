@@ -683,6 +683,12 @@ namespace RaintileOptions
         {
             var card = NewCard("Updates", "");
             var f = CardPanel(card);
+            // its settings (the Updates group of the Info page in the schema)
+            foreach (var item in Schema.ById("info").Groups[0].Items)
+            {
+                var row = NewItemRow(item);
+                if (row != null) f.Children.Add(row);
+            }
             updInstalled = NewHelp("", ResBrush("TextBrush"));
             updLatest = NewHelp("", ResBrush("TextBrush"));
             foreach (var row in new[] { Tuple.Create(updInstalled, "Installed"), Tuple.Create(updLatest, "Latest version") })

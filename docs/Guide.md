@@ -175,7 +175,7 @@ Three categories made of the tiles of the others. They are not in the category m
 - **Not played yet**: the tiles never launched (from Raintile, or with play time on Steam or [measured](#play-time)), the ones added last first: tiles added in the Options window remember the day (`Added=`). Up to `UnplayedCount`; `ShowUnplayed=0` turns it off.
 - **Recent**: the tiles you launched lately (`RecentOrder=Recent`) or most often (`MostUsed`), up to `RecentCount`.
 
-They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Top row > Favorites and Recent).
+They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Top row for Favorites, Top row > Recent and Not played yet for the others).
 
 ## Tags and filter bar
 
@@ -446,8 +446,8 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 | Tiles > Wheel | the wheel, how it turns, the inner wheel of categories, logos only, background of the selected tile |
 | Tiles > Backgrounds | how the background images move |
 | Tiles > Play time and updates | the play time line, play time outside Steam, Steam updates |
-| Top row | category menu (sizes, font, colours), X, gear and power buttons |
-| Top row > Favorites and Recent | Favorites, Recent, Not played yet |
+| Top row | category menu (sizes, font, colours), Favorites, X, gear and power buttons |
+| Top row > Recent and Not played yet | Recent, Not played yet |
 | Top row > Clock | time and date |
 | Top row > Search | search bar, filter bar |
 | Theme | font, text colours, background, accent, highlight |
@@ -455,12 +455,12 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 | Keybindings | open/close shortcut, close key, tile hot keys |
 | Keybindings > Keyboard | navigation keys |
 | Keybindings > Gamepad | support, open/close buttons, dead zone, repeat |
-| Widgets | widgets installed and to download, data |
+| Widgets | how often they update, the port for temperatures and fans, the example Dashboard, the widget gallery |
 | Import | the games and apps found on this PC, to add; where to look and where they go |
 | Advanced | performance, debug log, entries without a page of their own |
 | Categories | the list of categories (create, open, reorder, delete), name and icon of the selected one |
 | Categories > *each category* | its tiles side by side, **All tiles** first (grid, logo size, tile colour and background, framing and logo of every tile); a large preview to frame the background and place the logo; edit, drag a tile onto another category in the menu to move it there, turn imported games into normal tiles |
-| Info (at the bottom) | version and updates, your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide |
+| Info (at the bottom) | version and updates (whether to check, releases or nightly builds), your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide |
 
 - Every setting has a fitting control: switches, sliders with their unit (you can also type the value: number boxes take only numbers, and a comma becomes the decimal point), drop-down lists for choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit in the list after the box converts the number for the main screen). The same kind of value has the same control everywhere, in the category editor too. A value that is not valid is outlined in red and not saved until it is fixed.
 - What each setting or field does is written under its name. A setting that only applies with another one (the sizes of the inner wheel with the inner wheel) is greyed out while it does not apply, with what it needs under it, and so is a whole group (General > Window, General > Docked: only in that mode). A part that can be turned off has its switch beside the title of its page (the clock, keyboard navigation, the gamepad) or in the header of its group (the filter bar, labels, Steam updates), and the rest is greyed out while it is off; the page of the layout not in use (Grid or Wheel) is greyed out in the menu.
@@ -509,9 +509,9 @@ When an update adds settings, they are added to your `Settings.inc` with their d
 
 If something goes wrong with an update, install the package from the [releases page](https://github.com/Derek3rd/raintile/releases) by hand: your data is in its own folder and stays as it is.
 
-With `CheckUpdates=1` (Options > Advanced) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps) and on **Info** in the menu of the Options window; a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
+With `CheckUpdates=1` (Options > Info > *Updates*) the skin asks GitHub for the latest release at most once a day, in the background. When there is a newer version a dot lights up on the gear (the same dot used for new games and apps) and on **Info** in the menu of the Options window; a click opens Options > **Info**, which shows the installed and the latest version and the release notes:
 
-**Nightly builds** (`UpdateChannel=Nightly`, Options > Advanced > *Updates*): the check also looks at the pre-release `nightly`, built on every change, and offers the newer of the two. Their versions have four numbers, `1.2.1.5`: the 5th build after the release `1.2.1`; the next release (`1.2.2` or `1.3.0`) gathers them and is newer than all of them. Newer features, not tested as much: a copy of the skin is kept in `Skins\@Backup` before each update. Back to `Release`, the next release brings you back on it.
+**Nightly builds** (`UpdateChannel=Nightly`, Options > Info > *Updates*): the check also looks at the pre-release `nightly`, built on every change, and offers the newer of the two. Their versions have four numbers, `1.2.1.5`: the 5th build after the release `1.2.1`; the next release (`1.2.2` or `1.3.0`) gathers them and is newer than all of them. Newer features, not tested as much: a copy of the skin is kept in `Skins\@Backup` before each update. Back to `Release`, the next release brings you back on it.
 
 - **Direct update** downloads the release's `.rmskin` and installs it by itself: a copy of the current skin folder goes to `Skins\@Backup\Raintile-<version>-<date>` (Rainmeter does not load folders starting with @), the package's files replace the ones of the skin folder, then Rainmeter reloads every skin and the launcher opens. `@Resources\Generated` (thumbnails, lists) stays, the plugins are not touched, and a file in use (the Options program itself) is renamed and replaced; the old copy goes at the next start. If something fails, the files of the backup are put back. The package is refused if it does not hold `Skins/Raintile/Raintile.ini` or a path leaves its folder.
 - **Rainmeter Update** downloads the same package and opens it with the Rainmeter installer instead; the Options window closes. Keep the installer's default options.

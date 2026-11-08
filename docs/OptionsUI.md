@@ -35,15 +35,16 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 | The wheel, its turning, its inner wheel of categories, its backdrop | Tiles > Wheel |
 | Background images of the tiles | Tiles > Backgrounds |
 | The play time line, Steam updates on the tiles | Tiles > Play time and updates |
-| The category menu and its colours, the buttons of the top row | Top row |
-| Favorites, Recent, Not played yet | Top row > Favorites and Recent |
+| The category menu and its colours, Favorites, the buttons of the top row | Top row |
+| Recent, Not played yet | Top row > Recent and Not played yet |
 | Time and date | Top row > Clock |
 | Search bar, filter bar | Top row > Search |
 | Shared font and colours | Theme |
 | Effects, appearing tiles, smoothing, tile launch | Animations |
 | Opening keys, tile hot keys; navigation keys; the gamepad | Keybindings; > Keyboard; > Gamepad |
 | Widgets, Import, Categories | their pages |
-| Performance, updates, diagnostics | Advanced |
+| Performance, diagnostics | Advanced |
+| The updates (check, channel) with the installed and latest version | Info > Updates |
 
 - A new setting: find its part in the table. A new part gets a row here (and its
   page, or a group on the page of the part it belongs to) in the same PR.
@@ -91,6 +92,8 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
   format and its font size, then the date and its format; the height of an entry
   and its font, then its icon and the icon's spacing, then the spacing between
   entries, then the colours. A setting that depends on another comes right after it.
+- A page holds settings: a line of text that sets nothing is the help of the setting or
+  card it is about, or the page's description, never a row of its own.
 - A group (card) is one part of the launcher. A page with fewer than about four
   settings joins the page of its part as a group.
 - Two menu levels at most. A menu entry with sub-pages is a page of its own (the

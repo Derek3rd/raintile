@@ -273,13 +273,13 @@ def check_schema_layout(schema):
             first = groups and re.search(r'Kind = "([a-z]+)", Key = "([A-Za-z0-9]*)"', groups[0][2])
             if not (first and first.group(2) == psw.group(1) and first.group(1) == 'bool'):
                 fail('Options schema: page %s: its switch %s is not the first setting of its first group, or not a bool' % (pm.group(1), psw.group(1)))
-        if len(groups) == 1 and groups[0][0] != 'null' and not re.search(r'Dash|Market|Found|Other', pm.group(3)):
+        if len(groups) == 1 and groups[0][0] != 'null' and pm.group(1) != 'info' and not re.search(r'Dash|Market|Found|Other', pm.group(3)):
             fail('Options schema: page %s: its only card has a title (the page has it)' % pm.group(1))
     nav = re.search(r'NavTree = new List<NavNode>(.*?)\n        \};', schema, re.S).group(1)
     listed = re.findall(r'Page = "([a-z]+)"', nav) + [c for ch in re.findall(r'Children = new\[\] \{([^}]*)\}', nav) for c in re.findall(r'"([a-z]+)"', ch)]
     for pid in order:
         n = listed.count(pid)
-        if pid != 'info' and n != 1:
+        if pid != 'info' and n != 1:  # Info: at the bottom of the menu, not in NavTree
             fail('Options schema: page %s is in the menu (NavTree) %d times' % (pid, n))
     print('  %d pages, %d conditions' % (len(order), len(re.findall(r'When = "', schema))))
 

@@ -1,11 +1,22 @@
-# Screenshots of every page of the Options window (RaintileOptions.exe) and, with
-# -Base, of the same pages at another git ref, compared pixel by
+# Screenshots of every page of the Options window (RaintileOptions.exe), or of the
+# ones named with -Page, and, with -Base, of the same pages at another git ref, compared pixel by
 # pixel: a check by eye of what a change does to the layout. It opens the windows
 # and takes a few minutes, so it is run by hand when the window changed, never by
 # tools/check.py; with -Base it stops at once when nothing of the window changed.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\options-shots.ps1 -Base origin/nightly
 #   ... -Base HEAD     while working on a change: against its last commit
+#   ... -Page General  only the entries of the menu named (General,Tiles: several)
+#
+# -Page names the entries as the report does (General, Playtimeandupdates): spaces,
+# case, the number before and the screen after do not matter, so a file name of the
+# report works too. Only those entries are reached and shot, at both refs, and only
+# they are compared. Their shots are a content of their own in the cache: a page
+# reached on its own may look different from the same page reached after the others
+# (Found marks the games found as seen, and the dot of the menu goes), so they never
+# mix with the shots of every page, and a later run without -Page shoots every page.
+# A name that is no entry of the menu (at both refs) stops the run; an entry greyed
+# out (a mode not in use) is said in the report, not shot.
 #
 # Shots are kept: build\options-shots\cache\<key>\ (git-ignored) holds the shots of
 # one content of the window's sources (src\Options, @Resources, Raintile.ini) with
@@ -32,12 +43,23 @@ param(
     [int]$Width = 1280,
     [int]$Height = 1000,
     [switch]$Force,         # with -Base: compare even when the window did not change
-    [switch]$NewInputs      # a new copy of the data folder and of Generated
+    [switch]$NewInputs,     # a new copy of the data folder and of Generated
+    [string[]]$Page = @()   # entries of the menu to shoot; empty: every page
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $Out) { $Out = Join-Path $repo 'build\options-shots' }
 $windowFiles = @('src/Options', '@Resources/Scripts/Options.xaml')
+
+# An entry's name as the report writes it, lower case: what -Page is matched with
+function Get-PageName([string]$s) {
+    $s = $s.Trim() -replace '\.png$', '' -replace '^\d+-', '' -replace '(-tile)?(-\d+)?$', ''
+    return ($s -replace '[^A-Za-z0-9]', '').ToLowerInvariant()
+}
+# a list given through -File arrives as one string: General,Tiles
+$pageNames = @($Page | ForEach-Object { $_ -split ',' } | ForEach-Object { Get-PageName $_ } | Where-Object { $_ } | Select-Object -Unique)
+[Array]::Sort($pageNames, [StringComparer]::Ordinal)
+if ($Page.Count -gt 0 -and $pageNames.Count -eq 0) { throw ('-Page: no name of an entry in "' + ($Page -join ',') + '"') }
 
 function Invoke-Git {
     # git writes progress to stderr: in PowerShell 5.1 with 'Stop' that would be an error
@@ -167,6 +189,9 @@ function Get-Key([string]$ref, [string]$inputsId) {
     }
     [Array]::Sort($lines, [StringComparer]::Ordinal)
     $text = $inputsId + "`n" + $Width + 'x' + $Height + "`n" + ($lines -join "`n")
+    # the shots of some pages: a content of their own (see -Page above); without
+    # -Page the text, so the key, is the one of the shots before -Page
+    if ($pageNames.Count -gt 0) { $text = 'pages ' + ($pageNames -join ',') + "`n" + $text }
     $sha = New-Object System.Security.Cryptography.SHA1Managed
     $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text))
     return ((($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 16))
@@ -232,7 +257,9 @@ function Save-Page($win, [IntPtr]$hwnd, [string]$dir, [string]$name) {
     $sp.SetScrollPercent(-1, 0)
 }
 
-# Opens one window (the program 'exe') and shoots every page into 'dir'
+# Opens one window (the program 'exe') and shoots every page (with -Page, the
+# entries named) into 'dir'; menu.txt there lists every entry, ' greyed' after those
+# that cannot be selected
 function Save-Window([string]$exe, [string]$resources, [string]$dir) {
     New-Item -ItemType Directory -Force $dir | Out-Null
     $a = @('-Resources', ('"' + $resources + '"'), '-Config', 'RaintileShots')
@@ -258,6 +285,7 @@ function Save-Window([string]$exe, [string]$resources, [string]$dir) {
         [void][ShotsWin32]::MoveWindow($hwnd, 0, 0, $Width, $Height, $true)
         Start-Sleep -Milliseconds 2500   # the first page is built after the window shows
         $menu = @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -lt 200 })
+        $entries = New-Object System.Collections.Generic.List[string]
         for ($i = 0; $i -lt $menu.Count; $i++) {
             # the entries are found again: building a page may rebuild the menu
             $item = @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -lt 200 })[$i]
@@ -265,7 +293,10 @@ function Save-Window([string]$exe, [string]$resources, [string]$dir) {
                 ForEach-Object { $_.Current.Name } | Where-Object { $_ -match '[A-Za-z]' }) | Select-Object -Last 1
             $name = '{0:00}-{1}' -f $i, ($label -replace '[^A-Za-z0-9]', '')
             # a page of a mode not in use (Page.When) is greyed out: it cannot be selected
-            if (-not $item.Current.IsEnabled) { continue }
+            $enabled = $item.Current.IsEnabled
+            if ($enabled) { $entries.Add($name) } else { $entries.Add("$name greyed") }
+            if (-not $enabled) { continue }
+            if ($pageNames.Count -gt 0 -and $pageNames -notcontains (Get-PageName $label)) { continue }
             Select-Item $item
             Save-Page $win $hwnd $dir $name
             # a category page: also its first tile (after All tiles)
@@ -275,6 +306,7 @@ function Save-Window([string]$exe, [string]$resources, [string]$dir) {
                 Save-Page $win $hwnd $dir "$name-tile"
             }
         }
+        [System.IO.File]::WriteAllLines((Join-Path $dir 'menu.txt'), $entries)
         Write-Output ('  {0}: {1} shots' -f $dir.Substring($Out.Length + 1), @(Get-ChildItem $dir -Filter *.png).Count)
     }
     finally { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
@@ -300,7 +332,32 @@ function Save-Tree([string]$label, [string]$tree, [string]$key) {
     }
     if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }   # left by a run that was stopped
     Save-Window (Build-Program $tree (Join-Path $Out "$label-bin")) (New-Stage $tree) $dir
-    [System.IO.File]::WriteAllText((Join-Path $dir 'done.txt'), $label)
+    $what = $label
+    if ($pageNames.Count -gt 0) { $what += ', pages ' + ($pageNames -join ',') }
+    [System.IO.File]::WriteAllText((Join-Path $dir 'done.txt'), $what)
+}
+
+# With -Page: what became of a name in the shots of 'key', as a phrase of the report;
+# empty when it was shot. Shots of every page made before menu.txt never get here.
+function Get-PageState([string]$key, [string]$page) {
+    $menuFile = Join-Path (Join-Path $cache $key) 'menu.txt'
+    $entries = @([System.IO.File]::ReadAllLines($menuFile) | Where-Object { (Get-PageName ($_ -replace ' greyed$', '')) -eq $page })
+    if ($entries.Count -eq 0) { return 'not in the menu' }
+    if (@($entries | Where-Object { $_ -notmatch ' greyed$' }).Count -eq 0) { return 'greyed out (a mode not in use), not shot' }
+    return ''
+}
+
+# With -Page: a name that is no entry of the menu at any ref shot stops the run, with
+# the entries there are (of this checkout)
+function Assert-Pages([string[]]$keys) {
+    $unknown = @($pageNames | Where-Object {
+            $n = $_
+            @($keys | Where-Object { (Get-PageState $_ $n) -ne 'not in the menu' }).Count -eq 0
+        })
+    if ($unknown.Count -eq 0) { return }
+    $known = @([System.IO.File]::ReadAllLines((Join-Path (Join-Path $cache $keys[0]) 'menu.txt')) |
+        ForEach-Object { ($_ -replace ' greyed$', '') -replace '^\d+-', '' })
+    throw ('-Page: no entry ' + ($unknown -join ', ') + ' in the menu. The entries: ' + ($known -join ', '))
 }
 
 # current\ and base\ were the shots before the cache
@@ -314,9 +371,11 @@ if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
 }
 $inputsId = Initialize-Inputs
 
+if ($pageNames.Count -gt 0) { Write-Output ('Pages: ' + ($pageNames -join ', ')) }
 Write-Output 'This checkout...'
 $curKey = Get-Key '' $inputsId
 Save-Tree 'current' $repo $curKey
+if ($pageNames.Count -gt 0 -and -not $Base) { Assert-Pages @($curKey) }
 
 if ($Base) {
     Write-Output "$Base..."
@@ -336,11 +395,20 @@ if ($Base) {
         try { Save-Tree 'base' $tree $baseKey }
         finally { [void](Invoke-Git worktree remove --force $tree) }
     }
+    # a page only in one of them (added or removed) is compared as such
+    if ($pageNames.Count -gt 0) { Assert-Pages @($curKey, $baseKey) }
 
     $report = New-Object System.Collections.Generic.List[string]
     $report.Add("Options window: this checkout ($curKey) against $Base ($baseKey)")
+    if ($pageNames.Count -gt 0) { $report.Add('Only the pages ' + ($pageNames -join ', ')) }
     $report.Add('(changed pixels, area x0,y0-x1,y1; changes on 2 rows or fewer, the edges of a scrolled view, count as the same)')
     $report.Add('')
+    foreach ($n in $pageNames) {
+        foreach ($side in @(@($curKey, 'this checkout'), @($baseKey, $Base))) {
+            $state = Get-PageState $side[0] $n
+            if ($state) { $report.Add(('  {0,-34} {1} in {2}' -f $n, $state, $side[1])) }
+        }
+    }
     $a = Join-Path $cache $baseKey
     $b = Join-Path $cache $curKey
     $diffDir = Join-Path $Out 'diff'
@@ -366,7 +434,13 @@ if ($Base) {
     Write-Output ('Pictures of the changes: ' + $diffDir)
     Write-Output ('Shots: ' + $b + ' (this checkout), ' + $a + " ($Base)")
 }
-else { Write-Output ('Shots: ' + (Join-Path $cache $curKey)) }
+else {
+    foreach ($n in $pageNames) {
+        $state = Get-PageState $curKey $n
+        if ($state) { Write-Output "  ${n}: $state" }
+    }
+    Write-Output ('Shots: ' + (Join-Path $cache $curKey))
+}
 
 # the 12 contents used last are kept
 Get-ChildItem -LiteralPath $cache -Directory | Sort-Object LastWriteTime -Descending | Select-Object -Skip 12 |

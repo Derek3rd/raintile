@@ -364,7 +364,7 @@ namespace RaintileOptions
                     double h = hz ? p.Cells * (th + gap) - gap : p.Lines * (th + gap) - gap;
                     double x = hz ? line * (tw + gap) : p.Cross * (tw + gap);
                     double y = hz ? p.Cross * (th + gap) : line * (th + gap);
-                    var e = NewPreviewTile(p.Tile, w, h, Math.Min(radius, Math.Min(w, h) / 2), labels, false, g);
+                    var e = NewPreviewTile(p.Tile, w, h, Math.Min(radius, Math.Min(w, h) / 2), labels, false, g, true, false, true);
                     Canvas.SetLeft(e, x); Canvas.SetTop(e, y);
                     grid.Children.Add(e);
                 }

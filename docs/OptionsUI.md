@@ -8,7 +8,7 @@ Most rules are already code: the constants and helpers in `src/Options/Ui.cs`
 (`Glyph`, `Fs`, `Gap`, `FieldWidth`, `NewHelp`, `NewSectionTitle`, `NewLabelBlock`,
 `NewClearButton`, `NewDeleteButton`, `NewResetIcon`, `SetActionVisible`,
 `MarkInvalid`, `SetTrimmed`, `NewNumberField`, `NewSizeField`, `NewChoiceBox` with
-`SelectChoice` / `ChoiceValue`, `NumericOnly`, `NewEqualButtons`, `ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
+`SelectChoice` / `ChoiceValue` / `SetChoices`, `NumericOnly`, `NewEqualButtons`, `AddRowNote`, `ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
 `SetFormHelp`. Build new UI with them: no glyph codes,
 font sizes or margins written by hand. When a page needs something the helpers do
 not have, add it to `Ui.cs` and to this page, not to the page's own file.
@@ -29,6 +29,7 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 
 | Part of the launcher | Page |
 | --- | --- |
+| Saved sets of the settings (profiles): pick, load, save, delete | General (its first card) |
 | Where it shows, its mode (full screen, window, docked), margins, opening and closing | General |
 | Grid or wheel, scrolling and spacing of both, the tile itself in both (colour, corners, inner margin, highlight, label) | Tiles |
 | Rows and columns, the grid tiles' logo size, scroll direction, edge fade, how the background images move, scrollbar | Tiles > Grid |
@@ -158,6 +159,10 @@ always possible.
   - the full text of something cut with an ellipsis (always: `SetTrimmed` shows it
     only when the text is actually cut);
   - a keyboard shortcut (Ctrl+S on Save).
+- A state to notice that is not a setting's value (General > Profiles: the settings in
+  the window differ from the profile shown) is a note in the accent colour under the
+  label of its row (`AddRowNote`, as the reason of a row that does not apply), shown
+  only while it holds.
 
 ## 2. One glyph, one action
 
@@ -166,7 +171,7 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 | Glyph | Constant | Action | Tooltip wording |
 |---|---|---|---|
 | `0xE7A7` | `Glyph.Reset` | **A field** goes back to its default, or to the value of All tiles | "Restore default", "Back to the value of All tiles" |
-| `0xE70F` | `Glyph.Edit` | **A row of a list** shown read-only (Import > Your folders) is edited in place; the same button ends the editing. Shown with the mouse over the row or the focus in it (faded out otherwise, so the pad still reaches it) | "Edit ...", "Done" |
+| `0xE70F` | `Glyph.Edit` | **A row of a list** shown read-only (Import > Your folders) is edited in place; the same button ends the editing. Shown with the mouse over the row or the focus in it (faded out otherwise, so the pad still reaches it). **The entry picked in a combo** of entries saved on disk (General > Profiles) is renamed: in the action column of the combo's row, the new name asked in a dialog, hidden when the entry cannot be renamed | "Edit ...", "Done", "Rename ..." |
 | `0xE711` | `Glyph.Clear` | **A field** is emptied: no key, no colour, no image, no icon. When the value is a file of the data folder (an image, an icon) the file goes to the Recycle Bin, asked first | "Clear the ..." |
 | `0xE74D` | `Glyph.Delete` | **An entry of a list** goes away (a tile, a category): in the list's header, always asked | "Delete ..." |
 | `0xE710` | `Glyph.Add` | A new entry of a list | "New ..." |
@@ -174,7 +179,8 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 
 In short: the arrow and the x act on a field, in the action column of its row (or,
 for a field with two values such as a pair of keys, right after each value); the bin
-acts on a whole entry of a list, in the list's header. A field never has a bin.
+acts on a whole entry of a list, in the list's header; the pencil edits a row of a
+list, or renames the entry picked in a combo. A field never has a bin.
 
 - A new glyph is checked by drawing it (Segoe MDL2 Assets in a TextBlock, saved to a
   picture) before its constant goes into `Glyph`: codes are not written from memory.
@@ -345,8 +351,11 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 - Changes wait for "Save and refresh" (the status says "Unsaved changes."), and
   closing the window asks.
 - Operations on files that happen at once (sending an image or a category to the
-  Recycle Bin, adding tiles from Import or the widget gallery) say so in their help,
-  and the destructive ones ask first.
+  Recycle Bin, adding tiles from Import or the widget gallery, saving or deleting a
+  profile) say so in their help, and the destructive ones ask first.
+- The settings of a widget wait too (`widgetValues`, written by `SaveAll`), and so
+  does a profile picked or loaded: it only puts its values in the window, as if they
+  had been set by hand.
 
 ## 11. Checklist for a change to the window
 

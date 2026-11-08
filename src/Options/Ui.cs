@@ -329,11 +329,19 @@ namespace RaintileOptions
         // its label, shown while it does not apply (SetRowApplies)
         public TextBlock AddRowReason(Border row, string reason)
         {
+            return AddRowNote(row, reason);
+        }
+
+        // A note in the accent colour under the label of a row, after its help:
+        // a reason (AddRowReason) or a state to notice (the settings in the window
+        // differ from the profile). Its caller shows and hides it.
+        public TextBlock AddRowNote(Border row, string text)
+        {
             var left = (StackPanel)((Grid)row.Child).Children[0];
-            var why = NewHelp(reason, ResBrush("AccentBrush"));
-            why.Margin = T(0, Gap.Help, 0, 0);
-            AddTo(left, why);
-            return why;
+            var note = NewHelp(text, ResBrush("AccentBrush"));
+            note.Margin = T(0, Gap.Help, 0, 0);
+            AddTo(left, note);
+            return note;
         }
 
         // A row that does not apply: its controls disabled (the gamepad passes
@@ -538,11 +546,21 @@ namespace RaintileOptions
         public static ComboBox NewChoiceBox(IEnumerable<string[]> choices, string current, Action<string> changed)
         {
             var cb = new ComboBox();
-            foreach (var c in choices) cb.Items.Add(new ComboBoxItem { Content = c[1], Tag = c[0] });
-            if (!SelectChoice(cb, current) && cb.Items.Count > 0) cb.SelectedIndex = 0;
+            if (!SetChoices(cb, choices, current) && cb.Items.Count > 0) cb.SelectedIndex = 0;
             if (changed != null)
                 cb.SelectionChanged += (s, e) => { string v = ChoiceValue(cb); if (v != null) changed(v); };
             return cb;
+        }
+
+        // The { value, label } pairs of a combo, again (a list read from disk that
+        // changed), 'current' selected; false when it is not one of them (nothing
+        // selected). It reports the change like a pick: callers keep their guard.
+        public static bool SetChoices(ComboBox cb, IEnumerable<string[]> choices, string current)
+        {
+            cb.SelectedIndex = -1;
+            cb.Items.Clear();
+            foreach (var c in choices) cb.Items.Add(new ComboBoxItem { Content = c[1], Tag = c[0] });
+            return SelectChoice(cb, current);
         }
 
         // Selects the item with this value (case-insensitive); false when there is none

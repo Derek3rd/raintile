@@ -5,6 +5,8 @@
 // the widget's folder ("<Name>=<value>"; secrets encrypted with DPAPI, like
 // the SteamGridDB key). The launcher writes the values in place of
 // #OPTION:<Name># (not the secrets); the widget's scripts read the file.
+// Like every other setting, a change waits in the window (widgetValues) and
+// is written by Save and refresh (SaveAll); profiles change them the same way.
 
 using System;
 using System.Collections.Generic;
@@ -95,16 +97,50 @@ namespace RaintileOptions
             return d;
         }
 
+        // Values changed in the window and not saved yet: widget id -> its whole
+        // settings.inc as it will be written
+        readonly Dictionary<string, Dictionary<string, string>> widgetValues = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+
+        // The values of a widget as the window has them (a copy): the ones not
+        // saved yet, otherwise its settings.inc
+        Dictionary<string, string> GetWidgetValues(string id)
+        {
+            Dictionary<string, string> v;
+            return new Dictionary<string, string>(widgetValues.TryGetValue(id, out v) ? v : ReadWidgetSettings(id), StringComparer.OrdinalIgnoreCase);
+        }
+
+        // New values of a widget, written by Save and refresh: the same as its
+        // file again, nothing is left to write
+        void SetWidgetValues(string id, Dictionary<string, string> values)
+        {
+            var file = ReadWidgetSettings(id);
+            bool same = file.Count == values.Count && values.All(kv => { string f; return file.TryGetValue(kv.Key, out f) && f == kv.Value; });
+            if (same) widgetValues.Remove(id);
+            else widgetValues[id] = new Dictionary<string, string>(values, StringComparer.OrdinalIgnoreCase);
+        }
+
+        // Save and refresh: the values changed, into the widgets still installed;
+        // what could not be written, one line per widget
+        List<string> WriteWidgetValues()
+        {
+            var failed = new List<string>();
+            foreach (var kv in widgetValues)
+            {
+                if (!File.Exists(WidgetFile(kv.Key))) continue;
+                try { WriteWidgetSettings(kv.Key, kv.Value); }
+                catch (Exception ex) { failed.Add(kv.Key + ": " + ex.Message); }
+            }
+            widgetValues.Clear();
+            return failed;
+        }
+
         // The whole file again (a .tmp first): one line per value
         static void WriteWidgetSettings(string id, Dictionary<string, string> values)
         {
             var sb = new StringBuilder("; Settings of this widget, written by Raintile's Options window\r\n");
             foreach (var kv in values.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
                 sb.Append(kv.Key).Append('=').Append(System.Text.RegularExpressions.Regex.Replace(kv.Value ?? "", @"[\r\n]+", " ")).Append("\r\n");
-            string f = WidgetSettingsFile(id);
-            File.WriteAllText(f + ".tmp", sb.ToString(), Core.Utf8);
-            if (File.Exists(f)) File.Delete(f);
-            File.Move(f + ".tmp", f);
+            Core.WriteAllTextAtomic(WidgetSettingsFile(id), sb.ToString());
         }
 
         void ShowWidgetPage(string id)
@@ -116,7 +152,7 @@ namespace RaintileOptions
             pageSwitch.Content = null;
             // what the widget is, then where its settings go
             string info = WidgetInfo(id, "Information");
-            pageDesc.Text = (info != "" ? info.TrimEnd('.') + ". " : "") + "Its settings are saved in its folder (settings.inc); what a single tile shows (e.g. which game) is its Widget setting, in the tile editor.";
+            pageDesc.Text = (info != "" ? info.TrimEnd('.') + ". " : "") + "Its settings are saved in its folder (settings.inc) by Save and refresh; what a single tile shows (e.g. which game) is its Widget setting, in the tile editor.";
         }
 
         // The settings of a widget, as the rows of the other pages: its name and
@@ -130,17 +166,16 @@ namespace RaintileOptions
             var f = CardPanel(card);
             AddTo(sp, card);
             var defs = WidgetOptions(id);
-            var values = ReadWidgetSettings(id);
+            var values = GetWidgetValues(id);
             Func<WidgetOptionDef, string> value = d => { string v; return values.TryGetValue(d.Name, out v) ? v : d.Default; };
             var whens = new List<Action>();
             Action updateWhens = () => { foreach (var a in whens) a(); };
             Action<string, string> save = (name, v) =>
             {
                 values[name] = v;
-                try { WriteWidgetSettings(id, values); }
-                catch (Exception ex) { ShowDialog("Raintile", "The settings could not be saved: " + ex.Message); return; }
-                // the launcher writes the values into its widgets when it loads
-                needsRefresh = true;
+                // written by Save and refresh: the launcher puts the values into
+                // its widgets when it loads
+                SetWidgetValues(id, values);
                 UpdateDirty();
                 updateWhens();
             };

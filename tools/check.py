@@ -223,6 +223,7 @@ def check_settings_schema():
     for key in sorted(set(re.findall(r'Key = "([^"]+)"', schema)) - seen):
         fail('the Options schema has %s, which is not in Settings.inc' % key)
     print('  %d settings' % len(settings))
+    check_profiles(schema, seen)
     check_schema_layout(schema)
     # the kinds of what Import finds: the same in the window and in Scan.ps1
     ui = re.findall(r'new ImportKind \{ Id = "([a-z]+)"', schema)
@@ -231,6 +232,30 @@ def check_settings_schema():
     ps = re.findall(r"'([a-z]+)'", m.group(1)) if m else []
     if ui != ps:
         fail('the kinds of Import differ: IMPORT_KINDS of SchemaData.cs %s, $IMPORT_KINDS of Scan.ps1 %s' % (ui, ps))
+
+
+def check_profiles(schema, settings):
+    # Options > General > Profiles: what a profile leaves out are settings, and
+    # every secret is left out (it is encrypted for one Windows user); the look
+    # of a category it holds is what Raintile.lua reads of [Category] but the
+    # name, place, Hidden, Sort and icon, so a new look key is not forgotten
+    m = re.search(r'PROFILE_EXCLUDED = \{([^}]*)\}', schema)
+    excluded = re.findall(r'"([A-Za-z0-9_]+)"', m.group(1)) if m else []
+    if not excluded:
+        fail('Options schema: PROFILE_EXCLUDED is missing')
+    for key in excluded:
+        if key not in settings:
+            fail('Options schema: PROFILE_EXCLUDED names %s, which is not in Settings.inc' % key)
+    for key in re.findall(r'Kind = "secret", Key = "([A-Za-z0-9_]+)"', schema):
+        if key not in excluded:
+            fail('Options schema: the secret %s is not in PROFILE_EXCLUDED (a profile would copy it)' % key)
+    m = re.search(r'CATEGORY_LOOK = \{([^}]*)\}', schema)
+    look = {k.lower() for k in re.findall(r'"([A-Za-z0-9_]+)"', m.group(1))} if m else set()
+    lua = open(os.path.join(ROOT, '@Resources', 'Scripts', 'Raintile.lua'), encoding='ascii').read()
+    read = set(re.findall(r'catKeys\.([a-z]+)', lua)) - {'name', 'order', 'hidden', 'sort', 'icon'}
+    if look != read:
+        fail('Options schema: CATEGORY_LOOK %s differs from the look keys of [Category] that Raintile.lua reads %s'
+             % (sorted(look), sorted(read)))
 
 
 def check_schema_layout(schema):
@@ -268,7 +293,9 @@ def check_schema_layout(schema):
     # its page's; a page's only card has no title (the page has it); only the
     # first card of a page may have neither a title nor a switch
     for pm in re.finditer(r'new Page \{ Id = "([a-z]+)"[^\n]*?Title = "([^"]*)"(.*?)\n            \} \},', schema, re.S):
-        groups = re.findall(r'new Group \{ Title = (null|"[^"]*"), ([^\n]*?)(?:Switch = "([A-Za-z0-9]+)", )?Items = new List<Item>\n\s*\{\n(.*?)\n\s*\} \},', pm.group(3), re.S)
+        # (the closing line from the start of a line: a group without items does
+        # not take the one after it)
+        groups = re.findall(r'new Group \{ Title = (null|"[^"]*"), ([^\n]*?)(?:Switch = "([A-Za-z0-9]+)", )?Items = new List<Item>\n\s*\{\n(.*?)^\s*\} \},', pm.group(3), re.S | re.M)
         groups = [(title, switch, body, head) for title, head, switch, body in groups]
         for n, (title, switch, body, head) in enumerate(groups):
             first = re.search(r'Kind = "([a-z]+)", Key = "([A-Za-z0-9]*)"', body)

@@ -123,6 +123,16 @@ namespace RaintileOptions
             File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", Utf8);
         }
 
+        // A whole file written safely: a .tmp first, then put in its place, so a
+        // failure never leaves it half written (UTF-8 without BOM)
+        public static void WriteAllTextAtomic(string path, string text)
+        {
+            string tmp = path + ".tmp";
+            File.WriteAllText(tmp, text, Utf8);
+            if (File.Exists(path)) File.Replace(tmp, path, null);
+            else File.Move(tmp, path);
+        }
+
         // --- Colours -----------------------------------------------------------------
 
         // R, G, B[, A] from "R,G,B[,A]" or hex RRGGBB[AA] (with or without # or 0x)

@@ -122,10 +122,27 @@ namespace RaintileOptions
 
         static readonly MethodInfo buttonOnClick = typeof(ButtonBase).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic);
 
+        // A timer whose work runs in a dispatcher operation of its own, not in its
+        // Tick: the work may open a modal dialog (the pad pressing a button that
+        // asks something), and a DispatcherTimer does not tick while its own Tick
+        // is inside one, so the pad would stop in the dialog. This way the work
+        // runs inside the dialog's loop too, one call queued at a time.
+        public static DispatcherTimer NewLoopTimer(TimeSpan interval, DispatcherPriority priority, Action work)
+        {
+            var t = new DispatcherTimer(priority) { Interval = interval };
+            bool queued = false;
+            t.Tick += (s, e) =>
+            {
+                if (queued) return;
+                queued = true;
+                t.Dispatcher.BeginInvoke(new Action(() => { queued = false; if (t.IsEnabled) work(); }), priority);
+            };
+            return t;
+        }
+
         void InitGamepad()
         {
-            padTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = TimeSpan.FromMilliseconds(16) };
-            padTimer.Tick += (s, e) => PadTick();
+            padTimer = NewLoopTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Input, PadTick);
             // only while this program is in the foreground (its dialogs too)
             app.Activated += (s, e) => StartPad();
             win.Activated += (s, e) => StartPad();
@@ -423,7 +440,10 @@ namespace RaintileOptions
             {
                 var all = new List<FrameworkElement>();
                 CollectPadTargets(root, all);
-                next = all.OfType<Button>().FirstOrDefault(b => b.IsDefault) ?? all.FirstOrDefault();
+                // a dialog that asks for a text (a name): its field, ready for A
+                // (the keyboard), whether or not it has the focus yet
+                next = (root != win ? all.OfType<TextBox>().FirstOrDefault(t => !t.IsReadOnly) : null)
+                    ?? all.OfType<Button>().FirstOrDefault(b => b.IsDefault) ?? all.FirstOrDefault();
             }
             if (next != null) PadSetFocus(next, false);
         }

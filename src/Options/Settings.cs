@@ -71,14 +71,22 @@ namespace RaintileOptions
             try { screenPx = GetScreenPixels(); } catch { }
         }
 
-        void UpdateDirty()
+        // Something in the window that Save and refresh would write: settings,
+        // category files, widget settings (the profile in use aside)
+        bool SettingsUnsaved()
         {
             bool changed = values.Any(kv => { string f; fileValues.TryGetValue(kv.Key, out f); return kv.Value != f; });
-            bool dirty = changed || changedFiles.Count > 0 || needsRefresh;
+            return changed || changedFiles.Count > 0 || needsRefresh || widgetValues.Count > 0;
+        }
+
+        void UpdateDirty()
+        {
+            bool dirty = SettingsUnsaved() || ProfileUnsaved;
             dirtySettings = dirty;
             status.Text = dirty ? "Unsaved changes." : "";
             status.Foreground = dirty ? ResBrush("AccentBrush") : ResBrush("DimBrush");
             win.Title = dirty ? "Raintile - Options *" : "Raintile - Options";
+            QueueProfileState();
         }
 
         void UpdateResets()
@@ -738,6 +746,7 @@ namespace RaintileOptions
                     continue;
                 }
                 if (group.Dash) { AddTo(sp, NewDashCard()); continue; }
+                if (group.Profiles) { AddTo(sp, NewProfilesCard(group)); continue; }
                 if (group.Market)
                 {
                     // widgets to download (its own card)

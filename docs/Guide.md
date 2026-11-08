@@ -32,6 +32,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Adding games and apps](#adding-games-and-apps)
   - [Games no longer installed](#games-no-longer-installed)
 - [Options window](#options-window)
+  - [Profiles](#profiles)
 - [Your data and updates](#your-data-and-updates)
 - [Settings reference](#settings-reference)
 - [Sizes in pixels or percentages](#sizes-in-pixels-or-percentages)
@@ -240,7 +241,7 @@ The **Dashboard** (`Categories\Dashboard.ini`, added once to existing data too) 
 - The data is collected by the background helper (the one of the [gamepad](#gamepad)) only while a category with widgets is on screen, every `DashInterval` ms (default 1000): with it closed nothing is measured.
 - **Modrinth instances** (widget gallery, under Games): the instances of [Modrinth App](https://modrinth.com/app), the last played first, with their icons; a click starts one. Its script reads Modrinth App's database (read only) when the category comes on screen. More cells for the tile (`Size=1x2`), more rows. Widgets can do the same for anything: see [Writing widgets](Widgets.md).
 - **Steam achievements** (widget gallery, under Games): the achievements of the Steam game played last, or of the game in the tile's *Widget setting* (its Steam app id, `WidgetOption=570`): how many are unlocked, the last ones unlocked, the locked ones most players have. A click opens the game's achievements in Steam. It needs your Steam Web API key (free, from [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey)) in Options > Widgets > Steam achievements (the widget's own settings), and your profile's game details public; it asks Steam at most every 5 minutes for the same game.
-- Installed widgets with settings of their own (a key, a colour) have an entry each under Options > **Widgets**, in the menu on the left (click *Widgets* again to open or close the list); the settings are kept in the widget's folder (`settings.inc`) and survive its updates. What a single tile shows (e.g. which game) is its *Widget setting* in the tile editor instead.
+- Installed widgets with settings of their own (a key, a colour) have an entry each under Options > **Widgets**, in the menu on the left (click *Widgets* again to open or close the list); the settings are kept in the widget's folder (`settings.inc`), written by **Save and refresh** like the other settings, and survive its updates. What a single tile shows (e.g. which game) is its *Widget setting* in the tile editor instead.
 - A custom widget can have parts (`Part=1` on its meters): the highlight goes onto the part under the mouse and a click runs the part's own action (see [Writing widgets](Widgets.md#parts-of-a-tile)).
 - Widgets are left out of search, Favorites, Recent and the filters. In a sorted category they are sorted like the other tiles (by name, by when they were added...); pin them to keep them first.
 - Clicking a widget runs its `Command=`, or by default opens what fits: Task Manager (CPU, GPU, RAM, processes), the disk in Explorer, network or system settings.
@@ -455,7 +456,7 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 
 | Section | What it holds |
 | --- | --- |
-| General | area covered (whole screen or work area, monitor), mode (full screen, window, docked) and the window's or docked launcher's own settings, margins, opening and closing behaviour, fade |
+| General | profiles (saved sets of the settings, to switch between them), area covered (whole screen or work area, monitor), mode (full screen, window, docked) and the window's or docked launcher's own settings, margins, opening and closing behaviour, fade |
 | Tiles | grid or wheel, infinite scroll, mouse wheel notch, space under the top row; the tiles' colour, corners, inner margin, highlight and labels (grid and wheel) |
 | Tiles > Grid | default grid, logo size, scrolling direction, edge fade, how the background images move, scrollbar |
 | Tiles > Wheel | the wheel's shape, its thumbnails (size, logos only, names), the backdrop, how it turns, the inner wheel of categories |
@@ -496,6 +497,15 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 
 The window hides the launcher while open. You can always keep editing the files by hand.
 
+### Profiles
+
+Options > **General** > **Profiles** keeps named sets of the settings, to switch between them: a desk and a couch setup, a docked wheel and a full-screen grid, a test.
+
+- **What a profile holds**: every setting of the Options pages but where Import looks and where it puts what it adds (the stores, your folders, the search on start, the categories of games and apps), the SteamGridDB key (encrypted for your Windows user), the updates, the debug log, the LibreHardwareMonitor port and the measuring of play time; the look of each category (its grid, logo size, tile colour and opacity, framing, places of the logo and of the play time line: `NX`, `NY`, `IconSize`, `TileColor`, `TileOpacity`, `BgFocus`, `BgZoom`, `LogoPos`, `LogoScale`, `InfoPos`, `BackLogoPos`, `BackLogoScale`, `BackInfoPos` in `[Category]`); the settings of the installed widgets, not their secrets. Not your tiles, nor the name, icon, place in the menu, Hidden and Order of tiles of the categories, nor images, favorites, usage or play time.
+- **Picking a profile** in the list puts its settings in the window, on every page, as if you had set them by hand: **Save and refresh** applies them, Close without saving keeps the ones you had. When the window has settings no profile holds (changed since the profile shown, or no profile shown) it asks first. A category or widget that is no longer there is passed over; one the profile does not know keeps its look and settings. **Default settings** are the ones Raintile comes with (the example Dashboard keeps its own grid; your categories have no look of their own).
+- **Load** puts the profile's settings in the window again, after you changed them; a note under the buttons says when the window differs from the profile shown. **Save** writes the window's settings into the profile shown, **Save as new...** into a new one, **Delete** moves the profile shown to the Recycle Bin (asked first), and the pencil beside the list renames it (the profile in use stays the one in use): these write at once. The profile in use is noted when the settings are saved (at once when there is nothing else to save), and is shown the next time.
+- The files: `Profiles\<name>.ini` in the data folder, a `[Settings]` section, a `[Category <file>]` per category and a `[Widget <id>]` per widget (an empty value: none of its own), and `Profiles\Current.txt`, the profile in use. They can be edited by hand (a line that is not a setting of a profile is passed over) and are part of the backups.
+
 ## Your data and updates
 
 ### Where your data is
@@ -508,6 +518,7 @@ State.inc         last category and scroll positions
 Categories\*.ini  your categories and tiles
 Images\           their icons, backgrounds and logos
 Widgets\          custom widgets, installed from the gallery or by hand
+Profiles\         your profiles (Options > General > Profiles) and Current.txt, the one in use
 Favorites.txt     your favorite tiles
 Usage.txt         how many times and when each tile was launched (Recent)
 Seen.txt          games and apps already shown in the Import list
@@ -519,7 +530,7 @@ Installing an update replaces the skin folder, so nothing of yours may live ther
 
 **Back up and restore**: Options > Info > *Backup* saves the whole data folder as a zip (*Back up...*) and puts a backup back (*Restore...*). Restoring never deletes your current data: it is moved to a folder next to it (`Raintile.before-restore-<date>`), and put back if something goes wrong. A backup also moves your launcher to another PC; the SteamGridDB key in it only works for the same Windows user.
 
-When an update adds settings, they are added to your `Settings.inc` with their default value (and settings it removes go), keeping your values; this happens by itself on the first load after the update. To start over from the defaults, delete the data folder and refresh the skin.
+When an update adds settings, they are added to your `Settings.inc` with their default value (and settings it removes go), keeping your values; this happens by itself on the first load after the update. To start over from the default settings, pick *Default settings* in Options > General > Profiles (your categories and tiles stay); to start over from scratch, delete the data folder and refresh the skin.
 
 ### Updates
 

@@ -80,16 +80,25 @@ Sizes in percent (margins, menu, fonts) are of the area, not of the window, so t
 - **Wheel**: one line of tiles on an arc of a circle. The selected tile stays in the middle and the wheel turns: the mouse wheel, the arrows and the gamepad turn it by one tile, `Enter` / `A` launch the middle one. Best when docked.
   - The arc runs along the docked side (`WheelAxis=Auto`; across the screen in a window or full screen) and bulges towards the screen (`WheelCurve=Out`, or hollow: `In`). `WheelRadius` is in percent of the launcher's length, `WheelAnchor` places the selected tile across the launcher (in percent from its docked side), `WheelTileSize` sizes the tiles (percent of the smaller side of the screen).
   - `WheelSpacing` is the space from one tile to the next, in percent of a tile: under 100 they overlap, and the middle one is always on top. `WheelVisible` tiles show (odd), fading towards the ends by `WheelFade`. Names only on the middle tile (`WheelLabels=Center`) or on all.
-  - Tiles all take one cell (`Size=` is not used) and keep their size.
+  - **Thumbnails and backdrop.** In the wheel a tile is a square **thumbnail**: it is the wheel's tile, edited in Categories as the tiles of the grid (its framing `BgFocus=` / `BgZoom=`, its logo `LogoPos=` / `LogoScale=`, its play time line `InfoPos=`; the tile editor shows the square). Its logo is 70% of it, times `LogoScale=`. What belongs to the grid does nothing here and is greyed out in Options with its reason: `Size=` (every thumbnail takes one cell), the columns and rows, the logo size `IconSize`, the backgrounds' styles (`BgStyle`: the thumbnails are cropped), the scrolling smoothing. The **backdrop** (below) is the selected tile again, as large as the launcher.
+
+    | | Grid | Wheel: thumbnail | Wheel: backdrop |
+    |---|---|---|---|
+    | Colour, opacity, corners, greyscale logos, highlight, labels | yes | yes | — |
+    | Framing, logo place and size, play time place (tile editor) | on the tile (with `Size=`) | on the square | the logo and the lines where they sit on the thumbnail; the image is not framed |
+    | `Size=`, `NX` / `NY`, `IconSize`, `ScrollDir`, `EdgeFade`, scrollbar, `BgStyle`, `AnimScrollSmooth` | yes | — | — |
+    | `ScrollStep` (rows, or tiles in the wheel), `Gap` (under the top row; between the tiles of the grid) | yes | yes | — |
+    | Steam download: border, bar, greyscale | yes | yes | — |
+    | Update line and play time | on the tile | on the thumbnails or on the backdrop (`WheelInfoOn`) | the selected tile's, always as highlighted |
   - Widgets show their data on every tile, faded like the tiles and covered by the ones nearer the middle. With few tiles repeated, a widget shows its data on the copy nearest the middle and its title on the others.
-  - Each tile keeps its rounded corners (`TileRadius`) where it overlaps the next. The highlight goes with the selected tile when the mouse wheel turns the wheel.
-  - **Background of the selected tile** (`WheelBackdrop=1`): the launcher's background takes the background image of the tile in the middle, fading from one to the next as the wheel turns, at `WheelBackdropOpacity` percent over `BgColor`. The row at the top (clock, search, buttons, close) then gets one rounded band behind it, from the search to the close button and a little larger than the pills of the categories, so it stays readable over the picture: its colour is `TopBarColor` (Options > Appearance; black by default).
-  - **Logo and lines on the background** (`WheelLogoOn=Background`, `WheelInfoOn=Background`, with the background above): the selected tile's logo, and its lines (the Steam update and the play time), go on the background instead of on its tile, on the area under the top row, placed by `LogoPos=` and `InfoPos=` as on a tile; in this mode the preview of the tile editor is that area, so they are dragged where they will be. The other tiles of the wheel keep their logo; the lines are on none of them, only on the background. With logos only, the selected tile shows its background image instead of an empty colour. The logo is `WheelBackdropLogoSize` percent of the height of that area (times `LogoScale=`), from its full-size image, and the launch animation starts from it; when the lines show still follows `TileInfo` and the Steam updates. The background image is cut from its centre to fill the screen, not framed as on the tile: the place is on the screen, not on the same point of the picture.
+  - Each tile keeps its rounded corners (`TileRadius`) where it overlaps the next. The highlight is on the middle tile when the wheel opens and goes with it when the mouse wheel turns the wheel.
+  - **Backdrop** (`WheelBackdrop=1`, Options > Tiles > Wheel > Backdrop): the launcher's background takes the background image of the selected tile, filling it as a desktop wallpaper (cut from its centre, not framed), fading from one to the next as the wheel turns, at `WheelBackdropOpacity` percent over `BgColor`; a game no longer installed is greyed out there too. The row at the top (clock, search, buttons, close) then gets one rounded band behind it, from the search to the close button and a little larger than the pills of the categories, so it stays readable over the picture: its colour is `TopBarColor` (black by default).
+  - **Logo and lines on the backdrop** (`WheelLogoOn=Background`, `WheelInfoOn=Background`): the selected tile's logo, and its lines (the Steam update and the play time), go on the backdrop instead of on its thumbnail, on the area under the top row, where they sit on the thumbnail: a logo against a corner of the thumbnail is against the corner of that area, a centred one is centred (as a share of the room it can move in). The other thumbnails keep their logo; the lines are on none of them, only on the backdrop, shown as on a highlighted tile wherever the mouse is. With logos only, the selected thumbnail shows its background image instead of an empty colour. The logo is `WheelBackdropLogoSize` percent of the height of that area (times `LogoScale=`), from its full-size image, and the launch animation starts from it; when the lines show still follows `TileInfo` and the Steam updates (`Never`: none).
   - **Logos only** (`WheelIconsOnly=1`): the tiles show their logo on a colour taken from it (as `AutoTileColor`, also when that is off; a `Color=` of the tile or `TileColor=` of the category still wins). Tiles without a logo keep their background. Together with the background above: logos on the wheel, the art behind it.
   - The mouse resting on a side tile turns the wheel to it (`WheelHover=Turn`; `Highlight` only highlights it); a click on a side tile launches it (`WheelClick=Launch`) or turns it to the middle (`Center`). `WheelStepTime` is the time to turn by one tile.
   - **Inner wheel of categories** (`WheelMenu=Ring`): the categories go on a smaller circle inside the wheel of tiles, a disc each with the category's icon (or its initial), the active one in line with the selected tile and its name beside it. `Q` / `E`, `LB` / `RB`, a click or the mouse wheel over it change category; Favorites, Recent and Not played yet keep their buttons next to the search bar. `WheelMenuGap` (distance from the tiles) and `WheelMenuSize` (size of the discs) are in percent of a tile. `WheelMenu=Bar` keeps the categories in the menu at the top.
   - In a short launcher (docked at the top or bottom) leave room for the inner wheel: a lower `WheelAnchor` or `WheelTileSize`.
-  - The **Preview** window of Options (below) shows the wheel with the tiles of a category and your categories on the inner wheel; it turns like the launcher (the mouse wheel, the arrows, a click, the mouse resting on a side tile, `Q` / `E`). The logos sit where `LogoPos=` puts them, and the lines are there too (on the tiles or on the background): the Steam update line of the games with one waiting, and the play time as a sample ("24 h played - yesterday"), as in the tile editor.
+  - The **Preview** window of Options (below) shows the wheel with the tiles of a category and your categories on the inner wheel; it turns like the launcher (the mouse wheel, the arrows, a click, the mouse resting on a side tile, `Q` / `E`). The backgrounds are framed and the logos placed as on the tiles, and the lines are there too (on the thumbnails or on the backdrop): the Steam update line of the games with one waiting, and the play time as a sample ("24 h played - yesterday"), as in the tile editor.
   - The mouse resting on a side tile turns the wheel only after it moved: a tile that comes under the still mouse with a turn does not turn it again.
 
 Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter starts; `ShowZPos=1` brings it above other windows when shown (`-2` = on the desktop); `CloseAction=[!DeactivateConfig]` unloads the skin on close instead of hiding it (slower to reopen).
@@ -442,10 +451,9 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 | Section | What it holds |
 | --- | --- |
 | General | area covered (whole screen or work area, monitor), mode (full screen, window, docked) and the window's or docked launcher's own settings, margins, opening and closing behaviour, fade |
-| Tiles | grid or wheel, infinite scroll; the tiles' colour, corners, logo, highlight and labels |
-| Tiles > Grid | default grid, scrolling, space between tiles, edge fade, scrollbar |
-| Tiles > Wheel | the wheel, how it turns, the inner wheel of categories, logos only, background of the selected tile |
-| Tiles > Backgrounds | how the background images move |
+| Tiles | grid or wheel, infinite scroll, mouse wheel notch, space under the top row; the tiles' colour, corners, inner margin, highlight and labels (grid and wheel) |
+| Tiles > Grid | default grid, logo size, scrolling direction, edge fade, how the background images move, scrollbar |
+| Tiles > Wheel | the wheel's shape, its thumbnails (size, logos only, names), the backdrop, how it turns, the inner wheel of categories |
 | Tiles > Play time and updates | the play time line, play time outside Steam, Steam updates |
 | Top row | category menu (sizes, font, colours), Favorites, X, gear and power buttons |
 | Top row > Recent and Not played yet | Recent, Not played yet |
@@ -468,7 +476,7 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 - What each setting or field does is written under its name. A setting that only applies with another one (the sizes of the inner wheel with the inner wheel) is greyed out while it does not apply, with what it needs under it, and so is a whole group (General > Window, General > Docked: only in that mode). A part that can be turned off has its switch beside the title of its page (the clock, keyboard navigation, the gamepad) or in the header of its group (the filter bar, labels, Steam updates), and the rest is greyed out while it is off; the page of the layout not in use (Grid or Wheel) is greyed out in the menu.
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default (in the category editor: from All tiles), and restores it. The **x** empties a field (an image or an icon goes to the Recycle Bin, asked first); the bin in the header of a list deletes the entry selected (a tile, a category), asked first.
-- **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it: in the grid with the proportions of the category's tiles (and its `Size=`), in the wheel as its square tile, and in the wheel with the logo or the lines on the background (`WheelLogoOn`, `WheelInfoOn`) as that background, under the top row.
+- **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it: in the grid with the proportions of the category's tiles (and its `Size=`), in the wheel as its thumbnail, a square: the backdrop puts the logo and the lines where they sit on it. In the wheel the rows of the grid (Width, Height, Columns, Rows, Logo size) are greyed out with their reason.
   - **Sorting the tiles**: under **All tiles**, **Order** picks an order: *Name A–Z*, *Name Z–A*, *Recently added* (the date the tile was added, `Added=`; tiles without one go last), *Recently played* (the last launch: counted by Raintile, Steam's, or measured), *Most launched* (launches counted by Raintile) or *Most play time* (Steam's play time plus the one measured for the other games). Ties keep the order they had.
     - **Sort now** puts the tiles in that order once; you can still drag them afterwards.
     - **Keep sorted** keeps them in it (`Sort=` in `[Category]`): new and renamed tiles go to their place, and the launcher works the order out again each time it loads and opens, so the orders by play follow what you play. The remembered scroll position follows the tiles: the tile you launched (or had selected) stays in view where it moved. Dragging and the move buttons are off while it is on, except for pinned tiles.
@@ -573,7 +581,7 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | --- | --- | --- |
 | `NX`, `NY` | `4`, `2` | default visible tiles: columns × rows (per category: `NX`/`NY` in `[Category]`) |
 | `ScrollDir` | `V` | scroll direction: `V` (by rows) or `H` (by columns) |
-| `ScrollStep` | `1` | rows/columns per mouse wheel notch |
+| `ScrollStep` | `1` | rows/columns per mouse wheel notch; tiles in the wheel |
 | `InfiniteScroll` | `1` | after the last row the first comes back (with the wheel, after the last tile the first); with fewer tiles than fit they repeat, so it still scrolls round |
 
 ### Wheel
@@ -588,7 +596,7 @@ See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
 | `WheelRadius` | `70` | radius of the arc, % of the launcher's length along the wheel |
 | `WheelSpacing` | `50` | from one tile to the next, % of a tile (under 100 they overlap) |
 | `WheelAnchor` | `69` | place of the selected tile across the launcher, % from its docked side |
-| `WheelTileSize` | `25` | size of the tiles, % of the smaller side of the screen |
+| `WheelTileSize` | `25` | size of the thumbnails, % of the smaller side of the screen; their logo is 70% of it |
 | `WheelVisible` | `11` | tiles shown (odd) |
 | `WheelFade` | `65` | fade towards the ends, % |
 | `WheelLabels` | `Center` | names on the middle tile only (`Center`) or on `All` |
@@ -597,7 +605,7 @@ See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
 | `WheelClick` | `Launch` | click on a side tile: `Launch` it or turn it to the middle (`Center`) |
 | `WheelMenu` | `Ring` | categories on an inner wheel (`Ring`) or in the menu at the top (`Bar`) |
 | `WheelMenuGap`, `WheelMenuSize` | `50`, `50` | inner wheel: distance from the tiles and size of its discs, % of a tile |
-| `WheelBackdrop` | `1` | the launcher's background takes the selected tile's background image |
+| `WheelBackdrop` | `1` | the backdrop: the launcher's background takes the selected tile's background image, cut from its centre |
 | `WheelBackdropOpacity` | `40` | its opacity over `BgColor`, % |
 | `WheelLogoOn` | `Tile` | with `WheelBackdrop`: the selected tile's logo on its tile, or on the `Background` where `LogoPos=` puts it |
 | `WheelBackdropLogoSize` | `30` | the logo on the background: % of the height of the area under the top row, times `LogoScale=` |
@@ -609,10 +617,10 @@ See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `Gap` | `18` | space between tiles *(size)* |
+| `Gap` | `18` | space under the top row, and between the tiles of the grid *(size)* |
 | `PadX`, `PadY` | `40`, `24` | outer margins; they also hold the vertical / horizontal scrollbar *(size)* |
-| `IconSize` | `96` | logo box in the tiles (per category: `IconSize` in `[Category]`) *(size)* |
-| `LabelPad` | `14` | label margin inside the tile *(size)* |
+| `IconSize` | `96` | logo box in the tiles of the grid (per category: `IconSize` in `[Category]`); the wheel's thumbnails have their own *(size)* |
+| `LabelPad` | `14` | inner margin of a tile: to its label and to the play time and update lines *(size)* |
 | `ScrollBarSize` | `4` | scrollbar thickness *(size)* |
 
 ### Category menu
@@ -675,7 +683,7 @@ All of them only run while something moves.
 | `AnimStagger` | `2` | delay between one tile and the next, in steps |
 | `AnimSlide` | `30` | upward slide while appearing, in pixels |
 | `AnimSmooth` | `0.3` | base smoothing (0.05 very smooth/slow, 1 instant), used by the next ones when left empty |
-| `AnimScrollSmooth` | `0.15` | smoothing of scrolling |
+| `AnimScrollSmooth` | `0.15` | smoothing of scrolling (the grid; the wheel turns in `WheelStepTime`) |
 | `AnimHoverSmooth` | `0.3` | smoothing of the highlight box |
 | `AnimPillSmooth` | `0.25` | smoothing of the menu pill |
 | `AnimLogoSmooth` | `0.2` | smoothing of logo zoom/colour and background Zoom |
@@ -686,7 +694,7 @@ Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Contai
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `BgStyle` | `Pan` | `Crop` fixed centre crop; `Pan` under the mouse the tile slowly slides over the image, then goes back; `Parallax` while scrolling the image moves slower than the tile; `Zoom` under the mouse the background slightly grows |
+| `BgStyle` | `Pan` | in the grid (the wheel's thumbnails are cropped): `Crop` fixed centre crop; `Pan` under the mouse the tile slowly slides over the image, then goes back; `Parallax` while scrolling the image moves slower than the tile; `Zoom` under the mouse the background slightly grows |
 | `BgOverscan` | `1.15` | how much larger the image is than the tile (room to slide) |
 | `BgPanFrames` | `180` | length of the Pan slide in 16 ms steps (≈ 3 s) |
 | `BgHoverZoom` | `1.08` | background zoom for `Zoom` |

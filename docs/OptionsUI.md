@@ -30,10 +30,9 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 | Part of the launcher | Page |
 | --- | --- |
 | Where it shows, its mode (full screen, window, docked), margins, opening and closing | General |
-| Grid or wheel, the tile itself (colour, corners, logo, highlight, label) | Tiles |
-| Rows and columns, scrolling, scrollbar, edge fade | Tiles > Grid |
-| The wheel, its turning, its inner wheel of categories, its backdrop | Tiles > Wheel |
-| Background images of the tiles | Tiles > Backgrounds |
+| Grid or wheel, scrolling and spacing of both, the tile itself in both (colour, corners, inner margin, highlight, label) | Tiles |
+| Rows and columns, the grid tiles' logo size, scroll direction, edge fade, how the background images move, scrollbar | Tiles > Grid |
+| The wheel's shape, its thumbnails, its backdrop, its turning, its inner wheel of categories | Tiles > Wheel |
 | The play time line, Steam updates on the tiles | Tiles > Play time and updates |
 | The category menu and its colours, Favorites, the buttons of the top row | Top row |
 | Recent, Not played yet | Top row > Recent and Not played yet |
@@ -50,6 +49,15 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 
 - A new setting: find its part in the table. A new part gets a row here (and its
   page, or a group on the page of the part it belongs to) in the same PR.
+- **Settings of one layout.** What only the grid uses (rows and columns, `Size=`, the
+  logo size, the backgrounds' styles, the scrollbar) is on Tiles > Grid; what only the
+  wheel uses is on Tiles > Wheel; Tiles holds what both use, with a help that says
+  what it does in each when that differs (the mouse wheel notch: rows, or tiles). A
+  setting of one layout elsewhere has `When = "ScrollMode=..."`. In the tile editor
+  (Categories) a row of the other layout is disabled with its reason
+  (`AddGridOnlyReason`), and the preview shows the tile of the layout in use: the
+  grid's tile, or the wheel's thumbnail. In the wheel the thumbnail is the tile; the
+  backdrop is not edited, it follows the thumbnail (docs/Guide.md, "Grid or wheel").
 - **The switch before what it switches.** A setting that decides which others apply
   (a mode, a choice of layout, a feature on or off) is the first of its page or group;
   the pages of its modes are sub-pages of the page holding it (Grid / Wheel under

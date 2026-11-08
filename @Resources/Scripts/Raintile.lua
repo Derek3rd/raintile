@@ -1500,6 +1500,7 @@ local function writeGrid(path, sig, files)
 		w('[WidgetClip]')
 		w('Meter=Shape')
 		w('Shape=Rectangle 0,0,1,1 | Fill Color 0,0,0,255 | StrokeWidth 0')
+		w('Hidden=1')
 		w('')
 	end
 
@@ -3842,6 +3843,9 @@ local function placeSlots()
 		end
 		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
+	-- a container with none of its meters shown is drawn as a shape (black):
+	-- shown only with a widget in it
+	if V.Wheel then show('WidgetClip', next(dash.shown) ~= nil) end
 end
 
 local function placeHover()

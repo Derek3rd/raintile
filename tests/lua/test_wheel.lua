@@ -374,6 +374,17 @@ end
 function T.widgets_over_the_tiles()
 	local s, live = dashboard({})
 	t.ok(s.meters.widgetclip, 'no WidgetClip container in the wheel')
+	t.ok(not s.meters.widgetclip.hidden, 'WidgetClip hidden with a widget in the middle')
+	-- with no widget in it Rainmeter draws the container: a black rectangle
+	for i, c in ipairs(s:upvalue('cats')) do
+		if c.name ~= 'Dashboard' and not c.virtual and #c.tiles > 0 and not c.widgets then
+			s:call('SetCategory(' .. i .. ')')
+			break
+		end
+	end
+	t.clean(s)
+	t.ok(s.meters.widgetclip.hidden, 'WidgetClip shown with no widget: a black rectangle')
+	s = dashboard({})
 	t.eq(live, 1, 'widgets drawn (only the one in the middle)')
 	local pos = s:upvalue('pos')
 	local mid, side = slotOf(s, pos), slotOf(s, pos + 1)

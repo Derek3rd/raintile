@@ -64,6 +64,39 @@ Test 'Options: a choice box selects by value, the first when the value is not th
     Assert-Equal (Invoke-Options 'ChoiceValue' @($cb)) 'V' 'first choice for a value not in the list'
 }
 
+Test 'Options: the pad keeps being read while what it pressed shows a dialog' {
+    # The pad's work opens a modal dialog (a nested loop) on its second call: a
+    # DispatcherTimer does not tick while its own Tick is inside one, so the
+    # work must still be called while the dialog is open.
+    $s = @{ Calls = 0; Inner = 0; Nested = $false }
+    $outer = New-Object System.Windows.Threading.DispatcherFrame
+    $work = {
+        $s.Calls++
+        if ($s.Nested) { $s.Inner++; return }
+        if ($s.Calls -ne 2) { return }
+        $s.Nested = $true
+        $inner = New-Object System.Windows.Threading.DispatcherFrame
+        $close = New-Object System.Windows.Threading.DispatcherTimer
+        $close.Interval = [TimeSpan]::FromMilliseconds(400)
+        $close.add_Tick({ $close.Stop(); $inner.Continue = $false }.GetNewClosure())
+        $close.Start()
+        [System.Windows.Threading.Dispatcher]::PushFrame($inner)
+        $s.Nested = $false
+        $outer.Continue = $false
+    }.GetNewClosure()
+    $timer = Invoke-Options 'NewLoopTimer' @([TimeSpan]::FromMilliseconds(16), [System.Windows.Threading.DispatcherPriority]::Input, [Action]$work)
+    # (in case the work is never called twice)
+    $guard = New-Object System.Windows.Threading.DispatcherTimer
+    $guard.Interval = [TimeSpan]::FromSeconds(5)
+    $guard.add_Tick({ $guard.Stop(); $outer.Continue = $false }.GetNewClosure())
+    $guard.Start()
+    $timer.Start()
+    [System.Windows.Threading.Dispatcher]::PushFrame($outer)
+    $timer.Stop(); $guard.Stop()
+    Assert-True ($s.Calls -ge 2) 'the work was not called'
+    Assert-True ($s.Inner -gt 0) 'the work stopped while the dialog was open'
+}
+
 # Profiles (General > Profiles): their files and what loading one changes
 $optionsTypes = $optionsApp.Assembly
 function New-StringMap([hashtable]$Values = @{}) {

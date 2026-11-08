@@ -36,8 +36,9 @@ NY=2
 ScrollDir=V
 ; Rows/columns scrolled per mouse wheel notch
 ScrollStep=1
-; 1 = infinite scroll: after the last row the first comes back (only in
-; categories with more tiles than fit on screen); 0 = stop at the end
+; 1 = infinite scroll: after the last row the first comes back; with fewer
+; tiles than fit on screen they repeat, so it still scrolls round; 0 = stop at
+; the end
 InfiniteScroll=1
 
 ; --- Wheel ----------------------------------------------------------------------

@@ -46,6 +46,13 @@ end
 
 local function num(m, key) return tonumber(m:opt(key, '0')) end
 
+-- Where the tile of a slot is in the grid: its container (TileBox) in the skin
+local function tileXY(s, slot)
+	local V = s:upvalue('V')
+	local box = s.meters['tilebox' .. slot]
+	return num(box, 'X') - V.PadX, num(box, 'Y') - V.GridY
+end
+
 -- The slot of the tile at line k, and that slot
 local function slotOf(s, k)
 	local M = s:upvalue('M')
@@ -94,8 +101,9 @@ function T.middle_tile_on_top()
 	local m = s.meters['tile' .. slot]
 	local f = M.wf
 	-- docked left: the selection across at WheelAnchor from the left, in the middle along
-	local cx = num(m, 'X') + V.TileW / 2
-	local cy = num(m, 'Y') + V.TileH / 2
+	local mx, my = tileXY(s, slot)
+	local cx = mx + V.TileW / 2
+	local cy = my + V.TileH / 2
 	local W, H = V.ClipW or V.AreaW, V.ClipH or V.AreaH
 	t.ok(math.abs(cx - V.WheelAnchor / 100 * W) <= 1, 'selection across: ' .. cx)
 	t.ok(math.abs(cy - H / 2) <= 1, 'selection along: ' .. cy)
@@ -104,8 +112,9 @@ function T.middle_tile_on_top()
 	if side and #c.tiles > 1 then
 		local ms = s.meters['tile' .. side]
 		t.ok(num(ms, 'ImageAlpha') < num(m, 'ImageAlpha') or ms:opt('ImageAlpha', '255') ~= '255', 'side tile not faded')
-		t.ok(num(ms, 'X') < num(m, 'X'), 'side tile not nearer the docked edge')
-		t.ok(num(ms, 'Y') > num(m, 'Y'), 'next tile not below the selected one')
+		local sx, sy = tileXY(s, side)
+		t.ok(sx < mx, 'side tile not nearer the docked edge')
+		t.ok(sy > my, 'next tile not below the selected one')
 	end
 	t.ok(f and f.R > 0, 'no circle')
 	t.clean(s)
@@ -224,6 +233,70 @@ function T.logos_only()
 	t.clean(s)
 end
 
+-- The mouse wheel turns it: the highlight goes with the selection
+function T.highlight_follows_the_mouse_wheel()
+	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left' })
+	s:call('Scroll(1)')
+	local hover, offset = s:upvalue('hover'), s:upvalue('offset')
+	local c = s:upvalue('cur')()
+	t.ok(hover.on, 'no highlight after the mouse wheel')
+	t.eq(hover.idx, offset % #c.tiles + 1, 'the highlight is not on the selected tile')
+	t.clean(s)
+end
+
+-- Rounded tiles: each slot in a rounded container of its own (one shape for
+-- all, overlapping, squared the corners that fell on a neighbour)
+function T.rounded_corners_each()
+	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', TileRadius = 12 })
+	local M, V = s:upvalue('M'), s:upvalue('V')
+	local n = 0
+	for slot = 1, V.Slots do
+		if M.wv[slot] and M.wv[slot].a > 0.01 then
+			local box = s.meters['tilebox' .. slot]
+			t.ok(box and not box.hidden, 'no container for slot ' .. slot)
+			t.ok(box:opt('Shape', ''):match('^Rectangle 0,0,%d+,%d+,12 '), 'slot ' .. slot .. ' not rounded: ' .. box:opt('Shape', ''))
+			t.eq(s.meters['tile' .. slot]:opt('Container', ''), 'TileBox' .. slot, 'tile not in its container')
+			t.eq(s.meters['tile' .. slot]:opt('X', ''), '0', 'tile not at the corner of its container')
+			n = n + 1
+		end
+	end
+	t.ok(n > 1, 'too few tiles shown')
+	t.clean(s)
+end
+
+-- Infinite scroll with few tiles (fewer than shown): they repeat, and it turns round
+local function fewest(s)
+	local best, n
+	for i, c in ipairs(s:upvalue('cats')) do
+		if not c.virtual and #c.tiles > 1 and (not n or #c.tiles < n) then best, n = i, #c.tiles end
+	end
+	return best, n
+end
+
+function T.few_tiles_repeat()
+	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', InfiniteScroll = 1, WheelVisible = 11 })
+	local i, n = fewest(s)
+	t.ok(n and n < 13, 'no category with few tiles')
+	s:call('SetCategory(' .. i .. ')')
+	s:call('Scroll(-1)')
+	t.eq(s:upvalue('offset'), -1, 'did not turn back past the first tile')
+	local M, V, seen = s:upvalue('M'), s:upvalue('V'), 0
+	for slot = 1, V.Slots do if M.wv[slot] then seen = seen + 1 end end
+	t.ok(seen > n, 'tiles not repeated: ' .. seen .. ' shown of ' .. n)
+	t.clean(s)
+end
+
+function T.few_tiles_repeat_in_the_grid()
+	local s = R.new({ settings = { InfiniteScroll = 1, NX = 4, NY = 3 } }):start()
+	s:call('Show()')
+	local i = fewest(s)
+	s:call('SetCategory(' .. i .. ')')
+	s:call('Scroll(1)')
+	t.eq(s:upvalue('offset'), 1, 'the grid with few tiles does not scroll round')
+	s:call('Scroll(-2)')
+	t.clean(s)
+end
+
 -- Size= is not used: every tile one cell
 function T.one_cell_each()
 	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left' })
@@ -250,10 +323,11 @@ function T.inner_ring()
 	-- in line with the selected tile: on the same horizontal (docked left), nearer the edge
 	local slot = slotOf(s, s:upvalue('offset'))
 	local tile = s.meters['tile' .. slot]
-	local tileY = num(tile, 'Y') + V.GridY + V.TileH / 2
+	local tx, ty = tileXY(s, slot)
+	local tileY = ty + V.GridY + V.TileH / 2
 	local discY = num(dot, 'Y') + 0.5 * (V.TileW * V.WheelMenuSize / 100)
 	t.ok(math.abs(discY - tileY) <= 2, 'disc not level with the selected tile: ' .. discY .. ' / ' .. tileY)
-	t.ok(num(dot, 'X') < num(tile, 'X') + V.PadX, 'disc not nearer the docked edge than the tile')
+	t.ok(num(dot, 'X') < tx + V.PadX, 'disc not nearer the docked edge than the tile')
 	for i, c in ipairs(cats) do
 		if not c.virtual then
 			local m = s.meters['cathit' .. i]

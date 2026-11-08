@@ -41,7 +41,7 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "NY", Label = "Rows", Help = "", Min = 1.0, Max = 8.0, Step = 1.0, Unit = "rows" },
                     new Item { Kind = "choice", Key = "ScrollDir", Label = "Scroll direction", Help = "", Choices = new List<string[]> { new[] { "V", "Vertical" }, new[] { "H", "Horizontal" } } },
                     new Item { Kind = "int", Key = "ScrollStep", Label = "Rows per mouse wheel notch", Help = "", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "rows" },
-                    new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last row the first one comes back (only when the tiles do not all fit)." },
+                    new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last row the first one comes back; with few tiles they repeat, so it still scrolls round." },
                 } },
                 new Group { Title = "Spacing", Help = "In pixels, or as a percentage of the screen.", Items = new List<Item>
                 {

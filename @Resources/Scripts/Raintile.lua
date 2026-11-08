@@ -1245,7 +1245,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 17
+local GRID_VERSION = 18
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1433,9 +1433,21 @@ local function writeGrid(path, sig, files)
 	-- the largest grid needs. The script sets each slot's position and size
 	-- according to the active category's grid.
 	for slot = 1, slots do
+		-- the wheel: each tile in a container of its own, its rounded rectangle
+		-- (cut to the grid area): tiles overlap there, and one shape for all of
+		-- them (roundClip) would square the corners that fall on a neighbour
+		local box = V.Wheel and ('Container=TileBox' .. slot) or nil
+		if box then
+			w('[TileBox' .. slot .. ']')
+			w('Meter=Shape')
+			w('Shape=Rectangle 0,0,1,1 | Fill Color 0,0,0,255 | StrokeWidth 0')
+			w('Hidden=1')
+			w('')
+		end
 		w('[Tile' .. slot .. ']')
 		w('Meter=Image')
 		w('MeterStyle=StyleTile')
+		if box then w(box) end
 		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(' .. slot .. ')"]')
 		-- (where the mouse is: the wheel turns to a tile only when the mouse moved)
 		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ', \'$MouseX$\', \'$MouseY$\')"]')
@@ -1446,30 +1458,37 @@ local function writeGrid(path, sig, files)
 		w('[TileReveal' .. slot .. ']')
 		w('Meter=Image')
 		w('MeterStyle=StyleTileReveal')
+		if box then w(box) end
 		w('')
 		w('[TileBar' .. slot .. ']')
 		w('Meter=Shape')
 		w('MeterStyle=StyleTileGlow')
+		if box then w(box) end
 		w('')
 		w('[TileGlow' .. slot .. ']')
 		w('Meter=Shape')
 		w('MeterStyle=StyleTileGlow')
+		if box then w(box) end
 		w('')
 		w('[TileIcon' .. slot .. ']')
 		w('Meter=Image')
 		w('MeterStyle=StyleTileIcon')
+		if box then w(box) end
 		w('')
 		w('[TileLabel' .. slot .. ']')
 		w('Meter=String')
 		w('MeterStyle=StyleTileLabel')
+		if box then w(box) end
 		w('')
 		w('[TileUpd' .. slot .. ']')
 		w('Meter=String')
 		w('MeterStyle=StyleTileInfo')
+		if box then w(box) end
 		w('')
 		w('[TileInfo' .. slot .. ']')
 		w('Meter=String')
 		w('MeterStyle=StyleTileInfo')
+		if box then w(box) end
 		w('')
 	end
 
@@ -1720,9 +1739,8 @@ end
 -- Infinite scroll: after the last row the first one comes back. Only if the
 -- tiles don't all fit on screen (otherwise they would show up twice).
 local function infinite()
-	-- the wheel: only when the tiles do not all fit (otherwise they would repeat)
-	if V.Wheel then return V.InfiniteScroll and lineCount() >= V.Slots end
-	return V.InfiniteScroll and lineCount() > visibleLines()
+	-- also with few tiles (they all fit): they repeat, so it still scrolls round
+	return V.InfiniteScroll and #cur().tiles > 1 and lineCount() > 0
 end
 
 -- Brings a saved scroll position within the active category's limits.
@@ -2001,6 +2019,19 @@ function M.backdropAdvance()
 	M.animFast = true
 	M.backdropAlpha()
 	return b.f < 1
+end
+
+-- The rounded container of a slot at x, y of the grid, cut to the grid area
+function M.placeBox(slot, x, y)
+	local box = 'TileBox' .. slot
+	local r = math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))
+	set(box, 'X', tostring(math.floor(V.PadX + x)))
+	set(box, 'Y', tostring(math.floor(V.GridY + y)))
+	set(box, 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', V.TileW, V.TileH, r))
+	set(box, 'Shape2', string.format('Rectangle %d,%d,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
+		-math.floor(x), -math.floor(y), math.floor(V.ClipW or V.AreaW), math.floor(V.ClipH or V.AreaH)))
+	set(box, 'Shape3', 'Combine Shape | Intersect Shape2')
+	show(box, true)
 end
 
 -- Time-based turn towards offset: WheelStepTime per tile (a little less each
@@ -3575,8 +3606,14 @@ local function placeSlots()
 				y = y + (1 - f) * V.AnimSlide
 			end
 			x, y = math.floor(x + 0.5), math.floor(y + 0.5)
-			-- the wheel: fading towards the ends
-			if wv then f = f * wv.a end
+			-- the wheel: fading towards the ends; the slot's meters in its own
+			-- rounded container (TileBox), at 0,0 in it (wx, wy: where it is)
+			local wx, wy = 0, 0
+			if wv then
+				f = f * wv.a
+				M.placeBox(slot, x, y)
+				wx, wy, x, y = x, y, 0, 0
+			end
 			local alpha = tostring(math.floor(255 * f + 0.5))
 
 			set(tile, 'X', tostring(x))
@@ -3600,12 +3637,12 @@ local function placeSlots()
 			set(tile, 'SolidColor', solid)
 			-- Steam update: the border, the progress, the first line (always
 			-- shown), the background in greyscale while it downloads
-			local tileRows = (missing or M.greyWindow(t, st, x, y)) and GREY_ROWS or IDENTITY_ROWS
+			local tileRows = (missing or M.greyWindow(t, st, x + wx, y + wy)) and GREY_ROWS or IDENTITY_ROWS
 			set(tile, 'ColorMatrix1', tileRows[1])
 			set(tile, 'ColorMatrix2', tileRows[2])
 			set(tile, 'ColorMatrix3', tileRows[3])
 			local framedOriginal = t.frame and t.background == t.backgroundFull
-			local crop = (V.BgStyle ~= 'crop' or framedOriginal) and t.background and bgWindow(t, x, y)
+			local crop = (V.BgStyle ~= 'crop' or framedOriginal) and t.background and bgWindow(t, x + wx, y + wy)
 			set(tile, 'PreserveAspectRatio', crop and '0' or '2')
 			set(tile, 'ImageCrop', crop or '')
 			if t.logo then
@@ -3683,8 +3720,8 @@ local function placeSlots()
 			show(icon, t.logo ~= nil and not t.widget)
 			show(label, hasLabel and not t.widget)
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
-			if t.widget then D.placeWidget(t, x, y, f) end
-			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
+			if t.widget then D.placeWidget(t, x + wx, y + wy, f) end
+			if not wv then rects[#rects + 1] = { x, y, V.TileW, V.TileH } end
 			-- cut by the edge: how much, for each line across the scroll (a
 			-- row, or a column when the grid scrolls vertically) it covers
 			if V.EdgeFade and not appear and not V.Wheel then
@@ -3710,6 +3747,7 @@ local function placeSlots()
 			end
 			V.TileW, V.TileH = catW, catH
 		else
+			if V.Wheel then show('TileBox' .. slot, false) end
 			show(tile, false)
 			show(icon, false)
 			show(label, false)
@@ -5544,6 +5582,12 @@ function Scroll(delta)
 	if not infinite() then new = math.min(math.max(0, new), maxOffset()) end
 	if new ~= offset then
 		offset = new
+		-- the wheel: the highlight goes with the selection (the middle tile)
+		if V.Wheel then
+			local tiles = cur().tiles
+			local idx = offset % #tiles + 1
+			if V.Horizontal then focus(tiles[idx], idx, offset, 0) else focus(tiles[idx], idx, 0, offset) end
+		end
 		if V.AnimScroll then
 			startTicker()
 		else

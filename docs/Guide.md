@@ -81,6 +81,7 @@ Sizes in percent (margins, menu, fonts) are of the area, not of the window, so t
   - The arc runs along the docked side (`WheelAxis=Auto`; across the screen in a window or full screen) and bulges towards the screen (`WheelCurve=Out`, or hollow: `In`). `WheelRadius` is in percent of the launcher's length, `WheelAnchor` places the selected tile across the launcher (in percent from its docked side), `WheelTileSize` sizes the tiles (percent of the smaller side of the screen).
   - `WheelSpacing` is the space from one tile to the next, in percent of a tile: under 100 they overlap, and the middle one is always on top. `WheelVisible` tiles show (odd), fading towards the ends by `WheelFade`. Names only on the middle tile (`WheelLabels=Center`) or on all.
   - Tiles all take one cell (`Size=` is not used) and keep their size: widgets work as in the grid.
+  - Each tile keeps its rounded corners (`TileRadius`) where it overlaps the next. The highlight goes with the selected tile when the mouse wheel turns the wheel.
   - **Background of the selected tile** (`WheelBackdrop=1`): the launcher's background takes the background image of the tile in the middle, fading from one to the next as the wheel turns, at `WheelBackdropOpacity` percent over `BgColor`. The row at the top (clock, search, buttons, close) then gets one rounded band behind it, from the search to the close button and a little larger than the pills of the categories, so it stays readable over the picture: its colour is `TopBarColor` (Options > Appearance; black by default).
   - **Logos only** (`WheelIconsOnly=1`): the tiles show their logo on a colour taken from it (as `AutoTileColor`, also when that is off; a `Color=` of the tile or `TileColor=` of the category still wins). Tiles without a logo keep their background. Together with the background above: logos on the wheel, the art behind it.
   - The mouse resting on a side tile turns the wheel to it (`WheelHover=Turn`; `Highlight` only highlights it); a click on a side tile launches it (`WheelClick=Launch`) or turns it to the middle (`Center`). `WheelStepTime` is the time to turn by one tile.
@@ -562,7 +563,7 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `NX`, `NY` | `4`, `2` | default visible tiles: columns × rows (per category: `NX`/`NY` in `[Category]`) |
 | `ScrollDir` | `V` | scroll direction: `V` (by rows) or `H` (by columns) |
 | `ScrollStep` | `1` | rows/columns per mouse wheel notch |
-| `InfiniteScroll` | `1` | after the last row the first comes back (only when the tiles don't all fit); with the wheel, after the last tile the first |
+| `InfiniteScroll` | `1` | after the last row the first comes back (with the wheel, after the last tile the first); with fewer tiles than fit they repeat, so it still scrolls round |
 
 ### Wheel
 

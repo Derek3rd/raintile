@@ -374,5 +374,6 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
       field opens the right keyboard. These were found only by trying with the pad:
       say in the hand-over which of them were not tried.
 - [ ] Fits the narrowest window (960 px): nothing cut without its tooltip.
-- [ ] `tools\options-shots.ps1 -Base origin/nightly`: only the pages you meant to
-      change are different.
+- [ ] `tools\options-shots.ps1 -Base origin/nightly` (with `-Page <entry>` when only
+      that page's own code changed): only the pages you meant to change are
+      different.

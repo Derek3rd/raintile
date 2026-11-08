@@ -18,6 +18,10 @@ passed, what failed and what was not verified.
    -File tools\options-shots.ps1 -Base origin/nightly`, then look at the changed pages in
    `build\options-shots\diff\`. Only for such changes. Shots are kept by content: nightly is
    shot once, and between two steps of the same change `-Base HEAD` shoots only the new state.
+   Shared code (`Ui.cs`, `Settings.cs`, `Nav.cs`, `Schema*.cs`, `Options.xaml`) shoots every
+   page; code of one page only (`Profiles.cs` on General, `Dashboard.cs` and `Market.cs` on
+   Widgets) adds `-Page <that entry>`; a step that cannot show in the shots (a control
+   hidden with the frozen data) is not shot, and the hand-over says so.
 
 ## 2. Docs in sync
 - A new or changed setting: its comment in `@Resources/Settings.inc` and the "Settings

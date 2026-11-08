@@ -31,6 +31,9 @@ namespace RaintileOptions
         // the settings the whole group applies with (as Item.When): otherwise
         // the card is disabled, with the reason under its title
         public string When;
+        // a bool (one of Items) that turns the whole group on or off: in the
+        // card's header, its label as the card's title; the rest applies with it
+        public string Switch;
         public bool Found, Other, Market, Dash;
         public List<Item> Items = new List<Item>();
     }

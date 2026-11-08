@@ -532,6 +532,38 @@ namespace RaintileOptions
             return b;
         }
 
+        // A card whose header is a switch (Group.Switch): its label as the title,
+        // the switch and its reset in the control and action columns, its help
+        // (or the group's) below
+        Border NewSwitchCard(Item sw, string help)
+        {
+            var b = new Border { Style = ResStyle("Card") };
+            var sp = NewPanel();
+            b.Child = sp;
+            var g = NewGrid("*", "Auto", Gap.ActionColumn.ToString(CultureInfo.InvariantCulture));
+            g.ColumnDefinitions[1].SetResourceReference(ColumnDefinition.WidthProperty, FieldWidth.ControlKey);
+            g.Margin = T(0, Gap.Group, 0, Gap.Line);
+            var h = NewSectionTitle(sw.Label);
+            h.VerticalAlignment = VerticalAlignment.Center;
+            g.Children.Add(h);
+            var control = NewBoolControl(sw.Key);
+            ((FrameworkElement)control).VerticalAlignment = VerticalAlignment.Center;
+            SetCol(control, 1);
+            g.Children.Add(control);
+            var reset = NewResetButton(new[] { sw.Key });
+            SetCol(reset, 2);
+            g.Children.Add(reset);
+            AddTo(sp, g);
+            string text = !string.IsNullOrEmpty(help) ? help : sw.Help;
+            if (!string.IsNullOrEmpty(text))
+            {
+                var x = NewHelp(text);
+                x.Margin = T(0, 0, 0, Gap.Control);
+                AddTo(sp, x);
+            }
+            return b;
+        }
+
         static StackPanel CardPanel(Border card) { return (StackPanel)card.Child; }
 
         // Row of one schema item (null if its settings are not in Settings.inc)
@@ -626,7 +658,10 @@ namespace RaintileOptions
             var schemaKeys = new HashSet<string>(Schema.SchemaKeys(), StringComparer.OrdinalIgnoreCase);
             foreach (var group in page.Groups)
             {
-                var card = NewCard(group.Title, group.Help);
+                // a group with a switch: the switch in the header, its label the title
+                var sw = group.Switch == null ? null : group.Items.First(i => i.Key == group.Switch);
+                var card = sw != null ? NewSwitchCard(sw, group.Help) : NewCard(group.Title, group.Help);
+                string groupWhen = group.When ?? (sw != null ? sw.Key + "=1" : null);
                 int rows = 0;
                 if (group.Found)
                 {
@@ -657,15 +692,17 @@ namespace RaintileOptions
                 {
                     foreach (var item in group.Items)
                     {
+                        if (item == sw) { rows++; continue; }
                         var row = NewItemRow(item);
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
                         var b = row as Border;
                         if (b != null && !string.IsNullOrEmpty(item.When))
-                            whenRows.Add(new WhenRow { When = item.When, GroupWhen = group.When, Row = b, Why = AddRowReason(b, WhenReason(item.When, page)) });
+                            whenRows.Add(new WhenRow { When = item.When, GroupWhen = groupWhen, Row = b, Why = AddRowReason(b, WhenReason(item.When, page)) });
                     }
                 }
-                if (rows > 0 && !string.IsNullOrEmpty(group.When))
-                    whenCards.Add(new WhenCard { When = group.When, Card = card, Why = AddCardReason(card, WhenReason(group.When, page)) });
+                // (with a switch, no reason: the switch is in the header)
+                if (rows > 0 && groupWhen != null)
+                    whenCards.Add(new WhenCard { When = groupWhen, Card = card, Why = sw != null ? null : AddCardReason(card, WhenReason(group.When, page)) });
                 if (rows > 0) AddTo(sp, card);
             }
             UpdateWhenRows();

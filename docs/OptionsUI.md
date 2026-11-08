@@ -64,6 +64,16 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
   (`AddCardReason` / `SetCardApplies`), and its settings carry no `When` of that
   mode; a setting of the card that also needs another one keeps its own `When`.
   Their labels do not repeat the group's name (Window > Width, not Window width).
+- **A switch for a whole group goes in its header.** A bool that turns a whole
+  group on or off (the clock, the filter bar, keyboard navigation, the gamepad) is
+  `Switch = "Key"` on the group (`Group.Switch`, the first of its items): the card's
+  header is its label, upper case like any card title, with the switch and its
+  reset in the control and action columns (`NewSwitchCard`); its help (or the
+  group's) is under the header; the other settings of the group are disabled while
+  it is off, with no reason under them (the switch is right above). Its label names
+  the part ("Filter bar", "Labels"), not "Show ...": it is the title of the card.
+- **No title twice.** A card title never repeats its page's title, and a page's only
+  card has no title (the page has it), unless its header is a switch.
 - **A page for one mode** (Grid, Wheel) has the `When` on the page instead
   (`Page.When`): while the mode is not in use its menu entry is greyed out and
   passed over (keyboard, gamepad), and its settings carry no `When` of that mode.
@@ -76,8 +86,9 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 - Two menu levels at most. A menu entry with sub-pages is a page of its own (the
   switch and what the sub-pages share), never only a folder.
 - `tools/check.py` checks that every `When` (of a setting, a group or a page) names a setting and values it can take,
-  that a switch on the same page comes before what it switches, and that every
-  page is in the menu (`NavTree`) once.
+  that a switch on the same page comes before what it switches, that a group's
+  `Switch` is its first setting and a bool, that no card is titled as its page, that
+  a page's only card has no title, and that every page is in the menu (`NavTree`) once.
 
 ## 1. Nothing only in a tooltip
 
@@ -281,7 +292,8 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 
 - [ ] Glyphs, sizes, widths and margins come from `Ui.cs` (`tools/check.py` passes).
 - [ ] A new setting is on the page of the part it changes ("Where a setting goes"),
-      after the switch it depends on, with its `When`.
+      after the switch it depends on, with its `When` (or in the group of its switch).
+- [ ] No title is repeated: page, card and first row do not say the same word.
 - [ ] Every field shows its help; tooltips only name icon buttons, show cut text or
       shortcuts.
 - [ ] The control matches the kind of value: a single choice is a combo, a unit only

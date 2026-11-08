@@ -342,7 +342,7 @@ namespace RaintileOptions
             foreach (var row in ((StackPanel)card.Child).Children.Cast<UIElement>().OfType<Border>())
                 if (row.Child is Grid && ((Grid)row.Child).Children.Count > 0 && ((Grid)row.Child).Children[0] is StackPanel)
                     SetRowApplies(row, on, null, false);
-            why.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            if (why != null) why.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         }
 
         // Label with its help below: the left part of a row, or the top of a stacked one

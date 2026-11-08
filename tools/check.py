@@ -257,6 +257,18 @@ def check_schema_layout(schema):
                     fail('Options schema: When of %s: %s cannot be %s (%s)' % (key, name, v, ', '.join(allowed)))
             if page_of.get(name) == page_of.get(key) and pages[page_of[key]].index(name) > pages[page_of[key]].index(key):
                 fail('Options schema: %s switches %s but comes after it on its page' % (name, key))
+    # cards: a switch is a bool and the first of its group; a title never repeats
+    # its page's; a page's only card has no title (the page has it)
+    for pm in re.finditer(r'new Page \{ Id = "([a-z]+)"[^\n]*?Title = "([^"]*)"(.*?)\n            \} \},', schema, re.S):
+        groups = re.findall(r'new Group \{ Title = (null|"[^"]*"), [^\n]*?(?:Switch = "([A-Za-z0-9]+)", )?Items = new List<Item>\n\s*\{\n(.*?)\n\s*\} \},', pm.group(3), re.S)
+        for title, switch, body in groups:
+            first = re.search(r'Kind = "([a-z]+)", Key = "([A-Za-z0-9]*)"', body)
+            if switch and not (first and first.group(2) == switch and first.group(1) == 'bool'):
+                fail('Options schema: page %s: the switch %s is not the first setting of its group, or not a bool' % (pm.group(1), switch))
+            if title.strip('"').lower() == pm.group(2).lower():
+                fail('Options schema: page %s: a card titled as its page' % pm.group(1))
+        if len(groups) == 1 and groups[0][0] != 'null' and not re.search(r'Dash|Market|Found|Other', pm.group(3)):
+            fail('Options schema: page %s: its only card has a title (the page has it)' % pm.group(1))
     nav = re.search(r'NavTree = new List<NavNode>(.*?)\n        \};', schema, re.S).group(1)
     listed = re.findall(r'Page = "([a-z]+)"', nav) + [c for ch in re.findall(r'Children = new\[\] \{([^}]*)\}', nav) for c in re.findall(r'"([a-z]+)"', ch)]
     for pid in order:

@@ -19,6 +19,11 @@
 # shot with the old one is shot again.
 #
 # Output: diff\ (the current shot dimmed, the changed pixels red) and report.txt.
+# Shots are named after the entry of the menu and its place there (05-Search.png,
+# 20-Games-tile-1.png) but compared by page: an entry added to the menu or removed
+# moves the number of every later one, so the two refs are paired without it. A new
+# page is then the only one at one ref, the others are still compared, and a page
+# shot whole at one ref and scrolled at the other is compared by its first screen.
 # The programs are built from their sources, never taken from @Resources\Bin (it may
 # be older than the sources, or locked by an open Options window). Each window runs
 # from stage\, a copy of the skin always at the same place (the folders shown on Info
@@ -288,6 +293,32 @@ function Build-Program([string]$tree, [string]$bin) {
     return (Join-Path $bin 'RaintileOptions.exe')
 }
 
+# The shots of one content by the page they show, as the comparison pairs them: the
+# file name without the number of the menu entry (an entry added or removed moves
+# the number of every later one; one greyed out keeps its number), with screen 0 for
+# a page shot whole (it may scroll at the other ref). Two entries with the same name (two categories
+# called alike) are told apart by their order in the menu. Values: the file and the
+# number of its entry.
+function Get-ShotsByPage([string]$dir) {
+    $shots = @(Get-ChildItem -LiteralPath $dir -Filter *.png | ForEach-Object {
+            $m = [regex]::Match($_.Name, '^(\d+)-([A-Za-z0-9]*)(-tile)?(?:-(\d+))?\.png$')
+            if (-not $m.Success) { throw ('a shot not named as Save-Window names them: ' + $_.FullName) }
+            $screen = $m.Groups[4].Value
+            if (-not $screen) { $screen = '0' }
+            New-Object PSObject -Property @{ File = $_.Name; Index = [int]$m.Groups[1].Value; Label = $m.Groups[2].Value; Rest = $m.Groups[3].Value + '-' + $screen }
+        })
+    $byPage = @{}
+    foreach ($s in $shots) {
+        $page = $s.Label
+        $before = @($shots | Where-Object { $_.Label -eq $s.Label -and $_.Index -lt $s.Index } | ForEach-Object { $_.Index } | Sort-Object -Unique).Count
+        if ($before -gt 0) { $page += '~' + ($before + 1) }
+        $page += $s.Rest + '.png'
+        if ($byPage.ContainsKey($page)) { throw ('two shots of the same page in ' + $dir + ': ' + $byPage[$page].File + ', ' + $s.File) }
+        $byPage[$page] = $s
+    }
+    return $byPage
+}
+
 function Test-Cached([string]$key) { return (Test-Path -LiteralPath (Join-Path (Join-Path $cache $key) 'done.txt')) }
 
 # The shots of a source tree into the cache, unless that content was shot already
@@ -345,21 +376,34 @@ if ($Base) {
     $b = Join-Path $cache $curKey
     $diffDir = Join-Path $Out 'diff'
     New-Item -ItemType Directory -Force $diffDir | Out-Null
-    $names = @(@(Get-ChildItem $a -Filter *.png) + @(Get-ChildItem $b -Filter *.png) | ForEach-Object { $_.Name } | Sort-Object -Unique)
+    # paired by page, not by file name (see Get-ShotsByPage); in the order of the menu
+    # of this checkout, a page only at the other ref at its place there
+    $pa = Get-ShotsByPage $a
+    $pb = Get-ShotsByPage $b
+    $pages = @(@($pa.Keys) + @($pb.Keys) | Sort-Object -Unique |
+        Sort-Object { if ($pb.ContainsKey($_)) { $pb[$_].Index } else { $pa[$_].Index } }, { $_ })
     $same = 0
-    foreach ($f in $names) {
-        $fa = Join-Path $a $f
-        $fb = Join-Path $b $f
-        if (-not (Test-Path -LiteralPath $fa)) { $report.Add(('  {0,-34} only in this checkout' -f $f)); continue }
-        if (-not (Test-Path -LiteralPath $fb)) { $report.Add(('  {0,-34} only in {1}' -f $f, $Base)); continue }
-        $r = [ShotsDiff]::Compare($fa, $fb, (Join-Path $diffDir $f))
-        if ($r[0] -lt 0) { $report.Add(('  {0,-34} another size' -f $f)) }
+    $moved = 0
+    foreach ($page in $pages) {
+        if (-not $pa.ContainsKey($page)) { $report.Add(('  {0,-34} only in this checkout' -f $pb[$page].File)); continue }
+        if (-not $pb.ContainsKey($page)) { $report.Add(('  {0,-34} only in {1}' -f $pa[$page].File, $Base)); continue }
+        $fa = $pa[$page].File
+        $f = $pb[$page].File
+        # the name at the other ref, when it is another one
+        $was = ''
+        if ($fa -cne $f) { $was = "  ($fa in $Base)" }
+        if ($pa[$page].Index -ne $pb[$page].Index) { $moved++ }
+        $r = [ShotsDiff]::Compare((Join-Path $a $fa), (Join-Path $b $f), (Join-Path $diffDir $f))
+        if ($r[0] -lt 0) { $report.Add(('  {0,-34} another size' -f $f) + $was) }
         # on 2 rows at most: a border cut at the edge of a scrolled view, drawn a
         # pixel apart from one run to the next
         elseif ($r[0] -eq 0 -or $r[5] -le 2) { $same++ }
-        else { $report.Add(('  {0,-34} {1,7} px  {2},{3}-{4},{5}' -f $f, $r[0], $r[1], $r[2], $r[3], $r[4])) }
+        else { $report.Add(('  {0,-34} {1,7} px  {2},{3}-{4},{5}' -f $f, $r[0], $r[1], $r[2], $r[3], $r[4]) + $was) }
     }
-    $report.Add(('  {0} of {1} the same' -f $same, $names.Count))
+    $report.Add(('  {0} of {1} the same' -f $same, $pages.Count))
+    # an entry added or removed before them: the menu drawn on the left of the shots
+    # differs too, so even a page that did not change is listed
+    if ($moved -gt 0) { $report.Add(('  The menu differs from the one of {0}: {1} shots compared with the same page at another place there, and the menu on the left of the shots differs as well' -f $Base, $moved)) }
     [System.IO.File]::WriteAllLines((Join-Path $Out 'report.txt'), $report)
     $report
     Write-Output ''

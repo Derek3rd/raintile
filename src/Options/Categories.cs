@@ -1005,14 +1005,19 @@ namespace RaintileOptions
 
         FrameWindow GetFrameWindow()
         {
-            double iw = bgFrame.Bitmap.PixelWidth, ih = bgFrame.Bitmap.PixelHeight;
-            double pw = preview.Width, ph = preview.Height;
-            double s = Math.Max(pw / iw, ph / ih) * bgFrame.Zoom;
+            return FrameWindowOf(bgFrame.Bitmap.PixelWidth, bgFrame.Bitmap.PixelHeight, preview.Width, preview.Height, bgFrame.FX, bgFrame.FY, bgFrame.Zoom);
+        }
+
+        // The part of an iw x ih image a pw x ph tile shows, framed at focus fx, fy
+        // (0-1) and zoom (BgFocus, BgZoom): also the Preview window's thumbnails
+        static FrameWindow FrameWindowOf(double iw, double ih, double pw, double ph, double fx, double fy, double zoom)
+        {
+            double s = Math.Max(pw / iw, ph / ih) * zoom;
             double w = Math.Min(iw, pw / s), h = Math.Min(ih, ph / s);
             return new FrameWindow
             {
-                X = Math.Min(iw - w, Math.Max(0.0, bgFrame.FX * iw - w / 2)),
-                Y = Math.Min(ih - h, Math.Max(0.0, bgFrame.FY * ih - h / 2)),
+                X = Math.Min(iw - w, Math.Max(0.0, fx * iw - w / 2)),
+                Y = Math.Min(ih - h, Math.Max(0.0, fy * ih - h / 2)),
                 W = w, H = h, S = s, IW = iw, IH = ih,
             };
         }

@@ -31,6 +31,8 @@ namespace RaintileOptions
             public string Name, Label, LogoPath; public ImageSource Bg, Logo, BgFull; public Brush Color, LogoColor; public int Cols = 1, Rows = 1;
             // LogoPos= (centre, 0-1), LogoScale=, InfoPos= (0-1), of the tile or its category
             public double LogoX = 0.5, LogoY = 0.5, LogoScale = 1, InfoX, InfoY;
+            // BgFocus= (0-1) and BgZoom=: the framing of the background on the tile
+            public double FX = 0.5, FY = 0.5, Zoom = 1;
             public string Update;   // the update line of a Steam game with one waiting, or null
         }
         class WheelCat { public string File, Name; public ImageSource Icon; }
@@ -105,6 +107,8 @@ namespace RaintileOptions
                 LogoX = PreviewPos(TileOrCat(t, cs, "LogoPos"), 0, 0.5), LogoY = PreviewPos(TileOrCat(t, cs, "LogoPos"), 1, 0.5),
                 LogoScale = Math.Min(3, Math.Max(0.25, PreviewNum(TileOrCat(t, cs, "LogoScale"), 1))),
                 InfoX = PreviewPos(TileOrCat(t, cs, "InfoPos"), 0, 0), InfoY = PreviewPos(TileOrCat(t, cs, "InfoPos"), 1, 0),
+                FX = PreviewPos(TileOrCat(t, cs, "BgFocus"), 0, 0.5), FY = PreviewPos(TileOrCat(t, cs, "BgFocus"), 1, 0.5),
+                Zoom = Math.Min(4, Math.Max(1, PreviewNum(TileOrCat(t, cs, "BgZoom"), 1))),
                 Update = PreviewUpdate(updates, Art.SteamId(Core.GetKey(t, "Command").Trim(), Core.GetKey(t, "Source").Trim())),
             }).ToList();
             if (!keep) { wheelPos = wheelTarget = 0; gridScroll = 0; }
@@ -314,11 +318,19 @@ namespace RaintileOptions
                 if (WheelLogoBack() && sel.Logo != null)
                 {
                     double size = g.GH * Math.Min(80, Math.Max(5, WNum("WheelBackdropLogoSize", 30))) / 100 * sel.LogoScale;
-                    // LogoPos= as on a tile, on the area (M.backdropLogo)
-                    var at = PreviewLogoCentre(sel, size, g.GW, g.GH);
+                    // where it sits on its thumbnail, as a share of the room it can
+                    // move in (M.logoShare, M.backdropLogo)
+                    double ts = PreviewIcon(g) * sel.LogoScale;
+                    var tv = PreviewLogoVisible(sel, ts);
+                    var tc = PreviewLogoCentre(sel, ts, g.S, g.S);
+                    double qx = g.S > tv.Width ? (tc.X - tv.Width / 2) / (g.S - tv.Width) : 0.5;
+                    double qy = g.S > tv.Height ? (tc.Y - tv.Height / 2) / (g.S - tv.Height) : 0.5;
+                    var vis = PreviewLogoVisible(sel, size);
+                    double cx = g.GW > vis.Width ? vis.Width / 2 + qx * (g.GW - vis.Width) : g.GW / 2;
+                    double cy = g.GH > vis.Height ? vis.Height / 2 + qy * (g.GH - vis.Height) : g.GH / 2;
                     // (the image larger than the tiles' copy: it is much larger here)
                     var logo = new Image { Source = GetBitmap(sel.LogoPath, 640) ?? sel.Logo, Width = size, Height = size, Stretch = Stretch.Uniform };
-                    Canvas.SetLeft(logo, at.X - size / 2); Canvas.SetTop(logo, at.Y - size / 2);
+                    Canvas.SetLeft(logo, cx - size / 2); Canvas.SetTop(logo, cy - size / 2);
                     area.Children.Add(logo);
                 }
                 if (WheelInfoBack())
@@ -413,7 +425,17 @@ namespace RaintileOptions
             box.Clip = new RectangleGeometry(new Rect(0, 0, w, h), radius, radius);
             iconsOnly = iconsOnly && tile.Logo != null;
             box.Children.Add(new Rectangle { Fill = iconsOnly ? (tile.LogoColor ?? tile.Color) : tile.Color });
-            if (tile.Bg != null && !iconsOnly) box.Children.Add(new Image { Source = tile.Bg, Stretch = Stretch.UniformToFill });
+            var bg = tile.Bg as BitmapSource;
+            if (bg != null && bg.PixelWidth > 0 && !iconsOnly)
+            {
+                // framed as the launcher frames it (BgFocus, BgZoom; frameRect)
+                var v = FrameWindowOf(bg.PixelWidth, bg.PixelHeight, w, h, tile.FX, tile.FY, tile.Zoom);
+                var img = new Image { Source = bg, Width = v.IW * v.S, Height = v.IH * v.S, Stretch = Stretch.Fill };
+                var frame = new Canvas();
+                Canvas.SetLeft(img, -v.X * v.S); Canvas.SetTop(img, -v.Y * v.S);
+                frame.Children.Add(img);
+                box.Children.Add(frame);
+            }
             if (tile.Logo != null && showLogo)
             {
                 double ls = PreviewIcon(g) * tile.LogoScale;
@@ -455,16 +477,17 @@ namespace RaintileOptions
         bool WheelLogoBack() { return IsWheel() && WNum("WheelBackdrop", 1) != 0 && WWord("WheelLogoOn", "tile") == "background"; }
         bool WheelInfoBack() { return IsWheel() && WNum("WheelBackdrop", 1) != 0 && WWord("WheelInfoOn", "tile") == "background"; }
 
-        // The logo size of the category's tiles (IconSize= of it, or of
-        // Settings.inc); in the wheel at most most of its square tile (M.wheelGeometry)
+        // The logo size of the category's tiles: in the grid IconSize= of it, or of
+        // Settings.inc; in the wheel 70% of the thumbnail (M.wheelGeometry)
         double PreviewIcon(WheelGeo g)
         {
+            if (IsWheel()) return Math.Floor(g.S * 0.7);   // the thumbnails: a share of them
             string own = wheelCatIdx >= 0 && wheelCatIdx < wheelCats.Count
                 ? Core.GetKey(Core.GetCategorySection(GetModel(wheelCats[wheelCatIdx].File)), "IconSize").Trim() : "";
             double icon = WSize("IconSize", g.MonH, 96), n;
             if (own != "" && double.TryParse(own.TrimEnd('%'), NumberStyles.Float, CultureInfo.InvariantCulture, out n))
                 icon = own.EndsWith("%") ? n * g.MonH / 100 : n;
-            return IsWheel() ? Math.Min(icon, Math.Floor(g.S * 0.7)) : icon;
+            return icon;
         }
 
         // The part of a logo's square box its image fills (M.logoVisible)

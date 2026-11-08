@@ -31,19 +31,19 @@ local function shown(s, name)
 	return m ~= nil and not m.hidden
 end
 
--- Always (the default): the line on the tile at rest, with its border
+-- Always: the line on the tile at rest, with its border
 function T.update_line_always()
-	local s = withUpdate({})
-	t.eq(s:upvalue('V').UpdateInfo, 'always', 'default UpdateInfo')
+	local s = withUpdate({ UpdateInfo = 'Always' })
 	t.ok(shown(s, 'TileUpd1'), 'the update line is not shown at rest')
 	t.ok(shown(s, 'TileGlow1'), 'no border on the tile with an update')
 	s:call('Hide()')
 	t.atRest(s)
 end
 
--- Hover: the line only on the highlighted tile; the border always
+-- Hover (the default): the line only on the highlighted tile; the border always
 function T.update_line_hover()
-	local s = withUpdate({ UpdateInfo = 'Hover' })
+	local s = withUpdate({})
+	t.eq(s:upvalue('V').UpdateInfo, 'hover', 'default UpdateInfo')
 	t.ok(not shown(s, 'TileUpd1'), 'the update line is shown without the highlight')
 	t.ok(shown(s, 'TileGlow1'), 'no border on the tile with an update')
 	s:call('HoverTile(1)')
@@ -73,6 +73,14 @@ function T.update_line_old_setting()
 	end)
 	t.ok(not shown(s, 'TileUpd1'), 'GameUpdates=0 shows the line')
 	t.ok(not shown(s, 'TileGlow1'), 'GameUpdates=0 shows the border')
+	t.clean(s)
+	-- and GameUpdates=1 is the default, Hover
+	s = withUpdate({}, function(s)
+		local file = s.data .. 'Settings.inc'
+		local text = R.readFile(file):gsub('\nUpdateInfo=[^\r\n]*', '\nGameUpdates=1')
+		R.writeFile(file, text)
+	end)
+	t.eq(s:upvalue('V').UpdateInfo, 'hover', 'UpdateInfo from GameUpdates=1')
 	t.clean(s)
 end
 

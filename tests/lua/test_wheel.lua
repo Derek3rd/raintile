@@ -255,27 +255,77 @@ function T.logo_on_the_backdrop()
 end
 
 -- WheelInfoOn=Background: the selected tile's update line on the backdrop, at
--- the top left of the area under the top row (InfoPos 0,0), not on its tile
+-- the top left of the area under the top row (InfoPos 0,0); no tile of the
+-- wheel shows its line, also with UpdateInfo=Always
 function T.info_on_the_backdrop()
-	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelInfoOn = 'Background' })
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelInfoOn = 'Background', UpdateInfo = 'Always' })
 	local M, V = s:upvalue('M'), s:upvalue('V')
 	local L = #c.tiles
+	t.ok(L > 2, 'too few tiles')
 	local k = s:upvalue('offset')
-	local tl = c.tiles[k % L + 1]
-	t.ok(not tl.widget, 'the selected tile is a widget')
-	tl.steamId = '480'
-	R.writeFile(s.resources .. 'Generated\\GameUpdates.txt', '480|5000000000|0|0|0|steamapps\\appmanifest_480.acf\n')
+	local tl, next = c.tiles[k % L + 1], c.tiles[(k + 1) % L + 1]
+	t.ok(not tl.widget and not next.widget, 'a widget where a game is wanted')
+	-- the selected tile and the next one with an update
+	tl.steamId, next.steamId = '480', '481'
+	R.writeFile(s.resources .. 'Generated\\GameUpdates.txt',
+		'480|5000000000|0|0|0|steamapps\\appmanifest_480.acf\n481|3000000000|0|0|0|steamapps\\appmanifest_481.acf\n')
 	s:call('OnGameUpdates()')
-	local slot = slotOf(s, k)
-	t.ok(s.meters['tileupd' .. slot].hidden, 'the update line is still on the selected tile')
+	t.ok(s.meters['tileupd' .. slotOf(s, k)].hidden, 'the update line is still on the selected tile')
+	t.ok(s.meters['tileupd' .. slotOf(s, k + 1)].hidden, 'an update line on a side tile')
 	local upd = s.meters['backdropupd']
 	t.ok(not upd.hidden, 'no update line on the backdrop')
 	local ax, ay = M.backdropArea()
 	t.eq(num(upd, 'X'), ax + V.LabelPad, 'update line across')
 	t.eq(num(upd, 'Y'), ay + V.LabelPad, 'update line down')
-	-- the selection moves on: the line goes (that tile has no update)
+	local text = upd:opt('Text', '')
+	-- the selection moves on: the next tile's line on the backdrop, none on the
+	-- tile that was selected
 	s:call('Scroll(1)')
-	t.ok(upd.hidden, 'the update line stayed on the backdrop after a turn')
+	t.ok(not upd.hidden, 'no update line on the backdrop after a turn')
+	t.ok(upd:opt('Text', '') ~= text, 'the line of the tile selected before stayed')
+	t.ok(s.meters['tileupd' .. slotOf(s, k)].hidden, 'an update line on the tile selected before')
+	t.clean(s)
+end
+
+-- Logos only with the logo on the backdrop: the selected tile shows its art,
+-- not an empty colour; the others their logo on a colour
+function T.logos_only_with_the_logo_on_the_backdrop()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelIconsOnly = 1, WheelLogoOn = 'Background', Thumbnails = 0 }, true)
+	local L = #c.tiles
+	local k = s:upvalue('offset')
+	local tl = c.tiles[k % L + 1]
+	t.ok(tl.logo and tl.background, 'the selected tile has no logo or background (test images missing)')
+	t.eq(s.meters['tile' .. slotOf(s, k)]:opt('ImageName', ''), tl.background, 'image of the selected tile')
+	local side = slotOf(s, k + 1)
+	local st = c.tiles[(k + 1) % L + 1]
+	if side and st.logo and st ~= tl then
+		t.eq(s.meters['tile' .. side]:opt('ImageName', ''), '', 'a side tile shows its background with logos only')
+	end
+	-- turned: the tile that was selected goes back to its logo
+	s:call('Scroll(1)')
+	t.eq(s.meters['tile' .. slotOf(s, k)]:opt('ImageName', ''), '', 'the tile selected before kept its background')
+	t.clean(s)
+end
+
+-- The logo on the backdrop sits where it looks on its tile in the grid: its
+-- centre at LogoPos= is kept inside the tile, so a large logo near a corner
+-- touches it, and it touches the corner of the backdrop's area too
+function T.logo_on_the_backdrop_in_the_corner()
+	local s, c = wheel({ LauncherMode = 'Fullscreen', WheelLogoOn = 'Background', Thumbnails = 0 }, true)
+	local M = s:upvalue('M')
+	local L = #c.tiles
+	local tl = c.tiles[s:upvalue('offset') % L + 1]
+	t.ok(tl.logo, 'the selected tile has no logo (test images missing)')
+	-- 5,5 with a logo of 1.6 times the size: against the top left corner of the tile
+	tl.logoX, tl.logoY, tl.logoScale, tl.logoRatio = 0.05, 0.05, 1.6, nil
+	local qx, qy = M.logoShare(tl)
+	t.eq(qx, 0, 'share across on the tile')
+	t.eq(qy, 0, 'share down on the tile')
+	M.backdropLogo()
+	local logo = s.meters['backdroplogo']
+	local ax, ay = M.backdropArea()
+	t.eq(num(logo, 'X'), ax, 'logo not against the left of the area')
+	t.eq(num(logo, 'Y'), ay, 'logo not against the top of the area')
 	t.clean(s)
 end
 

@@ -86,7 +86,9 @@ WheelBackdropOpacity=40
 ; With WheelBackdrop=1, where the selected tile shows its logo and its lines
 ; (the update line and the play time): Tile (on the tile in the wheel) or
 ; Background (on the background, under the top row, where LogoPos= and
-; InfoPos= put them on the tile). The other tiles keep theirs.
+; InfoPos= put them on the tile). The other tiles keep their logo (with
+; WheelIconsOnly the selected one shows its background image instead); with
+; the lines on the background no tile of the wheel shows any.
 WheelLogoOn=Tile
 ; Height of the logo on the background, in percent of the area under the top
 ; row (times LogoScale= of the tile)
@@ -390,10 +392,10 @@ TrackPlaytime=1
 ; "Update 5.4 GB - Sat 06:27" (size and time Steam scheduled it),
 ; "Downloading 40% - 25.3 MB/s - 2:35 left" while it downloads (followed live
 ; while the launcher is open), and their tile gets a border in DownloadColor1
-; and DownloadColor2. Always (the line on every such tile), Hover (the line
-; only on the highlighted tile; the border and the bar always) or Never
+; and DownloadColor2. Hover (the line only on the highlighted tile; the
+; border and the bar always), Always (the line on every such tile) or Never
 ; (none of it).
-UpdateInfo=Always
+UpdateInfo=Hover
 ; What the update line says, in any order: percent, size (downloaded / total),
 ; speed, eta (time left), schedule (when Steam will download it)
 DownloadInfo=percent speed eta size schedule

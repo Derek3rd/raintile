@@ -58,10 +58,10 @@ function Convert-OldSettings([hashtable]$values) {
         $values.Remove('ImportFoldersKind')
     }
     # GameUpdates=0/1 (the Steam updates on or off) is now UpdateInfo=Never or
-    # Always (also Hover: the line only on the highlighted tile)
+    # Hover, its default (the line only on the highlighted tile; also Always)
     if ($values.ContainsKey('GameUpdates')) {
         if (-not $values.ContainsKey('UpdateInfo')) {
-            $values['UpdateInfo'] = if ($values['GameUpdates'] -eq '0') { 'Never' } else { 'Always' }
+            $values['UpdateInfo'] = if ($values['GameUpdates'] -eq '0') { 'Never' } else { 'Hover' }
         }
         $values.Remove('GameUpdates')
     }

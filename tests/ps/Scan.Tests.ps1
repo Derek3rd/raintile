@@ -87,12 +87,21 @@ Test 'Read-GooglePlay: the shortcuts of its games' {
     # the package after other parameters, and a shortcut of something else
     [IO.File]::WriteAllText((Join-Path $menu 'Other Game.url'), "[InternetShortcut]`r`nURL=googleplaygames://launch/?pid=2&id=com.example.othergame`r`n")
     [IO.File]::WriteAllText((Join-Path $menu 'A website.url'), "[InternetShortcut]`r`nURL=https://example.com/?id=com.not.agame`r`n")
+    # the shortcut it makes on the desktop: a .lnk holding the link and the icon
+    # as UTF-16 strings, with no program as its target
+    $u = [Text.Encoding]::Unicode
+    $lnk = [byte[]](0x4C, 0, 0, 0) + $u.GetBytes('googleplaygames://launch/?id=com.example.miner&lid=2&pid=1') + [byte[]](0, 0, 0x26, 0) +
+        $u.GetBytes('Idle Miner - Google Play Games') + [byte[]](0, 0) + $u.GetBytes('D:\Play Games\data\image_cache\com.example.miner.appicon.ico') + [byte[]](0, 0)
+    [IO.File]::WriteAllBytes((Join-Path $menu 'Idle Miner - Google Play Games.lnk'), $lnk)
     $script:items = New-Object System.Collections.ArrayList
     $script:installed = @{}
     $script:gameNames = @{}
     $StartMenu = $menu
     $out = Read-GooglePlay
-    Assert-Equal $out '2 found' 'result'
+    Assert-Equal $out '3 found' 'result'
+    $miner = $script:items | Where-Object { $_.Command -eq 'googleplaygames://launch/?id=com.example.miner' }
+    Assert-True $miner 'the .lnk of the desktop is not read'
+    Assert-Equal $miner.Name 'Idle Miner' 'the name without - Google Play Games'
     $coc = $script:items | Where-Object { $_.Name -eq 'Clash of Clans' }
     Assert-True $coc 'Clash of Clans is not found'
     Assert-Equal $coc.Store 'GooglePlay' 'store'

@@ -352,7 +352,6 @@ function Read-GooglePlay {
         @((Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'),
             [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('CommonDesktopDirectory'))
     }
-    $shell = $null
     $ids = @{}
     $count = 0
     foreach ($root in $roots) {
@@ -365,12 +364,16 @@ function Read-GooglePlay {
                 if ($text -match '(?im)^\s*URL\s*=\s*(\S+)') { $link = $Matches[1] }
                 if ($text -match '(?im)^\s*IconFile\s*=\s*(.+?)\s*$') { $icon = $Matches[1] }
             } else {
-                if (-not $shell) { try { $shell = New-Object -ComObject WScript.Shell } catch { continue } }
+                # its shortcuts point to the link itself, not to a program: the
+                # link and the icon are strings inside the file (UTF-16), with no
+                # target the shell would give
+                $text = ''
                 try {
-                    $sc = $shell.CreateShortcut($f.FullName)
-                    $link = "$($sc.TargetPath) $($sc.Arguments)"
-                    $icon = ($sc.IconLocation -replace ',\s*-?\d+\s*$', '').Trim().Trim('"')
+                    $bytes = [IO.File]::ReadAllBytes($f.FullName)
+                    $text = [Text.Encoding]::Unicode.GetString($bytes) + "`n" + [Text.Encoding]::ASCII.GetString($bytes)
                 } catch { continue }
+                if ($text -match $GPG_LINK) { $link = $Matches[0] }
+                if ($text -match '(?i)[A-Z]:\\[^\x00-\x1f"*?<>|]+?\.ico') { $icon = $Matches[0] }
             }
             if ($link -notmatch $GPG_LINK) { continue }
             $id = $Matches[1]
@@ -379,7 +382,8 @@ function Read-GooglePlay {
             Add-Installed 'GooglePlay' $id
             # its icon: the shortcut's, else the shortcut itself (the shell draws it)
             $iconSource = if ($icon -and (Test-Path -LiteralPath $icon)) { $icon } else { $f.FullName }
-            Add-Item 'game' 'GooglePlay' $id $f.BaseName ('googleplaygames://launch/?id={0}' -f $id) '' '' $iconSource
+            $name = $f.BaseName -replace '(?i)\s*-\s*Google Play (Games|Giochi|Spiele|Jeux|Juegos)\s*$', ''
+            Add-Item 'game' 'GooglePlay' $id $name ('googleplaygames://launch/?id={0}' -f $id) '' '' $iconSource
             $count++
         }
     }

@@ -132,7 +132,7 @@ Default=6
 | Key | |
 | --- | --- |
 | `Label` | the name shown (default: `<Name>`) |
-| `Kind` | `text` (default), `secret` (a key or password: hidden, saved encrypted), `bool` (`1`/`0`), `number`, `choice` |
+| `Kind` | `text` (default), `secret` (a key or password: hidden, saved encrypted), `bool` (`1`/`0`), `number` (the box takes only a number, decimals and a minus sign included; one not finished, such as `-`, is outlined in red and not saved), `choice` (a drop-down list) |
 | `Choices` | for `choice`: the values, separated by `\|` |
 | `Default` | the value until the user sets one |
 | `Help` | a line under it |

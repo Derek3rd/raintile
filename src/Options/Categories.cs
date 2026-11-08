@@ -103,8 +103,7 @@ namespace RaintileOptions
 
         void UpdateWidgetHint()
         {
-            var item = widgetKind.SelectedItem as ComboBoxItem;
-            string kind = item != null ? (string)item.Tag : "";
+            string kind = ChoiceValue(widgetKind) ?? "";
             string hint = WIDGET_KINDS.Where(k => k[0] == kind).Select(k => k[2]).FirstOrDefault() ?? "";
             SetFormHelp(widgetHint, hint);
             widgetParamRow.Visibility = hint != "" ? Visibility.Visible : Visibility.Collapsed;
@@ -1298,7 +1297,7 @@ namespace RaintileOptions
             // every tile can be a widget
             widgetRow.Visibility = Visibility.Visible;
             string kind = s != null ? Core.GetKey(s, "Widget").Trim().ToLowerInvariant() : "";
-            widgetKind.SelectedItem = widgetKind.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == kind) ?? widgetKind.Items[0];
+            if (!SelectChoice(widgetKind, kind)) widgetKind.SelectedIndex = 0;
             widgetParam.Text = s != null ? Core.GetKey(s, "Param") : "";
             widgetOption.Text = s != null ? Core.GetKey(s, "WidgetOption") : "";
             UpdateWidgetHint();
@@ -2135,8 +2134,8 @@ namespace RaintileOptions
             gridColsReset = NewResetIcon("Back to the default (Layout)");
             gridRowsReset = NewResetIcon("Back to the default (Layout)");
             catLogoSizeReset = NewResetIcon("Back to the default (Layout)");
-            gridCols = NewNumberField(1, 12, 1, "columns", t => setCatKey("NX", t, gridColsReset));
-            gridRows = NewNumberField(1, 8, 1, "rows", t => setCatKey("NY", t, gridRowsReset));
+            gridCols = NewNumberField(1, 12, 1, "", t => setCatKey("NX", t, gridColsReset));
+            gridRows = NewNumberField(1, 8, 1, "", t => setCatKey("NY", t, gridRowsReset));
             catLogoSize = NewSizeField("H", v => setCatKey("IconSize", v, catLogoSizeReset));
             var colsRow = AddTo(af, NewFormRow("Columns", gridCols.Root, "", null, gridColsReset));
             gridColsHint = FormHelp(colsRow);
@@ -2209,8 +2208,7 @@ namespace RaintileOptions
             cmdRow.Children.Add(btnCmd);
             AddTo(f, NewFormRow("Command", cmdRow, "A program, a .lnk/.url shortcut, a URL (also steam://...), a folder or a Rainmeter bang."));
             // widgets: any tile, in any category
-            widgetKind = new ComboBox();
-            foreach (var k in WIDGET_KINDS) widgetKind.Items.Add(new ComboBoxItem { Content = k[1], Tag = k[0] });
+            widgetKind = NewChoiceBox(WIDGET_KINDS, "", null);
             widgetRow = NewFormRow("Widget", widgetKind, "What the tile shows instead of images. A click opens its Command, or the tool that fits.");
             AddTo(f, widgetRow);
             widgetParam = new TextBox();
@@ -2235,9 +2233,9 @@ namespace RaintileOptions
                 UpdateWidgetHint();
                 if (loading) return;
                 var t = GetCurrentTile();
-                var item = widgetKind.SelectedItem as ComboBoxItem;
-                if (t == null || item == null) return;
-                Core.SetKey(t, "Widget", (string)item.Tag);
+                string kind = ChoiceValue(widgetKind);
+                if (t == null || kind == null) return;
+                Core.SetKey(t, "Widget", kind);
                 SetChanged(currentFile);
             };
             widgetParam.TextChanged += (s, e) =>

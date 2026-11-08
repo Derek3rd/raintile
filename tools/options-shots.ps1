@@ -5,11 +5,25 @@
 # tools/check.py; with -Base it stops at once when nothing of the window changed.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\options-shots.ps1 -Base origin/nightly
+#   ... -Base HEAD     while working on a change: against its last commit
 #
-# Output in build\options-shots\ (git-ignored): current\ and base\ (program\,
-# one PNG per page and screen), diff\ (the current shot dimmed, the
-# changed pixels red) and report.txt. The windows use a copy of the data folder and
-# the skin name RaintileShots, so nothing is saved and no bang reaches the skin.
+# Shots are kept: build\options-shots\cache\<key>\ (git-ignored) holds the shots of
+# one content of the window's sources (src\Options, @Resources, Raintile.ini) with
+# the inputs below, and the same content is never shot twice. A ref already shot
+# (the nightly branch, the last commit, a branch merged as it was) costs nothing; only
+# what changed is built and shot. The last 12 contents are kept.
+#
+# The inputs are frozen in inputs\ at the first run: a copy of the data folder and of
+# @Resources\Generated (the games found), so that shots taken days apart differ only
+# by the code. -NewInputs takes a new copy (after the data changed): what was
+# shot with the old one is shot again.
+#
+# Output: diff\ (the current shot dimmed, the changed pixels red) and report.txt.
+# The programs are built from their sources, never taken from @Resources\Bin (it may
+# be older than the sources, or locked by an open Options window). Each window runs
+# from stage\, a copy of the skin always at the same place (the folders shown on Info
+# are the same for every ref), with a fresh copy of the data and the skin name
+# RaintileShots, so nothing is saved and no bang reaches the skin.
 # Pages are reached with UI Automation: every entry of the menu, every screen of a
 # page scrolled, and on a category page also its first tile. Dialogs are not shot.
 param(
@@ -17,7 +31,8 @@ param(
     [string]$Out = '',
     [int]$Width = 1280,
     [int]$Height = 1000,
-    [switch]$Force          # with -Base: compare even when the window did not change
+    [switch]$Force,         # with -Base: compare even when the window did not change
+    [switch]$NewInputs      # a new copy of the data folder and of Generated
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -108,12 +123,68 @@ $Scope = [System.Windows.Automation.TreeScope]
 
 function New-Condition($property, $value) { return New-Object System.Windows.Automation.PropertyCondition($property, $value) }
 
-function Copy-Data([string]$dest) {
+$cache = Join-Path $Out 'cache'
+$inputs = Join-Path $Out 'inputs'
+
+# The frozen inputs (data folder, Generated): copied once; returns their id, part of
+# every key. id.txt is written last: a copy that was stopped is made again.
+function Initialize-Inputs {
+    $idFile = Join-Path $inputs 'id.txt'
+    if (-not $NewInputs -and (Test-Path -LiteralPath $idFile)) { return ([System.IO.File]::ReadAllText($idFile)).Trim() }
+    if (Test-Path -LiteralPath $inputs) { Remove-Item -LiteralPath $inputs -Recurse -Force }
+    New-Item -ItemType Directory -Force $inputs | Out-Null
     $src = Join-Path $env:APPDATA 'Rainmeter\Raintile'
-    if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
-    if (-not (Test-Path -LiteralPath (Join-Path $src 'Settings.inc'))) { return '' }   # the skin's defaults
-    Copy-Item -LiteralPath $src -Destination $dest -Recurse
-    return $dest
+    # without a data folder the window uses the skin's defaults
+    if (Test-Path -LiteralPath (Join-Path $src 'Settings.inc')) { Copy-Item -LiteralPath $src -Destination (Join-Path $inputs 'data') -Recurse }
+    $gen = Join-Path $repo '@Resources\Generated'
+    if (Test-Path -LiteralPath $gen) { Copy-Item -LiteralPath $gen -Destination (Join-Path $inputs 'Generated') -Recurse }
+    $id = [guid]::NewGuid().ToString('N')
+    [System.IO.File]::WriteAllText($idFile, $id)
+    return $id
+}
+
+# The key of a content of the window's sources: the blobs of its files, at a ref or
+# in the working tree (hash-object normalises line ends as 'git add' would), with
+# the inputs and the window size
+$keyPaths = @('src/Options', '@Resources', 'Raintile.ini')
+function Get-Key([string]$ref, [string]$inputsId) {
+    if ($ref) {
+        $lines = @(Invoke-Git -c core.quotePath=false ls-tree -r $ref '--' @keyPaths | ForEach-Object {
+            $p = $_ -split "`t", 2
+            ($p[0] -split ' ')[2] + ' ' + $p[1]
+        })
+    }
+    else {
+        $files = @(Invoke-Git -c core.quotePath=false ls-files --cached --others --exclude-standard '--' @keyPaths |
+            Where-Object { $_ -and (Test-Path -LiteralPath (Join-Path $repo $_)) })
+        # as arguments, in blocks (PowerShell 5.1 puts a BOM before what it pipes to git)
+        $hashes = @()
+        for ($i = 0; $i -lt $files.Count; $i += 100) {
+            $hashes += @(Invoke-Git hash-object '--' @($files[$i..([Math]::Min($i + 99, $files.Count - 1))]))
+        }
+        if ($hashes.Count -ne $files.Count) { throw 'git hash-object: not a hash for every file' }
+        $lines = @(for ($i = 0; $i -lt $files.Count; $i++) { $hashes[$i] + ' ' + $files[$i] })
+    }
+    [Array]::Sort($lines, [StringComparer]::Ordinal)
+    $text = $inputsId + "`n" + $Width + 'x' + $Height + "`n" + ($lines -join "`n")
+    $sha = New-Object System.Security.Cryptography.SHA1Managed
+    $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text))
+    return ((($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 16))
+}
+
+# The skin as the window sees it: Raintile.ini and @Resources of the tree, with the
+# Generated of the inputs; always at the same place
+function New-Stage([string]$tree) {
+    $stage = Join-Path $Out 'stage'
+    if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+    $res = Join-Path $stage '@Resources'
+    New-Item -ItemType Directory -Force $res | Out-Null
+    Copy-Item -LiteralPath (Join-Path $tree 'Raintile.ini') -Destination $stage
+    Get-ChildItem -LiteralPath (Join-Path $tree '@Resources') | Where-Object { $_.Name -ne 'Generated' -and $_.Name -ne 'Bin' } |
+        Copy-Item -Destination $res -Recurse
+    $gen = Join-Path $inputs 'Generated'
+    if (Test-Path -LiteralPath $gen) { Copy-Item -LiteralPath $gen -Destination $res -Recurse }
+    return $res
 }
 
 function Save-Shot([IntPtr]$hwnd, [string]$file) {
@@ -164,9 +235,15 @@ function Save-Page($win, [IntPtr]$hwnd, [string]$dir, [string]$name) {
 # Opens one window (the program 'exe') and shoots every page into 'dir'
 function Save-Window([string]$exe, [string]$resources, [string]$dir) {
     New-Item -ItemType Directory -Force $dir | Out-Null
-    $data = Copy-Data (Join-Path $Out 'data')   # a fresh copy: a page may mark things as seen
     $a = @('-Resources', ('"' + $resources + '"'), '-Config', 'RaintileShots')
-    if ($data) { $a += @('-Data', ('"' + $data + '"')) }
+    # a fresh copy of the frozen data for every window: a page may mark things as seen
+    $data = Join-Path $Out 'data'
+    if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
+    $frozen = Join-Path $inputs 'data'
+    if (Test-Path -LiteralPath $frozen) {
+        Copy-Item -LiteralPath $frozen -Destination $data -Recurse
+        $a += @('-Data', ('"' + $data + '"'))
+    }
     $p = Start-Process $exe -ArgumentList $a -PassThru
     try {
         $win = $null
@@ -201,6 +278,7 @@ function Save-Window([string]$exe, [string]$resources, [string]$dir) {
     finally { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
 }
 
+
 # The program of a source tree: built from its src\Options into 'bin'
 function Build-Program([string]$tree, [string]$bin) {
     $o = & dotnet build (Join-Path $tree 'src\Options\RaintileOptions.csproj') -c Release -o $bin -nologo -v q 2>&1
@@ -208,81 +286,86 @@ function Build-Program([string]$tree, [string]$bin) {
     return (Join-Path $bin 'RaintileOptions.exe')
 }
 
-# Shoots the window of a source tree whose @Resources (Options.xaml) and program
-# are given
-function Save-Tree([string]$label, [string]$exe, [string]$tree) {
-    $res = Join-Path $tree '@Resources'
-    if ($exe -and (Test-Path -LiteralPath $exe)) { Save-Window $exe $res (Join-Path $Out "$label\program") }
-    else { Write-Output "  $label\program: no RaintileOptions.exe (no .NET SDK?), not shot" }
+function Test-Cached([string]$key) { return (Test-Path -LiteralPath (Join-Path (Join-Path $cache $key) 'done.txt')) }
+
+# The shots of a source tree into the cache, unless that content was shot already
+function Save-Tree([string]$label, [string]$tree, [string]$key) {
+    $dir = Join-Path $cache $key
+    if (Test-Cached $key) {
+        (Get-Item -LiteralPath $dir).LastWriteTime = Get-Date   # recently used: kept by the pruning
+        Write-Output "  ${label}: from the cache ($key)"
+        return
+    }
+    if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }   # left by a run that was stopped
+    Save-Window (Build-Program $tree (Join-Path $Out "$label-bin")) (New-Stage $tree) $dir
+    [System.IO.File]::WriteAllText((Join-Path $dir 'done.txt'), $label)
 }
 
-foreach ($d in @('current', 'base', 'diff', 'base-bin')) {
+# current\ and base\ were the shots before the cache
+foreach ($d in @('diff', 'stage', 'current-bin', 'base-bin', 'current', 'base')) {
     $p = Join-Path $Out $d
     if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force }
 }
-New-Item -ItemType Directory -Force $Out | Out-Null
-$hasDotnet = [bool](Get-Command dotnet -ErrorAction SilentlyContinue)
-
-Write-Output 'Shooting this checkout...'
-$exe = Join-Path $repo '@Resources\Bin\RaintileOptions.exe'
-if ($hasDotnet) {
-    # rebuilds only when a source is newer than the program
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'dev-build.ps1') | Out-Null
+New-Item -ItemType Directory -Force $cache | Out-Null
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+    throw 'the .NET SDK (dotnet) is needed: the programs are built from their sources'
 }
-Save-Tree 'current' $exe $repo
+$inputsId = Initialize-Inputs
+
+Write-Output 'This checkout...'
+$curKey = Get-Key '' $inputsId
+Save-Tree 'current' $repo $curKey
 
 if ($Base) {
-    Write-Output "Shooting $Base..."
-    $tree = Join-Path $Out 'base-src'
-    # left by a run that was stopped
-    if (Test-Path -LiteralPath $tree) {
-        try { [void](Invoke-Git worktree remove --force $tree) } catch { Remove-Item -LiteralPath $tree -Recurse -Force }
-        [void](Invoke-Git worktree prune)
+    Write-Output "$Base..."
+    $baseKey = Get-Key $Base $inputsId
+    if (Test-Cached $baseKey) { Save-Tree 'base' '' $baseKey }
+    else {
+        $tree = Join-Path $Out 'base-src'
+        # left by a run that was stopped
+        if (Test-Path -LiteralPath $tree) {
+            try { [void](Invoke-Git worktree remove --force $tree) } catch { Remove-Item -LiteralPath $tree -Recurse -Force }
+            [void](Invoke-Git worktree prune)
+        }
+        # no hooks: a post-checkout hook could build or write into the new tree
+        $noHooks = Join-Path $Out 'no-hooks'
+        New-Item -ItemType Directory -Force $noHooks | Out-Null
+        [void](Invoke-Git -c "core.hooksPath=$noHooks" worktree add --detach $tree $Base)
+        try { Save-Tree 'base' $tree $baseKey }
+        finally { [void](Invoke-Git worktree remove --force $tree) }
     }
-    # no hooks: a post-checkout hook could build or write into the new tree
-    $noHooks = Join-Path $Out 'no-hooks'
-    New-Item -ItemType Directory -Force $noHooks | Out-Null
-    [void](Invoke-Git -c "core.hooksPath=$noHooks" worktree add --detach $tree $Base)
-    try {
-        # what the skin found (games, icons) for the Import page, as in this checkout
-        $gen = Join-Path $repo '@Resources\Generated'
-        if (Test-Path -LiteralPath $gen) { Copy-Item -Path (Join-Path $gen '*') -Destination (Join-Path $tree '@Resources\Generated') -Recurse -Force }
-        $baseExe = ''
-        if ($hasDotnet) { $baseExe = Build-Program $tree (Join-Path $Out 'base-bin') }
-        Save-Tree 'base' $baseExe $tree
-    }
-    finally { [void](Invoke-Git worktree remove --force $tree) }
 
     $report = New-Object System.Collections.Generic.List[string]
-    $report.Add("Options window: this checkout against $Base (changed pixels, area x0,y0-x1,y1;")
-    $report.Add('changes on 2 rows or fewer, the edges of a scrolled view, count as the same)')
-    foreach ($kind in @('program')) {
-        $a = Join-Path $Out "base\$kind"
-        $b = Join-Path $Out "current\$kind"
-        if (-not ((Test-Path -LiteralPath $a) -and (Test-Path -LiteralPath $b))) { continue }
-        $diffDir = Join-Path $Out "diff\$kind"
-        New-Item -ItemType Directory -Force $diffDir | Out-Null
-        $report.Add('')
-        $report.Add("== $kind")
-        $names = @(@(Get-ChildItem $a -Filter *.png) + @(Get-ChildItem $b -Filter *.png) | ForEach-Object { $_.Name } | Sort-Object -Unique)
-        $same = 0
-        foreach ($f in $names) {
-            $fa = Join-Path $a $f
-            $fb = Join-Path $b $f
-            if (-not (Test-Path -LiteralPath $fa)) { $report.Add(('  {0,-34} only in this checkout' -f $f)); continue }
-            if (-not (Test-Path -LiteralPath $fb)) { $report.Add(('  {0,-34} only in {1}' -f $f, $Base)); continue }
-            $r = [ShotsDiff]::Compare($fa, $fb, (Join-Path $diffDir $f))
-            if ($r[0] -lt 0) { $report.Add(('  {0,-34} another size' -f $f)) }
-            # on 2 rows at most: a border cut at the edge of a scrolled view, drawn a
-            # pixel apart from one run to the next
-            elseif ($r[0] -eq 0 -or $r[5] -le 2) { $same++ }
-            else { $report.Add(('  {0,-34} {1,7} px  {2},{3}-{4},{5}' -f $f, $r[0], $r[1], $r[2], $r[3], $r[4])) }
-        }
-        $report.Add(('  {0} of {1} the same' -f $same, $names.Count))
+    $report.Add("Options window: this checkout ($curKey) against $Base ($baseKey)")
+    $report.Add('(changed pixels, area x0,y0-x1,y1; changes on 2 rows or fewer, the edges of a scrolled view, count as the same)')
+    $report.Add('')
+    $a = Join-Path $cache $baseKey
+    $b = Join-Path $cache $curKey
+    $diffDir = Join-Path $Out 'diff'
+    New-Item -ItemType Directory -Force $diffDir | Out-Null
+    $names = @(@(Get-ChildItem $a -Filter *.png) + @(Get-ChildItem $b -Filter *.png) | ForEach-Object { $_.Name } | Sort-Object -Unique)
+    $same = 0
+    foreach ($f in $names) {
+        $fa = Join-Path $a $f
+        $fb = Join-Path $b $f
+        if (-not (Test-Path -LiteralPath $fa)) { $report.Add(('  {0,-34} only in this checkout' -f $f)); continue }
+        if (-not (Test-Path -LiteralPath $fb)) { $report.Add(('  {0,-34} only in {1}' -f $f, $Base)); continue }
+        $r = [ShotsDiff]::Compare($fa, $fb, (Join-Path $diffDir $f))
+        if ($r[0] -lt 0) { $report.Add(('  {0,-34} another size' -f $f)) }
+        # on 2 rows at most: a border cut at the edge of a scrolled view, drawn a
+        # pixel apart from one run to the next
+        elseif ($r[0] -eq 0 -or $r[5] -le 2) { $same++ }
+        else { $report.Add(('  {0,-34} {1,7} px  {2},{3}-{4},{5}' -f $f, $r[0], $r[1], $r[2], $r[3], $r[4])) }
     }
+    $report.Add(('  {0} of {1} the same' -f $same, $names.Count))
     [System.IO.File]::WriteAllLines((Join-Path $Out 'report.txt'), $report)
     $report
     Write-Output ''
-    Write-Output ('Shots and pictures of the changes: ' + $Out)
+    Write-Output ('Pictures of the changes: ' + $diffDir)
+    Write-Output ('Shots: ' + $b + ' (this checkout), ' + $a + " ($Base)")
 }
-else { Write-Output ('Shots: ' + (Join-Path $Out 'current')) }
+else { Write-Output ('Shots: ' + (Join-Path $cache $curKey)) }
+
+# the 12 contents used last are kept
+Get-ChildItem -LiteralPath $cache -Directory | Sort-Object LastWriteTime -Descending | Select-Object -Skip 12 |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }

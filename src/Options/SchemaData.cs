@@ -37,10 +37,10 @@ namespace RaintileOptions
             {
                 new Group { Title = "Grid", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "int", Key = "NX", Label = "Columns", Help = "", Min = 1.0, Max = 12.0, Step = 1.0, Unit = "columns" },
-                    new Item { Kind = "int", Key = "NY", Label = "Rows", Help = "", Min = 1.0, Max = 8.0, Step = 1.0, Unit = "rows" },
+                    new Item { Kind = "int", Key = "NX", Label = "Columns", Help = "", Min = 1.0, Max = 12.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "int", Key = "NY", Label = "Rows", Help = "", Min = 1.0, Max = 8.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "choice", Key = "ScrollDir", Label = "Scroll direction", Help = "", Choices = new List<string[]> { new[] { "V", "Vertical" }, new[] { "H", "Horizontal" } } },
-                    new Item { Kind = "int", Key = "ScrollStep", Label = "Rows per mouse wheel notch", Help = "", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "rows" },
+                    new Item { Kind = "int", Key = "ScrollStep", Label = "Rows per mouse wheel notch", Help = "", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last row the first one comes back (only when the tiles do not all fit)." },
                 } },
                 new Group { Title = "Spacing", Help = "In pixels, or as a percentage of the screen.", Items = new List<Item>
@@ -71,9 +71,9 @@ namespace RaintileOptions
                     new Item { Kind = "bool", Key = "ShowFavorites", Label = "Favorites", Help = "Right click a tile > Add to Favorites." },
                     new Item { Kind = "bool", Key = "ShowRecent", Label = "Recent", Help = "" },
                     new Item { Kind = "choice", Key = "RecentOrder", Label = "Recent shows", Help = "", Choices = new List<string[]> { new[] { "Recent", "Last launched" }, new[] { "MostUsed", "Most used" } } },
-                    new Item { Kind = "int", Key = "RecentCount", Label = "Tiles in Recent", Help = "", Min = 1.0, Max = 48.0, Step = 1.0, Unit = "tiles" },
+                    new Item { Kind = "int", Key = "RecentCount", Label = "Tiles in Recent", Help = "", Min = 1.0, Max = 48.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "bool", Key = "ShowUnplayed", Label = "Not played yet", Help = "Tiles never launched, the ones added last first." },
-                    new Item { Kind = "int", Key = "UnplayedCount", Label = "Tiles in Not played yet", Help = "", Min = 1.0, Max = 96.0, Step = 1.0, Unit = "tiles" },
+                    new Item { Kind = "int", Key = "UnplayedCount", Label = "Tiles in Not played yet", Help = "", Min = 1.0, Max = 96.0, Step = 1.0, Unit = "" },
                 } },
                 new Group { Title = "Filter bar", Help = "Chips above the search results, one per tag (Tags of the tiles) and per store: a click shows only the results that have it.", Items = new List<Item>
                 {

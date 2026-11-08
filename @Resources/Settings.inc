@@ -329,11 +329,12 @@ ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps
 ; Folders of your own (portable games, emulators...), separated by |: every
 ; program (.exe) in them and in their subfolders is listed, named after its
 ; file (installers, uninstallers, redistributables and helpers left out).
-; A folder can have a name, shown in the list of found ones and offered by its
-; filter: Name=Folder (e.g. Emulators=E:\Emu); without one, the folder's name
+; Each entry: Name=Folder>Kind>Category, all but the folder optional (e.g.
+; Emulators=E:\Emu>App>Emulators): its name, shown in the list of found ones
+; and offered by its filter (without one, the folder's name); Game or App
+; (without one: Game); the category its programs go to (without one, the one
+; of their kind: ImportCategory or AppsCategory)
 ImportFolders=
-; What they are: Game (to ImportCategory) or App (to AppsCategory)
-ImportFoldersKind=Game
 ; 1 = look for new games and apps in the background on every skin load: new
 ; ones light a dot on the gear (nothing is added). The same search finds the
 ; tiles of games no longer installed: they are greyed out, light the dot and

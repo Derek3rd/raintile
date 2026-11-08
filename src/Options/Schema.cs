@@ -20,6 +20,8 @@ namespace RaintileOptions
         public double Min, Max, Step = 1;
         public string Unit = "", Axis = "H";
         public bool NoSlider;
+        // stores: the sources of ImportStores this item shows, a row each
+        public string[] Stores;
         // the settings this one applies with, "Key=value" (values separated by
         // |, conditions by ;): otherwise disabled, with the reason under it
         public string When;
@@ -34,6 +36,9 @@ namespace RaintileOptions
         // a bool (one of Items) that turns the whole group on or off: in the
         // card's header, its label as the card's title; the rest applies with it
         public string Switch;
+        // a source of ImportStores (Folders) that turns the group on or off: its
+        // switch in the card's header, as Switch
+        public string Store;
         public bool Found, Other, Market, Dash;
         public List<Item> Items = new List<Item>();
     }

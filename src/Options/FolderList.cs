@@ -1,17 +1,25 @@
-// Raintile Options: a list of folders for a setting kept as "a|b|c"
-// (ImportFolders): each folder on a row with its name (alias) and a button to
-// remove it, and "Add folder..." with the Windows folder picker. An entry is
-// "Alias=X:\Folder" or just the folder (its name: the folder's own), as
+// Raintile Options: your folders (ImportFolders, entries separated by |) as a
+// grid: a row per folder with its name, the folder, whether its programs are
+// games or apps and the category they go to, a button to remove it, and
+// "Add folder..." with the Windows folder picker. An entry is
+// "Name=X:\Folder>Kind>Category", every part but the folder optional, as
 // Scan.ps1 reads it (Split-FolderEntry).
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 
 namespace RaintileOptions
 {
+    class FolderEntry
+    {
+        public string Name, Path, Kind, Category;
+        public bool OwnName;   // a name of its own, not the folder's
+    }
+
     public partial class OptionsApp
     {
         readonly Dictionary<string, Action> folderLists = new Dictionary<string, Action>();
@@ -21,29 +29,43 @@ namespace RaintileOptions
             return (value ?? "").Split('|').Select(f => f.Trim()).Where(f => f != "").ToList();
         }
 
-        // { alias (the folder's name without one), path, whether the alias is its own }
-        static string[] SplitFolderEntry(string entry)
+        static string FolderLeaf(string path)
         {
-            var m = System.Text.RegularExpressions.Regex.Match(entry.Trim(), "^([^\\\\/:=|\"]+?)\\s*=\\s*(.+)$");
-            string alias = m.Success ? m.Groups[1].Value.Trim() : "";
-            string path = (m.Success ? m.Groups[2].Value : entry).Trim().Trim('"');
-            string leaf = path.TrimEnd('\\', '/').Split('\\', '/').Last();
-            return new[] { alias != "" ? alias : leaf, path, alias != "" && alias != leaf ? "1" : "" };
+            return path.TrimEnd('\\', '/').Split('\\', '/').Last();
         }
 
-        // An entry again: the alias only when it is not the folder's own name;
-        // the characters an entry cannot hold leave the alias
-        static string JoinFolderEntry(string alias, string path)
+        // An entry of ImportFolders: a name has no \ / : = > | or ", a folder always
+        // has \ and never > (Windows refuses it in names)
+        static FolderEntry SplitFolderEntry(string entry)
         {
-            alias = System.Text.RegularExpressions.Regex.Replace(alias ?? "", "[\\\\/:=|\"]", "").Trim();
-            string leaf = path.TrimEnd('\\', '/').Split('\\', '/').Last();
-            return alias == "" || alias == leaf ? path : alias + "=" + path;
+            var m = Regex.Match(entry.Trim(), "^([^\\\\/:=|>\"]+?)\\s*=\\s*(.+)$");
+            string name = m.Success ? m.Groups[1].Value.Trim() : "";
+            var parts = (m.Success ? m.Groups[2].Value : entry).Split('>');
+            string path = parts[0].Trim().Trim('"');
+            string kind = parts.Length > 1 ? parts[1].Trim().ToLowerInvariant() : "";
+            kind = kind.StartsWith("app") ? "app" : kind.StartsWith("game") ? "game" : "";
+            return new FolderEntry
+            {
+                Name = name != "" ? name : FolderLeaf(path), Path = path, Kind = kind,
+                Category = parts.Length > 2 ? parts[2].Trim() : "", OwnName = name != "" && name != FolderLeaf(path),
+            };
+        }
+
+        // The entry again: only the parts that are set (a name only when it is
+        // not the folder's own); the characters an entry cannot hold leave them
+        static string JoinFolderEntry(FolderEntry e)
+        {
+            string name = Regex.Replace(e.Name ?? "", "[\\\\/:=|>\"]", "").Trim();
+            string cat = Regex.Replace(e.Category ?? "", "[|>\"]", "").Trim();
+            string s = (name == "" || name == FolderLeaf(e.Path) ? "" : name + "=") + e.Path;
+            if (e.Kind != "" || cat != "") s += ">" + (e.Kind == "app" ? "App" : e.Kind == "game" ? "Game" : "");
+            if (cat != "") s += ">" + cat;
+            return s;
         }
 
         UIElement NewFoldersControl(string key)
         {
             var root = NewPanel();
-            // fills the control column, as the text fields
             var rows = NewPanel();
             AddTo(root, rows);
             var add = NewButton("Add folder...");
@@ -51,56 +73,80 @@ namespace RaintileOptions
             add.Margin = T(0, Gap.Line, 0, 0);
             AddTo(root, add);
 
+            // the columns of a row: name, folder, kind, category, remove
+            Func<Grid> newRow = () =>
+            {
+                var g = NewGrid(FieldWidth.S.ToString(), "*", FieldWidth.S.ToString(), FieldWidth.M.ToString(), Gap.ActionColumn.ToString());
+                g.Margin = T(0, 0, 0, Gap.Line);
+                return g;
+            };
+            Action<Grid, UIElement, int> put = (g, el, col) =>
+            {
+                var fe = el as FrameworkElement;
+                if (fe != null) { fe.VerticalAlignment = VerticalAlignment.Center; if (col < 3) fe.Margin = T(0, 0, Gap.Control, 0); }
+                SetCol(el, col);
+                g.Children.Add(el);
+            };
+            // a change of a row: the whole value again
+            Action<int, FolderEntry> save = null;
             Action render = null;
+            save = (i, e) =>
+            {
+                var list = SplitFolders(V(key));
+                if (i < 0 || i >= list.Count) return;
+                string entry = JoinFolderEntry(e);
+                if (entry == list[i]) return;
+                list[i] = entry;
+                SetValue(key, string.Join("|", list));
+            };
+
             render = () =>
             {
                 rows.Children.Clear();
                 var folders = SplitFolders(V(key));
-                if (folders.Count == 0)
-                    AddTo(rows, NewHelp("No folders yet: add one with Add folder..."));
-                foreach (var entry in folders)
+                if (folders.Count == 0) { AddTo(rows, NewHelp("No folders yet: add one with Add folder...")); return; }
+                var head = newRow();
+                int c = 0;
+                foreach (var title in new[] { "Name", "Folder", "Programs are", "They go to" })
+                    put(head, NewSectionTitle(title), c++);
+                AddTo(rows, head);
+                var cats = new[] { new[] { "", "The category of their kind" } }
+                    .Concat(Core.GetCategoryFiles().Select(f => System.IO.Path.GetFileNameWithoutExtension(f.Name)).Select(n => new[] { n, n })).ToList();
+                for (int i = 0; i < folders.Count; i++)
                 {
-                    var parts = SplitFolderEntry(entry);
-                    string folder = parts[1];
-                    var row = NewGrid("Auto", "*", "Auto");
-                    row.Margin = T(0, 0, 0, Gap.Line);
+                    int index = i;
+                    var e = SplitFolderEntry(folders[i]);
+                    var row = newRow();
                     // its name: shown in the list of found ones, and a filter there
-                    var alias = new TextBox { Text = parts[0], Width = FieldWidth.S, VerticalAlignment = VerticalAlignment.Center, Margin = T(0, 0, Gap.Control, 0), ToolTip = "Its name in the list of found ones" };
-                    row.Children.Add(alias);
-                    string own = entry;
-                    alias.LostFocus += (s, e) =>
-                    {
-                        var list = SplitFolders(V(key));
-                        int i = list.IndexOf(own);
-                        if (i < 0) return;
-                        list[i] = JoinFolderEntry(alias.Text, folder);
-                        if (list[i] == own) return;
-                        SetValue(key, string.Join("|", list));
-                        render();
-                    };
+                    var name = new TextBox { Text = e.Name };
+                    name.LostFocus += (s, ev) => { e.Name = name.Text; save(index, e); };
+                    put(row, name, 0);
                     var cell = NewPanel();
-                    cell.VerticalAlignment = VerticalAlignment.Center;
-                    SetCol(cell, 1);
-                    var path = NewText(folder, Fs.Label);
+                    var path = NewText(e.Path, Fs.Label);
                     SetTrimmed(path);
                     AddTo(cell, path);
                     // shown, not only in a tooltip: a folder that is not there finds nothing
-                    if (!System.IO.Directory.Exists(System.Environment.ExpandEnvironmentVariables(folder)))
+                    if (!System.IO.Directory.Exists(Environment.ExpandEnvironmentVariables(e.Path)))
                     {
                         path.Foreground = ResBrush("DimBrush");
                         AddTo(cell, NewHelp("Not found: a drive not connected?"));
                     }
-                    row.Children.Add(cell);
+                    put(row, cell, 1);
+                    var kind = NewChoiceBox(new[] { new[] { "game", "Games" }, new[] { "app", "Apps" } }, e.Kind == "app" ? "app" : "game", v => { e.Kind = v ?? "game"; save(index, e); });
+                    put(row, kind, 2);
+                    var catList = cats.ToList();
+                    if (e.Category != "" && !catList.Any(x => x[0] == e.Category)) catList.Add(new[] { e.Category, e.Category });
+                    var cat = NewChoiceBox(catList, e.Category, v => { e.Category = v ?? ""; save(index, e); });
+                    put(row, cat, 3);
                     var remove = NewClearButton("Remove this folder from the list (nothing is deleted)");
-                    SetCol(remove, 2);
-                    row.Children.Add(remove);
-                    remove.Click += (s, e) =>
+                    remove.Click += (s, ev) =>
                     {
                         var list = SplitFolders(V(key));
-                        list.RemoveAll(x => string.Equals(x, own, StringComparison.OrdinalIgnoreCase));
+                        if (index < list.Count) list.RemoveAt(index);
                         SetValue(key, string.Join("|", list));
                         render();
                     };
+                    put(row, remove, 4);
                     AddTo(rows, row);
                 }
             };
@@ -112,7 +158,7 @@ namespace RaintileOptions
                     var list = SplitFolders(V(key));
                     // a folder in the list already (or inside one of them) adds nothing
                     string picked = dlg.SelectedPath.TrimEnd('\\');
-                    if (list.Select(x => SplitFolderEntry(x)[1].TrimEnd('\\')).Any(x => picked.Equals(x, StringComparison.OrdinalIgnoreCase)
+                    if (list.Select(x => SplitFolderEntry(x).Path.TrimEnd('\\')).Any(x => picked.Equals(x, StringComparison.OrdinalIgnoreCase)
                         || picked.StartsWith(x + "\\", StringComparison.OrdinalIgnoreCase))) return;
                     list.Add(picked);
                     SetValue(key, string.Join("|", list));

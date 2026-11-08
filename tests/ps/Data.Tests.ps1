@@ -124,3 +124,18 @@ Test 'Data.ps1: after an update, the data comes from the backup' {
     Assert-True (Test-Path -LiteralPath (Join-Path $i.Data 'Categories\Old.ini')) 'categories of the backup'
     Assert-Equal (Get-Setting (Join-Path $i.Data 'Settings.inc') 'NY') '5' 'settings of the backup'
 }
+
+Test 'Data.ps1: the kind of your folders moves onto each folder' {
+    $i = New-Install
+    Invoke-Data $i | Out-Null
+    $settings = Join-Path $i.Data 'Settings.inc'
+    # an older version: one kind for every folder
+    Set-Setting $settings 'ImportFolders' 'D:\Emu|Retro=E:\Old>Game'
+    [IO.File]::AppendAllText($settings, "ImportFoldersKind=App`r`n")
+    Invoke-Data $i | Out-Null
+    Assert-Equal (Get-Setting $settings 'ImportFolders') 'D:\Emu>App|Retro=E:\Old>Game' 'the old kind on the folders without one'
+    Assert-Equal (Get-Setting $settings 'ImportFoldersKind') $null 'the old setting'
+    # and again: nothing changes
+    $out = Invoke-Data $i
+    Assert-True (-not ($out -match '^Settings updated')) 'a second run rewrote Settings.inc'
+}

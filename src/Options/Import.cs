@@ -26,6 +26,7 @@ namespace RaintileOptions
         // where it was found as the list shows it (the store's name, or the
         // name of one of your folders) and when, the first time (ISO date)
         public string Source, Found;
+        public string Category;   // a folder's own category (where it goes), else empty
         public bool New;
     }
 
@@ -94,7 +95,7 @@ namespace RaintileOptions
                 {
                     Id = Json.Str(d, "Id"), Kind = Json.Str(d, "Kind"), Store = Json.Str(d, "Store"), Name = Json.Str(d, "Name"),
                     Command = Json.Str(d, "Command"), Hero = Json.Str(d, "Hero"), Logo = Json.Str(d, "Logo"), Icon = Json.Str(d, "Icon"),
-                    SteamAppId = Json.Str(d, "SteamAppId"), New = Json.Bool(d, "New"), Found = Json.Str(d, "Found"),
+                    SteamAppId = Json.Str(d, "SteamAppId"), New = Json.Bool(d, "New"), Found = Json.Str(d, "Found"), Category = Json.Str(d, "Category"),
                     Source = SourceLabel(Json.Str(d, "Store"), Json.Str(d, "Source")),
                 });
             }
@@ -441,7 +442,10 @@ namespace RaintileOptions
                     win.Dispatcher.Invoke(new Action(() => { }), DispatcherPriority.Background);
                     foundSelected.Remove(it.Id);
                     if (GetPresentIn(it, present) != null) continue;
-                    string b = target != "auto" ? Path.GetFileNameWithoutExtension(target) : it.Kind == "game" ? V("ImportCategory") : V("AppsCategory");
+                    // by type: a folder's own category first, then the one of its kind
+                    string b = target != "auto" ? Path.GetFileNameWithoutExtension(target)
+                        : !string.IsNullOrEmpty(it.Category) ? Core.GetTileName(it.Category)
+                        : it.Kind == "game" ? V("ImportCategory") : V("AppsCategory");
                     if (b == "") b = it.Kind == "game" ? "Games" : "Apps";
                     string file = GetCategoryFileFor(b);
                     var m = GetModel(file);
@@ -589,7 +593,7 @@ namespace RaintileOptions
             all.Click += (s, e) => { foreach (ListBoxItem i in foundList.Items) if (i.IsEnabled) i.IsSelected = true; };
             none.Click += (s, e) => { foundList.UnselectAll(); foundSelected.Clear(); UpdateFoundCount(); };
             foundTarget = new ComboBox { Width = FieldWidth.L, Margin = T(0, 0, Gap.Control, 0) };
-            foundTarget.Items.Add(new ComboBoxItem { Content = "By type: games to " + V("ImportCategory") + ", apps to " + V("AppsCategory"), Tag = "auto" });
+            foundTarget.Items.Add(new ComboBoxItem { Content = "By type: games to " + V("ImportCategory") + ", apps to " + V("AppsCategory") + " (or their folder's own)", Tag = "auto" });
             foreach (var e in GetCategoryEntries()) foundTarget.Items.Add(new ComboBoxItem { Content = "All to " + e.Name, Tag = e.File });
             foundTarget.SelectedIndex = 0;
             SetCol(foundTarget, 3);

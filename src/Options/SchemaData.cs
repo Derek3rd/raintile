@@ -329,19 +329,22 @@ namespace RaintileOptions
             } },
             new Page { Id = "import", Title = "Import", Icon = 0xE896, Desc = "Where to look for the games and apps installed on this PC, and where they go. The ones found are on Found, below: pick the ones to add, they become normal tiles with their images. Nothing is added by itself.", Groups = new List<Group>
             {
-                new Group { Title = "Where to look", Help = null, Items = new List<Item>
+                new Group { Title = "Game stores", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "stores", Key = "ImportStores", Label = "Where to look", Help = "" },
+                    new Item { Kind = "stores", Key = "ImportStores", Label = "Game stores", Help = "", Stores = new[] { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox" } },
                 } },
-                new Group { Title = "Your folders", Help = null, Items = new List<Item>
+                new Group { Title = "Apps", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "text", Key = "ImportFolders", Label = "Your folders", Help = "Folders of programs (portable games, emulators...): every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out. Give each a name (e.g. Emulators): the list of found ones shows it and can show only its programs." },
-                    new Item { Kind = "choice", Key = "ImportFoldersKind", Label = "They are", Help = "Where the programs of your folders go when added.", Choices = new List<string[]> { new[] { "Game", "Games (Category for games)" }, new[] { "App", "Apps (Category for apps)" } } },
+                    new Item { Kind = "stores", Key = "ImportStores", Label = "Apps", Help = "", Stores = new[] { "Apps" } },
+                } },
+                new Group { Title = "Your folders", Help = null, Store = "Folders", Items = new List<Item>
+                {
+                    new Item { Kind = "text", Key = "ImportFolders", Label = "Your folders", Help = "Folders of programs (portable games, emulators...): every .exe in them and in their subfolders is listed, named after its file; installers, uninstallers and helpers are left out. Each has a name (shown in the list of found ones, and a filter there), whether its programs are games or apps, and the category they go to (empty: the one of their kind, below)." },
                 } },
                 new Group { Title = "Where they go", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "category", Key = "ImportCategory", Label = "Category for games", Help = "" },
-                    new Item { Kind = "category", Key = "AppsCategory", Label = "Category for apps", Help = "" },
+                    new Item { Kind = "category", Key = "ImportCategory", Label = "Games go to", Help = "Unless a folder of yours has its own category." },
+                    new Item { Kind = "category", Key = "AppsCategory", Label = "Apps go to", Help = "Unless a folder of yours has its own category." },
                 } },
                 new Group { Title = "Search", Help = null, Items = new List<Item>
                 {
@@ -465,7 +468,6 @@ namespace RaintileOptions
             { "IconSize", "96" },
             { "ImportCategory", "Games" },
             { "ImportFolders", "" },
-            { "ImportFoldersKind", "Game" },
             { "ImportStores", "Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps" },
             { "InfiniteScroll", "1" },
             { "InfoFontSize", "10" },

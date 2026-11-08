@@ -45,6 +45,15 @@ Test 'Split-FolderEntry: an alias, or the folder name' {
     # an = in the path is not an alias (the part before it has a \ or :)
     $e = Split-FolderEntry 'D:\a=b\Games'
     Assert-Equal $e.Path 'D:\a=b\Games' 'an = inside a path'
+    # its kind and category
+    $e = Split-FolderEntry 'Emulators=E:\Emu>App>Retro games'
+    Assert-Equal $e.Path 'E:\Emu' 'path before the kind'
+    Assert-Equal $e.Kind 'app' 'kind'
+    Assert-Equal $e.Category 'Retro games' 'category'
+    $e = Split-FolderEntry 'E:\Emu>Game'
+    Assert-Equal $e.Kind 'game' 'kind without a category'
+    Assert-Equal $e.Category '' 'no category'
+    Assert-Equal (Split-FolderEntry 'E:\Emu').Kind '' 'no kind: the default one'
 }
 
 Test 'Update-FirstFound: the first date stays, gone items leave' {

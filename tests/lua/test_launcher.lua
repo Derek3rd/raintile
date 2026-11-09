@@ -223,6 +223,30 @@ function T.toggle_gives_focus_back()
 	t.atRest(s)
 end
 
+-- The last window level the launcher asked for (!ZPos)
+local function zpos(s)
+	for k = #s.log, 1, -1 do
+		local level = s.log[k]:lower():match('^!zpos%s+(%S+)')
+		if level then return level end
+	end
+end
+
+-- ShowZPos=0 (Normal): Rainmeter keeps a normal skin under every window, so
+-- the launcher is on top while in use and Normal once the focus goes; the
+-- shortcut brings it back on top (it used to stay under the other windows).
+function T.normal_level_on_top_while_in_use()
+	local s = opened({ LauncherMode = 'Window', ShowZPos = '0' })
+	t.eq(zpos(s), '1', 'window level when opened')
+	s:call('FocusLost()')
+	t.eq(zpos(s), '0', 'window level without the focus')
+	s:call('Toggle()')
+	t.eq(zpos(s), '1', 'window level after the shortcut')
+	s:call('FocusLost()')
+	s:call('FocusGained()')
+	t.eq(zpos(s), '1', 'window level after a click on it')
+	t.clean(s)
+end
+
 -- Full screen hides on focus loss (AutoHide=1); with AutoHide=0 it stays,
 -- without its keys.
 function T.autohide_on_focus_loss()

@@ -4851,7 +4851,7 @@ function Update()
 		show('MeterPower', V.ShowPower and not M.compact)
 		updateDashState()
 		if showNow then
-			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+			M.zpos(true)
 			SKIN:Bang('!Show')
 		end
 		if startHidden then
@@ -5087,7 +5087,7 @@ function Show(how)
 	if visible then
 		-- a refresh while hidden (e.g. saving in the Options window) leaves
 		-- the window hidden although the script starts as visible: show it
-		if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+		M.zpos(true)
 		SKIN:Bang('!Show')
 		return
 	end
@@ -5133,7 +5133,7 @@ function Show(how)
 		M.dock.dir = 1
 		M.dockPlace(M.dock.p)
 	end
-	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+	M.zpos(true)
 	SKIN:Bang('!Show')
 	M.focused = how ~= 'edge'
 	hotKey(true)
@@ -5192,7 +5192,7 @@ end
 -- behind a game) comes back in front with its keys first.
 function Toggle()
 	if visible and not M.focused and not launching then
-		M.toFront()
+		M.zpos(true)
 		SKIN:Bang('!Show')
 		M.setFocus(true)
 		return
@@ -6724,11 +6724,16 @@ function M.setFocus(on)
 	hotKey(on and not typing)
 end
 
--- In front again. With ShowZPos=0 (Normal) through "on top": Normal on a
--- window that is already normal does not raise it.
-function M.toFront()
-	if V.ShowZPos == '0' then SKIN:Bang('!ZPos', '1') end
-	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+-- Window level: front = shown or in use, otherwise the focus went elsewhere.
+-- Rainmeter keeps a Normal skin (ShowZPos=0) with the desktop, under every
+-- window, even right after showing it: so the launcher is on top (1) while
+-- in use and goes back to Normal, behind the others, when the focus goes.
+function M.zpos(front)
+	if V.ShowZPos == '0' then
+		SKIN:Bang('!ZPos', front and '1' or '0')
+	elseif front and V.ShowZPos ~= '' then
+		SKIN:Bang('!ZPos', V.ShowZPos)
+	end
 end
 
 -- The launcher lost the focus: its keys go off. With AutoHide=1 it also
@@ -6739,6 +6744,7 @@ function FocusLost()
 	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
 	if not ready or not visible then return end
 	M.setFocus(false)
+	M.zpos(false)
 	if launching or V.Mode == 'window' or not V.AutoHide then return end
 	Hide()
 end
@@ -6746,7 +6752,10 @@ end
 -- A click on the launcher: its keys come back.
 function FocusGained()
 	if not ready or not visible then return end
-	if not M.focused then dbg('focus gained') end
+	if not M.focused then
+		dbg('focus gained')
+		M.zpos(true)
+	end
 	M.setFocus(true)
 end
 

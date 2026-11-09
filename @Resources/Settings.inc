@@ -212,9 +212,10 @@ CloseOnLaunch=1
 AutoHide=1
 ; 1 = when Rainmeter starts the launcher stays hidden until the shortcut
 StartHidden=0
-; Window level when it is shown: 1 = above other windows, -2 = on the
-; desktop (focus loss is not seen there: it keeps its keys while visible),
-; empty = leave it as is
+; Window level when it is shown: 1 = above other windows, 0 = normal (above
+; them while in use, behind them once the focus goes; the shortcut brings it
+; back), -2 = on the desktop (focus loss is not seen there: it keeps its keys
+; while visible), empty = leave it as is
 ShowZPos=1
 
 ; --- Tile launch ----------------------------------------------------------------

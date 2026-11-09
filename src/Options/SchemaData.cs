@@ -43,7 +43,7 @@ namespace RaintileOptions
                     new Item { Kind = "bool", Key = "AutoHide", Label = "Hide when it loses focus", Help = "A click outside the launcher or another program in front hides it. Off, or as a window, it stays open without keys or gamepad." },
                     new Item { Kind = "bool", Key = "CloseOnLaunch", Label = "Hide after launching a tile", Help = "" },
                     new Item { Kind = "choice", Key = "CloseAction", Label = "Close button (X)", Help = "Unloading frees memory, but the next opening is slower.", Choices = new List<string[]> { new[] { "[!CommandMeasure MeasureScript \"Hide()\"]", "Hide" }, new[] { "[!DeactivateConfig]", "Unload the skin" } } },
-                    new Item { Kind = "choice", Key = "ShowZPos", Label = "Window level when shown", Help = "On the desktop, focus loss is not seen (no hiding, keys kept).", Choices = new List<string[]> { new[] { "1", "On top" }, new[] { "2", "Always on top" }, new[] { "0", "Normal" }, new[] { "-2", "On the desktop" }, new[] { "", "Unchanged" } } },
+                    new Item { Kind = "choice", Key = "ShowZPos", Label = "Window level when shown", Help = "Normal: on top only while in use. On the desktop, focus loss is not seen.", Choices = new List<string[]> { new[] { "1", "On top" }, new[] { "2", "Always on top" }, new[] { "0", "Normal" }, new[] { "-2", "On the desktop" }, new[] { "", "Unchanged" } } },
                     new Item { Kind = "int", Key = "FadeDuration", Label = "Fade when opening and closing", Help = "Applies from the next time Rainmeter loads the skin.", Min = 0.0, Max = 1000.0, Step = 10.0, Unit = "ms" },
                 } },
             } },

@@ -161,7 +161,7 @@ Opened with a shortcut, the launcher does not become the active window of Window
 - it **has** it when it opens (shortcut, gamepad, the command line, the Options window) and when you click it;
 - it **loses** it to a click anywhere else (another program, also one over the launcher, the desktop, another skin, a second monitor) or when another program comes to the foreground (`Alt+Tab`, a game starting).
 
-Without the focus its keys (navigation, `Esc`, the search, the tile keys with `TileKeysWhen=Open`) are free for the other programs, a search being typed stops (the results stay), and the gamepad does nothing but `Back` + `Start`. The mouse always works. With `AutoHide=1` losing the focus also hides the launcher, full screen and docked; as a window, or with `AutoHide=0`, it stays open, and a click on it, `Ctrl+Alt+G` or `Back` + `Start` brings it back in front with its keys (the shortcut pressed again closes it). Opened by the mouse on the docked edge it starts without the focus.
+Without the focus its keys (navigation, `Esc`, the search, the tile keys with `TileKeysWhen=Open`) are free for the other programs, a search being typed stops (the results stay), and the gamepad does nothing but `Back` + `Start`. The mouse always works. With `AutoHide=1` losing the focus also hides the launcher, full screen and docked; as a window, or with `AutoHide=0`, it stays open, and a click on it, `Ctrl+Alt+G` or `Back` + `Start` brings it back in front with its keys (the shortcut pressed again closes it). At the normal window level (`ShowZPos=0`) it is above the other windows while you use it and goes behind them when the focus goes: it is still open there, the shortcut brings it back. Opened by the mouse on the docked edge it starts without the focus.
 
 ## Search
 
@@ -686,7 +686,7 @@ See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
 | `CloseOnLaunch` | `1` | hide after launching a tile |
 | `AutoHide` | `1` | hide on focus loss (click outside, or another program in the foreground); not as a window. Without it the keys and the gamepad still stop on focus loss |
 | `StartHidden` | `0` | stay hidden when Rainmeter starts |
-| `ShowZPos` | `1` | window level when shown: `1` above other windows, `-2` on the desktop (focus loss is not seen there), empty = unchanged |
+| `ShowZPos` | `1` | window level when shown: `1` above other windows, `0` normal (above them while in use, behind them once the [focus](#focus) goes), `-2` on the desktop (focus loss is not seen there), empty = unchanged |
 
 ### Tile launch
 

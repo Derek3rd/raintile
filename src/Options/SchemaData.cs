@@ -75,8 +75,9 @@ namespace RaintileOptions
             {
                 new Group { Title = "Rows and columns", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "int", Key = "NX", Label = "Columns", Help = "", Min = 1.0, Max = 12.0, Step = 1.0, Unit = "" },
-                    new Item { Kind = "int", Key = "NY", Label = "Rows", Help = "", Min = 1.0, Max = 8.0, Step = 1.0, Unit = "" },
+                    new Item { Kind = "bool", Key = "CenterSelection", Label = "Carousel", Help = "The selected column (the row, scrolling vertically) stays in the middle: the mouse wheel, the keys and the gamepad bring the previous or next tile there. Columns (rows) and the size of the tiles along the scroll are odd: even ones go to the next odd number." },
+                    new Item { Kind = "int", Key = "NX", Label = "Columns", Help = "", Min = 1.0, Max = 12.0, Step = 1.0, Unit = "", Odd = "CenterSelection=1;ScrollDir=H" },
+                    new Item { Kind = "int", Key = "NY", Label = "Rows", Help = "", Min = 1.0, Max = 8.0, Step = 1.0, Unit = "", Odd = "CenterSelection=1;ScrollDir=V" },
                     new Item { Kind = "size", Key = "IconSize", Label = "Logo size", Help = "Box the tile logo fits in (the wheel's thumbnails have their own: a share of the thumbnail).", Axis = "H" },
                     new Item { Kind = "choice", Key = "ScrollDir", Label = "Scroll direction", Help = "", Choices = new List<string[]> { new[] { "V", "Vertical" }, new[] { "H", "Horizontal" } } },
                     new Item { Kind = "bool", Key = "EdgeFade", Label = "Fade at the edge of the grid", Help = "Tiles cut by the edge (e.g. a tall tile only partly on screen) fade into the background there, to show they go on." },
@@ -431,6 +432,7 @@ namespace RaintileOptions
             { "BgOverscan", "1.15" },
             { "BgPanFrames", "180" },
             { "BgStyle", "Parallax" },
+            { "CenterSelection", "0" },
             { "CheckUpdates", "1" },
             { "ClockFontSize", "18" },
             { "ClockFormat", "%H:%M" },

@@ -137,12 +137,29 @@ namespace RaintileOptions
         {
             if (updating) return;
             values[key] = value;
+            FixOdd();
             UpdateDirty();
             UpdateResets();
             if (keyButtons.ContainsKey(key)) UpdateKeyConflicts();
             UpdateWhenRows();
             // the wheel's preview follows every setting (sizes, mode, colours)
             if (wheelCanvas != null) DrawWheel();
+        }
+
+        // Item.Odd: a setting that holds only odd numbers from now on (the carousel
+        // turned on, the scroll direction changed) and is even goes to the next odd
+        // one, so the launcher never gets a value it cannot centre
+        void FixOdd()
+        {
+            foreach (var page in Schema.Pages)
+                foreach (var g in page.Groups)
+                    foreach (var it in g.Items)
+                    {
+                        double n;
+                        if (it.Odd == null || !WhenHolds(it.Odd) || !Core.TryNumber(V(it.Key), out n) || !IsEven(n)) continue;
+                        values[it.Key] = Core.FormatNumber(OddNumber(n, it.Min, it.Max), it.Step);
+                        UpdateControl(it.Key);
+                    }
         }
 
         // Rows that apply only with other settings (Item.When): disabled, with
@@ -272,7 +289,8 @@ namespace RaintileOptions
         {
             string key = item.Key;
             // an identifier or a huge range (a port): no slider
-            var f = NewNumberField(item.Min, item.Max, item.Step, item.Unit, t => SetValue(key, t), !item.NoSlider);
+            var f = NewNumberField(item.Min, item.Max, item.Step, item.Unit, t => SetValue(key, t), !item.NoSlider, 0,
+                item.Odd != null ? () => WhenHolds(item.Odd) : (Func<bool>)null);
             f.Show(V(key), item.Min);
             ctl[key] = new Ctl { Kind = item.Kind, Num = f, Text = f.Box };
             return f.Root;

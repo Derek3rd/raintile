@@ -79,6 +79,7 @@ Sizes in percent (margins, menu, fonts) are of the area, not of the window, so t
 `ScrollMode` (Options > **Tiles** > *Layout*) sets how the tiles are laid out, in every mode:
 
 - **Grid** (default): rows and columns (`NX`, `NY`), scrolled by rows or columns.
+  - **Carousel** (`CenterSelection=1`, Options > Tiles > Grid > *Carousel*): the selected column (the row, scrolling vertically with `ScrollDir=V`) stays in the middle of the grid. A mouse wheel notch, `A` / `D` (`W` / `S` vertically), the arrows and the gamepad bring the previous or next tile there, one at a time whatever `ScrollStep`; with more rows the whole column is in the middle and up / down move only the highlight in it. The mouse highlights and launches as in the grid; the next notch goes on from the tile in the middle. Without `InfiniteScroll` the first and the last tiles come to the middle too, with empty room beside them. The middle has to be a whole column: the columns (rows) along the scroll are odd, and so is the size of the tiles along it (`Size=3x1`, not `2x1`). Options takes only odd numbers there (an even one goes to the next odd number when the carousel is turned on); a category with even values written by hand stays a plain grid.
 - **Wheel**: one line of tiles on an arc of a circle. The selected tile stays in the middle and the wheel turns: the mouse wheel, the arrows and the gamepad turn it by one tile, `Enter` / `A` launch the middle one. Best when docked.
   - The arc runs along the docked side (`WheelAxis=Auto`; across the screen in a window or full screen) and bulges towards the screen (`WheelCurve=Out`, or hollow: `In`). `WheelRadius` is in percent of the launcher's length, `WheelAnchor` places the selected tile across the launcher (in percent from its docked side), `WheelTileSize` sizes the tiles (percent of the smaller side of the screen).
   - `WheelSpacing` is the space from one tile to the next, in percent of a tile: under 100 they overlap, and the middle one is always on top. `WheelVisible` tiles show (odd), fading towards the ends by `WheelFade`. Names only on the middle tile (`WheelLabels=Center`) or on all.
@@ -609,6 +610,7 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `ScrollDir` | `V` | scroll direction: `V` (by rows) or `H` (by columns) |
 | `ScrollStep` | `1` | rows/columns per mouse wheel notch; tiles in the wheel |
 | `InfiniteScroll` | `1` | after the last row the first comes back (with the wheel, after the last tile the first); with fewer tiles than fit they repeat, so it still scrolls round |
+| `CenterSelection` | `0` | `1` = carousel: the selected column (row with `ScrollDir=V`) stays in the middle and a notch or a key brings the next tile there; odd columns (rows) and odd tile sizes along the scroll ([Grid or wheel](#grid-or-wheel)) |
 
 ### Wheel
 

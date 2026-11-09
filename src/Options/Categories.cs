@@ -711,6 +711,15 @@ namespace RaintileOptions
 
         bool IsWheelLayout() { return V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase); }
 
+        // The carousel: only odd columns (key NX) or rows (NY) along the scroll, as
+        // on Tiles > Grid (their Item.Odd); for the grid of a category and Size=
+        bool OddOf(string key)
+        {
+            Page page;
+            var item = Schema.ItemOf(key, out page);
+            return item != null && item.Odd != null && WhenHolds(item.Odd);
+        }
+
         // Where the logo and the lines of a tile are placed, as the launcher draws
         // them: width, height and logo box (before LogoScale=), in pixels.
         //  - the grid: the tile of the category (NX, NY, its Size=), its IconSize;
@@ -2312,8 +2321,8 @@ namespace RaintileOptions
             gridColsReset = NewResetIcon("Back to the default (Tiles > Grid)");
             gridRowsReset = NewResetIcon("Back to the default (Tiles > Grid)");
             catLogoSizeReset = NewResetIcon("Back to the default (Tiles > Grid)");
-            gridCols = NewNumberField(1, 12, 1, "", t => setCatKey("NX", t, gridColsReset));
-            gridRows = NewNumberField(1, 8, 1, "", t => setCatKey("NY", t, gridRowsReset));
+            gridCols = NewNumberField(1, 12, 1, "", t => setCatKey("NX", t, gridColsReset), true, 0, () => OddOf("NX"));
+            gridRows = NewNumberField(1, 8, 1, "", t => setCatKey("NY", t, gridRowsReset), true, 0, () => OddOf("NY"));
             catLogoSize = NewSizeField("H", v => setCatKey("IconSize", v, catLogoSizeReset));
             var colsRow = AddTo(af, NewFormRow("Columns", gridCols.Root, "", null, gridColsReset));
             gridColsHint = FormHelp(colsRow);
@@ -2469,8 +2478,8 @@ namespace RaintileOptions
                 SetChanged(currentFile);
                 UpdateTilePreview();
             };
-            sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged);
-            sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged);
+            sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged, true, 0, () => OddOf("NX"));
+            sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged, true, 0, () => OddOf("NY"));
             AddGridOnlyReason(AddTo(f, NewFormRow("Width", sizeCols.Root, "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Search, Favorites and Recent show it in one cell.")));
             AddGridOnlyReason(AddTo(f, NewFormRow("Height", sizeRows.Root)));
             tagSuggestions = new WrapPanel();

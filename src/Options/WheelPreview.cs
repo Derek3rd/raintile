@@ -105,7 +105,8 @@ namespace RaintileOptions
                     ?? NewColorBrush(V("TileColor")) ?? ResBrush("FieldBg"),
                 // the colour taken from the logo (Generated\Colors.txt), unless the tile or its category sets one
                 LogoColor = NewColorBrush(Core.GetKey(t, "Color")) ?? NewColorBrush(Core.GetKey(Core.GetCategorySection(model), "TileColor")) ?? WheelLogoColor(Core.GetTileImage(b, t, "Logo")),
-                Cols = TileSpan(Core.GetKey(t, "Size"), 0), Rows = TileSpan(Core.GetKey(t, "Size"), 1),
+                // (its Size=, or TileSize= of All tiles)
+                Cols = Core.GetSpan(cs, t)[0], Rows = Core.GetSpan(cs, t)[1],
                 LogoX = PreviewPos(TileOrCat(t, cs, "LogoPos"), 0, 0.5), LogoY = PreviewPos(TileOrCat(t, cs, "LogoPos"), 1, 0.5),
                 LogoScale = Math.Min(3, Math.Max(0.25, PreviewNum(TileOrCat(t, cs, "LogoScale"), 1))),
                 InfoX = PreviewPos(TileOrCat(t, cs, "InfoPos"), 0, 0), InfoY = PreviewPos(TileOrCat(t, cs, "InfoPos"), 1, 0),
@@ -127,14 +128,6 @@ namespace RaintileOptions
                 StartWheelAnimation();
             }
             DrawWheel();
-        }
-
-        // Size=2x1: the columns (part 0) or the rows (part 1) a tile takes
-        static int TileSpan(string size, int part)
-        {
-            var m = System.Text.RegularExpressions.Regex.Match(size ?? "", @"^\s*(\d+)\s*[xX*]\s*(\d+)");
-            int n;
-            return m.Success && int.TryParse(m.Groups[part + 1].Value, out n) ? Math.Max(1, n) : 1;
         }
 
         // A key of the tile, or of its category ([Category]) when the tile has none

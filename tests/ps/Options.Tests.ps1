@@ -46,6 +46,36 @@ Test 'Options: IsPartialNumber lets through only what can still be a number' {
     Assert-True (-not (Invoke-Options 'IsPartialNumber' @('0123456789', '7.5'))) 'decimal point taken by a box without it'
 }
 
+Test 'Options: the carousel takes only odd numbers, the next one within the range' {
+    Assert-Equal (Invoke-Options 'OddNumber' @([double]5, [double]1, [double]12, $false)) ([double]5) 'odd kept'
+    Assert-Equal (Invoke-Options 'OddNumber' @([double]4, [double]1, [double]12, $false)) ([double]5) 'even: the next one'
+    Assert-Equal (Invoke-Options 'OddNumber' @([double]4, [double]1, [double]12, $true)) ([double]3) 'even, slider moved down'
+    Assert-Equal (Invoke-Options 'OddNumber' @([double]12, [double]1, [double]12, $false)) ([double]11) 'the maximum, even'
+    Assert-Equal (Invoke-Options 'OddNumber' @([double]2, [double]1, [double]8, $true)) ([double]1) 'down to the minimum'
+    Assert-Equal (Invoke-Options 'OddNumber' @([double]6.4, [double]1, [double]12, $false)) ([double]7) 'a slider between two steps'
+    Assert-True (Invoke-Options 'IsEven' @([double]8)) '8 not even'
+    Assert-True (-not (Invoke-Options 'IsEven' @([double]7))) '7 even'
+}
+
+Test 'Options: a tile takes its own Size or the TileSize of All tiles, as the launcher' {
+    $asm = $optionsApp.Assembly
+    $core = $asm.GetType('RaintileOptions.Core')
+    $section = $asm.GetType('RaintileOptions.IniSection')
+    function New-Section([hashtable]$Keys) {
+        $s = [Activator]::CreateInstance($section)
+        foreach ($k in $Keys.Keys) { $s.Keys.Add([System.Collections.Generic.KeyValuePair[string, string]]::new($k, $Keys[$k])) }
+        return $s
+    }
+    $span = { param($c, $t) ($core.GetMethod('GetSpan').Invoke($null, [object[]]@($c, $t))) -join 'x' }
+    $cat = New-Section @{ TileSize = '3x1' }
+    Assert-Equal (& $span $cat (New-Section @{})) '3x1' 'tile without a size'
+    Assert-Equal (& $span $cat (New-Section @{ Size = '1x2' })) '1x2' 'tile with its own'
+    Assert-Equal (& $span $cat $null) '3x1' 'All tiles'
+    Assert-Equal (& $span (New-Section @{}) (New-Section @{})) '1x1' 'nothing set'
+    # a Size= that is not WxH is not replaced by the category's (Raintile.lua: one cell)
+    Assert-Equal (& $span $cat (New-Section @{ Size = 'big' })) '1x1' 'a size that is not WxH'
+}
+
 Test 'Options: NumericOnly records the characters a box takes' {
     $tb = New-Object System.Windows.Controls.TextBox
     Invoke-Options 'NumericOnly' @($tb, $false, $true) | Out-Null

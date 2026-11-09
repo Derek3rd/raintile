@@ -55,9 +55,9 @@ namespace RaintileOptions
         NumberField zoomField, logoField;
         Button tileKeyButton, tileKeyClear, catIconDel, bgDel, logoDel, catColorClear, tileColorClear;
         TextBox catTileColor;
-        NumberField catOpacity, tileOpacity, gridCols, gridRows, sizeCols, sizeRows;
+        NumberField catOpacity, tileOpacity, gridCols, gridRows, sizeCols, sizeRows, catSizeCols, catSizeRows;
         SizeField catLogoSize;
-        Button catOpacityReset, tileOpacityReset, gridColsReset, gridRowsReset, catLogoSizeReset;
+        Button catOpacityReset, tileOpacityReset, gridColsReset, gridRowsReset, catLogoSizeReset, catSizeReset, tileSizeReset;
         Button catNew, catOpen, catUp, catDown, catDel, tileNew, tileDel, tileUp, tileDown;
         Button catColorSwatch;
         ComboBox widgetKind;
@@ -134,7 +134,7 @@ namespace RaintileOptions
             return m;
         }
 
-        void SetChanged(string file) { changedFiles[file] = true; UpdateDirty(); PreviewChanged(file); }
+        void SetChanged(string file) { changedFiles[file] = true; UpdateDirty(); PreviewChanged(file); UpdateCarouselNote(); }
 
         // Square thumbnail: image (or colour) in a rounded box
         Border NewThumb(double size)
@@ -425,8 +425,8 @@ namespace RaintileOptions
         }
 
         // Keys a tile can take from All tiles (framing, logo, play time line, TileColor,
-        // TileOpacity): a tile with one of them has settings of its own (the dot in the strip)
-        static readonly string[] OWN_KEYS = { "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos", "Color", "Opacity" };
+        // TileOpacity, TileSize): a tile with one of them has settings of its own (the dot in the strip)
+        static readonly string[] OWN_KEYS = { "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos", "Color", "Opacity", "Size" };
 
         static bool HasOwnValues(IniSection s)
         {
@@ -711,6 +711,15 @@ namespace RaintileOptions
 
         bool IsWheelLayout() { return V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase); }
 
+        // The carousel: only odd columns (key NX) or rows (NY) along the scroll, as
+        // on Tiles > Grid (their Item.Odd); for the grid of a category and Size=
+        bool OddOf(string key)
+        {
+            Page page;
+            var item = Schema.ItemOf(key, out page);
+            return item != null && item.Odd != null && WhenHolds(item.Odd);
+        }
+
         // Where the logo and the lines of a tile are placed, as the launcher draws
         // them: width, height and logo box (before LogoScale=), in pixels.
         //  - the grid: the tile of the category (NX, NY, its Size=), its IconSize;
@@ -723,10 +732,10 @@ namespace RaintileOptions
             if (!IsWheelLayout())
             {
                 var size = GetTileSize(file, area);
-                // a tile of more cells (Size=): its own proportions (gaps left out)
-                var span = Regex.Match(s != null && !all ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
-                if (span.Success)
-                    size = new[] { size[0] * Math.Max(1, int.Parse(span.Groups[1].Value)), size[1] * Math.Max(1, int.Parse(span.Groups[2].Value)) };
+                // a tile of more cells (Size=, or TileSize= of All tiles): its own
+                // proportions (gaps left out)
+                var span = Core.GetSpan(Core.GetCategorySection(GetModel(file)), s != null && !all ? s : null);
+                size = new[] { size[0] * span[0], size[1] * span[1] };
                 return new[] { size[0], size[1], GetLogoBox(file) };
             }
             if (placeBack)
@@ -1015,9 +1024,12 @@ namespace RaintileOptions
                 int own = tiles.Count(t => Core.GetKey(t, pos) != "" || (size != null && Core.GetKey(t, size) != ""));
                 return text + (own > 0 ? " (" + own + (own == 1 ? " tile has its own)" : " tiles have their own)") : "");
             };
+            var span = Core.GetSpan(Core.GetCategorySection(model), null);
+            int ownSize = tiles.Count(t => Core.GetKey(t, "Size").Trim() != "");
             SetFormHelp(placementHint, "Puts every tile back at the default place (the centre, the top left for the play time), the ones with their own included" +
-                (placeBack ? ", on the backdrop (Place on)" : "") + ". Now: logos " +
-                describe(LogoPosKey, LogoScaleKey) + (placeBack ? "" : "; framing " + describe("BgFocus", "BgZoom")) + "; play time " + describe(InfoPosKey, null) + ".");
+                (placeBack ? ", on the backdrop (Place on)" : "") + "; Size: at the size of All tiles. Now: logos " +
+                describe(LogoPosKey, LogoScaleKey) + (placeBack ? "" : "; framing " + describe("BgFocus", "BgZoom")) + "; play time " + describe(InfoPosKey, null) +
+                "; size " + span[0] + Times + span[1] + (ownSize > 0 ? " (" + ownSize + (ownSize == 1 ? " tile has its own)" : " tiles have their own)") : "") + ".");
         }
 
         void ReadFraming(IniSection section)
@@ -1443,11 +1455,11 @@ namespace RaintileOptions
             widgetParam.Text = s != null ? Core.GetKey(s, "Param") : "";
             widgetOption.Text = s != null ? Core.GetKey(s, "WidgetOption") : "";
             UpdateWidgetHint();
-            var size = Regex.Match(s != null ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
-            int sc = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[1].Value))) : 1;
-            int sr = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[2].Value))) : 1;
-            sizeCols.Show(sc.ToString(), 1);
-            sizeRows.Show(sr.ToString(), 1);
+            // its own size, or the one of All tiles
+            var span = Core.GetSpan(currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null, s);
+            sizeCols.Show(Math.Min(8, span[0]).ToString(), 1);
+            sizeRows.Show(Math.Min(8, span[1]).ToString(), 1);
+            SetActionVisible(tileSizeReset, s != null && Core.GetKey(s, "Size").Trim() != "");
             ShowTileOpacity(s);
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
@@ -1499,6 +1511,10 @@ namespace RaintileOptions
             // empty = the default of Layout, where the slider rests
             gridCols.Show(key("NX"), nx);
             gridRows.Show(key("NY"), ny);
+            var span = Core.GetSpan(c, null);
+            catSizeCols.Show(Math.Min(8, span[0]).ToString(), 1);
+            catSizeRows.Show(Math.Min(8, span[1]).ToString(), 1);
+            SetActionVisible(catSizeReset, key("TileSize") != "");
             catLogoSize.Show(key("IconSize"));
             SetActionVisible(gridColsReset, key("NX") != "");
             SetActionVisible(gridRowsReset, key("NY") != "");
@@ -2312,8 +2328,8 @@ namespace RaintileOptions
             gridColsReset = NewResetIcon("Back to the default (Tiles > Grid)");
             gridRowsReset = NewResetIcon("Back to the default (Tiles > Grid)");
             catLogoSizeReset = NewResetIcon("Back to the default (Tiles > Grid)");
-            gridCols = NewNumberField(1, 12, 1, "", t => setCatKey("NX", t, gridColsReset));
-            gridRows = NewNumberField(1, 8, 1, "", t => setCatKey("NY", t, gridRowsReset));
+            gridCols = NewNumberField(1, 12, 1, "", t => setCatKey("NX", t, gridColsReset), true, 0, () => OddOf("NX"));
+            gridRows = NewNumberField(1, 8, 1, "", t => setCatKey("NY", t, gridRowsReset), true, 0, () => OddOf("NY"));
             catLogoSize = NewSizeField("H", v => setCatKey("IconSize", v, catLogoSizeReset));
             var colsRow = AddTo(af, NewFormRow("Columns", gridCols.Root, "", null, gridColsReset));
             gridColsHint = FormHelp(colsRow);
@@ -2321,6 +2337,22 @@ namespace RaintileOptions
             var rowsRow = AddTo(af, NewFormRow("Rows", gridRows.Root, "", null, gridRowsReset));
             gridRowsHint = FormHelp(rowsRow);
             AddGridOnlyReason(rowsRow);
+            // cells of every tile without a size of its own (TileSize=, as Size= of a tile)
+            Action<string> catSizeChanged = x =>
+            {
+                if (loading || currentFile == null) return;
+                double nc, nr;
+                int c = Core.TryNumber(catSizeCols.Box.Text, out nc) ? Math.Max(1, Math.Min(8, (int)Math.Round(nc))) : 1;
+                int r = Core.TryNumber(catSizeRows.Box.Text, out nr) ? Math.Max(1, Math.Min(8, (int)Math.Round(nr))) : 1;
+                setCatKey("TileSize", c == 1 && r == 1 ? "" : c + "x" + r, catSizeReset);
+                UpdatePlacementHint();
+            };
+            catSizeReset = NewResetIcon("Back to one cell");
+            catSizeCols = NewNumberField(1, 8, 1, "columns", catSizeChanged, true, 0, () => OddOf("NX"));
+            catSizeRows = NewNumberField(1, 8, 1, "rows", catSizeChanged, true, 0, () => OddOf("NY"));
+            catSizeReset.Click += (s, e) => { setCatKey("TileSize", "", catSizeReset); ShowAllTiles(); };
+            AddGridOnlyReason(AddTo(af, NewFormRow("Tile width", catSizeCols.Root, "Cells every tile takes in the grid (at most the grid of the category), unless it has a size of its own (its Width and Height; Reset every tile > Size gives them this one).", null, catSizeReset)));
+            AddGridOnlyReason(AddTo(af, NewFormRow("Tile height", catSizeRows.Root)));
             var sizeFormRow = AddTo(af, NewFormRow("Logo size", catLogoSize.Root, "", null, catLogoSizeReset));
             sizeHint = FormHelp(sizeFormRow);
             AddGridOnlyReason(sizeFormRow);
@@ -2360,7 +2392,8 @@ namespace RaintileOptions
             var btnResetLogos = NewButton("Logos");
             var btnResetFraming = resetFramingAll = NewButton("Framing");
             var btnResetInfo = NewButton("Play time");
-            var placeFormRow = NewFormRow("Reset every tile", NewEqualButtons(btnResetLogos, btnResetFraming, btnResetInfo));
+            var btnResetSize = NewButton("Size");
+            var placeFormRow = NewFormRow("Reset every tile", NewEqualButtons(btnResetLogos, btnResetFraming, btnResetInfo, btnResetSize));
             placementHint = FormHelp(placeFormRow);   // what the buttons do and the current placement
             placementRow = placeFormRow;
             AddTo(af, placementRow);
@@ -2369,6 +2402,13 @@ namespace RaintileOptions
             AddTo(af, NewSortRow());
             btnResetLogos.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, placeBack ? "logo placement on the backdrop" : "logo placement", new[] { LogoPosKey, LogoScaleKey }); };
             btnResetFraming.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "background framing", new[] { "BgFocus", "BgZoom" }); };
+            // (Size= is a key of the tiles only: the category keeps its TileSize)
+            btnResetSize.Click += (s, e) =>
+            {
+                if (currentFile == null) return;
+                var span = Core.GetSpan(Core.GetCategorySection(GetModel(currentFile)), null);
+                ResetCategoryPlace(currentFile, "size", new[] { "Size" }, "the size of All tiles (" + span[0] + Times + span[1] + ")");
+            };
             btnResetInfo.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, placeBack ? "play time placement on the backdrop" : "play time placement", new[] { InfoPosKey }, "the top left"); };
 
             // Tile card
@@ -2465,13 +2505,27 @@ namespace RaintileOptions
                 double nc, nr;
                 int c = Core.TryNumber(sizeCols.Box.Text, out nc) ? Math.Max(1, Math.Min(8, (int)Math.Round(nc))) : 1;
                 int r = Core.TryNumber(sizeRows.Box.Text, out nr) ? Math.Max(1, Math.Min(8, (int)Math.Round(nr))) : 1;
-                Core.SetKey(t, "Size", c == 1 && r == 1 ? "" : c + "x" + r);
+                // the size of All tiles: none of its own
+                var all = Core.GetSpan(Core.GetCategorySection(GetModel(currentFile)), null);
+                Core.SetKey(t, "Size", c == all[0] && r == all[1] ? "" : c + "x" + r);
                 SetChanged(currentFile);
+                SetActionVisible(tileSizeReset, Core.GetKey(t, "Size") != "");
+                UpdateTileDots();
                 UpdateTilePreview();
             };
-            sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged);
-            sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged);
-            AddGridOnlyReason(AddTo(f, NewFormRow("Width", sizeCols.Root, "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Search, Favorites and Recent show it in one cell.")));
+            sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged, true, 0, () => OddOf("NX"));
+            sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged, true, 0, () => OddOf("NY"));
+            tileSizeReset = NewResetIcon("Back to the size of All tiles");
+            tileSizeReset.Click += (s, e) =>
+            {
+                var t = GetCurrentTile();
+                if (t == null) return;
+                Core.SetKey(t, "Size", "");
+                SetChanged(currentFile);
+                UpdateTileDots();
+                ShowTile();
+            };
+            AddGridOnlyReason(AddTo(f, NewFormRow("Width", sizeCols.Root, "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Without a size of its own it has the one of All tiles. Search, Favorites and Recent show it in one cell.", null, tileSizeReset)));
             AddGridOnlyReason(AddTo(f, NewFormRow("Height", sizeRows.Root)));
             tagSuggestions = new WrapPanel();
             AddTo(f, NewFormRow("Tags", tileFields["Tags"], "Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", tagSuggestions));

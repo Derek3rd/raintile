@@ -552,7 +552,7 @@ end
 -- results, Favorites and Recent stay one cell per tile.
 local function packTiles(c)
 	local P = V.Horizontal and c.ny or c.nx
-	local cell, count, at, lines, first = {}, {}, {}, 0, 0
+	local cell, count, at, lines, first, even = {}, {}, {}, 0, 0, false
 	local function free(l, x, ls, cs)
 		for a = l, l + ls - 1 do
 			local row = cell[a]
@@ -579,9 +579,11 @@ local function packTiles(c)
 		end
 		at[idx] = { l, placed, ls, cs }
 		lines = math.max(lines, l + ls)
+		if ls % 2 == 0 then even = true end
 		while (count[first] or 0) >= P do first = first + 1 end
 	end
-	c.pack = { at = at, cell = cell, lines = lines }
+	-- even: a tile of an even number of lines, which the carousel cannot centre
+	c.pack = { at = at, cell = cell, lines = lines, even = even }
 end
 
 -- Reads a category file (Categories\<file>.ini).
@@ -618,6 +620,8 @@ local function loadCategory(file)
 	c.logoPos, c.logoScale = own(catKeys.logopos), own(catKeys.logoscale)
 	c.infoPos = own(catKeys.infopos)
 	c.back = { own(catKeys.backlogopos), own(catKeys.backlogoscale), own(catKeys.backinfopos) }
+	-- cells of its tiles (TileSize=, as Size=), when a tile has no Size= of its own
+	c.tileSize = own(catKeys.tilesize)
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -648,8 +652,9 @@ local function loadCategory(file)
 			end
 			-- originals, used full screen by the launch animation
 			t.backgroundFull, t.logoFull = t.background, t.logo
-			-- cells taken (Size=2x1: two columns, one row), at most the grid
-			local sw, sh = trim(k.size or ''):match('^(%d+)%s*[xX*]%s*(%d+)$')
+			-- cells taken (Size=2x1: two columns, one row; or the category's
+			-- TileSize=), at most the grid
+			local sw, sh = (own(k.size) or c.tileSize or ''):match('^(%d+)%s*[xX*]%s*(%d+)$')
 			t.cols = math.max(1, math.min(c.nx, tonumber(sw) or 1))
 			t.rows = math.max(1, math.min(c.ny, tonumber(sh) or 1))
 			if t.cols > 1 or t.rows > 1 then c.spans = true end
@@ -995,8 +1000,9 @@ function M.sortTiles(c)
 		local shown = V.Horizontal and c.nx or c.ny
 		if i and (M.tileLine(c, i) < c.offset or M.tileLine(c, i) >= c.offset + shown) then i = nil end
 		if not i then
+			-- (in the carousel the first of the line in the middle)
 			for j = 1, #c.tiles do
-				if M.tileLine(c, j) >= c.offset then i = j break end
+				if M.tileLine(c, j) >= c.offset + M.half(c) then i = j break end
 			end
 		end
 		if i then anchor, before = c.tiles[i], M.tileLine(c, i) end
@@ -1017,10 +1023,10 @@ function M.sortTiles(c)
 	end)
 	if c.pack then packTiles(c) end -- tiles of more cells: placed again
 	if anchor then
-		local o = math.max(0, c.offset + M.tileLine(c, indexOf(c.tiles, anchor)) - before)
+		local o = math.max(0 - M.half(c), c.offset + M.tileLine(c, indexOf(c.tiles, anchor)) - before)
 		if o ~= c.offset then
 			c.offset = o
-			SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(o), data .. 'State.inc')
+			M.writeScroll(c)
 		end
 	end
 end
@@ -1783,6 +1789,8 @@ local function visibleLines()
 end
 
 local function maxOffset()
+	-- the carousel: up to the last line in the middle
+	if M.carousel() then return math.max(M.minOffset(), lineCount() - 1 - M.half()) end
 	return math.max(0, lineCount() - visibleLines())
 end
 
@@ -1793,11 +1801,39 @@ local function infinite()
 	return V.InfiniteScroll and #cur().tiles > 1 and lineCount() > 0
 end
 
--- Brings a saved scroll position within the active category's limits.
+-- Carousel (CenterSelection=1): the grid keeps the selected line (column, or
+-- row when it scrolls vertically) in the middle; the wheel, the keys and the
+-- gamepad move it by one tile. Only with an odd number of lines on screen and,
+-- with tiles of more cells, all of them odd along the scroll: then the middle
+-- is a whole line and offset stays a whole number. Otherwise (values written
+-- by hand: Options refuses them) the category is a plain grid. Without
+-- infinite scroll the ends come to the middle too, with empty room beside them.
+function M.carousel(c)
+	c = c or cur()
+	if V.Wheel or not V.CenterSelection or not c.nx then return false end
+	if (V.Horizontal and c.nx or c.ny) % 2 == 0 then return false end
+	return not (c.pack and c.pack.even)
+end
+
+-- Lines from the first on screen to the one in the middle (0: not a carousel)
+function M.half(c)
+	c = c or cur()
+	if not M.carousel(c) then return 0 end
+	return ((V.Horizontal and c.nx or c.ny) - 1) / 2
+end
+
+-- The smallest offset: the first line in the middle
+function M.minOffset()
+	if infinite() then return 0 end
+	return 0 - M.half() -- (0 - 0: never a -0 written to State.inc)
+end
+
+-- Brings a saved scroll position within the active category's limits; nil:
+-- the start (the first line at the top, or in the middle of the carousel).
 local function normalizeOffset(o)
-	o = math.floor(o or 0)
+	o = math.floor(o or 0 - M.half())
 	if infinite() then return o % lineCount() end
-	return math.min(math.max(0, o), maxOffset())
+	return math.min(math.max(M.minOffset(), o), maxOffset())
 end
 
 local function slotRC(slot)
@@ -1813,8 +1849,15 @@ local function saveScroll()
 	local o = normalizeOffset(offset)
 	if c.offset ~= o then
 		c.offset = o
-		SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(o), data .. 'State.inc')
+		M.writeScroll(c)
 	end
+end
+
+-- Scroll_<category> in State.inc: the first line on screen or, in the
+-- carousel, the line in the middle (0 is the start in both, so turning the
+-- carousel on or off keeps the place)
+function M.writeScroll(c)
+	SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(c.offset + M.half(c)), data .. 'State.inc')
 end
 
 -- With tiles of more cells (c.pack): what the slots show for the 'base'
@@ -2836,15 +2879,22 @@ local function renderFilters()
 end
 
 local function renderScrollBar()
-	local maxOff = maxOffset()
-	if maxOff == 0 or V.Wheel then
+	local maxOff, total, half = maxOffset(), lineCount(), M.half()
+	if V.Wheel or (half > 0 and total <= 1) or (half == 0 and maxOff == 0) then
 		show('MeterScrollBar', false)
 		return
 	end
 
-	local total = lineCount()
-	-- fraction of the thumb travel (with infinite scroll: position within the loop)
-	local at = infinite() and (pos % total) / maxOff or pos / maxOff
+	-- fraction of the thumb travel (with infinite scroll: position within the
+	-- loop; the carousel: the line in the middle, from the first to the last)
+	local at
+	if half > 0 then
+		local line = pos + half
+		if infinite() then line = line % total end
+		at = line / (total - 1)
+	else
+		at = infinite() and (pos % total) / maxOff or pos / maxOff
+	end
 	at = math.min(1, math.max(0, at))
 	local size = V.ScrollBarSize
 	local x, y, w, h, tx, ty, tw, th
@@ -4229,12 +4279,14 @@ applyFilter = function()
 	for _ in pairs(filter.stores) do n = n + 1 end
 	for _ in pairs(filter.tags) do n = n + 1 end
 	filter.n, filter.ver = n, filter.ver + 1
-	offset, pos, base = 0, 0, -1
+	offset = normalizeOffset(nil)
+	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	updateEmptyHint()
 	if V.AnimCategory then appear = 0 startTicker() end
+	if M.carousel() then M.focusSelected() end
 	render(true)
 end
 
@@ -4605,6 +4657,7 @@ function Initialize()
 	V.DefNY = math.max(1, math.floor(num('NY', 2)))
 	V.Horizontal = SKIN:GetVariable('ScrollDir', 'V'):upper():sub(1, 1) == 'H'
 	V.ScrollStep = math.max(1, math.floor(num('ScrollStep', 1)))
+	V.CenterSelection = num('CenterSelection', 0) ~= 0
 	V.ScreenX, V.ScreenY = num('ScreenX', 0), num('ScreenY', 0)
 	V.ScreenW = num('ScreenW', 1920)
 	V.ScreenH = num('ScreenH', 1080) -- before the sizes: percentages need it
@@ -4773,9 +4826,10 @@ function Initialize()
 
 	active = math.min(math.max(1, math.floor(num('LastCategory', 1))), #cats)
 	applyGeometry(cats[active])
-	-- saved scroll position of each category
+	-- saved scroll position of each category (M.writeScroll); none: the start
 	for _, c in ipairs(cats) do
-		c.offset = math.floor(num('Scroll_' .. c.name, 0))
+		local o = num('Scroll_' .. c.name, nil)
+		c.offset = o and math.floor(o) - M.half(c)
 	end
 	offset = normalizeOffset(cats[active].offset)
 	pos = offset
@@ -5519,6 +5573,7 @@ function M.togglePin(t)
 		offset = normalizeOffset(c.offset or offset)
 		pos, base = offset, -1
 		hover.idx, hover.on, hover.a = 0, false, 0
+		if M.carousel() then M.focusSelected() end
 		render(true)
 	end
 end
@@ -5543,6 +5598,7 @@ local function toggleFavorite(t)
 		pos, base = offset, -1
 		hover.idx, hover.on, hover.a = 0, false, 0
 		updateEmptyHint()
+		if M.carousel() then M.focusSelected() end
 		render(true)
 	end
 end
@@ -5988,14 +6044,17 @@ function SetCategory(i)
 	end
 	if i == active then
 		-- click on the category already open: back to the start (with infinite
-		-- scroll, to the nearest start of the loop)
-		local target = 0
+		-- scroll, to the nearest start of the loop; the carousel: the first
+		-- tile in the middle)
+		local half = M.half()
+		local target = 0 - half
 		if infinite() then
-			local L, o = lineCount(), offset % lineCount()
+			local L, o = lineCount(), (offset + half) % lineCount()
 			target = o <= L / 2 and offset - o or offset + L - o
 		end
 		if target ~= offset then
 			offset = target
+			if M.carousel() then M.focusSelected() end
 			if V.AnimScroll then startTicker() else pos = offset frame() end
 		end
 		return
@@ -6046,8 +6105,13 @@ end
 
 -- The wheel: the highlight on the selected tile, the middle one (after a
 -- turn, and when the launcher opens or the category changes, so the tile in
--- the middle is highlighted from the start)
+-- the middle is highlighted from the start). The carousel: the tile in the
+-- middle.
 function M.focusSelected()
+	if M.carousel() then
+		if #cur().tiles > 0 then M.navTiles(0, 0) end
+		return
+	end
 	if not V.Wheel then return end
 	local tiles = cur().tiles
 	if #tiles == 0 then return end
@@ -6057,6 +6121,14 @@ end
 
 function Scroll(delta)
 	if not ready or launching then return end
+	if M.carousel() then
+		-- one tile per notch, whatever ScrollStep, as the keys (not from part
+		-- to part of a widget: the notch moves the carousel)
+		if #cur().tiles == 0 or delta == 0 then return end
+		local d = delta > 0 and 1 or -1
+		if V.Horizontal then M.navTiles(d, 0) M.partArrive(d, 0) else M.navTiles(0, d) M.partArrive(0, d) end
+		return
+	end
 	local new = offset + delta * V.ScrollStep
 	if not infinite() then new = math.min(math.max(0, new), maxOffset()) end
 	if new ~= offset then
@@ -6273,9 +6345,18 @@ local function navPacked(dx, dy, p)
 		return id, l - (wrap(l) - p.at[id][1])
 	end
 	local idx, line
-	local e = hover.idx ~= 0 and p.at[hover.idx]
+	local from, start = hover.idx, V.Horizontal and hover.tx or hover.ty
+	local carousel = M.carousel()
+	if carousel then
+		-- the carousel: from the tile in the middle, also with the mouse on
+		-- another one (in the row of the highlight)
+		local h = from ~= 0 and p.at[from]
+		local x = h and math.min(math.max(hover.anchor or h[2], h[2]), h[2] + h[4] - 1) or 0
+		from, start = nearest(offset + M.half(), x)
+		from = from or 0
+	end
+	local e = from ~= 0 and p.at[from]
 	if e then
-		local start = V.Horizontal and hover.tx or hover.ty
 		local anchor = math.min(math.max(hover.anchor or e[2], e[2]), e[2] + e[4] - 1)
 		if dl ~= 0 then
 			local l = dl > 0 and start + e[3] or start - 1
@@ -6298,11 +6379,12 @@ local function navPacked(dx, dy, p)
 				x = x + dc
 			end
 		else
-			idx, line = hover.idx, start
+			idx, line = from, start
 		end
 	else
-		-- no highlighted tile: the first visible one
-		local l = offset
+		-- no highlighted tile: the first visible one (the carousel: of the
+		-- line in the middle)
+		local l = offset + M.half()
 		for _ = 1, L do
 			if not inRange(l) then break end
 			idx, line = nearest(l, 0)
@@ -6313,20 +6395,33 @@ local function navPacked(dx, dy, p)
 	end
 	if not idx then return end -- at the edge: the highlight stays
 	local at = p.at[idx]
-	if line < offset then
+	if carousel then
+		-- its middle line in the middle (it has an odd number of them)
+		offset = line + (at[3] - 1) / 2 - M.half()
+	elseif line < offset then
 		offset = line
 	elseif line + at[3] - 1 > offset + vis - 1 then
 		offset = line + at[3] - vis
 	end
-	if not inf then offset = math.min(math.max(0, offset), maxOffset()) end
-	if pos ~= offset then
+	if not inf then offset = math.min(math.max(M.minOffset(), offset), maxOffset()) end
+	local scrolled = pos ~= offset
+	if scrolled then
 		if V.AnimScroll then startTicker() else pos = offset end
 	end
 	if V.Horizontal then
-		focus(tiles[idx], idx, line, at[2])
+		M.navFocus(tiles[idx], idx, line, at[2], scrolled)
 	else
-		focus(tiles[idx], idx, at[2], line)
+		M.navFocus(tiles[idx], idx, at[2], line, scrolled)
 	end
+end
+
+-- focus() after Nav: without AnimScroll the grid that scrolled is drawn here
+-- when focus() has nothing to do (the highlight was already on that tile: in
+-- the carousel, the mouse on the tile next to the middle and a wheel notch)
+function M.navFocus(t, idx, tx, ty, scrolled)
+	local same = hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty
+	focus(t, idx, tx, ty)
+	if same and scrolled and not V.AnimScroll then frame() end
 end
 
 -- Moves the highlight by dx columns and dy rows, scrolling the grid just
@@ -6334,20 +6429,33 @@ end
 function Nav(dx, dy)
 	if not ready or launching or not visible then return end
 	if osk.open then oskMove(dx, dy) return end
-	local tiles = cur().tiles
-	if #tiles == 0 then return end
+	if #cur().tiles == 0 then return end
 	-- inside a widget with parts: from part to part first
 	if M.partStep(dx, dy) then return end
+	M.navTiles(dx, dy)
+	M.partArrive(dx, dy)
+end
+
+-- Nav() from tile to tile (also the wheel notch of the carousel). The
+-- carousel: from the tile in the middle, and the grid scrolls to bring the
+-- new one to the middle.
+function M.navTiles(dx, dy)
+	local tiles = cur().tiles
 	if cur().pack then
 		navPacked(dx, dy, cur().pack)
-		M.partArrive(dx, dy)
 		return
 	end
 	local L, per, vis = lineCount(), (V.Horizontal and V.NY or V.NX), visibleLines()
+	local carousel = M.carousel()
 
 	-- line = row (or column, when horizontal) along the scroll direction
 	local line, cross
-	if hover.idx ~= 0 then
+	if carousel then
+		-- the line in the middle, also with the mouse on another tile (in the
+		-- row of the highlight)
+		line = offset + M.half() + (V.Horizontal and dx or dy)
+		cross = (hover.idx ~= 0 and (V.Horizontal and hover.ty or hover.tx) or 0) + (V.Horizontal and dy or dx)
+	elseif hover.idx ~= 0 then
 		line = (V.Horizontal and hover.tx or hover.ty) + (V.Horizontal and dx or dy)
 		cross = (V.Horizontal and hover.ty or hover.tx) + (V.Horizontal and dy or dx)
 	else
@@ -6360,22 +6468,24 @@ function Nav(dx, dy)
 	local wrapped = line % L
 	cross = math.min(cross, #tiles - wrapped * per - 1)
 
-	if line < offset then
+	if carousel then
+		offset = line - M.half()
+	elseif line < offset then
 		offset = line
 	elseif line > offset + vis - 1 then
 		offset = line - vis + 1
 	end
-	if pos ~= offset then
+	local scrolled = pos ~= offset
+	if scrolled then
 		if V.AnimScroll then startTicker() else pos = offset end
 	end
 
 	local idx = wrapped * per + cross + 1
 	if V.Horizontal then
-		focus(tiles[idx], idx, line, cross)
+		M.navFocus(tiles[idx], idx, line, cross, scrolled)
 	else
-		focus(tiles[idx], idx, cross, line)
+		M.navFocus(tiles[idx], idx, cross, line, scrolled)
 	end
-	M.partArrive(dx, dy)
 end
 
 -- Launches the highlighted tile (or, if there is none, highlights the first).
@@ -6480,6 +6590,7 @@ leaveSearch = function()
 	updateSearchBar()
 	updateEmptyHint()
 	updateDashState()
+	if M.carousel() then M.focusSelected() end
 	return true
 end
 
@@ -6530,7 +6641,8 @@ local function runSearch(text)
 	filter.ver = filter.ver + 1
 	setGridArea(true)
 	applyGeometry(searchCat)
-	offset, pos, base = 0, 0, -1
+	offset = normalizeOffset(nil) -- the start (the carousel: the first result in the middle)
+	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}

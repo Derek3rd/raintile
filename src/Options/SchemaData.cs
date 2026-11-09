@@ -40,10 +40,10 @@ namespace RaintileOptions
                 new Group { Title = "Opening and closing", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "StartHidden", Label = "Start hidden", Help = "Stay hidden when Rainmeter starts, until you open it with the shortcut or the gamepad." },
-                    new Item { Kind = "bool", Key = "AutoHide", Label = "Hide when it loses focus", Help = "A click outside the launcher (e.g. on another monitor) or another program coming to the foreground hides it." },
+                    new Item { Kind = "bool", Key = "AutoHide", Label = "Hide when it loses focus", Help = "A click outside the launcher or another program in front hides it. Off, or as a window, it stays open without keys or gamepad." },
                     new Item { Kind = "bool", Key = "CloseOnLaunch", Label = "Hide after launching a tile", Help = "" },
                     new Item { Kind = "choice", Key = "CloseAction", Label = "Close button (X)", Help = "Unloading frees memory, but the next opening is slower.", Choices = new List<string[]> { new[] { "[!CommandMeasure MeasureScript \"Hide()\"]", "Hide" }, new[] { "[!DeactivateConfig]", "Unload the skin" } } },
-                    new Item { Kind = "choice", Key = "ShowZPos", Label = "Window level when shown", Help = "On the desktop, hiding on focus loss does not work.", Choices = new List<string[]> { new[] { "1", "On top" }, new[] { "2", "Always on top" }, new[] { "0", "Normal" }, new[] { "-2", "On the desktop" }, new[] { "", "Unchanged" } } },
+                    new Item { Kind = "choice", Key = "ShowZPos", Label = "Window level when shown", Help = "On the desktop, focus loss is not seen (no hiding, keys kept).", Choices = new List<string[]> { new[] { "1", "On top" }, new[] { "2", "Always on top" }, new[] { "0", "Normal" }, new[] { "-2", "On the desktop" }, new[] { "", "Unchanged" } } },
                     new Item { Kind = "int", Key = "FadeDuration", Label = "Fade when opening and closing", Help = "Applies from the next time Rainmeter loads the skin.", Min = 0.0, Max = 1000.0, Step = 10.0, Unit = "ms" },
                 } },
             } },
@@ -280,7 +280,7 @@ namespace RaintileOptions
                     new Item { Kind = "choice", Key = "TileKeysWhen", Label = "Tile hot keys", Help = "When the key combinations of the tiles (tile editor > Hot key) start them. Only with the launcher open, the keys stay free for other programs the rest of the time.", Choices = new List<string[]> { new[] { "Always", "Always, also with the launcher closed" }, new[] { "Open", "Only with the launcher open" } } },
                 } },
             } },
-            new Page { Id = "keys", Switch = "KeyboardNav", Title = "Keyboard", Icon = 0xE765, Desc = "Navigation keys only work while the launcher is visible.", Groups = new List<Group>
+            new Page { Id = "keys", Switch = "KeyboardNav", Title = "Keyboard", Icon = 0xE765, Desc = "Navigation keys only work while the launcher is visible and has the focus: a click on another program frees them.", Groups = new List<Group>
             {
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {

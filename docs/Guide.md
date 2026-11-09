@@ -11,6 +11,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
   - [Mouse](#mouse)
   - [Keyboard](#keyboard)
   - [Gamepad](#gamepad)
+  - [Focus](#focus)
 - [Search](#search)
 - [Tile menu](#tile-menu)
 - [Favorites and Recent](#favorites-and-recent)
@@ -47,8 +48,8 @@ The launcher loads **once** (when Rainmeter starts, or on *Refresh skin*) and th
 
 | How | Opens | Closes |
 | --- | --- | --- |
-| `Ctrl+Alt+G` (`OpenHotKey`) | ✓ | ✓ |
-| Gamepad `Back` + `Start` (`GamepadToggle`) | ✓ | ✓ |
+| `Ctrl+Alt+G` (`OpenHotKey`) | ✓ | ✓ (left open without the [focus](#focus), it first comes back in front with it) |
+| Gamepad `Back` + `Start` (`GamepadToggle`) | ✓ | ✓ (as `Ctrl+Alt+G`) |
 | `Esc` (`CloseHotKey`) | | ✓ (closes the search first, if open) |
 | The **X** at the top right (`CloseAction`) | | ✓ |
 | After launching a tile (`CloseOnLaunch=1`) | | ✓ |
@@ -66,8 +67,8 @@ Without the HotKey plugin you can toggle it from a Windows shortcut: create a sh
 `LauncherMode` (Options > General > Screen) sets how the launcher shows on its area (`ScreenX/Y/W/H`, a monitor or its work area):
 
 - **Fullscreen** (default): all of the area.
-- **Window**: a window of `WindowW` x `WindowH` (pixels or % of the area), centred the first time. It never covers the taskbar: on the whole screen its area is the work area of that monitor, so `100%` fills the space the taskbar leaves (full screen and docked are the modes that cover it). Drag an empty part of it (the background, the space around the menu) to move it: it stays where you put it. It does not hide when another program gets the focus; close it with the X, `Esc` or the shortcut.
-- **Dock**: on a side of the screen (`DockSide`: `Left`, `Right`, `Top`, `Bottom`), `DockSize` wide (left and right) or tall (top and bottom). It comes in from that side, sliding and fading, and goes back the same way; it hides when you click outside it (`AutoHide`). With `DockEdge=1` it also opens when the mouse rests on that edge of the screen for `DockEdgeDelay` ms, but not while a full-screen program (a game, a video) is in front; move the mouse away from the edge to open it again from there.
+- **Window**: a window of `WindowW` x `WindowH` (pixels or % of the area), centred the first time. It never covers the taskbar: on the whole screen its area is the work area of that monitor, so `100%` fills the space the taskbar leaves (full screen and docked are the modes that cover it). Drag an empty part of it (the background, the space around the menu) to move it: it stays where you put it. It does not hide when another program gets the focus: it stays open beside it, without its keys and the gamepad until you click it or press the shortcut (see [Focus](#focus)); close it with the X, `Esc` or the shortcut.
+- **Dock**: on a side of the screen (`DockSide`: `Left`, `Right`, `Top`, `Bottom`), `DockSize` wide (left and right) or tall (top and bottom). It comes in from that side, sliding and fading, and goes back the same way; it hides when you click outside it (`AutoHide`). With `DockEdge=1` it also opens when the mouse rests on that edge of the screen for `DockEdgeDelay` ms, but not while a full-screen program (a game, a video) is in front; move the mouse away from the edge to open it again from there. Opened from the edge it does not take the keys: they stay with the program you were using until you click the launcher or press the shortcut.
 
 Sizes in percent (margins, menu, fonts) are of the area, not of the window, so they stay the same in every mode.
 
@@ -116,7 +117,7 @@ Related settings: `StartHidden=1` keeps the launcher hidden when Rainmeter start
 
 ### Keyboard
 
-Keys are only captured **while the launcher is visible**: when it is hidden they work normally in other applications.
+Keys are only captured **while the launcher is visible and has the [focus](#focus)**: when it is hidden, or left open while you work in another program, they work normally in other applications.
 
 | Keys | Action |
 | --- | --- |
@@ -128,7 +129,7 @@ Keys are only captured **while the launcher is visible**: when it is hidden they
 
 Mouse and keyboard move the same highlight. On a widget with parts (the rows of a list, e.g. Modrinth) the arrows and the D-pad go from part to part, and on to the next tile past the last one; Enter / `A` presses the part, as a click does. Every action has two configurable keys (`NavUp`/`NavUp2`, `NavConfirm`/`NavConfirm2`, ...) using HotKey plugin key names: letters, `UP`, `DOWN`, `LEFT`, `RIGHT`, `SPACE`, `ENTER`, `TAB`, ... `KeyboardNav=0` turns keyboard navigation off. Confirm keys act on **release**, so key repeat and the release itself never reach the game you just launched.
 
-The keys are registered by two invisible mini-skins, `Raintile\Hotkey` (Esc) and `Raintile\Navigation` (everything else), which the launcher activates when shown and deactivates when hidden. Don't load them by hand.
+The keys are registered by two invisible mini-skins, `Raintile\Hotkey` (Esc) and `Raintile\Navigation` (everything else), which the launcher activates when shown and deactivates when hidden or when it loses the focus. Don't load them by hand.
 
 ### Gamepad
 
@@ -147,11 +148,20 @@ Xbox and compatible controllers (XInput):
 
 **On-screen keyboard**: `GamepadSearch` opens the search with a keyboard at the bottom of the screen (letters, digits, `-` and `.`, Delete, Space, Done). The D-pad or stick moves on it, `A` types the key, `X` deletes, `Start` (or *Done*) closes it and keeps the results (the first one highlighted, `A` launches it), `B` closes the search. The keys can be clicked with the mouse too. `Start` is also part of `GamepadToggle`: alone it counts when released, so `Back` + `Start` still opens and closes the launcher.
 
-Rainmeter cannot read controllers, so a small background helper does it (`Scripts\Helper.ps1`: C# compiled by PowerShell on first start). It polls the controllers every 16 ms at below-normal priority and sends commands to Rainmeter through a Windows message (`WM_COPYDATA`), without starting processes. Only one copy runs: refreshing the skin replaces it, and it exits by itself when Rainmeter is closed. While the launcher is hidden, commands other than open/close are ignored, so it does not interfere with games.
+Rainmeter cannot read controllers, so a small background helper does it (`Scripts\Helper.ps1`: C# compiled by PowerShell on first start). It polls the controllers every 16 ms at below-normal priority and sends commands to Rainmeter through a Windows message (`WM_COPYDATA`), without starting processes. Only one copy runs: refreshing the skin replaces it, and it exits by itself when Rainmeter is closed. While the launcher is hidden, or open without the [focus](#focus), commands other than open/close are ignored, so it does not interfere with games.
 
 The [Options window](#options-window) can be used with the controller too.
 
-Settings: `Gamepad=0` turns it off (in the Options window too); `GamepadSearch` and `GamepadOptions` (one or more buttons, or none; on `X`, `LT` or `RT` they take their place, and `GamepadOptions` does nothing on a button of `GamepadSearch` or `GamepadToggle`), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper handles `AutoHide`; with `Gamepad=0` and `AutoHide=0` it does not run at all.
+Settings: `Gamepad=0` turns it off (in the Options window too); `GamepadSearch` and `GamepadOptions` (one or more buttons, or none; on `X`, `LT` or `RT` they take their place, and `GamepadOptions` does nothing on a button of `GamepadSearch` or `GamepadToggle`), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper follows the launcher's [focus](#focus) (and `AutoHide`), the play time, the Dashboard data, the docked edge and the Steam downloads, so it runs with `Gamepad=0` too.
+
+### Focus
+
+Opened with a shortcut, the launcher does not become the active window of Windows (the program you were using keeps it), so Raintile keeps its own focus:
+
+- it **has** it when it opens (shortcut, gamepad, the command line, the Options window) and when you click it;
+- it **loses** it to a click anywhere else (another program, also one over the launcher, the desktop, another skin, a second monitor) or when another program comes to the foreground (`Alt+Tab`, a game starting).
+
+Without the focus its keys (navigation, `Esc`, the search, the tile keys with `TileKeysWhen=Open`) are free for the other programs, a search being typed stops (the results stay), and the gamepad does nothing but `Back` + `Start`. The mouse always works. With `AutoHide=1` losing the focus also hides the launcher, full screen and docked; as a window, or with `AutoHide=0`, it stays open, and a click on it, `Ctrl+Alt+G` or `Back` + `Start` brings it back in front with its keys (the shortcut pressed again closes it). Opened by the mouse on the docked edge it starts without the focus.
 
 ## Search
 
@@ -666,17 +676,17 @@ See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
 | `OpenHotKey` | `CTRL ALT G` | combination that opens/closes the launcher (HotKey plugin) |
 | `CloseAction` | `[!CommandMeasure MeasureScript "Hide()"]` | action of the X; `[!DeactivateConfig]` unloads the skin |
 | `CloseSize` | `14` | size of the X and gear buttons |
-| `CloseHotKey` | `ESCAPE` | close key, registered only while visible; empty = none |
-| `TileKeysWhen` | `Always` | hot keys of the tiles: `Always` (also with the launcher closed) or `Open` (only while it is open) |
-| `KeyboardNav` | `1` | keyboard navigation |
+| `CloseHotKey` | `ESCAPE` | close key, registered only while visible and in [focus](#focus); empty = none |
+| `TileKeysWhen` | `Always` | hot keys of the tiles: `Always` (also with the launcher closed) or `Open` (only while it is open and in [focus](#focus)) |
+| `KeyboardNav` | `1` | keyboard navigation (only while the launcher is visible and in [focus](#focus)) |
 | `NavUp`, `NavUp2`, `NavDown`, `NavDown2`, `NavLeft`, `NavLeft2`, `NavRight`, `NavRight2` | `W`/`UP`, `S`/`DOWN`, `A`/`LEFT`, `D`/`RIGHT` | movement keys |
 | `NavConfirm`, `NavConfirm2` | `SPACE`, `ENTER` | launch the highlighted tile (on release) |
 | `NavPrevCategory`, `NavNextCategory` | `Q`, `E` | previous / next category |
 | `NavSearch` | `F` | open the search |
 | `CloseOnLaunch` | `1` | hide after launching a tile |
-| `AutoHide` | `1` | hide on focus loss (click outside, or another program in the foreground) |
+| `AutoHide` | `1` | hide on focus loss (click outside, or another program in the foreground); not as a window. Without it the keys and the gamepad still stop on focus loss |
 | `StartHidden` | `0` | stay hidden when Rainmeter starts |
-| `ShowZPos` | `1` | window level when shown: `1` above other windows, `-2` on the desktop, empty = unchanged |
+| `ShowZPos` | `1` | window level when shown: `1` above other windows, `-2` on the desktop (focus loss is not seen there), empty = unchanged |
 
 ### Tile launch
 
@@ -830,10 +840,10 @@ Raintile is designed to be light even on a large full-screen window:
 
 ```
 Raintile.ini                 main skin (styles, measures, fixed meters)
-Hotkey/Hotkey.ini            Esc mini-skin (activated by the launcher)
-Navigation/Navigation.ini    navigation keys mini-skin (activated by the launcher)
+Hotkey/Hotkey.ini            Esc mini-skin (activated by the launcher while it has the focus)
+Navigation/Navigation.ini    navigation keys mini-skin (activated by the launcher while it has the focus)
 Typing/Typing.ini            keys typed in the search bar (activated while typing)
-TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated while the launcher is open)
+TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated while the launcher is open, with the focus)
 @Resources/
   Settings.inc               default settings (yours are in the data folder)
   State.inc                  default positions
@@ -847,7 +857,7 @@ TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated whi
   Scripts/Scan.ps1           search of the installed games and apps, and of the tiles no longer installed
   Scripts/Playtime.ps1       play time of the Steam games
   Scripts/GameUpdates.ps1    Steam games with an update waiting
-  Scripts/Helper.ps1         gamepad and focus-loss helper
+  Scripts/Helper.ps1         helper: gamepad, focus, play time, Dashboard data, docked edge, downloads
   Bin/RaintileOptions.exe    Options window (built from src/Options by the release workflow)
   Scripts/Options.xaml       look of the Options window
   Generated/Grid.inc         generated meters
@@ -892,7 +902,7 @@ The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your da
 ## Known limitations
 
 - **Search** takes letters, digits, space, `-` and `.`: accented letters and other characters can not be typed in it.
-- **Focus loss** (`AutoHide`) is detected only while the launcher is above other windows (`ShowZPos=1`, the default), not when it sits on the desktop (`-2`).
+- **Focus loss** (`AutoHide`, and the keys and gamepad turned off) is detected only while the launcher is a normal window or above the others (`ShowZPos=1`, the default, `2` or `0`), not when it sits on the desktop (`-2`): there it keeps its keys while visible.
 - **Icons from `.exe` files** cannot be extracted by Rainmeter: provide an image.
 - **Non-ASCII characters** (accents, etc.) in category names and labels may display incorrectly: category files are read as UTF-8.
 - **Battle.net, EA app and Xbox** games are found through Windows' list of installed programs and Store packages: a game installed in an unusual way may be missing (add its shortcut by hand). Battle.net games without a known product code open through their own launcher.

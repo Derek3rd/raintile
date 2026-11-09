@@ -150,4 +150,123 @@ function T.compact_menu_first_opening()
 	t.clean(s)
 end
 
+-- Focus ---------------------------------------------------------------------------
+
+-- Whether a key mini-skin (Navigation, Hotkey, Typing) is on: the last
+-- !ActivateConfig or !DeactivateConfig the launcher sent for it.
+local function keysOn(s, name)
+	local target = 'raintile\\' .. name:lower()
+	for k = #s.log, 1, -1 do
+		local e = s.log[k]:lower() .. ' '
+		if e:find('!activateconfig ' .. target .. ' ', 1, true) == 1 then return true end
+		if e:find('!deactivateconfig ' .. target .. ' ', 1, true) == 1 then return false end
+	end
+	return false
+end
+
+-- Shown again (from hidden), as by the shortcut
+local function opened(settings)
+	local s = launcher(settings)
+	s:call('Hide()')
+	s:call('Show()')
+	t.ok(keysOn(s, 'Navigation') and keysOn(s, 'Hotkey'), 'the keys are off after Show()')
+	return s
+end
+
+-- As a window the launcher stays open beside the program that took the
+-- focus, but its keys and the gamepad stop until a click on it gives the
+-- focus back (they used to keep working while typing in the other program).
+function T.window_focus_frees_keys()
+	local s = opened({ LauncherMode = 'Window' })
+	local before = s:upvalue('active')
+	s:call("Pad('NextCategory',1)")
+	t.ok(s:upvalue('active') ~= before, 'the gamepad does not switch category')
+	s:call('FocusLost()')
+	t.ok(s:upvalue('visible'), 'the window hid on focus loss')
+	t.ok(not keysOn(s, 'Navigation') and not keysOn(s, 'Hotkey'), 'the keys are still on without the focus')
+	before = s:upvalue('active')
+	s:call("Pad('NextCategory',1)")
+	t.eq(s:upvalue('active'), before, 'category after a gamepad button without the focus')
+	s:call('FocusGained()')
+	t.ok(keysOn(s, 'Navigation') and keysOn(s, 'Hotkey'), 'a click on it did not give the keys back')
+	s:call("Pad('NextCategory',1)")
+	t.ok(s:upvalue('active') ~= before, 'the gamepad does not switch category with the focus back')
+	t.clean(s)
+end
+
+-- A search being typed stops with the focus: the letters are free again, and
+-- the other keys do not come back after it (KeysReady).
+function T.focus_loss_stops_typing()
+	local s = opened({ LauncherMode = 'Window' })
+	s:call('SearchOpen()')
+	t.ok(s:upvalue('typing') and keysOn(s, 'Typing'), 'SearchOpen() did not start typing')
+	s:call("TypeKey('a')")
+	s:call('FocusLost()')
+	t.ok(not s:upvalue('typing'), 'still typing without the focus')
+	t.ok(not keysOn(s, 'Typing'), 'the Typing mini-skin is still on')
+	t.ok(not keysOn(s, 'Navigation'), 'the keys came back after the search without the focus')
+	t.eq(#s:running(), 0, 'animations still running')
+	t.clean(s)
+end
+
+-- The shortcut on a launcher left open without the focus brings it back with
+-- its keys; pressed again it closes it.
+function T.toggle_gives_focus_back()
+	local s = opened({ LauncherMode = 'Window' })
+	s:call('FocusLost()')
+	s:call('Toggle()')
+	t.ok(s:upvalue('visible'), 'Toggle() hid the launcher left open without the focus')
+	t.ok(keysOn(s, 'Navigation'), 'Toggle() did not give the keys back')
+	s:call('Toggle()')
+	t.ok(not s:upvalue('visible'), 'the second Toggle() did not hide it')
+	t.clean(s)
+	t.atRest(s)
+end
+
+-- Full screen hides on focus loss (AutoHide=1); with AutoHide=0 it stays,
+-- without its keys.
+function T.autohide_on_focus_loss()
+	local s = opened({})
+	s:call('FocusLost()')
+	t.ok(not s:upvalue('visible'), 'full screen did not hide on focus loss')
+	s = opened({ AutoHide = '0' })
+	s:call('FocusLost()')
+	t.ok(s:upvalue('visible'), 'hidden on focus loss with AutoHide=0')
+	t.ok(not keysOn(s, 'Navigation'), 'the keys are still on without the focus (AutoHide=0)')
+	t.clean(s)
+end
+
+-- Opened by the mouse on the docked edge it does not take the keys of the
+-- program in front; a click on it does.
+function T.dock_edge_opens_without_keys()
+	local s = launcher({ LauncherMode = 'Dock', DockSide = 'Left' })
+	s:call('Hide()')
+	s:call("Show('edge')")
+	t.ok(s:upvalue('visible'), "Show('edge') did not open it")
+	t.ok(not keysOn(s, 'Navigation'), 'opened from the edge with the keys')
+	s:call('FocusGained()')
+	t.ok(keysOn(s, 'Navigation'), 'a click on it did not give the keys')
+	t.clean(s)
+end
+
+-- CloseOnLaunch=0: the game comes in front during the launch animation; the
+-- launcher stays open behind it, without its keys (WASD and Space used to
+-- move and launch tiles from inside the game).
+function T.launch_keeps_keys_off_behind_the_game()
+	local s = opened({ CloseOnLaunch = '0' })
+	local target
+	for i, c in ipairs(s:upvalue('cats')) do
+		if not c.virtual and #c.tiles > 0 and not c.tiles[1].widget then target = i break end
+	end
+	t.ok(target, 'no category with a tile to launch')
+	s:call('SetCategory(' .. target .. ')')
+	s:run('[!CommandMeasure MeasureScript """Launch(1)"""]')
+	t.ok(s:upvalue('launching'), 'no launch animation')
+	s:call('FocusLost()')
+	t.ok(not s:upvalue('launching'), 'the launch animation did not end')
+	t.ok(s:upvalue('visible'), 'hidden although CloseOnLaunch=0')
+	t.ok(not keysOn(s, 'Navigation'), 'the keys are still on with the game in front')
+	t.clean(s)
+end
+
 return T

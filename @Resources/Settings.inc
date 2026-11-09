@@ -175,15 +175,18 @@ CloseSize=14
 ; last two want a second click)
 ShowPower=1
 ; Key that closes the launcher (HotKey plugin), registered only while the
-; launcher is visible. Empty = no key.
+; launcher is visible and has the focus. Empty = no key.
 CloseHotKey=ESCAPE
 ; Hot keys of the tiles (HotKey= in the category files): Always = they start
 ; their tile also while the launcher is closed; Open = only while it is open
-; (the keys stay free for other programs the rest of the time)
+; and has the focus (the keys stay free for other programs the rest of the
+; time)
 TileKeysWhen=Always
-; Keyboard navigation, only active while the launcher is visible (HotKey
-; plugin): 1 = on, 0 = off. Each action has two keys (HotKey plugin names:
-; letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
+; Keyboard navigation, only active while the launcher is visible and has the
+; focus (HotKey plugin): 1 = on, 0 = off. The launcher has the focus when it
+; is opened or clicked, and loses it to a click on another program or another
+; program in front; the shortcut gives it back. Each action has two keys
+; (HotKey plugin names: letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
 KeyboardNav=1
 NavUp=W
 NavUp2=UP
@@ -204,12 +207,14 @@ NavSearch=F
 ; 1 = hide the launcher after launching a tile, 0 = keep it open
 CloseOnLaunch=1
 ; 1 = hide when it loses focus: a click outside its window (e.g. on the second
-; monitor) or another program coming to the foreground
+; monitor) or another program coming to the foreground. Not as a window. With
+; 0 (or as a window) it stays open, without its keys and the gamepad.
 AutoHide=1
 ; 1 = when Rainmeter starts the launcher stays hidden until the shortcut
 StartHidden=0
 ; Window level when it is shown: 1 = above other windows, -2 = on the
-; desktop, empty = leave it as is
+; desktop (focus loss is not seen there: it keeps its keys while visible),
+; empty = leave it as is
 ShowZPos=1
 
 ; --- Tile launch ----------------------------------------------------------------

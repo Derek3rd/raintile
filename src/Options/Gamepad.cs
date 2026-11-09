@@ -447,6 +447,16 @@ namespace RaintileOptions
         void EnsurePadFocus(Window root)
         {
             if (PadUsable(padFocus, root)) return;
+            // the control hid itself (a reset or clear button with nothing left to
+            // do): the first control of its row, not the menu
+            var row = PadRowOf(padFocus);
+            if (row != null && row.IsVisible && Window.GetWindow(row) == root)
+            {
+                var inRow = new List<FrameworkElement>();
+                CollectPadTargets(row, inRow);
+                var first = PadFirst(inRow, root);
+                if (first != null) { PadSetFocus(first, false); return; }
+            }
             FrameworkElement next = null;
             // the control with the keyboard focus (the field of an editable list: the list)
             var focused = Keyboard.FocusedElement as FrameworkElement;
@@ -669,11 +679,18 @@ namespace RaintileOptions
             // the switch beside the page title (Page.Switch) first: it is at the top
             CollectPadTargets(pageSwitch, all);
             CollectPadTargets(pageHost, all);
+            var best = PadFirst(all, win);
+            if (best != null) PadSetFocus(best);
+        }
+
+        // Of these controls, the top one, the left one of a row
+        public static FrameworkElement PadFirst(IEnumerable<FrameworkElement> all, Visual root)
+        {
             FrameworkElement best = null;
             Rect bestRect = Rect.Empty;
             foreach (var c in all)
             {
-                var r = PadRect(c, win);
+                var r = PadRect(c, root);
                 if (r.IsEmpty) continue;
                 // a row: what overlaps the best up and down counts as the same row
                 // (a slider is lower than the box after it, centred in the row)
@@ -684,7 +701,18 @@ namespace RaintileOptions
                     bestRect = r;
                 }
             }
-            if (best != null) PadSetFocus(best);
+            return best;
+        }
+
+        // The row of a settings card (NewRow) that holds d, if any
+        public static CardRow PadRowOf(DependencyObject d)
+        {
+            for (var p = d; p != null; p = VisualTreeHelper.GetParent(p))
+            {
+                var row = p as CardRow;
+                if (row != null) return row;
+            }
+            return null;
         }
 
         // --- Acting ------------------------------------------------------------------

@@ -127,6 +127,42 @@ Test 'Options: the pad keeps being read while what it pressed shows a dialog' {
     Assert-True ($s.Inner -gt 0) 'the work stopped while the dialog was open'
 }
 
+Test 'Options: a reset pressed with the pad hides itself, the pad goes to the first control of its row' {
+    # a row as NewRow builds it: the label, two fields with their clear buttons,
+    # the reset in the action column, which hides itself once used
+    $row = [Activator]::CreateInstance($optionsApp.Assembly.GetType('RaintileOptions.CardRow'), @([System.Windows.Media.Brushes]::Gray))
+    $grid = New-Object System.Windows.Controls.Grid
+    foreach ($w in 300, 400, 40) { $c = New-Object System.Windows.Controls.ColumnDefinition; $c.Width = New-Object System.Windows.GridLength $w; $grid.ColumnDefinitions.Add($c) }
+    $label = New-Object System.Windows.Controls.TextBlock
+    $label.Text = 'Open these options'
+    $fields = New-Object System.Windows.Controls.StackPanel
+    $fields.Orientation = 'Horizontal'
+    [System.Windows.Controls.Grid]::SetColumn($fields, 1)
+    $buttons = @{}
+    foreach ($name in 'Field1', 'Clear1', 'Field2', 'Clear2') {
+        $b = New-Object System.Windows.Controls.Button
+        $b.Width = if ($name -like 'Field*') { 132 } else { 28 }
+        $b.Height = 28
+        [void]$fields.Children.Add($b)
+        $buttons[$name] = $b
+    }
+    $reset = New-Object System.Windows.Controls.Button
+    $reset.Width = 28; $reset.Height = 28
+    [System.Windows.Controls.Grid]::SetColumn($reset, 2)
+    foreach ($e in $label, $fields, $reset) { [void]$grid.Children.Add($e) }
+    $row.Child = $grid
+    $row.Measure((New-Object System.Windows.Size 740, 60))
+    $row.Arrange((New-Object System.Windows.Rect 0, 0, 740, 60))
+    $reset.Visibility = 'Hidden'
+    $found = Invoke-Options 'PadRowOf' @($reset)
+    Assert-True ([object]::ReferenceEquals($found, $row)) 'the row of the reset'
+    $list = New-Object 'System.Collections.Generic.List[System.Windows.FrameworkElement]'
+    foreach ($name in 'Clear2', 'Field2', 'Clear1', 'Field1') { $list.Add($buttons[$name]) }
+    $first = Invoke-Options 'PadFirst' @($list, $row)
+    Assert-True ([object]::ReferenceEquals($first, $buttons['Field1'])) 'not the first field of the row'
+    Assert-True ($null -eq (Invoke-Options 'PadRowOf' @($grid.Parent.Parent))) 'a row outside a card'
+}
+
 # Profiles (General > Profiles): their files and what loading one changes
 $optionsTypes = $optionsApp.Assembly
 function New-StringMap([hashtable]$Values = @{}) {

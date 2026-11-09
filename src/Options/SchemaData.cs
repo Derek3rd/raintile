@@ -617,6 +617,14 @@ namespace RaintileOptions
         // the right, Start, the sticks and Back at the bottom, the D-pad on the
         // left; each cross read clockwise)
         public static readonly string[] GAMEPAD_BUTTONS = { "RB", "RT", "Y", "B", "A", "X", "START", "RS", "LS", "BACK", "DOWN", "LEFT", "UP", "RIGHT", "LT", "LB" };
+        // their names, for the tooltips and the screen readers
+        public static readonly Dictionary<string, string> PAD_LABELS = new Dictionary<string, string>
+        {
+            { "A", "A" }, { "B", "B" }, { "X", "X" }, { "Y", "Y" }, { "LB", "LB" }, { "RB", "RB" },
+            { "LT", "LT (left trigger)" }, { "RT", "RT (right trigger)" }, { "BACK", "Back (View)" }, { "START", "Start (Menu)" },
+            { "LS", "LS (left stick click)" }, { "RS", "RS (right stick click)" },
+            { "UP", "D-pad up" }, { "DOWN", "D-pad down" }, { "LEFT", "D-pad left" }, { "RIGHT", "D-pad right" },
+        };
         public static readonly string[] SOURCES = { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox", "GooglePlay", "Folders", "Apps" };
         // the kinds of what Import finds (see ImportKind); the first one is the
         // kind of a folder without one

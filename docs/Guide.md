@@ -134,26 +134,31 @@ The keys are registered by two invisible mini-skins, `Raintile\Hotkey` (Esc) and
 
 ### Gamepad
 
-Xbox and compatible controllers (XInput):
+Xbox and compatible controllers (XInput). Every action has its buttons, set in Options > Keybindings > Gamepad; these are the defaults:
 
 | Button | Action |
 | --- | --- |
 | `Back` + `Start` (View + Menu) | open / close the launcher (`GamepadToggle`) |
-| D-pad / left stick | move the highlight (holding repeats) |
-| `A` | launch the highlighted tile |
-| `B` | close the search, or the launcher |
-| `LB` / `RB` | previous / next category |
+| D-pad (`GamepadUp`, `GamepadDown`, `GamepadLeft`, `GamepadRight`) | move the highlight (holding repeats); the left stick always moves too |
+| `A` (`GamepadConfirm`) | launch the highlighted tile |
+| `B` (`GamepadBack`) | close the search, or the launcher |
+| `LB` / `RB` (`GamepadPrevCategory`, `GamepadNextCategory`) | previous / next category |
 | `Y` (`GamepadSearch`) | search with the on-screen keyboard |
-| `LT` / `RT` | with search results: the previous / next filter chip, alone |
+| `X` / `Start` (`GamepadDelete`, `GamepadDone`) | on the on-screen keyboard: delete / done |
+| `LT` / `RT` (`GamepadPrevChip`, `GamepadNextChip`) | with search results: the previous / next filter chip |
 | `RS`, the right stick click (`GamepadOptions`) | open the [Options window](#options-window), as the gear |
 
-**On-screen keyboard**: `GamepadSearch` opens the search with a keyboard at the bottom of the screen (letters, digits, `-` and `.`, Delete, Space, Done). The D-pad or stick moves on it, `A` types the key, `X` deletes, `Start` (or *Done*) closes it and keeps the results (the first one highlighted, `A` launches it), `B` closes the search. The keys can be clicked with the mouse too. `Start` is also part of `GamepadToggle`: alone it counts when released, so `Back` + `Start` still opens and closes the launcher.
+**On-screen keyboard**: `GamepadSearch` opens the search with a keyboard at the bottom of the screen (letters, digits, `-` and `.`, Delete, Space, Done). The moves move on it, `GamepadConfirm` (`A`) types the key, `GamepadDelete` (`X`) deletes, `GamepadDone` (`Start`, or the *Done* key) closes it and keeps the results (the first one highlighted, `A` launches it), `GamepadBack` (`B`) closes the search. The keys can be clicked with the mouse too.
+
+**Two buttons held together**: an action can have one button or two (in `Settings.inc` more too, separated by spaces), held together: the action counts when the last one is pressed, and while they are held their buttons do nothing else. A button that is also part of another action's pair counts when it is released, and only if the pair was not completed meanwhile: `Start` alone is *Done* on release, so `Back` + `Start` still opens and closes the launcher. The same buttons on two actions: only the first one in the table acts (the Options window marks both in red).
+
+**Choosing the buttons** (Options > Keybindings > Gamepad): each action has two fields, like the keys of the Keyboard page, with the glyph of the button; the second one is optional and is held together with the first. Click a field (or press `Enter` on it) and a dial of the buttons opens around it: click one, or turn with the arrows and press `Enter`; `Esc` or a click elsewhere closes it, and a button of the pad pressed while it is open picks itself. With the controller, press `A` on a field and then the new button: any button, `B` and `Start` too, is taken. Moving the mouse, a key or 5 seconds without a button stop waiting. The `x` after a field empties it. The buttons that drive the Options window itself (below) stay the same.
 
 Rainmeter cannot read controllers, so a small background helper does it (`Scripts\Helper.ps1`: C# compiled by PowerShell on first start). It polls the controllers every 16 ms at below-normal priority and sends commands to Rainmeter through a Windows message (`WM_COPYDATA`), without starting processes. Only one copy runs: refreshing the skin replaces it, and it exits by itself when Rainmeter is closed. While the launcher is hidden, or open without the [focus](#focus), commands other than open/close are ignored, so it does not interfere with games.
 
 The [Options window](#options-window) can be used with the controller too.
 
-Settings: `Gamepad=0` turns it off (in the Options window too); `GamepadSearch` and `GamepadOptions` (one or more buttons, or none; on `X`, `LT` or `RT` they take their place, and `GamepadOptions` does nothing on a button of `GamepadSearch` or `GamepadToggle`), `GamepadToggle` (buttons held together: `A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT`), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper follows the launcher's [focus](#focus) (and `AutoHide`), the play time, the Dashboard data, the docked edge and the Steam downloads, so it runs with `Gamepad=0` too.
+Settings: `Gamepad=0` turns it off (in the Options window too); the buttons of each action in the table (`A B X Y LB RB LT RT BACK START LS RS UP DOWN LEFT RIGHT`, held together when there are more, empty for none), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper follows the launcher's [focus](#focus) (and `AutoHide`), the play time, the Dashboard data, the docked edge and the Steam downloads, so it runs with `Gamepad=0` too.
 
 ### Focus
 
@@ -481,7 +486,7 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 | Animations | effects, appearing tiles, smoothing, tile launch |
 | Keybindings | open/close shortcut, close key, tile hot keys |
 | Keybindings > Keyboard | navigation keys |
-| Keybindings > Gamepad | support, open/close buttons, dead zone, repeat |
+| Keybindings > Gamepad | support, dead zone, repeat, the buttons of every action |
 | Widgets | how often they update, the port for temperatures and fans, the example Dashboard, the widget gallery |
 | Import | where to look (game stores, Start menu apps: a switch each), your folders (a switch, and a grid: name, folder, games or apps, category), where they go, the search on start, the SteamGridDB key |
 | Import > Found | the games and apps found on this PC, to add (filter, order); the tiles of games no longer installed |
@@ -501,7 +506,7 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
     - **Pinned tiles** (the tile's **Pinned** box, or right click on the tile in the launcher > **Pin to the start**) come first, in the order you drag them to, with a pin on their small tile; sorting moves only the others.
   - **Moving a tile to another category**: drag it from the strip onto that category in the menu on the left (the entry is outlined when it can take it). The tile and its images move, and both category files are saved at once. Imported games move only once they are normal tiles.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
-- **Gamepad** (off with `Gamepad=0`): while the window is in the foreground the controller moves a ring between the controls. D-pad / left stick move, `A` presses a button, starts changing a slider (the ring goes and its knob turns to the accent colour: left and right change the value, `A` keeps it, `B` puts back the one it had; the number field next to it is a stop of its own), flips a switch, picks a choice or a list entry, opens a drop-down list (up/down choose, `LB`/`RB` jump by 10, `A` keeps, `B` puts back) or types into a text field, `B` goes back to the menu (in the menu it closes the window, in a dialog it cancels), `LB` / `RB` go to the previous / next page, `Start` alone saves and refreshes, `Y` shows or hides the preview beside the window, the right stick scrolls. In the menu on the left there is no ring: up and down open the entry's page right away (its background marks it) and go round from the last entry to the first, passing over an open group; right goes to the first control of the page, and coming back to the menu lands on the page shown. While the pad is in use, *Preview* shows the `Y` glyph, *Save and refresh* the `Start` glyph and *Close* (and the last button of a dialog) the `B` glyph. The ring and the glyphs go away when you move the mouse or press a key; the next pad input brings them back without acting. The arrow keys go round the menu the same way.
+- **Gamepad** (off with `Gamepad=0`): while the window is in the foreground the controller moves a ring between the controls. D-pad / left stick move, `A` presses a button, starts changing a slider (the ring goes and its knob turns to the accent colour: left and right change the value, `A` keeps it, `B` puts back the one it had; the number field next to it is a stop of its own), flips a switch, picks a choice or a list entry, opens a drop-down list (up/down choose, `LB`/`RB` jump by 10, `A` keeps, `B` puts back) or types into a text field, `B` goes back to the menu (in the menu it closes the window, in a dialog it cancels), `LB` / `RB` go to the previous / next page, `Start` alone saves and refreshes, `Y` shows or hides the preview beside the window, the right stick scrolls. On the field of a gamepad setting `A` waits for the button to pick ([Choosing the buttons](#gamepad)). In the menu on the left there is no ring: up and down open the entry's page right away (its background marks it) and go round from the last entry to the first, passing over an open group; right goes to the first control of the page, and coming back to the menu lands on the page shown. While the pad is in use, *Preview* shows the `Y` glyph, *Save and refresh* the `Start` glyph and *Close* (and the last button of a dialog) the `B` glyph. The ring and the glyphs go away when you move the mouse or press a key; the next pad input brings them back without acting. The arrow keys go round the menu the same way.
   - **On-screen keyboard** (`A` on a text field): the launcher's layout with lower case, **Shift** for capitals and a page of symbols (`#+=`) for paths and commands; the text shows above the keys. `A` types the key, `X` deletes, `Y` adds a space, `LB` / `RB` move the cursor, `LT` is Shift, `RT` the symbols, `Start` (or *Done*) keeps the text, `B` puts back what was there; the keys show the symbol of the controller button that presses them, and the line under the keys the others. The keys can be clicked too. On a number field it is a number pad instead (1 to 9, then 0, as on a phone): `-` and `.` are on only where they can go (the minus at the start, one decimal point, and only in a field that takes them), and moving skips the keys that are off.
   - **Tile preview** (`A` on it): moves the background, the logo or the play time line, as dragging them. The left stick moves the outlined part (the further, the faster), the D-pad by one pixel, `LB` / `RB` switch between background, logo and play time line, `LT` / `RT` make the background zoom or the logo smaller / larger, `A` keeps, `B` puts back what was there. A click or a key ends it and keeps the changes.
   - Still mouse or keyboard: key bindings (they wait for a key), colour and file pickers (Windows dialogs).
@@ -746,7 +751,7 @@ Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Contai
 
 ### Gamepad
 
-See [Gamepad](#gamepad): `Gamepad`, `GamepadToggle`, `GamepadSearch`, `GamepadOptions`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms).
+See [Gamepad](#gamepad): `Gamepad`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms), and the buttons of the actions (one, or several held together; empty = none): `GamepadToggle` (`BACK START`), `GamepadUp` / `GamepadDown` / `GamepadLeft` / `GamepadRight` (the D-pad), `GamepadConfirm` (`A`), `GamepadBack` (`B`), `GamepadPrevCategory` / `GamepadNextCategory` (`LB` / `RB`), `GamepadSearch` (`Y`), `GamepadDelete` (`X`), `GamepadDone` (`START`), `GamepadPrevChip` / `GamepadNextChip` (`LT` / `RT`), `GamepadOptions` (`RS`).
 
 ### Search
 

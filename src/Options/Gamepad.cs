@@ -17,6 +17,7 @@
 //   Start                Save and refresh (alone, on release: Back + Start is the
 //                        launcher's toggle, read by the helper)
 //   right stick          scrolls
+//   (on the field of a gamepad setting, A waits for the button to pick: PadDial.cs)
 
 using System;
 using System.Collections.Generic;
@@ -216,6 +217,8 @@ namespace RaintileOptions
             CloseOsk(true);
             EndPlace(true);
             EndSliderEdit(true);
+            EndPadCapture();
+            padIgnoreHeld = false;
             padCombo = null;
         }
 
@@ -223,6 +226,7 @@ namespace RaintileOptions
         {
             if (closeOsk) { CloseOsk(true); EndPlace(true); }
             EndSliderEdit(true);
+            EndPadCapture();
             if (!padMode) return;
             padMode = false;
             HideRing();
@@ -262,6 +266,9 @@ namespace RaintileOptions
                 if (Math.Abs((int)st.ThumbRX) > Math.Abs(rx)) rx = st.ThumbRX;
                 if (Math.Abs((int)st.ThumbRY) > Math.Abs(ry)) ry = st.ThumbRY;
             }
+            // as they are, for picking a button (PadDial.cs)
+            padRawPrev = padRaw;
+            padRaw = buttons;
             int dead = PadSetting("GamepadDeadZone", 12000, 0, 32767);
             if (Math.Abs(lx) > dead || Math.Abs(ly) > dead)
                 buttons |= Math.Abs(lx) > Math.Abs(ly) ? (lx > 0 ? PadRight : PadLeft) : (ly > 0 ? PadUp : PadDown);
@@ -353,6 +360,16 @@ namespace RaintileOptions
                 return;
             }
             if (root == win && refreshing) return;
+
+            // a button was just picked (PadDial.cs): it does nothing more, Start
+            // does not save on its release
+            if (padIgnoreHeld)
+            {
+                if (buttons == 0) { padIgnoreHeld = false; padStartAlone = false; }
+                return;
+            }
+            if (padCaptureField != null) { PadCaptureInput(); return; }
+            if (padDial != null && padDial.IsOpen) { PadDialInput(); return; }
 
             if (oskTarget != null) { OskInput(fire, start); return; }
             if (padCombo != null)

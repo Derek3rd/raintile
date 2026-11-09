@@ -190,6 +190,10 @@ list, or renames the entry picked in a combo. A field never has a bin.
   (`AddPadHint`, shown while the pad is in use) or a key of the on-screen keyboard
   (Delete, Space, Shift, symbols, Done). The keyboard's hint line names the other pad
   buttons by their glyphs too, never by their letters. Never an icon button of their own.
+- The value of a gamepad setting is shown by its glyphs too (`NewPadFace`, with
+  `Glyph.PadBack` `PadLS` `PadRS` and `PadDpad` plus the arrow for the D-pad): in its
+  fields and on the dial that picks it. Their names are in the tooltips
+  (`Schema.PAD_LABELS`).
 - An icon button that would do nothing (the value is already the default, the field
   is already empty) is hidden with `SetActionVisible`: `Visibility.Hidden`, so its
   room stays and nothing moves. Never dim it by hand.
@@ -203,12 +207,13 @@ list, or renames the entry picked in a combo. A field never has a bin.
 | On / off | Switch (`CheckBox`) |
 | One of a fixed set, however few | Combo (`NewChoiceBox`) |
 | One of a list read from disk | Combo |
-| Several of a fixed set | Switches with their labels, or chips (`Segment` toggles) for short names (gamepad buttons) |
+| Several of a fixed set | Switches with their labels, or chips (`Segment` toggles) for short names |
 | A number in a range worth dragging (counts, ms, pt, zoom, opacity) | Slider + text box with its unit (`NewNumberField`) |
 | A length that can be pixels or a share of the screen | `size`: text box + px / % combo (`NewSizeField`) |
 | An identifier or a huge range (a port) | Text box with its unit (`NoSlider` in the schema) |
 | A colour | Swatch + text box |
 | A key | Key button + clear |
+| Gamepad buttons (one, or two held together) | Two key buttons + clear, with the button's glyph (`NewPadControl`): clicked, the dial of the buttons around it; with the pad, A and then the button |
 | Text, path | Text box (paths: + "Browse...") |
 
 - No row of chips for a single choice: it wraps and clutters the page. Chips stay for

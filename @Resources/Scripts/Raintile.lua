@@ -6714,8 +6714,10 @@ end
 -- Turns the keys back on after the search (called by MeasureKeysDelay).
 -- On-screen keyboard ---------------------------------------------------------------
 -- GamepadSearch (Y) opens the search with a keyboard at the bottom of the
--- screen: D-pad / stick move on it, A types the key, X deletes, Start (or
--- Done) keeps the results, B closes the search. The mouse can click its keys.
+-- screen: the moves (D-pad / stick) move on it, GamepadConfirm (A) types the
+-- key, GamepadDelete (X, PadX) deletes, GamepadDone (Start, PadStart) or the
+-- Done key keeps the results, GamepadBack (B) closes the search. The buttons
+-- are the helper's (Helper.ps1). The mouse can click its keys.
 
 renderOsk = function()
 	local k = math.floor(V.MenuH * 1.15)

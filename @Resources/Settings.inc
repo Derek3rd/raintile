@@ -302,25 +302,43 @@ FrameRate=Auto
 FadeDuration=0
 
 ; --- Gamepad (XInput: Xbox and compatible controllers) --------------------------
-; D-pad/left stick = move, A = launch, B = back/close,
-; LB/RB = previous/next category, GamepadToggle = open/close.
 ; 1 = on (background helper), 0 = off
 Gamepad=1
-; Buttons to hold together to open/close the launcher
-; (A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT)
+; The buttons of each action: one button, or two (or more) held together; empty
+; = no button. Buttons: A B X Y LB RB LT RT BACK START LS RS UP DOWN LEFT RIGHT
+; (LS/RS = the stick clicks, LT/RT = the triggers, UP...RIGHT = the D-pad). A
+; button that is also part of a combination of another action acts when it is
+; released (Start alone, Back + Start). The same buttons on two actions: only
+; the first one here acts.
+; Open/close the launcher, also while it is hidden
 GamepadToggle=BACK START
 ; Stick dead zone (0-32767) and repeat while holding a direction: first delay
 ; and interval, in ms
 GamepadDeadZone=12000
 GamepadRepeatDelay=350
 GamepadRepeatRate=110
-; Button that opens the search with the on-screen keyboard: D-pad/stick move
-; on it, A types, X deletes, Start keeps the results, B closes. LT/RT pick
-; the filter chips of the results.
+; Move the highlight (repeats while held); the left stick always moves too
+GamepadUp=UP
+GamepadDown=DOWN
+GamepadLeft=LEFT
+GamepadRight=RIGHT
+; Launch the highlighted tile (on the on-screen keyboard: type the key)
+GamepadConfirm=A
+; Close the search, or the launcher
+GamepadBack=B
+; Previous / next category
+GamepadPrevCategory=LB
+GamepadNextCategory=RB
+; Open the search with the on-screen keyboard: the moves move on it, Launch
+; types, Delete deletes, Done keeps the results, Back closes
 GamepadSearch=Y
-; Button that opens the Options window, as the gear (RS = right stick click).
-; It does nothing on a button of GamepadSearch or GamepadToggle; on X, LT or
-; RT it takes their place. Empty = no button.
+; On the on-screen keyboard: delete the last letter / keep the results
+GamepadDelete=X
+GamepadDone=START
+; Previous / next filter chip of the search results
+GamepadPrevChip=LT
+GamepadNextChip=RT
+; Open the Options window, as the gear
 GamepadOptions=RS
 
 ; --- Search ---------------------------------------------------------------------

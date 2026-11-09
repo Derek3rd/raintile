@@ -17,6 +17,7 @@
 //   Start                Save and refresh (alone, on release: Back + Start is the
 //                        launcher's toggle, read by the helper)
 //   right stick          scrolls
+//   (on the field of a gamepad setting, A waits for the button to pick: PadDial.cs)
 
 using System;
 using System.Collections.Generic;
@@ -96,7 +97,7 @@ namespace RaintileOptions
     {
         // XInput buttons, and the triggers pressed past half way (as Helper.ps1)
         const int PadUp = 0x1, PadDown = 0x2, PadLeft = 0x4, PadRight = 0x8, PadStart = 0x10,
-            PadLB = 0x100, PadRB = 0x200, PadA = 0x1000, PadB = 0x2000, PadX = 0x4000, PadY = 0x8000,
+            PadView = 0x20, PadLS = 0x40, PadRS = 0x80, PadLB = 0x100, PadRB = 0x200, PadA = 0x1000, PadB = 0x2000, PadX = 0x4000, PadY = 0x8000,
             PadLT = 0x10000, PadRT = 0x20000;
         const int PadDirs = PadUp | PadDown | PadLeft | PadRight;
 
@@ -216,6 +217,8 @@ namespace RaintileOptions
             CloseOsk(true);
             EndPlace(true);
             EndSliderEdit(true);
+            EndPadCapture();
+            padIgnoreHeld = false;
             padCombo = null;
         }
 
@@ -223,6 +226,7 @@ namespace RaintileOptions
         {
             if (closeOsk) { CloseOsk(true); EndPlace(true); }
             EndSliderEdit(true);
+            EndPadCapture();
             if (!padMode) return;
             padMode = false;
             HideRing();
@@ -262,6 +266,9 @@ namespace RaintileOptions
                 if (Math.Abs((int)st.ThumbRX) > Math.Abs(rx)) rx = st.ThumbRX;
                 if (Math.Abs((int)st.ThumbRY) > Math.Abs(ry)) ry = st.ThumbRY;
             }
+            // as they are, for picking a button (PadDial.cs)
+            padRawPrev = padRaw;
+            padRaw = buttons;
             int dead = PadSetting("GamepadDeadZone", 12000, 0, 32767);
             if (Math.Abs(lx) > dead || Math.Abs(ly) > dead)
                 buttons |= Math.Abs(lx) > Math.Abs(ly) ? (lx > 0 ? PadRight : PadLeft) : (ly > 0 ? PadUp : PadDown);
@@ -354,6 +361,16 @@ namespace RaintileOptions
             }
             if (root == win && refreshing) return;
 
+            // a button was just picked (PadDial.cs): it does nothing more, Start
+            // does not save on its release
+            if (padIgnoreHeld)
+            {
+                if (buttons == 0) { padIgnoreHeld = false; padStartAlone = false; }
+                return;
+            }
+            if (padCaptureField != null) { PadCaptureInput(); return; }
+            if (padDial != null && padDial.IsOpen) { PadDialInput(); return; }
+
             if (oskTarget != null) { OskInput(fire, start); return; }
             if (padCombo != null)
             {
@@ -430,6 +447,16 @@ namespace RaintileOptions
         void EnsurePadFocus(Window root)
         {
             if (PadUsable(padFocus, root)) return;
+            // the control hid itself (a reset or clear button with nothing left to
+            // do): the first control of its row, not the menu
+            var row = PadRowOf(padFocus);
+            if (row != null && row.IsVisible && Window.GetWindow(row) == root)
+            {
+                var inRow = new List<FrameworkElement>();
+                CollectPadTargets(row, inRow);
+                var first = PadFirst(inRow, root);
+                if (first != null) { PadSetFocus(first, false); return; }
+            }
             FrameworkElement next = null;
             // the control with the keyboard focus (the field of an editable list: the list)
             var focused = Keyboard.FocusedElement as FrameworkElement;
@@ -652,11 +679,18 @@ namespace RaintileOptions
             // the switch beside the page title (Page.Switch) first: it is at the top
             CollectPadTargets(pageSwitch, all);
             CollectPadTargets(pageHost, all);
+            var best = PadFirst(all, win);
+            if (best != null) PadSetFocus(best);
+        }
+
+        // Of these controls, the top one, the left one of a row
+        public static FrameworkElement PadFirst(IEnumerable<FrameworkElement> all, Visual root)
+        {
             FrameworkElement best = null;
             Rect bestRect = Rect.Empty;
             foreach (var c in all)
             {
-                var r = PadRect(c, win);
+                var r = PadRect(c, root);
                 if (r.IsEmpty) continue;
                 // a row: what overlaps the best up and down counts as the same row
                 // (a slider is lower than the box after it, centred in the row)
@@ -667,7 +701,18 @@ namespace RaintileOptions
                     bestRect = r;
                 }
             }
-            if (best != null) PadSetFocus(best);
+            return best;
+        }
+
+        // The row of a settings card (NewRow) that holds d, if any
+        public static CardRow PadRowOf(DependencyObject d)
+        {
+            for (var p = d; p != null; p = VisualTreeHelper.GetParent(p))
+            {
+                var row = p as CardRow;
+                if (row != null) return row;
+            }
+            return null;
         }
 
         // --- Acting ------------------------------------------------------------------

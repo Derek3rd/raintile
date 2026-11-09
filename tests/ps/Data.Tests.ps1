@@ -160,3 +160,22 @@ Test 'Data.ps1: the Steam updates switch becomes UpdateInfo' {
     $out = Invoke-Data $i
     Assert-True (-not ($out -match '^Settings updated')) 'a second run rewrote Settings.inc'
 }
+
+Test 'Data.ps1: X, LT and RT of an older file stay with GamepadSearch / GamepadOptions' {
+    $i = New-Install
+    Invoke-Data $i | Out-Null
+    $settings = Join-Path $i.Data 'Settings.inc'
+    Set-Setting $settings 'GamepadOptions' 'LT'
+    # an older version: the buttons of the on-screen keyboard and of the chips had no settings
+    $lines = @([IO.File]::ReadAllLines($settings) | Where-Object { $_ -notmatch '^Gamepad(Delete|PrevChip|NextChip)=' })
+    [IO.File]::WriteAllText($settings, (($lines -join "`r`n") + "`r`n"))
+    Invoke-Data $i | Out-Null
+    Assert-Equal (Get-Setting $settings 'GamepadPrevChip') '' 'GamepadPrevChip (LT is the Options button)'
+    Assert-Equal (Get-Setting $settings 'GamepadNextChip') 'RT' 'GamepadNextChip'
+    Assert-Equal (Get-Setting $settings 'GamepadDelete') 'X' 'GamepadDelete'
+    Assert-Equal (Get-Setting $settings 'GamepadOptions') 'LT' 'GamepadOptions'
+    # and once there, they are yours: LT put back on the chip stays
+    Set-Setting $settings 'GamepadPrevChip' 'LT'
+    Invoke-Data $i | Out-Null
+    Assert-Equal (Get-Setting $settings 'GamepadPrevChip') 'LT' 'GamepadPrevChip set by hand'
+}

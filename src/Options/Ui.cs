@@ -49,6 +49,8 @@ namespace RaintileOptions
         // (AddPadHint), and on the keys and the hint line of the on-screen keyboard
         public const int PadA = 0xF093, PadB = 0xF094, PadY = 0xF095, PadX = 0xF096, PadStart = 0xEDE3;
         public const int PadLT = 0xF10A, PadRT = 0xF10B, PadLB = 0xF10C, PadRB = 0xF10D;
+        // and as the value of a gamepad setting (NewPadFace), with the ones above
+        public const int PadBack = 0xEECA, PadLS = 0xF108, PadRS = 0xF109, PadDpad = 0xF10E;
         public static readonly FontFamily Font = new FontFamily("Segoe MDL2 Assets");
     }
 
@@ -291,6 +293,45 @@ namespace RaintileOptions
             t.FontFamily = Glyph.Font;
             t.VerticalAlignment = VerticalAlignment.Center;
             return t;
+        }
+
+        // A gamepad button (Schema.GAMEPAD_BUTTONS) as it shows in its field and on
+        // the dial: its glyph; the D-pad's with the arrow of the direction
+        public static int PadGlyphOf(string button)
+        {
+            switch (button)
+            {
+                case "A": return Glyph.PadA;
+                case "B": return Glyph.PadB;
+                case "X": return Glyph.PadX;
+                case "Y": return Glyph.PadY;
+                case "LB": return Glyph.PadLB;
+                case "RB": return Glyph.PadRB;
+                case "LT": return Glyph.PadLT;
+                case "RT": return Glyph.PadRT;
+                case "BACK": return Glyph.PadBack;
+                case "START": return Glyph.PadStart;
+                case "LS": return Glyph.PadLS;
+                case "RS": return Glyph.PadRS;
+                default: return Glyph.PadDpad;
+            }
+        }
+
+        public FrameworkElement NewPadFace(string button, Brush brush = null)
+        {
+            if (string.IsNullOrEmpty(button)) return NewText("None", Fs.Label, brush, true);
+            var sp = NewPanel(Orientation.Horizontal);
+            sp.HorizontalAlignment = HorizontalAlignment.Center;
+            var g = NewGlyph(PadGlyphOf(button), Fs.Label);
+            if (brush != null) g.Foreground = brush;
+            AddTo(sp, g);
+            if (button == "UP" || button == "DOWN" || button == "LEFT" || button == "RIGHT")
+            {
+                var arrow = NewText(Schema.FormatHotKey(button), Fs.Label, brush, true);
+                arrow.Margin = T(Gap.Line, 0, 0, 0);
+                AddTo(sp, arrow);
+            }
+            return sp;
         }
 
         public Button NewButton(string text, string style = "", string tip = "")

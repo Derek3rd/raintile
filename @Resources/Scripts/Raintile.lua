@@ -1020,7 +1020,7 @@ function M.sortTiles(c)
 	end)
 	if c.pack then packTiles(c) end -- tiles of more cells: placed again
 	if anchor then
-		local o = math.max(-M.half(c), c.offset + M.tileLine(c, indexOf(c.tiles, anchor)) - before)
+		local o = math.max(0 - M.half(c), c.offset + M.tileLine(c, indexOf(c.tiles, anchor)) - before)
 		if o ~= c.offset then
 			c.offset = o
 			M.writeScroll(c)
@@ -1822,13 +1822,13 @@ end
 -- The smallest offset: the first line in the middle
 function M.minOffset()
 	if infinite() then return 0 end
-	return -M.half()
+	return 0 - M.half() -- (0 - 0: never a -0 written to State.inc)
 end
 
 -- Brings a saved scroll position within the active category's limits; nil:
 -- the start (the first line at the top, or in the middle of the carousel).
 local function normalizeOffset(o)
-	o = math.floor(o or -M.half())
+	o = math.floor(o or 0 - M.half())
 	if infinite() then return o % lineCount() end
 	return math.min(math.max(M.minOffset(), o), maxOffset())
 end
@@ -2876,17 +2876,22 @@ local function renderFilters()
 end
 
 local function renderScrollBar()
-	-- (the carousel: from the first line in the middle to the last)
-	local minOff = M.minOffset()
-	local maxOff = maxOffset() - minOff
-	if maxOff <= 0 or V.Wheel then
+	local maxOff, total, half = maxOffset(), lineCount(), M.half()
+	if V.Wheel or (half > 0 and total <= 1) or (half == 0 and maxOff == 0) then
 		show('MeterScrollBar', false)
 		return
 	end
 
-	local total = lineCount()
-	-- fraction of the thumb travel (with infinite scroll: position within the loop)
-	local at = infinite() and (pos % total) / maxOff or (pos - minOff) / maxOff
+	-- fraction of the thumb travel (with infinite scroll: position within the
+	-- loop; the carousel: the line in the middle, from the first to the last)
+	local at
+	if half > 0 then
+		local line = pos + half
+		if infinite() then line = line % total end
+		at = line / (total - 1)
+	else
+		at = infinite() and (pos % total) / maxOff or pos / maxOff
+	end
 	at = math.min(1, math.max(0, at))
 	local size = V.ScrollBarSize
 	local x, y, w, h, tx, ty, tw, th
@@ -6039,10 +6044,10 @@ function SetCategory(i)
 		-- scroll, to the nearest start of the loop; the carousel: the first
 		-- tile in the middle)
 		local half = M.half()
-		local target = -half
+		local target = 0 - half
 		if infinite() then
 			local L, o = lineCount(), (offset + half) % lineCount()
-			target = (o <= L / 2 and offset - o or offset + L - o)
+			target = o <= L / 2 and offset - o or offset + L - o
 		end
 		if target ~= offset then
 			offset = target

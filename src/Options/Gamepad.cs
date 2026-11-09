@@ -97,7 +97,7 @@ namespace RaintileOptions
     {
         // XInput buttons, and the triggers pressed past half way (as Helper.ps1)
         const int PadUp = 0x1, PadDown = 0x2, PadLeft = 0x4, PadRight = 0x8, PadStart = 0x10,
-            PadLB = 0x100, PadRB = 0x200, PadA = 0x1000, PadB = 0x2000, PadX = 0x4000, PadY = 0x8000,
+            PadView = 0x20, PadLS = 0x40, PadRS = 0x80, PadLB = 0x100, PadRB = 0x200, PadA = 0x1000, PadB = 0x2000, PadX = 0x4000, PadY = 0x8000,
             PadLT = 0x10000, PadRT = 0x20000;
         const int PadDirs = PadUp | PadDown | PadLeft | PadRight;
 

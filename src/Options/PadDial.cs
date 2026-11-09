@@ -22,13 +22,12 @@ namespace RaintileOptions
 {
     public partial class OptionsApp
     {
-        // XInput bits of the buttons (PadUp... in Gamepad.cs; Back and the stick
-        // clicks only here)
+        // The XInput bit of each button (Gamepad.cs)
         static readonly Dictionary<string, int> PadBits = new Dictionary<string, int>
         {
-            { "UP", 0x1 }, { "DOWN", 0x2 }, { "LEFT", 0x4 }, { "RIGHT", 0x8 }, { "START", 0x10 }, { "BACK", 0x20 },
-            { "LS", 0x40 }, { "RS", 0x80 }, { "LB", 0x100 }, { "RB", 0x200 }, { "A", 0x1000 }, { "B", 0x2000 },
-            { "X", 0x4000 }, { "Y", 0x8000 }, { "LT", 0x10000 }, { "RT", 0x20000 },
+            { "UP", PadUp }, { "DOWN", PadDown }, { "LEFT", PadLeft }, { "RIGHT", PadRight }, { "START", PadStart }, { "BACK", PadView },
+            { "LS", PadLS }, { "RS", PadRS }, { "LB", PadLB }, { "RB", PadRB }, { "A", PadA }, { "B", PadB },
+            { "X", PadX }, { "Y", PadY }, { "LT", PadLT }, { "RT", PadRT },
         };
         const int PadCaptureMs = 5000;
 
@@ -43,7 +42,7 @@ namespace RaintileOptions
         Popup padDial;
         Border[] padDialKeys;
         string padDialKey;
-        int padDialSlot, padDialSel;
+        int padDialSlot, padDialSel, padDialCurrent = -1;
         Button padDialField;
 
         // The first button of 'buttons' in the order of the dial
@@ -243,6 +242,5 @@ namespace RaintileOptions
             if (padDialField != null)
                 padDialField.Content = padDialSel < 0 ? (object)"Pick a button" : NewPadFace(Schema.GAMEPAD_BUTTONS[padDialSel]);
         }
-        int padDialCurrent = -1;
     }
 }

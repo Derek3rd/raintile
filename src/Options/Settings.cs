@@ -142,8 +142,6 @@ namespace RaintileOptions
             UpdateDirty();
             UpdateResets();
             if (keyButtons.ContainsKey(key)) UpdateKeyConflicts();
-            Ctl padCtl;
-            if (ctl.TryGetValue(key, out padCtl) && padCtl.Kind == "pad") UpdatePadConflicts();
             UpdateWhenRows();
             // the wheel's preview follows every setting (sizes, mode, colours)
             if (wheelCanvas != null) DrawWheel();
@@ -511,7 +509,8 @@ namespace RaintileOptions
         }
 
         // The same buttons on two actions: only the first one acts (Helper.ps1),
-        // both are marked
+        // both are marked. After every change of a pad setting (ShowPadSlots, also
+        // from UpdateControl: a reset, a profile)
         void UpdatePadConflicts()
         {
             var pads = ctl.Where(kv => kv.Value.Kind == "pad" && kv.Value.Buttons != null).ToList();
@@ -652,7 +651,6 @@ namespace RaintileOptions
                 UpdateDirty();
                 UpdateResets();
                 UpdateKeyConflicts();
-                UpdatePadConflicts();
             };
             resets.Add(new ResetInfo { KeyList = keys, Button = b });
             return b;

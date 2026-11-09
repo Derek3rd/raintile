@@ -207,7 +207,7 @@ list, or renames the entry picked in a combo. A field never has a bin.
 | On / off | Switch (`CheckBox`) |
 | One of a fixed set, however few | Combo (`NewChoiceBox`) |
 | One of a list read from disk | Combo |
-| Several of a fixed set | Switches with their labels, or chips (`Segment` toggles) for short names |
+| Several of a fixed set | Switches with their labels |
 | A number in a range worth dragging (counts, ms, pt, zoom, opacity) | Slider + text box with its unit (`NewNumberField`) |
 | A length that can be pixels or a share of the screen | `size`: text box + px / % combo (`NewSizeField`) |
 | An identifier or a huge range (a port) | Text box with its unit (`NoSlider` in the schema) |

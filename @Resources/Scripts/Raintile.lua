@@ -4630,11 +4630,14 @@ function Initialize()
 	V.LaunchAnimFrames = math.max(0, math.floor(num('LaunchAnimFrames', 15)))
 	V.LaunchLogoSize = math.floor(num('LaunchLogoSize', 400))
 	V.CloseOnLaunch = num('CloseOnLaunch', 1) ~= 0
+	-- hide when it loses the focus (FocusLost); its keys go off in any case
+	V.AutoHide = num('AutoHide', 1) ~= 0
 	V.CloseAction = SKIN:GetVariable('CloseAction', '[!CommandMeasure MeasureScript "Hide()"]')
 	V.StartHidden = num('StartHidden', 0) ~= 0
 	V.ShowZPos = SKIN:GetVariable('ShowZPos', '')
 	V.HotKey = trim(SKIN:GetVariable('CloseHotKey', ''))
-	-- The close key mini-skin: only active while the launcher is visible
+	-- The close key mini-skin: only active while the launcher is visible and
+	-- has the focus
 	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
 	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
 	V.DebugLog = num('DebugLog', 0) ~= 0
@@ -4803,7 +4806,10 @@ function M.writeTileKeys()
 	if f then f:write(text) f:close() end
 end
 
+-- Only while the launcher has the focus (M.setFocus): typing in another
+-- program, with the launcher left open beside it, the keys are its own.
 local function hotKey(on)
+	on = on and M.focused
 	if V.TileKeysOpen and #tileKeys > 0 then
 		if on then
 			SKIN:Bang('!ActivateConfig', V.TileKeysConfig, 'TileKeys.ini')
@@ -4845,7 +4851,7 @@ function Update()
 		show('MeterPower', V.ShowPower and not M.compact)
 		updateDashState()
 		if showNow then
-			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+			M.zpos(true)
 			SKIN:Bang('!Show')
 		end
 		if startHidden then
@@ -4853,6 +4859,8 @@ function Update()
 			SKIN:Bang('!Hide')
 			hotKey(false)
 		else
+			-- shown on load: ready for the keys and the gamepad, as when opened
+			M.focused = true
 			hotKey(true)
 			if appear then startTicker() end
 			ClockTick(0)
@@ -5071,13 +5079,15 @@ local function stopClock()
 	SKIN:Bang('!CommandMeasure', 'MeasureClock', 'Stop 2')
 end
 
-function Show()
-	dbg('Show: visible=' .. tostring(visible))
+-- how = 'edge': opened by the mouse on the docked edge (Helper.ps1), without
+-- the focus: the keys stay with the program in front until a click on it
+function Show(how)
+	dbg('Show: visible=' .. tostring(visible) .. ' how=' .. tostring(how))
 	if not ready then return end
 	if visible then
 		-- a refresh while hidden (e.g. saving in the Options window) leaves
 		-- the window hidden although the script starts as visible: show it
-		if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+		M.zpos(true)
 		SKIN:Bang('!Show')
 		return
 	end
@@ -5123,8 +5133,9 @@ function Show()
 		M.dock.dir = 1
 		M.dockPlace(M.dock.p)
 	end
-	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+	M.zpos(true)
 	SKIN:Bang('!Show')
+	M.focused = how ~= 'edge'
 	hotKey(true)
 	if appear or M.dock.dir ~= 0 or M.dl.anim then startTicker() end
 	ReadPlaytime(60)
@@ -5177,7 +5188,15 @@ function M.finishHide()
 	SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
 end
 
+-- Open, or close; a launcher left open without the focus (a window, AutoHide=0,
+-- behind a game) comes back in front with its keys first.
 function Toggle()
+	if visible and not M.focused and not launching then
+		M.zpos(true)
+		SKIN:Bang('!Show')
+		M.setFocus(true)
+		return
+	end
 	if visible then Hide() else Show() end
 end
 
@@ -6226,7 +6245,8 @@ end
 -- Keyboard -------------------------------------------------------------------
 -- WASD/arrows move the highlight (the same one as the mouse), Space/Enter
 -- launch the highlighted tile, Q/E switch category. The keys are registered by
--- the Raintile\Navigation mini-skin, only active while the launcher is visible.
+-- the Raintile\Navigation mini-skin, only active while the launcher is visible
+-- and has the focus (see Focus).
 
 -- Nav() in a grid with tiles of more cells (c.pack): to the next tile in
 -- that direction. Up and down keep the column the highlight came from
@@ -6528,6 +6548,10 @@ end
 
 function SearchOpen()
 	if not ready or launching or not visible or typing then return end
+	-- the keys arrive only with the focus, the gamepad's through Pad(): here
+	-- without it, this is a click on the bar, which gives the launcher the
+	-- focus (FocusGained may come after it)
+	M.focused = true
 	typing = true
 	typed = query
 	hotKey(false) -- the letters (WASD, Q, E, F...) are typed now
@@ -6681,17 +6705,68 @@ oskMove = function(dx, dy)
 end
 
 function KeysReady()
-	if ready and visible and not typing then hotKey(true) end
+	if ready and visible and not typing and M.focused then hotKey(true) end
 end
 
--- The launcher lost focus (from Helper.ps1, AutoHide=1). Ignored during the
--- launch animation: the game window, or its launcher's, popping up must not
--- interrupt it.
+-- Focus ------------------------------------------------------------------------
+-- Opened with a shortcut the launcher does not become the active window, so
+-- its focus is kept here: it has it when opened (Show) or clicked
+-- (FocusGained), and loses it to a click elsewhere or another program in
+-- front (FocusLost, both from Helper.ps1). Its keys (hotKey) and the gamepad
+-- (Pad) work only while it has it; the mouse always.
+
+-- Losing the focus also ends the typing in the search (the results stay, as
+-- with Enter), so the letters are free again.
+function M.setFocus(on)
+	if M.focused == on then return end
+	M.focused = on
+	if not on then stopTyping() end
+	hotKey(on and not typing)
+end
+
+-- Window level: front = shown or in use, otherwise the focus went elsewhere.
+-- Rainmeter keeps a Normal skin (ShowZPos=0) with the desktop, under every
+-- window, even right after showing it: so the launcher is on top (1) while
+-- in use and goes back to Normal, behind the others, when the focus goes.
+function M.zpos(front)
+	if V.ShowZPos == '0' then
+		SKIN:Bang('!ZPos', front and '1' or '0')
+	elseif front and V.ShowZPos ~= '' then
+		SKIN:Bang('!ZPos', V.ShowZPos)
+	end
+end
+
+-- The launcher lost the focus: its keys go off. With AutoHide=1 it also
+-- hides, but not as a window (it stays open beside the others) nor during
+-- the launch animation (the game window, or its launcher's, popping up must
+-- not interrupt it).
 function FocusLost()
 	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
-	if not ready or not visible or launching then return end
-	if V.Mode == 'window' then return end -- a window stays open beside the others
+	if not ready or not visible then return end
+	M.setFocus(false)
+	M.zpos(false)
+	if launching or V.Mode == 'window' or not V.AutoHide then return end
 	Hide()
+end
+
+-- A click on the launcher: its keys come back.
+function FocusGained()
+	if not ready or not visible then return end
+	if not M.focused then
+		dbg('focus gained')
+		M.zpos(true)
+	end
+	M.setFocus(true)
+end
+
+-- A gamepad button (Helper.ps1), all but the open/close combination (Toggle):
+-- only while the launcher is shown and has the focus, so the pad never acts
+-- on a launcher left open behind another program.
+function Pad(name, a, b)
+	if not ready or not visible or not M.focused then return end
+	local f = ({ Nav = Nav, Confirm = Confirm, Escape = Escape, NextCategory = NextCategory,
+		PadSearch = PadSearch, PadStart = PadStart, PadOptions = PadOptions, PadX = PadX, PadChip = PadChip })[name]
+	if f then f(a, b) end
 end
 
 -- Esc: closes the search if open, otherwise hides the launcher.

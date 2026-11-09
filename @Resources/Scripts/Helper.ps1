@@ -12,12 +12,13 @@
 #   X / Start                     on-screen keyboard: delete / done
 #   LT / RT                       filter chips of the search results
 #   GamepadOptions (RS)           the Options window
-# While the launcher is hidden, commands other than open/close are ignored by
-# the skin.
+# Every button but open/close goes through the skin's Pad(), which ignores it
+# while the launcher is hidden or does not have the focus.
 #
-# Hide on focus loss (AutoHide): while the launcher is visible, a click
-# outside its window (e.g. on the second monitor) or another program coming
-# to the foreground hides it.
+# Focus: while the launcher is visible, a click outside its window (e.g. on
+# the second monitor, or on a program over it) or another program coming to
+# the foreground sends FocusLost(), a click on it FocusGained(). The skin
+# turns its keys off and on with them, and hides on FocusLost() if AutoHide=1.
 #
 # Play time (TrackPlaytime): after the skin launches a tile that is not a
 # Steam game it writes Generated\Launch.txt ("<tile id>|<unix time>|<exe>");
@@ -34,9 +35,8 @@
 # previous one; it exits by itself when Rainmeter is no longer running.
 
 param(
-    # 0 and 0 = only close the copy already running
+    # Gamepad, Track and Dash all 0 = only close the copy already running
     [int]$Gamepad = 1,
-    [int]$AutoHide = 1,
     [string]$Config = 'Raintile',
     [string]$Toggle = 'BACK START',
     [int]$DeadZone = 12000,
@@ -53,7 +53,7 @@ param(
 $ErrorActionPreference = 'Stop'
 try { (Get-Process -Id $PID).PriorityClass = 'BelowNormal' } catch { }
 
-if (-not $Gamepad -and -not $AutoHide -and -not $Track -and -not $Dash) {
+if (-not $Gamepad -and -not $Track -and -not $Dash) {
     $quit = $null
     if ([System.Threading.EventWaitHandle]::TryOpenExisting('Local\Raintile.Gamepad.Quit', [ref]$quit)) {
         [void]$quit.Set()
@@ -663,6 +663,13 @@ public class RaintilePad
         return "[!CommandMeasure MeasureScript \"" + function + "\" \"" + config + "\"]";
     }
 
+    // A button for the launcher: through Pad(), which drops it while the
+    // launcher is hidden or does not have the focus
+    string PadCall(string function, string args)
+    {
+        return Call("Pad('" + function + "'" + (args.Length > 0 ? "," + args : "") + ")");
+    }
+
     // Button state (all controllers together) and left stick at time 'now'
     // (ms) -> commands to send to Rainmeter.
     public List<string> Step(int buttons, int lx, int ly, long now)
@@ -695,38 +702,38 @@ public class RaintilePad
         int released = previousForRelease & ~buttons;
         previousForRelease = buttons;
         if ((buttons & START) != 0 && (pressed & START) != 0) toggleUsed = false;
-        if ((released & START) != 0 && !toggleUsed) bangs.Add(Call("PadStart()"));
+        if ((released & START) != 0 && !toggleUsed) bangs.Add(PadCall("PadStart", ""));
 
         // Directions, repeating while held
         int[] dirs = { UP, DOWN, LEFT, RIGHT };
-        string[] moves = { "Nav(0,-1)", "Nav(0,1)", "Nav(-1,0)", "Nav(1,0)" };
+        string[] moves = { "0,-1", "0,1", "-1,0", "1,0" };
         for (int i = 0; i < 4; i++)
         {
             if ((pressed & dirs[i]) != 0)
             {
-                bangs.Add(Call(moves[i]));
+                bangs.Add(PadCall("Nav", moves[i]));
                 nextRepeat[i] = now + repeatDelay;
             }
             else if ((buttons & dirs[i]) != 0 && now >= nextRepeat[i])
             {
-                bangs.Add(Call(moves[i]));
+                bangs.Add(PadCall("Nav", moves[i]));
                 nextRepeat[i] = now + repeatRate;
             }
         }
-        if ((pressed & A) != 0) bangs.Add(Call("Confirm()"));
-        if ((pressed & B) != 0) bangs.Add(Call("Escape()"));
-        if ((pressed & LB) != 0) bangs.Add(Call("NextCategory(-1)"));
-        if ((pressed & RB) != 0) bangs.Add(Call("NextCategory(1)"));
-        if (SearchMask != 0 && (pressed & SearchMask) != 0) bangs.Add(Call("PadSearch()"));
+        if ((pressed & A) != 0) bangs.Add(PadCall("Confirm", ""));
+        if ((pressed & B) != 0) bangs.Add(PadCall("Escape", ""));
+        if ((pressed & LB) != 0) bangs.Add(PadCall("NextCategory", "-1"));
+        if ((pressed & RB) != 0) bangs.Add(PadCall("NextCategory", "1"));
+        if (SearchMask != 0 && (pressed & SearchMask) != 0) bangs.Add(PadCall("PadSearch", ""));
         // the Options window: not on a button of the search or of the
         // open/close combination
         int options = OptionsMask & ~SearchMask & ~toggleMask;
-        if (options != 0 && (pressed & options) != 0) bangs.Add(Call("PadOptions()"));
+        if (options != 0 && (pressed & options) != 0) bangs.Add(PadCall("PadOptions", ""));
         // the search and Options buttons take the place of X, LT and RT
         int chosen = SearchMask | options;
-        if ((pressed & X) != 0 && (chosen & X) == 0) bangs.Add(Call("PadX()"));
-        if ((pressed & LT) != 0 && (chosen & LT) == 0) bangs.Add(Call("PadChip(-1)"));
-        if ((pressed & RT) != 0 && (chosen & RT) == 0) bangs.Add(Call("PadChip(1)"));
+        if ((pressed & X) != 0 && (chosen & X) == 0) bangs.Add(PadCall("PadX", ""));
+        if ((pressed & LT) != 0 && (chosen & LT) == 0) bangs.Add(PadCall("PadChip", "-1"));
+        if ((pressed & RT) != 0 && (chosen & RT) == 0) bangs.Add(PadCall("PadChip", "1"));
         return bangs;
     }
 
@@ -773,7 +780,7 @@ public class RaintilePad
         return FindWindow("DummyRainWClass", null);
     }
 
-    // --- Focus loss --------------------------------------------------------
+    // --- Focus --------------------------------------------------------------
 
     [StructLayout(LayoutKind.Sequential)]
     struct Rect { public int Left, Top, Right, Bottom; }
@@ -783,6 +790,14 @@ public class RaintilePad
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string className, string windowName);
+
+    [DllImport("user32.dll")]
+    static extern IntPtr WindowFromPoint(Point point);
+
+    [DllImport("user32.dll")]
+    static extern IntPtr GetAncestor(IntPtr window, uint flags);
+
+    const uint GA_ROOT = 2;
 
     [DllImport("user32.dll")]
     static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
@@ -857,14 +872,31 @@ public class RaintilePad
             || (GetAsyncKeyState(0x04) & 0x8000) != 0;
     }
 
-    public bool PadEnabled = true, AutoHide = true;
+    public bool PadEnabled = true;
     IntPtr launcher, foreground;
     bool launcherShown, mouseWasDown;
     long nextLauncherScan;
 
-    // While the launcher is visible: true if a click outside its window or
-    // another program in the foreground took its focus away.
-    bool FocusLost(IntPtr rainmeterWindow, long now)
+    // The window a click lands on: +1 the launcher, 0 a window of Rainmeter
+    // that is not a skin (its menus and dialogs), -1 anything else (another
+    // program, also when it is over the launcher, another skin, the desktop)
+    int ClickedOn(uint rainmeter)
+    {
+        Point p;
+        if (!GetCursorPos(out p)) return 0;
+        IntPtr root = GetAncestor(WindowFromPoint(p), GA_ROOT);
+        if (root == IntPtr.Zero) return 0;
+        if (root == launcher) return 1;
+        if (ProcessOf(root) != rainmeter) return -1;
+        var name = new System.Text.StringBuilder(64);
+        GetClassName(root, name, name.Capacity);
+        return name.ToString() == "RainmeterMeterWindow" ? -1 : 0;
+    }
+
+    // While the launcher is visible: -1 if a click elsewhere or another
+    // program in the foreground took its focus away, +1 if a click on it
+    // gave it back (the skin turns its keys off and on), 0 otherwise.
+    int FocusStep(IntPtr rainmeterWindow, long now)
     {
         uint rainmeter = ProcessOf(rainmeterWindow);
         // the launcher window is looked up every half second, not on every loop
@@ -875,7 +907,7 @@ public class RaintilePad
         }
         bool shown = launcher != IntPtr.Zero && IsWindowVisible(launcher);
         bool down = MouseDown();
-        bool lost = false;
+        int change = 0;
         if (shown && !launcherShown)
         {
             // just shown: only what changes from now on counts
@@ -884,18 +916,17 @@ public class RaintilePad
         else if (shown)
         {
             IntPtr fg = GetForegroundWindow();
-            if (fg != foreground && fg != IntPtr.Zero && ProcessOf(fg) != rainmeter) lost = true;
+            if (fg != foreground && fg != IntPtr.Zero && ProcessOf(fg) != rainmeter) change = -1;
             foreground = fg;
             if (down && !mouseWasDown)
             {
-                Point p; Rect r;
-                if (GetCursorPos(out p) && GetWindowRect(launcher, out r)
-                    && (p.X < r.Left || p.X >= r.Right || p.Y < r.Top || p.Y >= r.Bottom)) lost = true;
+                int click = ClickedOn(rainmeter);
+                if (click != 0) change = click;
             }
         }
         launcherShown = shown;
         mouseWasDown = down;
-        return lost;
+        return change;
     }
 
     // --- Play time -----------------------------------------------------------
@@ -1190,7 +1221,9 @@ public class RaintilePad
         edgeArmed = false;
         edgeSince = -1;
         if (FullScreenInFront(window)) return;
-        Send(window, Call("Show()"));
+        // opened by the mouse: the keys stay with the program in front until
+        // a click on the launcher
+        Send(window, Call("Show('edge')"));
     }
 
     // --- Dashboard ---------------------------------------------------------------
@@ -1565,7 +1598,12 @@ public class RaintilePad
             if (window != IntPtr.Zero) lastRainmeter = now;
             else if (now - lastRainmeter > 10000) return;
 
-            if (AutoHide && window != IntPtr.Zero && FocusLost(window, now)) Send(window, Call("FocusLost()"));
+            if (window != IntPtr.Zero)
+            {
+                int focus = FocusStep(window, now);
+                if (focus < 0) Send(window, Call("FocusLost()"));
+                else if (focus > 0) Send(window, Call("FocusGained()"));
+            }
             if (TrackEnabled) { try { TrackStep(now); } catch { } }
             if (DashFlag != null && window != IntPtr.Zero) { try { DashStep(window, now); } catch { } }
             if (EdgeFile != null && window != IntPtr.Zero) { try { EdgeStep(window, now); } catch { } }
@@ -1613,7 +1651,6 @@ if (-not $owned) { exit }
 
 $pad = New-Object RaintilePad($Config, [RaintilePad]::ParseButtons($Toggle), $DeadZone, $RepeatDelay, $RepeatRate)
 $pad.PadEnabled = [bool]$Gamepad
-$pad.AutoHide = [bool]$AutoHide
 $pad.SearchMask = [RaintilePad]::ParseButtons($SearchButton)
 $pad.OptionsMask = [RaintilePad]::ParseButtons($OptionsButton)
 $pad.TrackEnabled = [bool]$Track -and $Generated -and $Data

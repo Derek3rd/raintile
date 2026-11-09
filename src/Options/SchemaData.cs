@@ -296,25 +296,32 @@ namespace RaintileOptions
                     new Item { Kind = "key", Key = "NavSearch", Label = "Search", Help = "" },
                 } },
             } },
-            new Page { Id = "gamepad", Switch = "Gamepad", Title = "Gamepad", Icon = 0xE7FC, Desc = "Xbox and compatible (XInput) controllers, read by a small background helper.", Groups = new List<Group>
+            new Page { Id = "gamepad", Switch = "Gamepad", Title = "Gamepad", Icon = 0xE7FC, Desc = "Xbox and compatible (XInput) controllers, read by a small background helper. Click a button and pick the new one on the dial, or press A on it and then the new button on the pad. With a second button, both are held together.", Groups = new List<Group>
             {
                 new Group { Title = "Controller", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "Gamepad", Label = "Gamepad support", Help = "" },
-                    new Item { Kind = "pad", Key = "GamepadToggle", Label = "Open / close", Help = "Buttons to hold together." },
+                    new Item { Kind = "pad", Key = "GamepadToggle", Label = "Open / close", Help = "Also while the launcher is hidden." },
                     new Item { Kind = "int", Key = "GamepadDeadZone", Label = "Stick dead zone", Help = "How far the stick moves before it counts.", Min = 0.0, Max = 32767.0, Step = 500.0, Unit = "/ 32767" },
                     new Item { Kind = "int", Key = "GamepadRepeatDelay", Label = "Repeat delay", Help = "Holding a direction: wait before it repeats.", Min = 50.0, Max = 1000.0, Step = 10.0, Unit = "ms" },
                     new Item { Kind = "int", Key = "GamepadRepeatRate", Label = "Repeat interval", Help = "", Min = 30.0, Max = 500.0, Step = 10.0, Unit = "ms" },
                 } },
                 new Group { Title = "Buttons", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "info", Key = "", Label = "D-pad / left stick", Help = "Move the highlight" },
-                    new Item { Kind = "info", Key = "", Label = "A", Help = "Launch the highlighted tile" },
-                    new Item { Kind = "info", Key = "", Label = "B", Help = "Close the search, or the launcher" },
-                    new Item { Kind = "info", Key = "", Label = "LB / RB", Help = "Previous / next category" },
-                    new Item { Kind = "pad", Key = "GamepadSearch", Label = "Search with the on-screen keyboard", Help = "D-pad/stick move on it, A types, X deletes, Start keeps the results, B closes." },
-                    new Item { Kind = "info", Key = "", Label = "LT / RT", Help = "Filter chips of the search results" },
-                    new Item { Kind = "pad", Key = "GamepadOptions", Label = "Open these options", Help = "As the gear. RS is the right stick click. Not on a button of the search or of Open / close." },
+                    new Item { Kind = "pad", Key = "GamepadUp", Label = "Move up", Help = "The left stick always moves too." },
+                    new Item { Kind = "pad", Key = "GamepadDown", Label = "Move down", Help = "" },
+                    new Item { Kind = "pad", Key = "GamepadLeft", Label = "Move left", Help = "" },
+                    new Item { Kind = "pad", Key = "GamepadRight", Label = "Move right", Help = "" },
+                    new Item { Kind = "pad", Key = "GamepadConfirm", Label = "Launch the highlighted tile", Help = "On the on-screen keyboard: types the key." },
+                    new Item { Kind = "pad", Key = "GamepadBack", Label = "Close the search, or the launcher", Help = "" },
+                    new Item { Kind = "pad", Key = "GamepadPrevCategory", Label = "Previous category", Help = "" },
+                    new Item { Kind = "pad", Key = "GamepadNextCategory", Label = "Next category", Help = "" },
+                    new Item { Kind = "pad", Key = "GamepadSearch", Label = "Search with the on-screen keyboard", Help = "The moves move on it, Launch types, Close closes the search." },
+                    new Item { Kind = "pad", Key = "GamepadDelete", Label = "Delete", Help = "On the on-screen keyboard: the last letter." },
+                    new Item { Kind = "pad", Key = "GamepadDone", Label = "Done", Help = "On the on-screen keyboard: closes it and keeps the results." },
+                    new Item { Kind = "pad", Key = "GamepadPrevChip", Label = "Previous filter chip", Help = "Of the search results." },
+                    new Item { Kind = "pad", Key = "GamepadNextChip", Label = "Next filter chip", Help = "" },
+                    new Item { Kind = "pad", Key = "GamepadOptions", Label = "Open these options", Help = "As the gear." },
                 } },
             } },
             new Page { Id = "dashboard", Title = "Widgets", Icon = 0xE9D2, Desc = "Tiles that show something instead of starting it, in any category: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>
@@ -462,12 +469,24 @@ namespace RaintileOptions
             { "FontFace", "Segoe UI" },
             { "FrameRate", "Auto" },
             { "Gamepad", "1" },
+            { "GamepadBack", "B" },
+            { "GamepadConfirm", "A" },
             { "GamepadDeadZone", "12000" },
+            { "GamepadDelete", "X" },
+            { "GamepadDone", "START" },
+            { "GamepadDown", "DOWN" },
+            { "GamepadLeft", "LEFT" },
+            { "GamepadNextCategory", "RB" },
+            { "GamepadNextChip", "RT" },
             { "GamepadOptions", "RS" },
+            { "GamepadPrevCategory", "LB" },
+            { "GamepadPrevChip", "LT" },
             { "GamepadRepeatDelay", "350" },
             { "GamepadRepeatRate", "110" },
+            { "GamepadRight", "RIGHT" },
             { "GamepadSearch", "Y" },
             { "GamepadToggle", "BACK START" },
+            { "GamepadUp", "UP" },
             { "Gap", "18" },
             { "HoverCategoryColor", "255,255,255,20" },
             { "HoverColor", "255,255,255,25" },
@@ -593,7 +612,11 @@ namespace RaintileOptions
         // them against the [Category] keys Raintile.lua reads.
         public static readonly string[] CATEGORY_LOOK = { "NX", "NY", "IconSize", "TileSize", "TileColor", "TileOpacity", "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos" };
 
-        public static readonly string[] GAMEPAD_BUTTONS = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };
+        // the buttons in the order of the dial (PadDial.cs): clockwise from the
+        // top, as on the controller (bumpers and triggers at the top, Y B A X on
+        // the right, Start, the sticks and Back at the bottom, the D-pad on the
+        // left; each cross read clockwise)
+        public static readonly string[] GAMEPAD_BUTTONS = { "RB", "RT", "Y", "B", "A", "X", "START", "RS", "LS", "BACK", "DOWN", "LEFT", "UP", "RIGHT", "LT", "LB" };
         public static readonly string[] SOURCES = { "Steam", "Epic", "GOG", "Ubisoft", "Battlenet", "EA", "Xbox", "GooglePlay", "Folders", "Apps" };
         // the kinds of what Import finds (see ImportKind); the first one is the
         // kind of a folder without one

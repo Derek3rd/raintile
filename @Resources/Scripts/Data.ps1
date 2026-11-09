@@ -65,6 +65,16 @@ function Convert-OldSettings([hashtable]$values) {
         }
         $values.Remove('GameUpdates')
     }
+    # X, LT and RT got settings of their own (GamepadDelete, GamepadPrevChip,
+    # GamepadNextChip); before, GamepadSearch or GamepadOptions on one of them
+    # took its place: added without that button, so it keeps doing what it did.
+    # Only when they are added (an older file with the gamepad settings).
+    if ($values.ContainsKey('GamepadSearch') -or $values.ContainsKey('GamepadOptions')) {
+        $taken = @(("$($values['GamepadSearch']) $($values['GamepadOptions'])").ToUpperInvariant() -split '[\s+|,]+')
+        foreach ($pair in @(@('GamepadDelete', 'X'), @('GamepadPrevChip', 'LT'), @('GamepadNextChip', 'RT'))) {
+            if (-not $values.ContainsKey($pair[0]) -and $taken -contains $pair[1]) { $values[$pair[0]] = '' }
+        }
+    }
 }
 
 # The defaults file with the given values in place of the default ones

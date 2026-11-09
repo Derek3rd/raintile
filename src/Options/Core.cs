@@ -377,6 +377,17 @@ namespace RaintileOptions
             return n;
         }
 
+        // Cells a tile takes in the grid, columns and rows: its Size= ("3x1") or,
+        // without one, the TileSize= of its category (tile null: that one); one
+        // cell when not set or not WxH, as Raintile.lua reads them
+        public static int[] GetSpan(IniSection category, IniSection tile)
+        {
+            string own = GetKey(tile, "Size").Trim();
+            var m = Regex.Match(own != "" ? own : GetKey(category, "TileSize").Trim(), @"^(\d{1,3})\s*[xX*]\s*(\d{1,3})$");
+            if (!m.Success) return new[] { 1, 1 };
+            return new[] { Math.Max(1, int.Parse(m.Groups[1].Value)), Math.Max(1, int.Parse(m.Groups[2].Value)) };
+        }
+
         public static List<IniSection> GetTiles(CategoryModel model)
         {
             return model.Sections.Where(s => !string.Equals(s.Name, "Category", StringComparison.OrdinalIgnoreCase)).ToList();

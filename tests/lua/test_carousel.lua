@@ -16,7 +16,8 @@ local function carousel(settings, n, sizes, prepare)
 		if settings[k] == nil then settings[k] = v end
 	end
 	local s = R.new({ settings = settings })
-	local lines = { '[Category]', 'Name=Carousel', 'Order=0', '' }
+	-- (sizes.all: TileSize= of the category)
+	local lines = { '[Category]', 'Name=Carousel', 'Order=0', sizes and sizes.all and 'TileSize=' .. sizes.all or '', '' }
 	for i = 1, n or 9 do
 		lines[#lines + 1] = '[T' .. i .. ']'
 		lines[#lines + 1] = 'Command=notepad.exe'
@@ -149,6 +150,22 @@ function T.odd_tile_centred()
 	expect(s, 5, 4, 'the next one')
 	s:call('Scroll(-1)')
 	expect(s, 4, 2, 'back to the wide tile')
+	t.clean(s)
+end
+
+-- TileSize= of the category: the size of every tile without a Size= of its own
+function T.tile_size_of_the_category()
+	local s = carousel({}, 5, { all = '3x1', [2] = '1x1' })
+	local c = s:upvalue('cats')[s:upvalue('active')]
+	t.eq(c.tiles[1].cols, 3, 'tile without its own size')
+	t.eq(c.tiles[2].cols, 1, 'tile with its own size')
+	t.ok(s:upvalue('M').carousel(), 'carousel off with odd sizes')
+	-- T1 takes the columns 0-2, T2 the 3rd: one notch centres T2
+	expect(s, 1, -1, 'opened on the wide tile')
+	s:call('Scroll(1)')
+	expect(s, 2, 1, 'the narrow one')
+	s:call('Scroll(1)')
+	expect(s, 3, 3, 'the next wide one')
 	t.clean(s)
 end
 

@@ -223,6 +223,39 @@ namespace RaintileOptions
                 SetRowApplies(w.Row, card && own, w.Why, card && !own);
             }
             UpdateNavApplies();
+            UpdateCarouselNote();
+        }
+
+        // Under Carousel, while it is on: the categories it does not apply to,
+        // which the launcher shows as a plain grid (their columns, or rows when
+        // scrolling vertically, or the size of tiles along the scroll are even:
+        // values from before the carousel, which FixOdd does not touch)
+        TextBlock carouselNote;
+        void UpdateCarouselNote()
+        {
+            if (carouselNote == null) return;
+            var list = new List<string>();
+            if (V("CenterSelection") == "1" && V("ScrollMode").Equals("grid", StringComparison.OrdinalIgnoreCase))
+            {
+                bool h = V("ScrollDir").Trim().StartsWith("h", StringComparison.OrdinalIgnoreCase);
+                string key = h ? "NX" : "NY";
+                foreach (var file in Core.GetCategoryFiles())
+                {
+                    var model = GetModel(file.Name);
+                    var c = Core.GetCategorySection(model);
+                    var why = new List<string>();
+                    double n;
+                    if (!Core.TryNumber(Core.GetKey(c, key), out n) && !Core.TryNumber(V(key), out n)) n = 1;
+                    if (Core.GetKey(c, key).Trim() != "" && IsEven(n)) why.Add(Core.FormatNumber(n, 1) + (h ? " columns" : " rows"));
+                    // (a tile is at most as large as the grid, as in the launcher)
+                    int even = Core.GetTiles(model).Count(t => IsEven(Math.Min(n, Core.GetSpan(c, t)[h ? 0 : 1])));
+                    if (even > 0) why.Add(even + (even == 1 ? " tile " : " tiles ") + (h ? "of an even width" : "of an even height"));
+                    if (why.Count > 0) list.Add(GetCategoryName(file.Name) + " (" + string.Join(", ", why) + ")");
+                }
+            }
+            carouselNote.Text = list.Count == 0 ? "" : "Not in " + string.Join(", ", list) +
+                ": they stay a plain grid. Change them in Categories, on All tiles (Columns, Tile width, Reset every tile > Size) or on the tiles.";
+            carouselNote.Visibility = list.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // Shows the current value of 'key' in its controls (after a reset)
@@ -804,6 +837,8 @@ namespace RaintileOptions
                         var row = NewItemRow(item);
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
                         var b = row as Border;
+                        // the categories the carousel cannot centre (UpdateCarouselNote)
+                        if (b != null && item.Key == "CenterSelection") carouselNote = AddRowNote(b, "");
                         if (b != null && !string.IsNullOrEmpty(item.When))
                             whenRows.Add(new WhenRow { When = item.When, GroupWhen = groupWhen, Row = b, Why = AddRowReason(b, WhenReason(item.When, page)) });
                     }

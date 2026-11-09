@@ -9,7 +9,7 @@ Your games, apps, links and system tools become large tiles with background art 
 ## Features
 
 - **Categories** in a centred menu at the top (icon, text or both), each with its own grid size.
-- **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs. Tiles can take more cells (`Size=2x2`) for a featured game or a bigger widget. Backgrounds fit the tile by themselves; you can also frame each one by dragging and zooming it in Options, and move and resize its logo on its own, or set both once for a whole category (every logo on the right, say) and reset them all.
+- **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs. Tiles can take more cells (`Size=2x2`) for a featured game or a bigger widget, one by one or all the tiles of a category at once. Backgrounds fit the tile by themselves; you can also frame each one by dragging and zooming it in Options, and move and resize its logo on its own, or set both once for a whole category (every logo on the right, say) and reset them all.
 - **Add games and apps** found on this PC — Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Battle.net, EA app, Xbox, and the programs of the Start menu — picking them from a list, with background and logo (local Steam cache, [SteamGridDB](https://www.steamgriddb.com/), program icons). New ones are signalled with a dot on the gear.
 - **Clock and date** at the top left, and a **search** across all categories that opens when you hover it, with results that follow every key.
 - **Favorites and Recent**: your favorite tiles and the ones launched lately (or most often), one click away from the buttons next to the search bar.

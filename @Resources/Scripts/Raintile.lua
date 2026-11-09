@@ -620,6 +620,8 @@ local function loadCategory(file)
 	c.logoPos, c.logoScale = own(catKeys.logopos), own(catKeys.logoscale)
 	c.infoPos = own(catKeys.infopos)
 	c.back = { own(catKeys.backlogopos), own(catKeys.backlogoscale), own(catKeys.backinfopos) }
+	-- cells of its tiles (TileSize=, as Size=), when a tile has no Size= of its own
+	c.tileSize = own(catKeys.tilesize)
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -650,8 +652,9 @@ local function loadCategory(file)
 			end
 			-- originals, used full screen by the launch animation
 			t.backgroundFull, t.logoFull = t.background, t.logo
-			-- cells taken (Size=2x1: two columns, one row), at most the grid
-			local sw, sh = trim(k.size or ''):match('^(%d+)%s*[xX*]%s*(%d+)$')
+			-- cells taken (Size=2x1: two columns, one row; or the category's
+			-- TileSize=), at most the grid
+			local sw, sh = (own(k.size) or c.tileSize or ''):match('^(%d+)%s*[xX*]%s*(%d+)$')
 			t.cols = math.max(1, math.min(c.nx, tonumber(sw) or 1))
 			t.rows = math.max(1, math.min(c.ny, tonumber(sh) or 1))
 			if t.cols > 1 or t.rows > 1 then c.spans = true end

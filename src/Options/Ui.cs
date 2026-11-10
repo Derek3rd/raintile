@@ -329,6 +329,25 @@ namespace RaintileOptions
             return sp;
         }
 
+        // The buttons of a gamepad combination in one field: A + LB (None without any)
+        public FrameworkElement NewPadCombo(IList<string> buttons, Brush brush = null)
+        {
+            if (buttons == null || buttons.Count == 0) return NewPadFace("", brush);
+            var sp = NewPanel(Orientation.Horizontal);
+            sp.HorizontalAlignment = HorizontalAlignment.Center;
+            for (int i = 0; i < buttons.Count; i++)
+            {
+                if (i > 0)
+                {
+                    var plus = NewText("+", Fs.Label, brush, true);
+                    plus.Margin = T(Gap.Line, 0, Gap.Line, 0);
+                    AddTo(sp, plus);
+                }
+                AddTo(sp, NewPadFace(buttons[i], brush));
+            }
+            return sp;
+        }
+
         public Button NewButton(string text, string style = "", string tip = "")
         {
             var b = new Button { Content = text };

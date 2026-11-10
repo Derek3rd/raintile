@@ -5244,6 +5244,7 @@ function Hide()
 	stopClock()
 	closePower()
 	M.closeMore()
+	M.closeTileMenu()
 	updateDashState()
 	-- the downloads are followed only while it is open
 	os.remove(resources .. 'Generated\\DownloadOn.txt')
@@ -5505,30 +5506,35 @@ end
 -- Context menu entries for tile t, in the order shown (Rainmeter stops at the
 -- first empty one, so only those that apply are listed)
 local TILE_MENU_SLOTS = 6
+-- { label, kind, glyph } (the glyph for the pad's menu, M.tmenu)
+function M.tileMenuItems(t)
+	local items = {}
+	if not t then return items end
+	items[#items + 1] = { 'Edit ' .. t.name .. '...', 'edit', '[\\xE70F]' }
+	if V.ShowFavorites and t.file and t.file ~= '' and not t.widget then
+		items[#items + 1] = { favorites.set[tileId(t)] and 'Remove from Favorites' or 'Add to Favorites', 'favorite', '[\\xE734]' }
+	end
+	local home = t.file and t.file ~= '' and M.catOf(t)
+	if home then
+		items[#items + 1] = { t.pinned and 'Unpin' or 'Pin to the start', 'pin', '[\\xE718]' }
+	end
+	local path, args = commandTarget(t.command)
+	if path and path:match('^%a:[\\/]') and fileExists(path) then items[#items + 1] = { 'Open file location', 'folder', '[\\xE838]' } end
+	if path and isProgram(path, args) then items[#items + 1] = { 'Run as administrator', 'admin', '[\\xE7EF]' } end
+	if t.file and t.file ~= '' then
+		items[#items + 1] = { 'Remove from ' .. (t.catLabel or '') .. '...', 'remove', '[\\xE74D]' }
+	end
+	return items
+end
+
 local function setPointed(t)
 	if pointed == t then return end
 	pointed = t
-	local items = {}
-	if t then
-		-- & would underline the next letter in a menu
-		items[#items + 1] = { 'Edit ' .. t.name:gsub('&', '&&') .. '...', 'edit' }
-		if V.ShowFavorites and t.file and t.file ~= '' and not t.widget then
-			items[#items + 1] = { favorites.set[tileId(t)] and 'Remove from Favorites' or 'Add to Favorites', 'favorite' }
-		end
-		local home = t.file and t.file ~= '' and M.catOf(t)
-		if home then
-			items[#items + 1] = { t.pinned and 'Unpin' or 'Pin to the start', 'pin' }
-		end
-		local path, args = commandTarget(t.command)
-		if path and path:match('^%a:[\\/]') and fileExists(path) then items[#items + 1] = { 'Open file location', 'folder' } end
-		if path and isProgram(path, args) then items[#items + 1] = { 'Run as administrator', 'admin' } end
-		if t.file and t.file ~= '' then
-			items[#items + 1] = { 'Remove from ' .. (t.catLabel or ''):gsub('&', '&&') .. '...', 'remove' }
-		end
-	end
+	local items = M.tileMenuItems(t)
 	for i = 1, TILE_MENU_SLOTS do
 		local it = items[i]
-		SKIN:Bang('!SetVariable', 'TileMenuTitle' .. i, it and it[1] or '')
+		-- & would underline the next letter in a menu
+		SKIN:Bang('!SetVariable', 'TileMenuTitle' .. i, it and (it[1]:gsub('&', '&&')) or '')
 		SKIN:Bang('!SetVariable', 'TileMenuAction' .. i, it and ('[!CommandMeasure MeasureScript "TileMenu(\'' .. it[2] .. '\')"]') or '')
 	end
 end
@@ -5644,7 +5650,10 @@ end
 function TileMenu(kind)
 	local t = pointed
 	setPointed(nil)
-	if not t then return end
+	if t then M.runTileMenu(t, kind) end
+end
+
+function M.runTileMenu(t, kind)
 	if kind == 'edit' then
 		if writeTileFile('EditTile.txt', t) then SKIN:Bang(SKIN:GetVariable('OptionsTileAction')) end
 	elseif kind == 'favorite' then
@@ -5666,6 +5675,99 @@ end
 -- Older name of the "Edit" entry
 function EditTile()
 	TileMenu('edit')
+end
+
+-- The tile's menu for the pad (GamepadDone, Start, outside the on-screen
+-- keyboard): the entries of the right-click menu, which the pad cannot
+-- reach, drawn over the highlighted tile (MeterTileMenuItem1-6). Up and down
+-- move in it, Confirm picks, Back or Start again close it; the mouse works
+-- on it too. Any other button closes it and acts.
+M.tmenu = { open = false, sel = 1, items = {}, t = nil }
+
+function M.renderTileMenu()
+	local tm = M.tmenu
+	local x, y, h = 0, 0, 0
+	if tm.open then
+		local gx, gy = gridToPx(hover.tx, hover.ty)
+		x, y = math.floor(V.PadX + gx + 12), math.floor(V.GridY + gy + 12)
+	end
+	-- shown before being measured (a hidden meter measures 0)
+	local heights = {}
+	for i = 1, TILE_MENU_SLOTS do
+		local m, it = 'MeterTileMenuItem' .. i, tm.open and tm.items[i]
+		show(m, it and true or false)
+		if it then
+			set(m, 'Text', it[3] .. '   ' .. D.text(it[1]))
+			set(m, 'SolidColor', tm.sel == i and '44,44,54,245' or '24,24,30,240')
+			set(m, 'FontColor', tm.sel == i and V.AccentColor or V.TextColor)
+			SKIN:Bang('!UpdateMeter', m)
+			local mt = SKIN:GetMeter(m)
+			heights[i] = math.max(1, mt and mt:GetH() or 40)
+			h = h + heights[i] + 2
+		end
+	end
+	if tm.open then
+		-- inside the screen: up from the bottom, left from the right edge
+		local mt = SKIN:GetMeter('MeterTileMenuItem1')
+		local w = mt and mt:GetW() or 260
+		x = math.max(0, math.min(x, V.ScreenW - w - 8))
+		y = math.max(0, math.min(y, V.ScreenH - h - 8))
+		for i = 1, #tm.items do
+			if i > TILE_MENU_SLOTS then break end
+			local m = 'MeterTileMenuItem' .. i
+			set(m, 'X', tostring(x))
+			set(m, 'Y', tostring(y))
+			SKIN:Bang('!UpdateMeter', m)
+			y = y + heights[i] + 2
+		end
+	end
+	SKIN:Bang('!Redraw')
+end
+
+-- Opens it on the highlighted tile (nothing highlighted: nothing)
+function M.openTileMenu()
+	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
+	if not t then return false end
+	local items = M.tileMenuItems(t)
+	if #items == 0 then return false end
+	closePower()
+	M.closeMore()
+	local tm = M.tmenu
+	tm.open, tm.sel, tm.items, tm.t = true, 1, items, t
+	M.renderTileMenu()
+	return true
+end
+
+function M.closeTileMenu()
+	local tm = M.tmenu
+	if not tm.open then return false end
+	tm.open, tm.items, tm.t = false, {}, nil
+	M.renderTileMenu()
+	return true
+end
+
+function M.tileMenuMove(dy)
+	local tm = M.tmenu
+	local n = math.min(#tm.items, TILE_MENU_SLOTS)
+	if dy == 0 or n == 0 then return end
+	tm.sel = (tm.sel - 1 + (dy > 0 and 1 or -1)) % n + 1
+	M.renderTileMenu()
+end
+
+function TileMenuHover(i)
+	local tm = M.tmenu
+	if not tm.open or not tm.items[i] then return end
+	tm.sel = i
+	M.renderTileMenu()
+end
+
+function TileMenuPick(i)
+	local tm = M.tmenu
+	local it, t = tm.open and tm.items[i], tm.t
+	if not it then return end
+	M.picked = os.time()
+	M.closeTileMenu()
+	M.runTileMenu(t, it[2])
 end
 
 -- Update check on every load (CheckUpdates=1); Update.ps1 asks GitHub at
@@ -5844,7 +5946,7 @@ end
 -- an entry was picked (M.picked, until the mouse moves onto a tile), the
 -- tiles leave the click alone.
 function M.menuOverGrid()
-	if M.more.open or power.open then return true end
+	if M.more.open or power.open or M.tmenu.open then return true end
 	return M.picked ~= nil and os.time() - M.picked <= 1
 end
 
@@ -5855,7 +5957,7 @@ function HoverTile(slot, mx, my)
 	local last = M.mouse
 	M.mouse = { tonumber(mx), tonumber(my) }
 	if last and (last[1] ~= M.mouse[1] or last[2] ~= M.mouse[2]) then M.keyInput() end
-	if M.more.open or power.open then return end
+	if M.more.open or power.open or M.tmenu.open then return end
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
 	setPointed(t)
@@ -5894,7 +5996,7 @@ end
 -- as between tiles. The meters of a widget are placed in its container, at
 -- the tile: their X, Y are from its top left corner.
 function HoverPart(name)
-	if not ready or launching or M.more.open or power.open then return end
+	if not ready or launching or M.more.open or power.open or M.tmenu.open then return end
 	local n = tonumber(name:match('^CW(%d+)_') or name:match('^W(%d+)RowHit%d+$') or '')
 	local t = n and widgets[n]
 	local m = t and SKIN:GetMeter(name)
@@ -6181,6 +6283,7 @@ end
 
 function Scroll(delta)
 	if not ready or launching then return end
+	M.closeTileMenu() -- (its tile moves away)
 	if M.carousel() then
 		-- one tile per notch, whatever ScrollStep, as the keys (not from part
 		-- to part of a widget: the notch moves the carousel)
@@ -6560,6 +6663,7 @@ function Nav(dx, dy)
 	M.keyInput()
 	if not ready or launching or not visible then return end
 	if osk.open then oskMove(dx, dy) return end
+	if M.tmenu.open then M.tileMenuMove(dy) return end
 	if #cur().tiles == 0 then return end
 	-- inside a widget with parts: from part to part first
 	if M.partStep(dx, dy) then return end
@@ -6626,6 +6730,7 @@ function Confirm()
 		tostring(launching ~= nil), tostring(visible), hover.idx, tostring(hover.on)))
 	if not ready or launching or not visible then return end
 	if osk.open then OskPress(osk.sel) return end
+	if M.tmenu.open then TileMenuPick(M.tmenu.sel) return end
 	if hover.idx == 0 or not hover.on then
 		Nav(0, 0)
 		return
@@ -6921,9 +7026,14 @@ function OskPress(i)
 	if osk.open then renderOsk() end
 end
 
--- Start or Done: the search stays, the keyboard closes
+-- Start or Done: the search stays, the keyboard closes; without the
+-- keyboard, the menu of the highlighted tile (again: closes it)
 function PadStart()
-	if not osk.open then return end
+	if not osk.open then
+		if launching then return end
+		if not M.closeTileMenu() then M.openTileMenu() end
+		return
+	end
 	closeOsk()
 	if typing then TypeKey('ENTER') end
 end
@@ -7022,6 +7132,9 @@ function Pad(name, a, b)
 		PadSearch = PadSearch, PadStart = PadStart, PadOptions = PadOptions, PadX = PadX, PadChip = PadChip,
 		PadTile = M.padTile })[name]
 	if not f then return end
+	-- the tile's menu takes the moves, Confirm, Back and Start; any other
+	-- button closes it and does what it does
+	if M.tmenu.open and name ~= 'Nav' and name ~= 'Confirm' and name ~= 'Escape' and name ~= 'PadStart' then M.closeTileMenu() end
 	-- (M.inPad: the functions it calls know the pad, not a key, called them)
 	M.padMode, M.inPad = true, true
 	f(a, b)
@@ -7058,7 +7171,10 @@ function M.legendItems()
 		end
 		if #keys > 0 then list[#list + 1] = { key = table.concat(keys, ' / '), label = label } end
 	end
-	if power.open or M.more.open then
+	if M.tmenu.open then
+		add({ 'Confirm' }, 'Choose')
+		add({ 'Back' }, 'Close')
+	elseif power.open or M.more.open then
 		add({ 'Back' }, 'Close')
 	elseif osk.open then
 		add({ 'Confirm' }, 'Type')
@@ -7072,6 +7188,7 @@ function M.legendItems()
 		add({ 'Back' }, 'Close the search')
 	else
 		add({ 'Confirm' }, 'Launch')
+		if hover.on and hover.idx ~= 0 then add({ 'Done' }, 'Menu') end
 		add({ 'Search' }, 'Search')
 		add({ 'PrevCategory', 'NextCategory' }, 'Category')
 		add({ 'Options' }, 'Options')
@@ -7161,6 +7278,7 @@ end
 function Escape()
 	M.keyInput()
 	if not ready then return end
+	if M.closeTileMenu() then return end
 	-- inside a widget (its parts): out of it, nothing closes
 	if not launching and M.partOut() then return end
 	if closePower() then return end

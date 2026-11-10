@@ -114,6 +114,9 @@ function Format-SpotifyBang($Song, [string]$Prefix, [string]$Group, [string]$Con
     $pos = [int]$Song.Position
     $dur = [int]$Song.Duration
     & $set 'Cover' 'ImageName' (Get-SafeText $Song.Cover)
+    # (over the cover, with the ShowTrack setting)
+    & $set 'Title' 'Text' (Get-SafeText $Song.Title)
+    & $set 'Artist' 'Text' (Get-SafeText $Song.Artist)
     & $set 'Cover' 'ToolTipText' (Get-SafeText ($Song.Title + $(if ($Song.Artist) { ' - ' + $Song.Artist } else { '' })))
     & $set 'NoCover' 'Hidden' $(if ($Song.Cover -ne '') { '1' } else { '0' })
     # (Segoe MDL2 Assets: Play E768, Pause E769, Heart E006, HeartFill E00B,

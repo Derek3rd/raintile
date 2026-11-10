@@ -122,6 +122,9 @@ function Format-PlayingBang($Song, [string]$Prefix, [string]$Group, [string]$Con
     if ($Song.App) { $tip += ' (' + $Song.App + ')' }
     & $set 'Cover' 'ImageName' (Get-SafeText $Song.Cover)
     & $set 'Cover' 'ToolTipText' (Get-SafeText $tip)
+    # (over the cover, with the ShowTrack setting)
+    & $set 'Title' 'Text' (Get-SafeText $Song.Title)
+    & $set 'Artist' 'Text' (Get-SafeText $Song.Artist)
     & $set 'NoCover' 'Hidden' $(if ($Song.Cover -ne '') { '1' } else { '0' })
     # (Segoe MDL2 Assets: Play E768, Pause E769, RepeatAll E8EE, RepeatOne
     # E8ED; shuffle and repeat lit when on)

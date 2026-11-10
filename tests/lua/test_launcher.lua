@@ -293,4 +293,29 @@ function T.launch_keeps_keys_off_behind_the_game()
 	t.clean(s)
 end
 
+-- Pad shortcuts of the tiles (PadKey=): written for the helper, one
+-- combination per line (the same buttons written two ways: one), and started
+-- by Pad('PadTile', <line>) only while the launcher is open with the focus
+function T.tile_pad_keys()
+	local s = R.new({})
+	local cat = s.data .. 'Categories\\Apps.ini'
+	R.writeFile(cat, R.readFile(cat) .. '\r\n[Pad one]\r\nCommand=[!SetVariable PadRan one]\r\nPadKey=lb + a\r\n'
+		.. '\r\n[Pad two]\r\nCommand=[!SetVariable PadRan two]\r\nPadKey=A LB\r\n'
+		.. '\r\n[Pad three]\r\nCommand=[!SetVariable PadRan three]\r\nPadKey=Y X\r\n')
+	s:start()
+	t.clean(s)
+	t.eq(R.readFile(s.resources .. 'Generated\\PadKeys.txt'), 'A LB\r\nX Y\r\n', 'the combinations for the helper')
+	s:call('Hide()')
+	s:call("Pad('PadTile',2)")
+	t.eq(s.vars['padran'], nil, 'a pad shortcut started a tile with the launcher hidden')
+	s:call('Show()')
+	s:call("Pad('PadTile',2)")
+	t.eq(s.vars['padran'], 'three', 'the second combination is not the third tile')
+	t.ok(not s:upvalue('visible'), 'the launcher did not hide after the shortcut')
+	s:call('Show()')
+	s:call("Pad('PadTile',1)")
+	t.eq(s.vars['padran'], 'one', 'the first tile with the combination is not the one started')
+	t.clean(s)
+end
+
 return T

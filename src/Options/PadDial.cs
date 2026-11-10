@@ -105,7 +105,7 @@ namespace RaintileOptions
             padDialKey = key;
             padDialSlot = slot;
             padDialField = c.Buttons[slot];
-            var list = PadButtons(V(key));
+            var list = PadButtons(PadValue(key));
             int at = slot < list.Count ? Array.IndexOf(Schema.GAMEPAD_BUTTONS, list[slot]) : -1;
             padDialSel = at;
             RenderPadDial(at);

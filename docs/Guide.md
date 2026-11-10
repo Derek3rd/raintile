@@ -237,6 +237,8 @@ A small line on the tile (at the top left unless you move it) tells how long you
 
 **Hot keys**: a tile with `HotKey=` (e.g. `CTRL ALT 1`) starts with that combination wherever you are, also while the launcher is hidden (`TileKeysWhen=Always`, the default; with `Open` only while it is open, and the keys stay free for other programs the rest of the time): right away, without the animation (an open launcher hides with `CloseOnLaunch=1`). One tile per combination: if two tiles have the same one, the first wins, and the open/close key (`OpenHotKey`) cannot be used. The Options window warns about a combination already used.
 
+**Pad shortcuts**: a tile with `PadKey=` (e.g. `LB A`; Options: the tile's *Pad shortcut*, two fields like the buttons of Keybindings > Gamepad) starts with those buttons of the gamepad held together, only while the launcher is open (never in a game), as a hot key does. The buttons of an action of the [gamepad](#gamepad) stay that action's (the Options window marks them in red); a button that is also part of a shortcut acts when it is released (`LB` alone changes category on release when a tile has `LB A`). One tile per combination: the first wins.
+
 On click the tile expands to full screen (with background and logo at full resolution), stays visible for `LaunchHold` ms, then the launcher hides. The command starts right away, at the beginning of the animation.
 
 | Setting | Default | Effect |
@@ -362,6 +364,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
 | `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
 | `HotKey` | key combination that starts the tile, also while the launcher is hidden: HotKey plugin names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
+| `PadKey` | gamepad buttons held together that start the tile while the launcher is open (`LB A`; `A B X Y LB RB LT RT BACK START LS RS UP DOWN LEFT RIGHT`). See [Launching a tile](#launching-a-tile) |
 | `Pinned` | `1` = at the start of the category, in the order of the file, whatever the category's `Sort=`: see [Sorting the tiles](#options-window) |
 | `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
 

@@ -431,13 +431,33 @@ namespace RaintileOptions
 
         // The button of one field: the other keeps its own (an empty first field
         // takes the second one's)
+        // The value of a pad field: a setting, or the pad shortcut of the tile
+        // being edited (TilePadKey: PadKey= of the tile, Categories.cs)
+        const string TilePadKey = "@TilePadKey";
+
+        string PadValue(string key)
+        {
+            if (key != TilePadKey) return V(key);
+            var t = GetCurrentTile();
+            return t != null ? Core.GetKey(t, "PadKey") : "";
+        }
+
+        void SetPadValue(string key, string value)
+        {
+            if (key != TilePadKey) { SetValue(key, value); return; }
+            var t = GetCurrentTile();
+            if (t == null || loading) return;
+            Core.SetKey(t, "PadKey", value);
+            SetChanged(currentFile);
+        }
+
         void SetPadSlot(string key, int slot, string button)
         {
-            var list = PadButtons(V(key));
+            var list = PadButtons(PadValue(key));
             while (list.Count < 2) list.Add("");
             list[slot] = button;
             if (button != "" && list[1 - slot] == button) list[1 - slot] = "";
-            SetValue(key, string.Join(" ", list.Where(x => x != "")));
+            SetPadValue(key, string.Join(" ", list.Where(x => x != "")));
             ShowPadSlots(key);
         }
 
@@ -445,7 +465,7 @@ namespace RaintileOptions
         {
             Ctl c;
             if (!ctl.TryGetValue(key, out c) || c.Kind != "pad") return;
-            var list = PadButtons(V(key));
+            var list = PadButtons(PadValue(key));
             for (int i = 0; i < 2; i++)
             {
                 string b = i < list.Count ? list[i] : "";
@@ -463,13 +483,13 @@ namespace RaintileOptions
         void UpdatePadConflicts()
         {
             var pads = ctl.Where(kv => kv.Value.Kind == "pad" && kv.Value.Buttons != null).ToList();
-            Func<string, string> combo = k => string.Join(" ", PadButtons(V(k)).OrderBy(x => x, StringComparer.Ordinal));
+            Func<string, string> combo = k => string.Join(" ", PadButtons(PadValue(k)).OrderBy(x => x, StringComparer.Ordinal));
             foreach (var kv in pads)
             {
                 string mine = combo(kv.Key);
                 var others = mine == "" ? new List<string>() : pads.Where(o => o.Key != kv.Key && combo(o.Key) == mine)
-                    .Select(o => { Page pg; var it = Schema.ItemOf(o.Key, out pg); return it != null ? it.Label : o.Key; }).ToList();
-                var list = PadButtons(V(kv.Key));
+                    .Select(o => { if (o.Key == TilePadKey) return "the pad shortcut of the tile being edited"; Page pg; var it = Schema.ItemOf(o.Key, out pg); return it != null ? it.Label : o.Key; }).ToList();
+                var list = PadButtons(PadValue(kv.Key));
                 for (int i = 0; i < 2; i++)
                 {
                     var b = kv.Value.Buttons[i];

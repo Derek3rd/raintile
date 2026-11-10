@@ -246,6 +246,80 @@ function T.gallery_audio_control()
 	t.clean(s)
 end
 
+-- Spotify (widgets/Spotify): its sizes written out, its controls parts of
+-- the tile in a group of its own that OnFocus shows, the bar always a part
+function T.gallery_spotify()
+	local s = R.new({})
+	host_mkdir(s.data .. 'Widgets')
+	host_copytree(s.repo .. '\\widgets\\Spotify', s.data .. 'Widgets\\Spotify', '')
+	local cat = s.data .. 'Categories\\Dashboard.ini'
+	R.writeFile(cat, R.readFile(cat) .. '\r\n[Spotify]\r\nWidget=custom\r\nParam=Spotify\r\nSize=2x2\r\n')
+	s:start()
+	t.clean(s)
+	local w
+	for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == 'Spotify' then w = x end end
+	t.ok(w, 'the widget tile is missing')
+	local g = grid(s)
+	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
+	for _, v in ipairs({ 'SB', 'SR', 'SL', 'SO', 'SF', 'SH', 'SCmd', 'SShow', 'SHide' }) do
+		own = own or (g:find('#' .. v .. '#', 1, true) and v)
+	end
+	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
+	local p = 'CW' .. w.widget.idx .. '_'
+	local api = s:upvalue('M').widgetInfo(w)
+	t.ok(api.onFocus and api.onFocus:find('!ShowMeterGroup "' .. p .. 'CoverCtl"', 1, true), 'OnFocus does not show the controls: ' .. tostring(api.onFocus))
+	t.ok(api.onHide:find('Do quit', 1, true) and api.onHide:find('!HideMeterGroup', 1, true), 'OnHide does not stop the script and hide the controls')
+	local parts = s:upvalue('M').widgetParts(w)
+	for _, name in ipairs({ 'Open', 'Previous', 'Play', 'Next', 'Like', 'Seek' }) do
+		t.ok(parts[p .. name], name .. ' is not a part of the tile')
+	end
+	t.ok(g:find('-Port "8974"', 1, true), 'the Port setting does not reach the script')
+end
+
+-- OnFocus= / OnBlur=: the highlight of the keys or the pad comes onto the
+-- widget's tile (before its parts are looked for: a part hidden until then,
+-- shown by OnFocus, is reached), and leaves it with another category
+function T.focus_shows_parts()
+	local s = R.new({})
+	local dir = s.data .. 'Widgets\\FocusW\\'
+	host_mkdir(s.data .. 'Widgets')
+	host_mkdir(dir)
+	R.writeFile(dir .. 'FocusW.ini', table.concat({
+		'[Raintile]',
+		'OnFocus=[!SetVariable Foc on][!ShowMeterGroup FocusBtn]',
+		'OnBlur=[!SetVariable Foc off][!HideMeterGroup FocusBtn]',
+		'[Btn]',
+		'Meter=Shape',
+		'X=10',
+		'Y=10',
+		'Shape=Rectangle 0,0,40,40 | Fill Color 0,0,0,1 | StrokeWidth 0',
+		'Part=1',
+		'Group=FocusBtn',
+		'Hidden=1',
+		'LeftMouseUpAction=[!SetVariable Pressed yes]',
+		'',
+	}, '\r\n'))
+	R.writeFile(s.data .. 'Categories\\Focus.ini', '[Category]\r\nName=Focus\r\n\r\n[Focus widget]\r\nWidget=custom\r\nParam=FocusW\r\n')
+	s:start()
+	t.clean(s)
+	local target
+	for i, c in ipairs(s:upvalue('cats')) do if c.name == 'Focus' then target = i end end
+	t.ok(target, 'no Focus category')
+	s:call('Show()')
+	s:call('SetCategory(' .. target .. ')')
+	t.eq(s.vars['foc'], nil, 'OnFocus before the keys came')
+	s:call('Nav(0, 0)')
+	t.clean(s)
+	t.eq(s.vars['foc'], 'on', 'OnFocus did not run with the highlight of the keys on the tile')
+	local kp = s:upvalue('M').kpart
+	t.ok(kp and kp.name:match('_Btn$'), 'the part shown by OnFocus is not reached: ' .. tostring(kp and kp.name))
+	s:call('Confirm()')
+	t.eq(s.vars['pressed'], 'yes', 'Confirm did not press the part')
+	s:call('SetCategory(' .. (target == 1 and 2 or 1) .. ')')
+	t.eq(s.vars['foc'], 'off', 'OnBlur did not run with another category')
+	t.clean(s)
+end
+
 -- Keyboard and pad inside a widget with parts (the rows of its list): from
 -- row to row, out of the tile at the last one, back onto the nearest row
 function T.parts_with_keys()

@@ -73,6 +73,8 @@ What the widget asks of Raintile:
 [Raintile]
 OnShow=[!CommandMeasure #WIDGET:Read# "Run"]
 OnHide=
+OnFocus=
+OnBlur=
 List=list.txt
 ListY=
 WidgetOptionChoices=
@@ -118,6 +120,17 @@ Hidden=(1-#OPTION:ShowTitle#)
 ### OnShow and OnHide
 
 Bangs run when the widget's category comes on screen (the launcher opens on it, or the menu goes to it) and when it leaves the screen (another category, the launcher hidden). This is where a widget starts its work: reading its data, loading something. Nothing runs while the launcher is hidden.
+
+### OnFocus and OnBlur
+
+Bangs run when the highlight of the keys or the pad comes onto the widget's tile, and when it leaves it (another tile, the mouse moving, another category). `OnFocus` runs before Raintile looks for the tile's [parts](#parts-of-a-tile): a widget can show there what it shows on mouse hover, and the keys reach its parts. [`Spotify`](../widgets/Spotify) shows its controls this way:
+
+```ini
+OnFocus=[!ShowMeterGroup "#WIDGET:Cover#Ctl"][!Redraw]
+OnBlur=[!HideMeterGroup "#WIDGET:Cover#Ctl"][!Redraw]
+```
+
+A group of the widget's own takes a name made from one of its sections (`#WIDGET:Cover#Ctl`): two tiles of the same widget then have groups of their own.
 
 ### Lists
 
@@ -223,6 +236,7 @@ FinishAction=[!CommandMeasure MeasureScript "WidgetChanged()"]
 
 A widget whose data changes while it is on screen (a volume, a player) can keep its script running from `OnShow` to `OnHide` instead of starting it again and again; see [`AudioControl`](../widgets/AudioControl):
 
+- **A server**: [`Spotify`](../widgets/Spotify) is a small WebSocket server on `127.0.0.1` (a TCP listener with the handshake and the frames in C#), for a program that sends its data out (Spicetify's WebNowPlaying extension); only while the widget is shown, so the program connects again when it comes back.
 - **Into the meters**: the script sends `!SetOption` (then `!UpdateMeasureGroup`, `!UpdateMeterGroup` and `!Redraw`) to Rainmeter with `WM_COPYDATA` (the window of class `DummyRainWClass`), as `Rainmeter.exe !bang` does without a process each time, and only when something changed. Give it `#CURRENTCONFIG#` (the bangs' config) and a section's name, `#WIDGET:<Section>#`: the others have the same prefix (`CW11_`), and their group is the prefix without `_` (`CW11`). Colours and fonts of the launcher (`#AccentColor#`) are best passed as arguments, already resolved.
 - **From the meters**: a click writes a command with `!WriteKeyValue` into an `.ini` of the widget's folder (one per tile: `cmd_#WIDGET:Server#.ini`), which the script waits on (`FileSystemWatcher`); `$MouseX:%$` gives where on the meter it was clicked.
 - **Exit**: on the command `OnHide` writes, when Rainmeter is gone, and when a newer copy started for the same tile (after a refresh: it writes its id into the file). Nothing may be left running.

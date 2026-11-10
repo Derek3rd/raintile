@@ -253,7 +253,7 @@ function T.gallery_spotify()
 	host_mkdir(s.data .. 'Widgets')
 	host_copytree(s.repo .. '\\widgets\\Spotify', s.data .. 'Widgets\\Spotify', '')
 	local cat = s.data .. 'Categories\\Dashboard.ini'
-	R.writeFile(cat, R.readFile(cat) .. '\r\n[Spotify]\r\nWidget=custom\r\nParam=Spotify\r\nSize=2x2\r\n')
+	R.writeFile(cat, R.readFile(cat) .. '\r\n[Spotify]\r\nWidget=custom\r\nParam=Spotify\r\nSize=2x1\r\n')
 	s:start()
 	t.clean(s)
 	local w
@@ -261,7 +261,7 @@ function T.gallery_spotify()
 	t.ok(w, 'the widget tile is missing')
 	local g = grid(s)
 	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
-	for _, v in ipairs({ 'SB', 'SR', 'SL', 'SO', 'SF', 'SH', 'SCmd', 'SShow', 'SHide' }) do
+	for _, v in ipairs({ 'S', 'IF', 'SB', 'SR', 'SL', 'SO', 'SF', 'SH', 'SCmd', 'SShow', 'SHide' }) do
 		own = own or (g:find('#' .. v .. '#', 1, true) and v)
 	end
 	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
@@ -274,6 +274,11 @@ function T.gallery_spotify()
 		t.ok(parts[p .. name], name .. ' is not a part of the tile')
 	end
 	t.ok(g:find('-Port "8974"', 1, true), 'the Port setting does not reach the script')
+	-- a wide tile: the cover a square as high as the tile, the title beside it
+	local cover, info = s.meters[(p .. 'Cover'):lower()], s.meters[(p .. 'InfoTitle'):lower()]
+	local cw, ch = s:number(cover:opt('W', '0'), 0), s:number(cover:opt('H', '0'), 0)
+	t.ok(cw == ch and cw > 0, string.format('the cover is not a square: %sx%s', cw, ch))
+	t.ok(not info.hidden and s:number(info:opt('X', '0'), 0) > cw, 'the title is not beside the cover')
 end
 
 -- Now Playing (widgets/NowPlaying): its sizes written out, its controls

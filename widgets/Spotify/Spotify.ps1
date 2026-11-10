@@ -113,6 +113,9 @@ function Format-SpotifyBang($Song, [string]$Prefix, [string]$Group, [string]$Con
     $dur = [int]$Song.Duration
     & $set 'Title' 'Text' (Get-SafeText $Song.Title)
     & $set 'Artist' 'Text' (Get-SafeText $Song.Artist)
+    # (beside the square cover, on a tile that is not square)
+    & $set 'InfoTitle' 'Text' (Get-SafeText $Song.Title)
+    & $set 'InfoArtist' 'Text' (Get-SafeText $Song.Artist)
     & $set 'Cover' 'ImageName' (Get-SafeText $Song.Cover)
     & $set 'NoCover' 'Hidden' $(if ($Song.Cover -ne '') { '1' } else { '0' })
     # (Segoe MDL2 Assets: Play E768, Pause E769, Heart E006, HeartFill E00B)

@@ -259,4 +259,4 @@ Use a key only for the service it is for, never write it to a file or a log, and
 
 ## Publishing in the gallery
 
-Add an entry to [`widgets/index.json`](../widgets/index.json), and the folder to `widgets/<Id>/` if it is hosted here: see [widgets/README.md](../widgets/README.md). With nightly builds the gallery reads the list of the `nightly` branch, so a widget can be tried there before a release.
+Add an entry to [`widgets/index.json`](../widgets/index.json), with `minVersion`, the oldest Raintile it works with (the gallery of older ones does not install it), and the folder to `widgets/<Id>/` if it is hosted here: see [widgets/README.md](../widgets/README.md). With nightly builds the gallery reads the list of the `nightly` branch, so a widget can be tried there before a release.

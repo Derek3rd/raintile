@@ -284,3 +284,13 @@ Test 'Options: loading a profile changes only what it names' {
     Assert-Equal $widget['Key'] 'dpapi:y' 'the secret of a widget'
     Assert-True (-not $widget.ContainsKey('Other')) 'an option the widget does not declare added'
 }
+
+Test 'Options: a gallery widget needs the Raintile of its minVersion' {
+    Assert-True (Invoke-Options 'VersionFits' @('1.4.1', '1.4.1')) 'the same release'
+    Assert-True (Invoke-Options 'VersionFits' @('1.5.0', '1.4.1')) 'a newer release'
+    Assert-True (-not (Invoke-Options 'VersionFits' @('1.4.0', '1.4.1'))) 'an older release'
+    Assert-True (-not (Invoke-Options 'VersionFits' @('1.3.9', '1.10.0'))) 'numbers, not text'
+    Assert-True (Invoke-Options 'VersionFits' @('1.4.1.3', '1.4.2')) 'a nightly build: the next release'
+    Assert-True (Invoke-Options 'VersionFits' @('1.4.1', '')) 'no minVersion'
+    Assert-True (Invoke-Options 'VersionFits' @('0', '1.4.0')) 'an unknown version of Raintile'
+}

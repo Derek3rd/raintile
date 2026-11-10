@@ -24,7 +24,8 @@ namespace RaintileOptions
         public List<CheckBox> Boxes;   // stores: one switch per store
         public TextBox Text;
         public Button Swatch, Button, Clear;
-        public Button[] Buttons, Clears;   // pad: the two fields and their clear buttons
+        public Button[] Buttons, Clears;   // pad: the fields and their clear buttons (PadSlots)
+        public FrameworkElement[] Slots;   // pad: each field with its clear button
         public Control Input;   // text, font, category, secret, choice
         public ComboBox Area, Monitor;
         public NumberField Num;
@@ -389,18 +390,21 @@ namespace RaintileOptions
             return rows;
         }
 
-        // Gamepad buttons (GamepadToggle, GamepadConfirm...): two fields as the
-        // keys of the Keyboard page, the button's glyph in each; the second one,
-        // when set, is held together with the first. Clicked (mouse, keys) a
-        // field opens the dial of the buttons around it, pressed with the pad it
-        // waits for the next button of the pad (PadDial.cs).
+        // Gamepad buttons (GamepadToggle, GamepadConfirm...): fields as the
+        // keys of the Keyboard page, the button's glyph in each; the buttons of
+        // all of them are held together. Two fields, and as many as there are
+        // buttons plus an empty one for one more, up to PadSlots. Clicked (mouse,
+        // keys) a field opens the dial of the buttons around it, pressed with
+        // the pad it waits for the next button of the pad (PadDial.cs).
+        const int PadSlots = 4;
+
         UIElement NewPadControl(string key)
         {
             var kp = NewPanel(Orientation.Horizontal);
             kp.HorizontalAlignment = HorizontalAlignment.Right;
-            var c = new Ctl { Kind = "pad", Buttons = new Button[2], Clears = new Button[2] };
+            var c = new Ctl { Kind = "pad", Buttons = new Button[PadSlots], Clears = new Button[PadSlots], Slots = new FrameworkElement[PadSlots] };
             ctl[key] = c;
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < PadSlots; i++)
             {
                 int slot = i;
                 var sp = NewPanel(Orientation.Horizontal);
@@ -411,6 +415,7 @@ namespace RaintileOptions
                 AddTo(kp, sp);
                 c.Buttons[i] = b;
                 c.Clears[i] = clear;
+                c.Slots[i] = sp;
                 b.Click += (s, e) =>
                 {
                     if (padMode) StartPadCapture(key, slot);
@@ -423,14 +428,12 @@ namespace RaintileOptions
         }
 
         // The buttons of a pad setting: "BACK START" -> BACK, START (as the
-        // helper reads them; more than two stay, after the two fields)
+        // helper reads them; more than PadSlots stay, after the fields)
         static List<string> PadButtons(string value)
         {
             return Regex.Split((value ?? "").ToUpperInvariant(), @"[\s+|,]+").Where(x => x != "").Distinct().ToList();
         }
 
-        // The button of one field: the other keeps its own (an empty first field
-        // takes the second one's)
         // The value of a pad field: a setting, or the pad shortcut of the tile
         // being edited (TilePadKey: PadKey= of the tile, Categories.cs)
         const string TilePadKey = "@TilePadKey";
@@ -451,12 +454,14 @@ namespace RaintileOptions
             SetChanged(currentFile);
         }
 
+        // The button of one field: the others keep theirs (the same button in
+        // another field leaves it; an emptied field closes up)
         void SetPadSlot(string key, int slot, string button)
         {
             var list = PadButtons(PadValue(key));
-            while (list.Count < 2) list.Add("");
+            while (list.Count < PadSlots) list.Add("");
+            for (int i = 0; i < list.Count; i++) if (i != slot && button != "" && list[i] == button) list[i] = "";
             list[slot] = button;
-            if (button != "" && list[1 - slot] == button) list[1 - slot] = "";
             SetPadValue(key, string.Join(" ", list.Where(x => x != "")));
             ShowPadSlots(key);
         }
@@ -466,8 +471,10 @@ namespace RaintileOptions
             Ctl c;
             if (!ctl.TryGetValue(key, out c) || c.Kind != "pad") return;
             var list = PadButtons(PadValue(key));
-            for (int i = 0; i < 2; i++)
+            int shown = Math.Max(2, Math.Min(PadSlots, list.Count + 1));
+            for (int i = 0; i < PadSlots; i++)
             {
+                c.Slots[i].Visibility = i < shown ? Visibility.Visible : Visibility.Collapsed;
                 string b = i < list.Count ? list[i] : "";
                 c.Buttons[i].Content = NewPadFace(b);
                 string name;
@@ -490,7 +497,7 @@ namespace RaintileOptions
                 var others = mine == "" ? new List<string>() : pads.Where(o => o.Key != kv.Key && combo(o.Key) == mine)
                     .Select(o => { if (o.Key == TilePadKey) return "the pad shortcut of the tile being edited"; Page pg; var it = Schema.ItemOf(o.Key, out pg); return it != null ? it.Label : o.Key; }).ToList();
                 var list = PadButtons(PadValue(kv.Key));
-                for (int i = 0; i < 2; i++)
+                for (int i = 0; i < PadSlots; i++)
                 {
                     var b = kv.Value.Buttons[i];
                     if (b == padCaptureField) continue;

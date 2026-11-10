@@ -296,7 +296,7 @@ namespace RaintileOptions
                     new Item { Kind = "key", Key = "NavSearch", Label = "Search", Help = "" },
                 } },
             } },
-            new Page { Id = "gamepad", Switch = "Gamepad", Title = "Gamepad", Icon = 0xE7FC, Desc = "Xbox and compatible (XInput) controllers, read by a small background helper. Click a button and pick the new one on the dial, or press A on it and then the new button on the pad. With a second button, both are held together.", Groups = new List<Group>
+            new Page { Id = "gamepad", Switch = "Gamepad", Title = "Gamepad", Icon = 0xE7FC, Desc = "Xbox and compatible (XInput) controllers, read by a small background helper. Click a button and pick the new one on the dial, or press A on it and then the new button on the pad. With more buttons (up to 4), all are held together.", Groups = new List<Group>
             {
                 new Group { Title = "Controller", Help = null, Items = new List<Item>
                 {

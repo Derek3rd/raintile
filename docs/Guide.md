@@ -150,6 +150,8 @@ Xbox and compatible controllers (XInput). Every action has its buttons, set in O
 
 **On-screen keyboard**: `GamepadSearch` opens the search with a keyboard at the bottom of the screen (letters, digits, `-` and `.`, Delete, Space, Done). The moves move on it, `GamepadConfirm` (`A`) types the key, `GamepadDelete` (`X`) deletes, `GamepadDone` (`Start`, or the *Done* key) closes it and keeps the results (the first one highlighted, `A` launches it), `GamepadBack` (`B`) closes the search. The keys can be clicked with the mouse too.
 
+**Legend** (`GamepadLegend=1`, Options > Keybindings > Gamepad > *Button legend*): after a button of the pad, a small bar at the bottom of the launcher shows what the buttons do there, with the buttons you chose: *Launch*, *Search*, *Category*, *Options*, *Close* on the grid; *Launch*, *Keyboard*, *Filter*, *Close the search* in the results; *Type*, *Delete*, *Done*, *Close* over the on-screen keyboard (the bar goes above it). The moves are left out. It goes when the mouse moves or a key of the keyboard is used, and comes back with the next button of the pad.
+
 **Buttons held together**: an action can have one button or more (up to four in the Options window, any number in `Settings.inc`, separated by spaces), held together: the action counts when the last one is pressed, and while they are held their buttons do nothing else. A button that is also part of another action's pair counts when it is released, and only if the pair was not completed meanwhile: `Start` alone is *Done* on release, so `Back` + `Start` still opens and closes the launcher. The same buttons on two actions: only the first one in the table acts (the Options window marks both in red).
 
 **Choosing the buttons** (Options > Keybindings > Gamepad): each action has one field, like the keys of the Keyboard page, with the glyphs of its buttons (`LB + A`), up to four held together. Click the field (or press `Enter` on it) and a dial of the buttons opens around it, the ones of the action lit: a click on a button, or the arrows and `Enter`, puts it in or takes it out; a button of the pad pressed while it is open does the same; `Esc` or a click elsewhere closes it. With the controller, press `A` on the field and then hold the new buttons together: when you release them they are the action's (any button, `B` and `Start` too). Moving the mouse, a key or 5 seconds without a button stop waiting. The `x` after the field empties it. The buttons that drive the Options window itself (below) stay the same.
@@ -158,7 +160,7 @@ Rainmeter cannot read controllers, so a small background helper does it (`Script
 
 The [Options window](#options-window) can be used with the controller too.
 
-Settings: `Gamepad=0` turns it off (in the Options window too); the buttons of each action in the table (`A B X Y LB RB LT RT BACK START LS RS UP DOWN LEFT RIGHT`, held together when there are more, empty for none), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`. The same helper follows the launcher's [focus](#focus) (and `AutoHide`), the play time, the Dashboard data, the docked edge and the Steam downloads, so it runs with `Gamepad=0` too.
+Settings: `Gamepad=0` turns it off (in the Options window too); the buttons of each action in the table (`A B X Y LB RB LT RT BACK START LS RS UP DOWN LEFT RIGHT`, held together when there are more, empty for none), `GamepadDeadZone`, `GamepadRepeatDelay`, `GamepadRepeatRate`, `GamepadLegend`. The same helper follows the launcher's [focus](#focus) (and `AutoHide`), the play time, the Dashboard data, the docked edge and the Steam downloads, so it runs with `Gamepad=0` too.
 
 ### Focus
 
@@ -757,7 +759,7 @@ Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Contai
 
 ### Gamepad
 
-See [Gamepad](#gamepad): `Gamepad`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms), and the buttons of the actions (one, or several held together; empty = none): `GamepadToggle` (`BACK START`), `GamepadUp` / `GamepadDown` / `GamepadLeft` / `GamepadRight` (the D-pad), `GamepadConfirm` (`A`), `GamepadBack` (`B`), `GamepadPrevCategory` / `GamepadNextCategory` (`LB` / `RB`), `GamepadSearch` (`Y`), `GamepadDelete` (`X`), `GamepadDone` (`START`), `GamepadPrevChip` / `GamepadNextChip` (`LT` / `RT`), `GamepadOptions` (`RS`).
+See [Gamepad](#gamepad): `Gamepad`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms), `GamepadLegend` (1 = the legend of the buttons while the pad is in use), and the buttons of the actions (one, or several held together; empty = none): `GamepadToggle` (`BACK START`), `GamepadUp` / `GamepadDown` / `GamepadLeft` / `GamepadRight` (the D-pad), `GamepadConfirm` (`A`), `GamepadBack` (`B`), `GamepadPrevCategory` / `GamepadNextCategory` (`LB` / `RB`), `GamepadSearch` (`Y`), `GamepadDelete` (`X`), `GamepadDone` (`START`), `GamepadPrevChip` / `GamepadNextChip` (`LT` / `RT`), `GamepadOptions` (`RS`).
 
 ### Search
 

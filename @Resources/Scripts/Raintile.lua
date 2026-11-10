@@ -4233,6 +4233,7 @@ local function render(menu)
 		SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	end
 	frame()
+	if M.padMode then M.renderLegend() end
 end
 
 -- Click on a chip: All clears the filter, the others turn on and off. The
@@ -4741,6 +4742,13 @@ function Initialize()
 	V.TileKeysConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\TileKeys'
 	-- tile hot keys: always (Always), or only while the launcher is open (Open)
 	V.TileKeysOpen = SKIN:GetVariable('TileKeysWhen', 'Always'):lower() == 'open'
+	-- the gamepad's legend (M.renderLegend) and the buttons it shows
+	V.PadLegend = num('Gamepad', 1) ~= 0 and num('GamepadLegend', 1) ~= 0
+	V.PadKeys = {}
+	for _, a in ipairs({ 'Confirm', 'Back', 'PrevCategory', 'NextCategory', 'Search', 'Delete', 'Done', 'PrevChip', 'NextChip', 'Options' }) do
+		V.PadKeys[a] = SKIN:GetVariable('Gamepad' .. a, '')
+	end
+	M.legendKey = nil
 	V.TypingConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Typing'
 	V.FilterBar = num('FilterBar', 1) ~= 0
 	V.FilterStores = num('FilterStores', 1) ~= 0
@@ -5830,7 +5838,11 @@ end
 
 function HoverTile(slot, mx, my)
 	M.picked = nil
+	-- (the mouse moved: the pad's legend goes; a tile coming under a still
+	-- mouse, the grid scrolled by the pad, keeps it)
+	local last = M.mouse
 	M.mouse = { tonumber(mx), tonumber(my) }
+	if last and (last[1] ~= M.mouse[1] or last[2] ~= M.mouse[2]) then M.keyInput() end
 	if M.more.open or power.open then return end
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
@@ -6511,6 +6523,7 @@ end
 -- Moves the highlight by dx columns and dy rows, scrolling the grid just
 -- enough to keep it visible.
 function Nav(dx, dy)
+	M.keyInput()
 	if not ready or launching or not visible then return end
 	if osk.open then oskMove(dx, dy) return end
 	if #cur().tiles == 0 then return end
@@ -6574,6 +6587,7 @@ end
 
 -- Launches the highlighted tile (or, if there is none, highlights the first).
 function Confirm()
+	M.keyInput()
 	dbg(string.format('Confirm: ready=%s launching=%s visible=%s hover=%d on=%s', tostring(ready),
 		tostring(launching ~= nil), tostring(visible), hover.idx, tostring(hover.on)))
 	if not ready or launching or not visible then return end
@@ -6589,6 +6603,7 @@ end
 
 -- Previous (-1) or next (+1) category, wrapping around.
 function NextCategory(delta)
+	M.keyInput()
 	if not ready or launching or not visible then return end
 	if M.ringOn() then
 		local list = M.ringCats()
@@ -6743,6 +6758,7 @@ local function runSearch(text)
 end
 
 function SearchOpen()
+	M.keyInput()
 	if not ready or launching or not visible or typing then return end
 	-- the keys arrive only with the focus, the gamepad's through Pad(): here
 	-- without it, this is a click on the bar, which gives the launcher the
@@ -6771,6 +6787,7 @@ end
 
 -- A key from the Typing mini-skin: a character, or BACK, ENTER, ESC
 function TypeKey(key)
+	M.keyInput()
 	if not ready or not visible or not typing then return end
 	if key == 'ENTER' then
 		stopTyping()
@@ -6803,14 +6820,19 @@ end
 -- Done key keeps the results, GamepadBack (B) closes the search. The buttons
 -- are the helper's (Helper.ps1). The mouse can click its keys.
 
-renderOsk = function()
+-- Where the keyboard is: its key size, gap, padding and box (also the
+-- legend's place, above it: M.renderLegend)
+function M.oskBox()
 	local k = math.floor(V.MenuH * 1.15)
 	local gap = 6
 	local pad = 14
 	local w = 10 * k + 9 * gap + 2 * pad
 	local h = 5 * k + 4 * gap + 2 * pad
-	local x0 = math.floor((V.ScreenW - w) / 2)
-	local y0 = math.floor(V.ScreenH - V.PadY - h - 12)
+	return k, gap, pad, math.floor((V.ScreenW - w) / 2), math.floor(V.ScreenH - V.PadY - h - 12), w, h
+end
+
+renderOsk = function()
+	local k, gap, pad, x0, y0, w, h = M.oskBox()
 	set('OskBg', 'X', tostring(x0))
 	set('OskBg', 'Y', tostring(y0))
 	set('OskBg', 'Shape', string.format('Rectangle 0,0,%d,%d,14 | Fill Color 18,18,24,235 | StrokeWidth 1 | Stroke Color %s',
@@ -6965,11 +6987,145 @@ function Pad(name, a, b)
 	local f = ({ Nav = Nav, Confirm = Confirm, Escape = Escape, NextCategory = NextCategory,
 		PadSearch = PadSearch, PadStart = PadStart, PadOptions = PadOptions, PadX = PadX, PadChip = PadChip,
 		PadTile = M.padTile })[name]
-	if f then f(a, b) end
+	if not f then return end
+	-- (M.inPad: the functions it calls know the pad, not a key, called them)
+	M.padMode, M.inPad = true, true
+	f(a, b)
+	M.inPad = false
+	M.renderLegend()
+end
+
+-- Gamepad legend (GamepadLegend=1) -----------------------------------------------
+-- At the bottom of the launcher (over the on-screen keyboard while it is
+-- open), what the pad's buttons do now, with the buttons of the settings; the
+-- moves are left out (the stick and the D-pad are plain). It shows from a
+-- button of the pad (Pad()) until the mouse moves onto a tile or a key of the
+-- keyboard acts (M.keyInput); PadLegend* meters of Raintile.ini.
+M.LEGEND_ITEMS = 6
+M.padMode = false
+
+-- "BACK START" -> "Back+Start", "a" -> "A"
+function M.padLabel(text)
+	local names = { BACK = 'Back', START = 'Start', UP = 'Up', DOWN = 'Down', LEFT = 'Left', RIGHT = 'Right' }
+	local parts = {}
+	for b in text:upper():gmatch('[^%s+|,]+') do parts[#parts + 1] = names[b] or b end
+	return table.concat(parts, '+')
+end
+
+-- What the buttons do in the launcher as it is: { key, label } (a button
+-- without buttons in the settings is left out)
+function M.legendItems()
+	local list = {}
+	local function add(actions, label)
+		local keys = {}
+		for _, a in ipairs(actions) do
+			local b = trim(V.PadKeys[a] or '')
+			if b ~= '' then keys[#keys + 1] = M.padLabel(b) end
+		end
+		if #keys > 0 then list[#list + 1] = { key = table.concat(keys, ' / '), label = label } end
+	end
+	if power.open or M.more.open then
+		add({ 'Back' }, 'Close')
+	elseif osk.open then
+		add({ 'Confirm' }, 'Type')
+		add({ 'Delete' }, 'Delete')
+		add({ 'Done' }, 'Done')
+		add({ 'Back' }, 'Close')
+	elseif searchCat then
+		add({ 'Confirm' }, 'Launch')
+		add({ 'Search' }, 'Keyboard')
+		if #filter.chips > 0 then add({ 'PrevChip', 'NextChip' }, 'Filter') end
+		add({ 'Back' }, 'Close the search')
+	else
+		add({ 'Confirm' }, 'Launch')
+		add({ 'Search' }, 'Search')
+		add({ 'PrevCategory', 'NextCategory' }, 'Category')
+		add({ 'Options' }, 'Options')
+		add({ 'Back' }, 'Close')
+	end
+	while #list > M.LEGEND_ITEMS do table.remove(list) end
+	return list
+end
+
+-- A key or the mouse acted: the legend goes (until the next button of the pad)
+function M.keyInput()
+	if M.inPad or not M.padMode then return end
+	M.padMode = false
+	M.renderLegend()
+end
+
+-- Places and shows the legend, or hides it; only when what it shows changed
+function M.renderLegend()
+	local on = V.PadLegend and M.padMode and visible and ready
+	local items = on and M.legendItems() or {}
+	local sig = {}
+	for _, it in ipairs(items) do sig[#sig + 1] = it.key .. '=' .. it.label end
+	local key = table.concat(sig, '|') .. (osk.open and '|osk' or '') .. '|' .. V.ScreenW .. 'x' .. V.ScreenH
+	if key == M.legendKey then return end
+	M.legendKey = key
+	local padX, padY, gap, chipPad = 12, 6, 18, 7
+	local x, h = padX, 0
+	local placed = {}
+	for i = 1, M.LEGEND_ITEMS do
+		local it = items[i]
+		local chip, keyM, text = 'PadLegendChip' .. i, 'PadLegendKey' .. i, 'PadLegendText' .. i
+		if it then
+			set(keyM, 'Text', it.key)
+			set(text, 'Text', it.label)
+			local kw, kh = M.lineSize(keyM, it.key)
+			local lw, lh = M.lineSize(text, it.label)
+			local cw = kw + 2 * chipPad
+			placed[i] = { x = x, cw = cw, kh = kh }
+			x = x + cw + 6 + lw + gap
+			h = math.max(h, kh + 4, lh)
+		else
+			show(chip, false) show(keyM, false) show(text, false)
+		end
+	end
+	if #items == 0 then
+		show('PadLegendBg', false)
+		SKIN:Bang('!UpdateMeter', 'PadLegendBg')
+		SKIN:Bang('!Redraw')
+		return
+	end
+	local w = x - gap + padX
+	local bh = h + 2 * padY
+	local x0 = math.floor((V.ScreenW - w) / 2)
+	local y0 = math.floor(V.ScreenH - V.PadY - bh - 12)
+	if osk.open then
+		local _, _, _, _, oy = M.oskBox()
+		y0 = oy - bh - 8
+	end
+	local mid = y0 + math.floor(bh / 2)
+	set('PadLegendBg', 'X', tostring(x0))
+	set('PadLegendBg', 'Y', tostring(y0))
+	set('PadLegendBg', 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 18,18,24,220 | StrokeWidth 1 | Stroke Color %s',
+		w, bh, math.floor(bh / 2), V.HoverCategoryColor))
+	show('PadLegendBg', true)
+	for i, p in pairs(placed) do
+		local chip, keyM, text = 'PadLegendChip' .. i, 'PadLegendKey' .. i, 'PadLegendText' .. i
+		local ch = p.kh + 4
+		set(chip, 'X', tostring(x0 + p.x))
+		set(chip, 'Y', tostring(mid - math.floor(ch / 2)))
+		set(chip, 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 255,255,255,30 | StrokeWidth 0', p.cw, ch, math.floor(ch / 2)))
+		set(keyM, 'X', tostring(x0 + p.x + math.floor(p.cw / 2)))
+		set(keyM, 'Y', tostring(mid))
+		set(text, 'X', tostring(x0 + p.x + p.cw + 6))
+		set(text, 'Y', tostring(mid))
+		show(chip, true) show(keyM, true) show(text, true)
+	end
+	for _, m in ipairs({ 'PadLegendBg' }) do SKIN:Bang('!UpdateMeter', m) end
+	for i = 1, M.LEGEND_ITEMS do
+		SKIN:Bang('!UpdateMeter', 'PadLegendChip' .. i)
+		SKIN:Bang('!UpdateMeter', 'PadLegendKey' .. i)
+		SKIN:Bang('!UpdateMeter', 'PadLegendText' .. i)
+	end
+	SKIN:Bang('!Redraw')
 end
 
 -- Esc: closes the search if open, otherwise hides the launcher.
 function Escape()
+	M.keyInput()
 	if not ready then return end
 	if closePower() then return end
 	if M.closeMore() then return end

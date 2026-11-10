@@ -331,4 +331,43 @@ function T.tile_pad_keys()
 	t.clean(s)
 end
 
+-- The gamepad's legend (GamepadLegend): it shows with a button of the pad,
+-- with the buttons of the settings, what they do there (the keyboard's
+-- buttons with it open), and goes with a key or the mouse moving
+function T.pad_legend()
+	local function legend(s)
+		local bg = s.meters['padlegendbg']
+		if bg.hidden then return nil end
+		local list = {}
+		for i = 1, 6 do
+			local k = s.meters['padlegendkey' .. i]
+			if not k.hidden then list[#list + 1] = k:opt('Text', '') .. '=' .. s.meters['padlegendtext' .. i]:opt('Text', '') end
+		end
+		return table.concat(list, ' ')
+	end
+	local s = opened({ GamepadSearch = 'LB Y', GamepadOptions = '' })
+	t.eq(legend(s), nil, 'a legend before any button of the pad')
+	s:call("Pad('Nav',1,0)")
+	t.eq(legend(s), 'A=Launch LB+Y=Search LB / RB=Category B=Close', 'the legend of the grid')
+	-- the mouse still (the grid scrolled under it): it stays; moved: it goes
+	s:call("HoverTile(1, '10', '10')")
+	s:call("Pad('Nav',1,0)")
+	s:call("HoverTile(2, '10', '10')")
+	t.ok(legend(s) ~= nil, 'a tile coming under the still mouse took the legend away')
+	s:call("HoverTile(2, '40', '10')")
+	t.eq(legend(s), nil, 'the mouse moved and the legend stayed')
+	s:call("Pad('PadSearch')")
+	t.eq(legend(s), 'A=Type X=Delete Start=Done B=Close', 'the legend of the on-screen keyboard')
+	t.ok(tonumber(s.meters['padlegendbg']:opt('Y', '0')) < tonumber(s.meters['oskbg']:opt('Y', '0')), 'the legend is not over the keyboard')
+	s:call("Pad('PadStart')")
+	s:call("Pad('Escape')")
+	s:call('Nav(1,0)')
+	t.eq(legend(s), nil, 'a key of the keyboard and the legend stayed')
+	t.clean(s)
+	s = opened({ GamepadLegend = '0' })
+	s:call("Pad('Nav',1,0)")
+	t.eq(legend(s), nil, 'a legend with GamepadLegend=0')
+	t.clean(s)
+end
+
 return T

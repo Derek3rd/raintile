@@ -46,17 +46,6 @@ Test 'Options: IsPartialNumber lets through only what can still be a number' {
     Assert-True (-not (Invoke-Options 'IsPartialNumber' @('0123456789', '7.5'))) 'decimal point taken by a box without it'
 }
 
-Test 'Options: the carousel takes only odd numbers, the next one within the range' {
-    Assert-Equal (Invoke-Options 'OddNumber' @([double]5, [double]1, [double]12, $false)) ([double]5) 'odd kept'
-    Assert-Equal (Invoke-Options 'OddNumber' @([double]4, [double]1, [double]12, $false)) ([double]5) 'even: the next one'
-    Assert-Equal (Invoke-Options 'OddNumber' @([double]4, [double]1, [double]12, $true)) ([double]3) 'even, slider moved down'
-    Assert-Equal (Invoke-Options 'OddNumber' @([double]12, [double]1, [double]12, $false)) ([double]11) 'the maximum, even'
-    Assert-Equal (Invoke-Options 'OddNumber' @([double]2, [double]1, [double]8, $true)) ([double]1) 'down to the minimum'
-    Assert-Equal (Invoke-Options 'OddNumber' @([double]6.4, [double]1, [double]12, $false)) ([double]7) 'a slider between two steps'
-    Assert-True (Invoke-Options 'IsEven' @([double]8)) '8 not even'
-    Assert-True (-not (Invoke-Options 'IsEven' @([double]7))) '7 even'
-}
-
 Test 'Options: a tile takes its own Size or the TileSize of All tiles, as the launcher' {
     $asm = $optionsApp.Assembly
     $core = $asm.GetType('RaintileOptions.Core')

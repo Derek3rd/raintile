@@ -276,9 +276,7 @@ def check_schema_layout(schema):
     conds += [('page ' + m.group(1), m.group(2)) for m in re.finditer(r'new Page \{ Id = "([a-z]+)", When = "([^"]*)"', schema)]
     # a group: checked as its first setting (the switch must come before it)
     conds += [(m.group(2), m.group(1)) for m in re.finditer(r'new Group \{ Title = [^\n]*?When = "([^"]*)", Items = new List<Item>\n\s*\{\n\s*new Item \{ Kind = "[a-z]+", Key = "([A-Za-z0-9]+)"', schema)]
-    # Odd (only odd numbers while it holds): the same conditions, in any order
-    odd = [(m.group(1), m.group(2)) for m in re.finditer(r'Key = "([A-Za-z0-9]+)"[^\n]*Odd = "([^"]*)"', schema)]
-    for key, when in conds + odd:
+    for key, when in conds:
         for cond in when.split(';'):
             name, _, values = cond.partition('=')
             if name not in items:
@@ -289,8 +287,6 @@ def check_schema_layout(schema):
             for v in values.split('|'):
                 if allowed and v not in allowed:
                     fail('Options schema: When of %s: %s cannot be %s (%s)' % (key, name, v, ', '.join(allowed)))
-            if (key, when) in odd:
-                continue
             if page_of.get(name) == page_of.get(key) and pages[page_of[key]].index(name) > pages[page_of[key]].index(key):
                 fail('Options schema: %s switches %s but comes after it on its page' % (name, key))
     # cards: a switch is a bool and the first of its group; a title never repeats

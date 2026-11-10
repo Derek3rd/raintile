@@ -230,11 +230,6 @@ list, or renames the entry picked in a combo. A field never has a bin.
   start (only where the value can be negative: a slider whose minimum is below 0, a
   widget's number; never a size), one decimal point (a comma becomes it). The on-screen keyboard shows a number pad on them with the same rule
   (`NumericChars`): the keys that cannot type there are dimmed and skipped.
-- A count that must be odd while other settings hold (the carousel: `Odd` in the
-  schema, `odd` of `NewNumberField`) steps its slider over the even numbers
-  (`OddNumber`), and an even number typed or already in the file gets the red border
-  and is not saved; when those settings come to hold, an even value goes to the next
-  odd one (`FixOdd`). The help of the setting that turns the rule on says so.
 - With the gamepad every control is a stop the ring passes over, a slider too: `A`
   starts changing it (the ring goes, its thumb turns accent), left and right change
   it, `A` keeps the value and `B` puts it back. Left and right never change a value

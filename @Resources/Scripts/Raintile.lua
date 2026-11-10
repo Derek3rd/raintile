@@ -552,7 +552,7 @@ end
 -- results, Favorites and Recent stay one cell per tile.
 local function packTiles(c)
 	local P = V.Horizontal and c.ny or c.nx
-	local cell, count, at, lines, first, even = {}, {}, {}, 0, 0, false
+	local cell, count, at, lines, first = {}, {}, {}, 0, 0
 	local function free(l, x, ls, cs)
 		for a = l, l + ls - 1 do
 			local row = cell[a]
@@ -579,11 +579,9 @@ local function packTiles(c)
 		end
 		at[idx] = { l, placed, ls, cs }
 		lines = math.max(lines, l + ls)
-		if ls % 2 == 0 then even = true end
 		while (count[first] or 0) >= P do first = first + 1 end
 	end
-	-- even: a tile of an even number of lines, which the carousel cannot centre
-	c.pack = { at = at, cell = cell, lines = lines, even = even }
+	c.pack = { at = at, cell = cell, lines = lines }
 end
 
 -- Reads a category file (Categories\<file>.ini).
@@ -1802,20 +1800,19 @@ local function infinite()
 end
 
 -- Carousel (CenterSelection=1): the grid keeps the selected line (column, or
--- row when it scrolls vertically) in the middle; the wheel, the keys and the
--- gamepad move it by one tile. Only with an odd number of lines on screen and,
--- with tiles of more cells, all of them odd along the scroll: then the middle
--- is a whole line and offset stays a whole number. Otherwise (values written
--- by hand: Options refuses them) the category is a plain grid. Without
--- infinite scroll the ends come to the middle too, with empty room beside them.
+-- row when it scrolls vertically) in the middle of the screen; the wheel, the
+-- keys and the gamepad move it by one tile. offset = the selected line's
+-- middle - M.half(): with an even number of lines on screen, or a tile of an
+-- even number of them, a multiple of 1/2, and a half line shows at each side.
+-- Without infinite scroll the ends come to the middle too, with empty room
+-- beside them.
 function M.carousel(c)
 	c = c or cur()
-	if V.Wheel or not V.CenterSelection or not c.nx then return false end
-	if (V.Horizontal and c.nx or c.ny) % 2 == 0 then return false end
-	return not (c.pack and c.pack.even)
+	return not V.Wheel and V.CenterSelection and c.nx ~= nil
 end
 
--- Lines from the first on screen to the one in the middle (0: not a carousel)
+-- Lines from the first on screen to the middle of the screen (0: not a
+-- carousel); x.5 with an even number of them
 function M.half(c)
 	c = c or cur()
 	if not M.carousel(c) then return 0 end
@@ -1830,8 +1827,14 @@ end
 
 -- Brings a saved scroll position within the active category's limits; nil:
 -- the start (the first line at the top, or in the middle of the carousel).
+-- The carousel: a middle on a line or between two (a tile of an even size).
 local function normalizeOffset(o)
-	o = math.floor(o or 0 - M.half())
+	if M.carousel() then
+		local h = M.half()
+		o = math.floor(((o or 0 - h) + h) * 2 + 0.5) / 2 - h
+	else
+		o = math.floor(o or 0)
+	end
 	if infinite() then return o % lineCount() end
 	return math.min(math.max(M.minOffset(), o), maxOffset())
 end
@@ -6352,7 +6355,9 @@ local function navPacked(dx, dy, p)
 		-- another one (in the row of the highlight)
 		local h = from ~= 0 and p.at[from]
 		local x = h and math.min(math.max(hover.anchor or h[2], h[2]), h[2] + h[4] - 1) or 0
-		from, start = nearest(offset + M.half(), x)
+		-- (the line under the middle of the screen: of a tile of an even size,
+		-- the first of its two middle ones)
+		from, start = nearest(math.floor(offset + M.half()), x)
 		from = from or 0
 	end
 	local e = from ~= 0 and p.at[from]
@@ -6384,7 +6389,7 @@ local function navPacked(dx, dy, p)
 	else
 		-- no highlighted tile: the first visible one (the carousel: of the
 		-- line in the middle)
-		local l = offset + M.half()
+		local l = math.floor(offset + M.half())
 		for _ = 1, L do
 			if not inRange(l) then break end
 			idx, line = nearest(l, 0)
@@ -6396,7 +6401,8 @@ local function navPacked(dx, dy, p)
 	if not idx then return end -- at the edge: the highlight stays
 	local at = p.at[idx]
 	if carousel then
-		-- its middle line in the middle (it has an odd number of them)
+		-- its middle in the middle of the screen (between two lines when it
+		-- has an even number of them)
 		offset = line + (at[3] - 1) / 2 - M.half()
 	elseif line < offset then
 		offset = line
@@ -6453,7 +6459,7 @@ function M.navTiles(dx, dy)
 	if carousel then
 		-- the line in the middle, also with the mouse on another tile (in the
 		-- row of the highlight)
-		line = offset + M.half() + (V.Horizontal and dx or dy)
+		line = math.floor(offset + M.half() + 0.5) + (V.Horizontal and dx or dy)
 		cross = (hover.idx ~= 0 and (V.Horizontal and hover.ty or hover.tx) or 0) + (V.Horizontal and dy or dx)
 	elseif hover.idx ~= 0 then
 		line = (V.Horizontal and hover.tx or hover.ty) + (V.Horizontal and dx or dy)

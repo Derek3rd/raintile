@@ -22,6 +22,8 @@ Test 'spotify: times and covers' {
 Test 'spotify: commands and what Spotify gets' {
     Assert-Equal (Get-SpotifyMessage (ConvertFrom-SpotifyCommand 'playpause') 0 0) 'TOGGLE_PLAYING' 'play / pause'
     Assert-Equal (Get-SpotifyMessage (ConvertFrom-SpotifyCommand 'like') 0 0) 'TOGGLE_THUMBS_UP' 'heart'
+    Assert-Equal (Get-SpotifyMessage (ConvertFrom-SpotifyCommand 'shuffle') 0 0) 'TOGGLE_SHUFFLE' 'shuffle'
+    Assert-Equal (Get-SpotifyMessage (ConvertFrom-SpotifyCommand 'repeat') 0 0) 'TOGGLE_REPEAT' 'repeat'
     Assert-Equal (Get-SpotifyMessage (ConvertFrom-SpotifyCommand 'seek 50') 10 200) 'SET_POSITION 100:0.5' 'half way'
     Assert-Equal (Get-SpotifyMessage (ConvertFrom-SpotifyCommand 'step 10') 90 200) 'SET_POSITION 100:0.5' '10 s on'
     Assert-Equal (Get-SpotifyMessage (ConvertFrom-SpotifyCommand 'step -10') 5 200) 'SET_POSITION 0:0' 'not before the start'
@@ -32,9 +34,11 @@ Test 'spotify: commands and what Spotify gets' {
 }
 
 Test 'spotify: the song in the meters' {
-    $song = @{ Title = 'A "song" [live]'; Artist = 'Someone'; State = 'PLAYING'; Position = 50; Duration = 200; Liked = $true; Cover = ''; Note = '' }
+    $song = @{ Title = 'A "song" [live]'; Artist = 'Someone'; State = 'PLAYING'; Position = 50; Duration = 200; Liked = $true; Shuffle = $true; Repeat = 'ONE'; Cover = ''; Note = '' }
     $bang = Format-SpotifyBang $song 'CW3_' 'CW3' 'Raintile' @{ Text = 'T'; Accent = 'A' }
-    Assert-True ($bang.Contains('[!SetOption "CW3_Title" "Text" "A ''song'' (live)" "Raintile"]')) 'the title, safe in a bang'
+    Assert-True ($bang.Contains('[!SetOption "CW3_Cover" "ToolTipText" "A ''song'' (live) - Someone" "Raintile"]')) 'the title, safe in a bang'
+    Assert-True ($bang.Contains('[!SetOption "CW3_ShuffleGlyph" "FontColor" "A" "Raintile"]')) 'shuffle on'
+    Assert-True ($bang.Contains('[!SetOption "CW3_RepeatGlyph" "Text" "' + [char]0xE8ED + '" "Raintile"]')) 'repeat one'
     Assert-True ($bang.Contains('[!SetOption "CW3_Progress" "Formula" "25" "Raintile"]')) 'the progress'
     Assert-True ($bang.Contains('[!SetOption "CW3_LikeGlyph" "FontColor" "A" "Raintile"]')) 'a liked song in the accent colour'
     Assert-True ($bang.Contains('[!SetOption "CW3_PlayGlyph" "Text" "' + [char]0xE769 + '" "Raintile"]')) 'pause while playing'

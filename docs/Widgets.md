@@ -123,7 +123,7 @@ Bangs run when the widget's category comes on screen (the launcher opens on it, 
 
 ### OnFocus and OnBlur
 
-Bangs run when the highlight of the keys or the pad comes onto the widget's tile, and when it leaves it (another tile, the mouse moving, another category). `OnFocus` runs before Raintile looks for the tile's [parts](#parts-of-a-tile): a widget can show there what it shows on mouse hover, and the keys reach its parts. [`Spotify`](../widgets/Spotify) shows its controls this way:
+Bangs run when the highlight of the keys or the pad comes onto the widget's tile, and when it leaves it (another tile, the mouse moving, another category). `OnFocus` runs before Raintile looks for the tile's [parts](#parts-of-a-tile): a widget can show there what it shows on mouse hover (controls over a picture), and the keys reach its parts:
 
 ```ini
 OnFocus=[!ShowMeterGroup "#WIDGET:Cover#Ctl"][!Redraw]

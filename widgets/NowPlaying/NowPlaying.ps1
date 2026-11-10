@@ -291,7 +291,9 @@ function Read-Session {
     if ($script:round % 2 -eq 0 -or -not $script:song.Title) {
         $p = Wait-WinRT ($s.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])
         $k = $s.SourceAppUserModelId + '|' + $p.Title + '|' + $p.Artist + '|' + $p.AlbumTitle
-        if ($k -ne $script:key) { $script:key = $k; $script:cover = Save-Cover $p $k }
+        # (a browser gives the thumbnail a moment after the title: asked
+        # again while the song has none)
+        if ($k -ne $script:key -or -not $script:cover) { $script:key = $k; $script:cover = Save-Cover $p $k }
         $script:song.Title = [string]$p.Title
         $script:song.Artist = $(if ($p.Artist) { [string]$p.Artist } else { [string]$p.AlbumArtist })
     }

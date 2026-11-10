@@ -212,6 +212,12 @@ function T.gallery_audio_control()
 		t.ok(not parts[p .. name], name .. ' is a part (the keys go from row to row only)')
 	end
 	t.ok(g:find('KeyRightAction=[!WriteKeyValue Cmd Do "up 1"', 1, true), 'right on a row does not turn its volume up')
+	-- the highlight of a row takes its bar too
+	local hit
+	for _, r in ipairs(s:upvalue('M').partRects(w)) do if r[1] == p .. 'Hit1' then hit = r end end
+	local track = s.meters[(p .. 'Track1'):lower()]
+	local ty = s:number(track:opt('Y', '0'), 0)
+	t.ok(hit and hit[3] + hit[5] >= ty + track:GetH(), 'the row\'s part ends above its bar')
 	local api = s:upvalue('M').widgetInfo(w)
 	t.ok(api.onShow and api.onShow:find('!CommandMeasure ' .. p .. 'Server "Run"', 1, true), 'OnShow does not start the script: ' .. tostring(api.onShow))
 	t.ok(api.onShow:find('cmd_' .. p .. 'Server.ini', 1, true) and api.onHide:find('Do quit', 1, true), 'OnShow/OnHide do not use the command file')

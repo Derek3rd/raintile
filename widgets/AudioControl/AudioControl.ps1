@@ -232,42 +232,87 @@ namespace RaintileAudio
     interface IAudioSessionEnumerator
     {
         void GetCount(out int count);
-        void GetSession(int index, out IAudioSessionControl session);
+        void GetSession(int index, out IntPtr session);
     }
 
-    [ComImport, Guid("F4B1A599-7266-4319-A8CA-E70ACB11E8CD"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IAudioSessionControl
+    // A program's session (IAudioSessionControl2 and ISimpleAudioVolume),
+    // called through its table of methods: the runtime's own casting of the
+    // session to those interfaces fails ("no such interface") on some PCs,
+    // while the session answers them (QueryInterface)
+    class RawSession
     {
-        void GetState(out int state);
-        void GetDisplayName([MarshalAs(UnmanagedType.LPWStr)] out string name);
-    }
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int GetInt(IntPtr self, out int value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int GetPtr(IntPtr self, out IntPtr value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int NoArg(IntPtr self);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int GetFloat(IntPtr self, out float value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int SetFloat(IntPtr self, float value, ref Guid context);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int SetInt(IntPtr self, int value, ref Guid context);
 
-    // (an interface of COM that extends another one lists the other's methods first)
-    [ComImport, Guid("BFB7FF88-7239-4FC9-8FA2-07C950BE9C6D"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IAudioSessionControl2
-    {
-        void GetState(out int state);
-        void GetDisplayName([MarshalAs(UnmanagedType.LPWStr)] out string name);
-        void SetDisplayName([MarshalAs(UnmanagedType.LPWStr)] string name, ref Guid context);
-        void GetIconPath([MarshalAs(UnmanagedType.LPWStr)] out string path);
-        void SetIconPath([MarshalAs(UnmanagedType.LPWStr)] string path, ref Guid context);
-        void GetGroupingParam(out Guid group);
-        void SetGroupingParam(ref Guid group, ref Guid context);
-        void RegisterAudioSessionNotification(IntPtr events);
-        void UnregisterAudioSessionNotification(IntPtr events);
-        void GetSessionIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string id);
-        void GetSessionInstanceIdentifier([MarshalAs(UnmanagedType.LPWStr)] out string id);
-        void GetProcessId(out int pid);
-        [PreserveSig] int IsSystemSoundsSession();
-    }
+        static readonly Guid Control2Id = new Guid("BFB7FF88-7239-4FC9-8FA2-07C950BE9C6D");
+        static readonly Guid SimpleVolumeId = new Guid("87CE5498-68D6-44E5-9215-6F071AE88845");
+        IntPtr control, volume;
 
-    [ComImport, Guid("87CE5498-68D6-44E5-9215-6F071AE88845"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface ISimpleAudioVolume
-    {
-        void SetMasterVolume(float level, ref Guid context);
-        void GetMasterVolume(out float level);
-        void SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, ref Guid context);
-        void GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+        // (the methods' places: IUnknown 0-2; IAudioSessionControl 3 GetState,
+        // 4 GetDisplayName ... 11; IAudioSessionControl2 14 GetProcessId,
+        // 15 IsSystemSoundsSession; ISimpleAudioVolume 3 SetMasterVolume,
+        // 4 GetMasterVolume, 5 SetMute, 6 GetMute)
+        static T Method<T>(IntPtr obj, int slot) where T : class
+        {
+            IntPtr table = Marshal.ReadIntPtr(obj);
+            return (T)(object)Marshal.GetDelegateForFunctionPointer(Marshal.ReadIntPtr(table, slot * IntPtr.Size), typeof(T));
+        }
+
+        static void Check(int hr) { if (hr < 0) Marshal.ThrowExceptionForHR(hr); }
+
+        // From the session the enumerator gave (its reference is taken over);
+        // null with why in 'error' when it does not answer
+        public static RawSession From(IntPtr session, out string error)
+        {
+            error = null;
+            try
+            {
+                IntPtr c, v;
+                Guid g = Control2Id;
+                int hr = Marshal.QueryInterface(session, ref g, out c);
+                if (hr != 0) { error = "IAudioSessionControl2: 0x" + hr.ToString("X8"); return null; }
+                g = SimpleVolumeId;
+                hr = Marshal.QueryInterface(session, ref g, out v);
+                if (hr != 0) { Marshal.Release(c); error = "ISimpleAudioVolume: 0x" + hr.ToString("X8"); return null; }
+                return new RawSession { control = c, volume = v };
+            }
+            finally { Marshal.Release(session); }
+        }
+
+        public void Release()
+        {
+            if (control != IntPtr.Zero) Marshal.Release(control);
+            if (volume != IntPtr.Zero) Marshal.Release(volume);
+            control = volume = IntPtr.Zero;
+        }
+
+        public int State { get { int v; Check(Method<GetInt>(control, 3)(control, out v)); return v; } }
+        public int ProcessId { get { int v; Check(Method<GetInt>(control, 14)(control, out v)); return v; } }
+        public bool IsSystem { get { return Method<NoArg>(control, 15)(control) == 0; } }
+        public string DisplayName
+        {
+            get
+            {
+                IntPtr p;
+                if (Method<GetPtr>(control, 4)(control, out p) < 0 || p == IntPtr.Zero) return "";
+                try { return Marshal.PtrToStringUni(p); }
+                finally { Marshal.FreeCoTaskMem(p); }
+            }
+        }
+        public float Level
+        {
+            get { float v; Check(Method<GetFloat>(volume, 4)(volume, out v)); return v; }
+            set { Guid none = Guid.Empty; Check(Method<SetFloat>(volume, 3)(volume, value, ref none)); }
+        }
+        public bool Mute
+        {
+            get { int v; Check(Method<GetInt>(volume, 6)(volume, out v)); return v != 0; }
+            set { Guid none = Guid.Empty; Check(Method<SetInt>(volume, 5)(volume, value ? 1 : 0, ref none)); }
+        }
     }
 
     [ComImport, Guid("F8679F50-850A-41CF-9C72-430F290290C8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -412,7 +457,9 @@ namespace RaintileAudio
             finally { CloseHandle(h); }
         }
 
-        class Session { public string Key, Name, Exe; public bool System; public ISimpleAudioVolume Volume; }
+        class Session { public string Key, Name, Exe; public bool System; public RawSession Volume; }
+
+        static void Free(List<Session> list) { foreach (Session s in list) s.Volume.Release(); }
 
         // The sessions of the default device's programs (not those ended),
         // keyed by program: a program's sessions (a browser has several) are one
@@ -429,27 +476,24 @@ namespace RaintileAudio
             Skipped.Clear();
             for (int i = 0; i < count; i++)
             {
+                RawSession raw = null;
                 try
                 {
-                    IAudioSessionControl control;
-                    sessions.GetSession(i, out control);
-                    var control2 = control as IAudioSessionControl2;
-                    var volume = control as ISimpleAudioVolume;
-                    if (control2 == null || volume == null) { Skipped.Add(i + ": no IAudioSessionControl2 or ISimpleAudioVolume"); continue; }
-                    int state;
-                    control.GetState(out state);
-                    if (state == 2) continue;   // (expired)
-                    var s = new Session { Volume = volume, System = control2.IsSystemSoundsSession() == 0 };
+                    IntPtr session;
+                    sessions.GetSession(i, out session);
+                    string why;
+                    raw = RawSession.From(session, out why);
+                    if (raw == null) { Skipped.Add(i + ": " + why); continue; }
+                    if (raw.State == 2) { raw.Release(); continue; }   // (expired)
+                    var s = new Session { Volume = raw, System = raw.IsSystem };
                     if (s.System) { s.Key = "system"; s.Name = "System sounds"; s.Exe = ""; }
                     else
                     {
-                        int pid;
-                        control2.GetProcessId(out pid);
+                        int pid = raw.ProcessId;
                         s.Exe = ProcessPath(pid);
-                        if (s.Exe == null) { Skipped.Add(i + ": process " + pid + " not readable"); continue; }   // (the program is gone)
+                        if (s.Exe == null) { Skipped.Add(i + ": process " + pid + " not readable"); raw.Release(); continue; }   // (the program is gone)
                         s.Key = s.Exe.ToLowerInvariant();
-                        string name;
-                        control2.GetDisplayName(out name);
+                        string name = raw.DisplayName;
                         // (a name of the program's resources, "@%SystemRoot%\...": its description instead)
                         if (string.IsNullOrEmpty(name) || name.StartsWith("@"))
                         {
@@ -460,8 +504,13 @@ namespace RaintileAudio
                         s.Name = name.Trim();
                     }
                     list.Add(s);
+                    raw = null;
                 }
-                catch (Exception e) { Skipped.Add(i + ": " + e.Message); }
+                catch (Exception e)
+                {
+                    Skipped.Add(i + ": " + e.Message);
+                    if (raw != null) raw.Release();
+                }
             }
             return list;
         }
@@ -481,15 +530,16 @@ namespace RaintileAudio
             master.Active = false;
             list.Add(master);
             var programs = new Dictionary<string, Item>();
-            foreach (Session s in Sessions())
+            var sessions = Sessions();
+            try
             {
-                if (programs.ContainsKey(s.Key)) continue;
-                float level;
-                bool mute;
-                s.Volume.GetMasterVolume(out level);
-                s.Volume.GetMute(out mute);
-                programs[s.Key] = new Item { Key = s.Key, Name = s.Name, Exe = s.Exe, Volume = (int)Math.Round(level * 100), Mute = mute };
+                foreach (Session s in sessions)
+                {
+                    if (programs.ContainsKey(s.Key)) continue;
+                    programs[s.Key] = new Item { Key = s.Key, Name = s.Name, Exe = s.Exe, Volume = (int)Math.Round(s.Volume.Level * 100), Mute = s.Volume.Mute };
+                }
             }
+            finally { Free(sessions); }
             var apps = new List<Item>(programs.Values);
             apps.Sort(delegate (Item a, Item b)
             {
@@ -509,21 +559,25 @@ namespace RaintileAudio
                 else SetDeviceMuteNow(key.Substring(7), mute);
                 return;
             }
-            foreach (Session s in Sessions())
+            var sessions = Sessions();
+            try
             {
-                if (s.Key != key) continue;
-                if (percent >= 0)
+                foreach (Session s in sessions)
                 {
-                    s.Volume.SetMasterVolume(Math.Max(0, Math.Min(100, percent)) / 100f, ref NoContext);
-                    s.Volume.SetMute(false, ref NoContext);
+                    if (s.Key != key) continue;
+                    if (percent >= 0)
+                    {
+                        s.Volume.Level = Math.Max(0, Math.Min(100, percent)) / 100f;
+                        s.Volume.Mute = false;
+                    }
+                    else s.Volume.Mute = mute;
                 }
-                else s.Volume.SetMute(mute, ref NoContext);
             }
+            finally { Free(sessions); }
         }
 
-        // Core Audio from a thread of the multithreaded apartment: from the
-        // single-threaded one of PowerShell a program's session does not give
-        // its other interfaces (IAudioSessionControl2, ISimpleAudioVolume)
+        // Core Audio from a thread of the multithreaded apartment, as it asks
+        // (PowerShell's own thread is single-threaded)
         static T Mta<T>(Func<T> work)
         {
             if (Thread.CurrentThread.GetApartmentState() == ApartmentState.MTA) return work();

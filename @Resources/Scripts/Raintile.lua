@@ -3008,28 +3008,9 @@ function M.widgetHooks(c)
 			end
 		end
 	end
-	M.keyFocus(nil)
 	run(M.hookCat, 'onHide')
 	M.hookCat = c
 	run(c, 'onShow')
-end
-
--- The tile the highlight of the keys or the pad is on (M.partArrive): a
--- custom widget's OnFocus= runs when it comes onto its tile, OnBlur= when it
--- leaves it (another tile, the mouse moving, another category). OnFocus runs
--- before the parts are looked for: a widget can show parts the mouse shows
--- on hover (Spotify's controls), and the keys reach them.
-function M.keyFocus(t)
-	if M.keyFocused == t then return end
-	local old = M.keyFocused
-	M.keyFocused = t
-	local function run(w, key)
-		if not (w and w.widget and w.widget.kind == 'custom') then return end
-		local a = M.widgetInfo(w)[key]
-		if a and a ~= '' then SKIN:Bang(a) end
-	end
-	run(old, 'onBlur')
-	run(t, 'onFocus')
 end
 
 -- New data from a widget: its rows read again
@@ -3396,8 +3377,6 @@ function D.customWidgetText(t, i, w, h)
 					:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end))
 				if key == 'onshow' then api.onShow = v
 				elseif key == 'onhide' then api.onHide = v
-				elseif key == 'onfocus' then api.onFocus = v
-				elseif key == 'onblur' then api.onBlur = v
 				elseif key == 'listy' and v ~= '' then
 					-- where the rows start, from the top of the tile (under a
 					-- title of the widget's own)
@@ -5865,10 +5844,7 @@ function HoverTile(slot, mx, my)
 	-- mouse, the grid scrolled by the pad, keeps it)
 	local last = M.mouse
 	M.mouse = { tonumber(mx), tonumber(my) }
-	if last and (last[1] ~= M.mouse[1] or last[2] ~= M.mouse[2]) then
-		M.keyInput()
-		M.keyFocus(nil)
-	end
+	if last and (last[1] ~= M.mouse[1] or last[2] ~= M.mouse[2]) then M.keyInput() end
 	if M.more.open or power.open then return end
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
@@ -6020,7 +5996,6 @@ end
 -- After Nav moved onto a widget with parts: onto its part nearest that side
 function M.partArrive(dx, dy)
 	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
-	M.keyFocus(t or nil)
 	M.kpart = nil
 	if not (t and t.widget and next(M.widgetParts(t))) then return end
 	local slot, name = M.slotOfTile(t), M.partEnter(t, dx, dy)

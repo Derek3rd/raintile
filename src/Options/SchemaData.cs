@@ -52,7 +52,7 @@ namespace RaintileOptions
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "choice", Key = "ScrollMode", Label = "Layout", Help = "Grid: rows and columns. Wheel: one line of square tiles on an arc (the thumbnails), the selected one in the middle and, if you like, as the launcher's backdrop; suggested docked. Each has its page below; the page of the other one is greyed out in the menu.", Choices = new List<string[]> { new[] { "Grid", "Grid" }, new[] { "Wheel", "Wheel" } } },
-                    new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last tile the first one comes back, when there are more than fit on screen (a tile never shows twice). A category can have its own (the category > All tiles)." },
+                    new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last tile the first one comes back, when there are more than fit on screen (a tile never shows twice). A category can have its own (Categories, the category: Infinite scroll)." },
                     new Item { Kind = "int", Key = "ScrollStep", Label = "Mouse wheel notch", Help = "Rows (or columns) it scrolls in the grid, tiles it turns in the wheel.", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "size", Key = "Gap", Label = "Space", Help = "Under the top row, and between the tiles of the grid.", Axis = "H" },
                 } },

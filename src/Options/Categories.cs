@@ -669,6 +669,10 @@ namespace RaintileOptions
             SetThumb(catIcon, icon);
             SetActionVisible(catIconDel, icon != null);
             catIconHint.Text = file != null ? "Default: Images\\" + GetListBase() + "\\icon.png" : "";
+            string inf = c != null ? Core.GetKey(c, "InfiniteScroll").Trim() : "";
+            SelectChoice(catInfinite, InfiniteChoice(inf));
+            SetActionVisible(catInfiniteReset, inf != "");
+            SetFormHelp(catInfiniteHint, "After the last tile the first one comes back, when there are more than fit on screen. Default: the setting of the Tiles page (" + (V("InfiniteScroll") == "0" ? "off" : "on") + ").");
             int i = catsList.SelectedIndex;
             catOpen.IsEnabled = catDel.IsEnabled = file != null;
             catUp.IsEnabled = file != null && i > 0;
@@ -1539,9 +1543,6 @@ namespace RaintileOptions
             catSizeRows.Show(Math.Min(8, span[1]).ToString(), 1);
             SetActionVisible(catSizeReset, key("TileSize") != "");
             catLogoSize.Show(key("IconSize"));
-            SelectChoice(catInfinite, InfiniteChoice(key("InfiniteScroll")));
-            SetActionVisible(catInfiniteReset, key("InfiniteScroll") != "");
-            SetFormHelp(catInfiniteHint, "After the last tile the first one comes back, when there are more than fit on screen. Default: the setting of the Tiles page (" + (V("InfiniteScroll") == "0" ? "off" : "on") + ").");
             SetActionVisible(gridColsReset, key("NX") != "");
             SetActionVisible(gridRowsReset, key("NY") != "");
             SetActionVisible(catLogoSizeReset, key("IconSize") != "");
@@ -1892,6 +1893,18 @@ namespace RaintileOptions
             var iconRow = NewFieldRow(catIcon, btnIcon, null);
             catIconHint = NewHelp("");
             AddTo(f, NewFormRow("Icon", iconRow, "In the menu, left of the name.", catIconHint, btnIconDel));
+            // InfiniteScroll= of its own: the default (the setting), on or off
+            catInfiniteReset = NewResetIcon("Back to the default (Tiles page)");
+            catInfinite = NewChoiceBox(new[] { new[] { "", "Default" }, new[] { "1", "On" }, new[] { "0", "Off" } }, "", v =>
+            {
+                string file = GetListFile();
+                if (loading || file == null) return;
+                Core.SetKey(Core.GetCategorySection(GetModel(file)), "InfiniteScroll", v);
+                SetChanged(file);
+                SetActionVisible(catInfiniteReset, v != "");
+            });
+            catInfiniteReset.Click += (s, e) => SelectChoice(catInfinite, "");   // SelectionChanged writes it
+            catInfiniteHint = FormHelp(AddTo(f, NewFormRow("Infinite scroll", catInfinite, "", null, catInfiniteReset)));
             var more = NewHelp("Grid, logo size, tile colour and background, framing and logo of all its tiles: open the category (double click) and choose All tiles, the first entry above its tiles.");
             more.Margin = T(0, Gap.Icon, 0, Gap.Text);
             AddTo(f, more);
@@ -2370,11 +2383,6 @@ namespace RaintileOptions
             var rowsRow = AddTo(af, NewFormRow("Rows", gridRows.Root, "", null, gridRowsReset));
             gridRowsHint = FormHelp(rowsRow);
             AddGridOnlyReason(rowsRow);
-            // infinite scroll of its own: the default (the setting), on or off
-            catInfiniteReset = NewResetIcon("Back to the default (Tiles page)");
-            catInfinite = NewChoiceBox(new[] { new[] { "", "Default" }, new[] { "1", "On" }, new[] { "0", "Off" } }, "", v => setCatKey("InfiniteScroll", v, catInfiniteReset));
-            catInfiniteReset.Click += (s, e) => SelectChoice(catInfinite, "");   // SelectionChanged writes it
-            catInfiniteHint = FormHelp(AddTo(af, NewFormRow("Infinite scroll", catInfinite, "", null, catInfiniteReset)));
             // cells of every tile without a size of its own (TileSize=, as Size= of a tile)
             Action<string> catSizeChanged = x =>
             {

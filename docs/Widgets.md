@@ -48,7 +48,7 @@ The `.ini` is written like a Rainmeter skin, but it is not a skin of its own: Ra
 - Coordinates start at the top left corner of the tile.
 - `[Rainmeter]`, `[Metadata]` and the `[Option:...]` sections are left out. `Name=` and `Information=` of `[Metadata]` are shown in the Options window.
 - **Section names get a prefix** (`[Read]` becomes `[CW11_Read]`): references written as `[Section]`, `[Section:...]` and `MeasureName=` are renamed by themselves; anywhere else (in bangs) write [`#WIDGET:Read#`](#variables-raintile-fills-in), or `#CURRENTSECTION#` in a section's own actions.
-- **Its `[Variables]`** are written in place of `#Name#` before the widget is added (so `!SetVariable` on one of them does not change the meters). Prefer names of your own (`MyClockColor`).
+- **Its `[Variables]`** are written in place of `#Name#` before the widget is added (so `!SetVariable` on one of them does not change the meters); their values can use [its settings](#settings-of-a-widget) (`#OPTION:<Name>#`) and the [variables Raintile fills in](#variables-raintile-fills-in). Prefer names of your own (`MyClockColor`).
 - The launcher has no update cycle of its own (`Update=-1`): while the widget is on screen, Raintile updates its measures and meters every `DashInterval` ms (1 s by default), and not at all while it is hidden. Work that should not run that often (reading files, starting a script) goes in [OnShow](#onshow-and-onhide), or in a RunCommand measure started with `!CommandMeasure` (updating it does not run it).
 - The file must be UTF-8 (or ANSI), not UTF-16.
 - When the file changes, refresh the skin: Raintile writes the launcher's widgets again.
@@ -75,7 +75,10 @@ OnShow=[!CommandMeasure #WIDGET:Read# "Run"]
 OnHide=
 List=list.txt
 ListY=
+WidgetOptionChoices=
 ```
+
+`WidgetOptionChoices=Devices|Mixer`: the values the tile's *Widget setting* ([`#WIDGETOPTION#`](#variables-raintile-fills-in)) can take; the tile editor shows them as a list instead of a text box, the first one while the tile has none (so make it the widget's default).
 
 Raintile writes no title on a custom widget's tile (the tile's `Label=` is not used): the whole tile is the widget's, and a widget that wants a title draws it with a meter of its own.
 
@@ -193,6 +196,7 @@ LeftMouseUpAction=["steam://rungameid/570"]
 - A tile with parts is never highlighted whole: between two parts the highlight stays on the last one.
 - The meter's own `MouseOverAction` / `MouseLeaveAction` still run.
 - The keyboard and the gamepad go from part to part too: coming onto the tile the highlight lands on the part nearest the side it comes from, the arrows (D-pad) move to the next part in that direction, and past the last one onto the next tile; `Enter` / `A` does what a click on the part does (its `LeftMouseUpAction`; a row of a list: its command). With the mouse on a part, the keys go on from it.
+- A part can take a direction itself: `KeyLeftAction=`, `KeyRightAction=`, `KeyUpAction=`, `KeyDownAction=` on its meter run when that arrow (D-pad) is pressed on it, and the highlight stays (e.g. left and right change a volume, [`AudioControl`](../widgets/AudioControl)). Up and down still go to the other parts and out of the tile, so take only left and right in a widget of one column.
 
 ## Getting data: scripts
 
@@ -223,6 +227,7 @@ A widget whose data changes while it is on screen (a volume, a player) can keep 
 - **From the meters**: a click writes a command with `!WriteKeyValue` into an `.ini` of the widget's folder (one per tile: `cmd_#WIDGET:Server#.ini`), which the script waits on (`FileSystemWatcher`); `$MouseX:%$` gives where on the meter it was clicked.
 - **Exit**: on the command `OnHide` writes, when Rainmeter is gone, and when a newer copy started for the same tile (after a refresh: it writes its id into the file). Nothing may be left running.
 - Rows that come and go: a fixed number of meters with `DynamicVariables=1` and `Hidden=([Count]<3)`, `[Count]` a Calc measure the script sets; hidden parts are left out by the keys.
+- Core Audio and other COM interfaces: call them from a thread of the multithreaded apartment (PowerShell's own is single-threaded, and some objects do not give all their interfaces there).
 
 ### Keys of the user's
 

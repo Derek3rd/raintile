@@ -114,8 +114,36 @@ namespace RaintileOptions
             SetFormHelp(widgetHint, hint);
             widgetParamRow.Visibility = hint != "" ? Visibility.Visible : Visibility.Collapsed;
             if (widgetOptionRow != null) widgetOptionRow.Visibility = kind == "custom" ? Visibility.Visible : Visibility.Collapsed;
+            ShowWidgetOptionChoices();
+        }
+
+        // A custom widget that lists the values of its tile setting
+        // ([Raintile] WidgetOptionChoices=Devices|Mixer): a list instead of the
+        // text box, the first value shown while the tile has none (the widget's
+        // own default)
+        void ShowWidgetOptionChoices()
+        {
+            if (widgetOptionChoice == null) return;
+            string kind = ChoiceValue(widgetKind) ?? "";
+            string id = widgetParam.Text.Trim();
+            string[] choices = new string[0];
+            if (kind == "custom" && SafeId(id))
+            {
+                var raintile = WidgetSections(id).FirstOrDefault(x => x.Name.Equals("Raintile", StringComparison.OrdinalIgnoreCase));
+                if (raintile != null)
+                    choices = Core.GetKey(raintile, "WidgetOptionChoices").Split('|').Select(c => c.Trim()).Where(c => c != "").ToArray();
+            }
+            bool list = choices.Length > 0;
+            widgetOption.Visibility = list ? Visibility.Collapsed : Visibility.Visible;
+            widgetOptionChoice.Visibility = list ? Visibility.Visible : Visibility.Collapsed;
+            if (!list) return;
+            widgetChoiceSync = true;
+            if (!SetChoices(widgetOptionChoice, choices.Select(c => new[] { c, c }), widgetOption.Text.Trim())) widgetOptionChoice.SelectedIndex = 0;
+            widgetChoiceSync = false;
         }
         TextBox widgetOption;
+        ComboBox widgetOptionChoice;
+        bool widgetChoiceSync;
         FrameworkElement widgetOptionRow;
         Button colorSwatch;
         WrapPanel tagSuggestions;
@@ -2430,7 +2458,12 @@ namespace RaintileOptions
             AddTo(f, widgetParamRow);
             // a custom widget's setting for this tile (#WIDGETOPTION#)
             widgetOption = new TextBox();
-            widgetOptionRow = NewFormRow("Widget setting", widgetOption, "A setting of this tile for its custom widget, if it takes one (its page says which): e.g. the Steam app id of a game.");
+            // (or a list, for a widget that names the values: ShowWidgetOptionChoices)
+            widgetOptionChoice = NewChoiceBox(new string[0][], "", v => { if (!widgetChoiceSync) widgetOption.Text = v; });
+            var optionCell = NewGrid("*");
+            optionCell.Children.Add(widgetOption);
+            optionCell.Children.Add(widgetOptionChoice);
+            widgetOptionRow = NewFormRow("Widget setting", optionCell, "A setting of this tile for its custom widget, if it takes one (its page says which): e.g. the Steam app id of a game, or what Audio control shows.");
             AddTo(f, widgetOptionRow);
             widgetOption.TextChanged += (s, e) =>
             {
@@ -2457,6 +2490,7 @@ namespace RaintileOptions
                 if (t == null) return;
                 Core.SetKey(t, "Param", widgetParam.Text.Trim());
                 SetChanged(currentFile);
+                ShowWidgetOptionChoices();
             };
             AddTo(f, NewFormRow("Label", tileFields["Label"], "Text at the bottom left. Empty = none (tiles without images show their name)."));
             colorSwatch = NewButton("", "Swatch", "Pick a colour");

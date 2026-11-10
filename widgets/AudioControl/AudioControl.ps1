@@ -13,9 +13,15 @@
 #   pick k      Devices: makes the device the default one; Mixer: mute on/off
 #   mute k      mute on/off
 #   set k <p>   volume <p> % (0-100; the bar's $MouseX:%$)
-#   up k, down k  volume +/- -Step %
-#   mode Devices|Mixer   the other mode (also kept in -Cmd as Mode=)
+#   up k, down k  volume +/- -Step % (also the arrows / D-pad on a row)
 #   quit        exits (the widget's OnHide)
+# The mode is the tile's widget setting (-Mode: Devices or Mixer), so two
+# tiles can show one each. Core Audio is used from a thread of the
+# multithreaded apartment (see Mta): from PowerShell's own thread the
+# programs' sessions do not answer.
+#
+# -Probe prints what it reads (the devices, the mixer's rows, the sessions
+# left out and why) and exits: to look at a PC where a row is missing.
 #
 # It exits too when another copy started for the same tile (Owner= in -Cmd),
 # when Rainmeter is gone or when the launcher shows no widget (-Flag missing).
@@ -27,14 +33,15 @@ param(
     [string]$Section = '',
     [string]$Cmd = '',
     [string]$Mode = 'Devices',
-    [string]$TileMode = '',
+    [string]$Title = '',
     [string]$Step = '5',
     [int]$Interval = 1000,
     [int]$Rows = 8,
     [string]$Flag = '',
     [string]$Text = '240,240,245,255',
     [string]$Dim = '150,150,160,255',
-    [string]$Accent = '0,210,180,255'
+    [string]$Accent = '0,210,180,255',
+    [switch]$Probe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,12 +73,6 @@ function ConvertFrom-AudioCommand([string]$Line) {
     if ($parts.Count -eq 0 -or $parts[0] -eq '') { return $null }
     $verb = $parts[0].ToLowerInvariant()
     if ($verb -eq 'quit' -or $verb -eq 'show') { return @{ Verb = $verb; Row = 0; Value = $null } }
-    if ($verb -eq 'mode') {
-        $m = $null
-        if ($parts.Count -ge 2) { $m = Get-AudioMode $parts[1] }
-        if (-not $m) { return $null }
-        return @{ Verb = 'mode'; Row = 0; Value = $m }
-    }
     if (@('pick', 'mute', 'set', 'up', 'down') -notcontains $verb) { return $null }
     $row = 0
     if ($parts.Count -lt 2 -or -not [int]::TryParse($parts[1], [ref]$row) -or $row -lt 1) { return $null }
@@ -93,9 +94,10 @@ function Get-SteppedVolume([int]$Volume, [int]$Step, [int]$Direction) {
 }
 
 # The bangs that show $Items (rows: Name, Volume, Mute, Active, Icon) in the
-# widget's meters (<Prefix><Meter><k>), the mode's tab lit, then the group
+# widget's meters (<Prefix><Meter><k>), the title ($Title, or the mode's
+# name) and what shows without rows ($Note, or the mode's), then the group
 # updated and redrawn
-function Format-AudioBang($Items, [string]$Mode, [string]$Prefix, [string]$Group, [string]$Config, [int]$Rows, $Colors) {
+function Format-AudioBang($Items, [string]$Mode, [string]$Prefix, [string]$Group, [string]$Config, [int]$Rows, $Colors, [string]$Title = '', [string]$Note = '') {
     $sb = New-Object System.Text.StringBuilder
     $set = {
         param($meter, $key, $value)
@@ -114,18 +116,17 @@ function Format-AudioBang($Items, [string]$Mode, [string]$Prefix, [string]$Group
     $mixer = $Mode -eq 'Mixer'
     & $set 'Count' 'Formula' ([string]$count)
     & $set 'IconOn' 'Formula' $(if ($mixer) { '1' } else { '0' })
-    & $set 'TabDevText' 'FontColor' $(if ($mixer) { $Colors.Dim } else { $Colors.Text })
-    & $set 'TabMixText' 'FontColor' $(if ($mixer) { $Colors.Text } else { $Colors.Dim })
-    & $set 'TabDevLine' 'Hidden' $(if ($mixer) { '1' } else { '0' })
-    & $set 'TabMixLine' 'Hidden' $(if ($mixer) { '0' } else { '1' })
-    & $set 'Empty' 'Text' $(if ($mixer) { 'No program is playing sound' } else { 'No sound device' })
+    if (-not $Title) { $Title = $(if ($mixer) { 'Volume mixer' } else { 'Sound devices' }) }
+    & $set 'Title' 'Text' (Get-SafeText $Title)
+    if (-not $Note) { $Note = 'No sound device' }
+    & $set 'Empty' 'Text' (Get-SafeText $Note)
     [void]$sb.Append('[!UpdateMeasureGroup "' + $Group + '" "' + $Config + '"][!UpdateMeterGroup "' + $Group + '" "' + $Config + '"][!Redraw "' + $Config + '"]')
     return $sb.ToString()
 }
 
-# [Cmd] of the command file: @{ Owner; Do; Mode } (missing keys: '')
+# [Cmd] of the command file: @{ Owner; Do } (missing keys: '')
 function Read-CommandFile([string]$Path) {
-    $r = @{ Owner = ''; Do = ''; Mode = '' }
+    $r = @{ Owner = ''; Do = '' }
     $text = $null
     for ($try = 0; $try -lt 5 -and $null -eq $text; $try++) {
         try { $text = [IO.File]::ReadAllText($Path) }
@@ -136,7 +137,7 @@ function Read-CommandFile([string]$Path) {
     $in = $false
     foreach ($line in ($text -split "`r?`n")) {
         if ($line -match '^\s*\[([^\]]+)\]') { $in = $Matches[1].Trim() -eq 'Cmd'; continue }
-        if ($in -and $line -match '^\s*(Owner|Do|Mode)\s*=(.*)$') { $r[$Matches[1]] = $Matches[2].Trim() }
+        if ($in -and $line -match '^\s*(Owner|Do)\s*=(.*)$') { $r[$Matches[1]] = $Matches[2].Trim() }
     }
     return $r
 }
@@ -150,6 +151,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 namespace RaintileAudio
 {
@@ -350,7 +352,7 @@ namespace RaintileAudio
         }
 
         // The playback devices that are on, the default one Active
-        public static List<Item> Devices()
+        static List<Item> DevicesNow()
         {
             var list = new List<Item>();
             var en = Enumerator();
@@ -378,21 +380,21 @@ namespace RaintileAudio
             return (IAudioEndpointVolume)Activate(device, EndpointVolumeId);
         }
 
-        public static void SetDefault(string id)
+        static void SetDefaultNow(string id)
         {
             var policy = (IPolicyConfig)new PolicyConfigCo();
             Marshal.ThrowExceptionForHR(policy.SetDefaultEndpoint(id, Console));
             Marshal.ThrowExceptionForHR(policy.SetDefaultEndpoint(id, Multimedia));
         }
 
-        public static void SetDeviceVolume(string id, int percent)
+        static void SetDeviceVolumeNow(string id, int percent)
         {
             var v = DeviceVolume(id);
             v.SetMasterVolumeLevelScalar(Math.Max(0, Math.Min(100, percent)) / 100f, ref NoContext);
             v.SetMute(false, ref NoContext);
         }
 
-        public static void SetDeviceMute(string id, bool mute)
+        static void SetDeviceMuteNow(string id, bool mute)
         {
             DeviceVolume(id).SetMute(mute, ref NoContext);
         }
@@ -424,6 +426,7 @@ namespace RaintileAudio
             manager.GetSessionEnumerator(out sessions);
             int count;
             sessions.GetCount(out count);
+            Skipped.Clear();
             for (int i = 0; i < count; i++)
             {
                 try
@@ -432,7 +435,7 @@ namespace RaintileAudio
                     sessions.GetSession(i, out control);
                     var control2 = control as IAudioSessionControl2;
                     var volume = control as ISimpleAudioVolume;
-                    if (control2 == null || volume == null) continue;
+                    if (control2 == null || volume == null) { Skipped.Add(i + ": no IAudioSessionControl2 or ISimpleAudioVolume"); continue; }
                     int state;
                     control.GetState(out state);
                     if (state == 2) continue;   // (expired)
@@ -443,7 +446,7 @@ namespace RaintileAudio
                         int pid;
                         control2.GetProcessId(out pid);
                         s.Exe = ProcessPath(pid);
-                        if (s.Exe == null) continue;   // (the program is gone)
+                        if (s.Exe == null) { Skipped.Add(i + ": process " + pid + " not readable"); continue; }   // (the program is gone)
                         s.Key = s.Exe.ToLowerInvariant();
                         string name;
                         control2.GetDisplayName(out name);
@@ -458,14 +461,14 @@ namespace RaintileAudio
                     }
                     list.Add(s);
                 }
-                catch (COMException) { }
+                catch (Exception e) { Skipped.Add(i + ": " + e.Message); }
             }
             return list;
         }
 
         // Mixer: the default device first (its volume), then System sounds,
         // then the programs by name
-        public static List<Item> Mixer()
+        static List<Item> MixerNow()
         {
             var list = new List<Item>();
             var en = Enumerator();
@@ -498,12 +501,12 @@ namespace RaintileAudio
         }
 
         // Volume (percent >= 0) or mute (percent < 0: mute) of a row of Mixer
-        public static void SetProgram(string key, int percent, bool mute)
+        static void SetProgramNow(string key, int percent, bool mute)
         {
             if (key.StartsWith("device:"))
             {
-                if (percent >= 0) SetDeviceVolume(key.Substring(7), percent);
-                else SetDeviceMute(key.Substring(7), mute);
+                if (percent >= 0) SetDeviceVolumeNow(key.Substring(7), percent);
+                else SetDeviceMuteNow(key.Substring(7), mute);
                 return;
             }
             foreach (Session s in Sessions())
@@ -517,6 +520,32 @@ namespace RaintileAudio
                 else s.Volume.SetMute(mute, ref NoContext);
             }
         }
+
+        // Core Audio from a thread of the multithreaded apartment: from the
+        // single-threaded one of PowerShell a program's session does not give
+        // its other interfaces (IAudioSessionControl2, ISimpleAudioVolume)
+        static T Mta<T>(Func<T> work)
+        {
+            if (Thread.CurrentThread.GetApartmentState() == ApartmentState.MTA) return work();
+            T result = default(T);
+            Exception error = null;
+            var thread = new Thread(() => { try { result = work(); } catch (Exception e) { error = e; } });
+            thread.SetApartmentState(ApartmentState.MTA);
+            thread.Start();
+            thread.Join();
+            if (error != null) throw error;
+            return result;
+        }
+
+        public static List<Item> Devices() { return Mta(() => DevicesNow()); }
+        public static List<Item> Mixer() { return Mta(() => MixerNow()); }
+        public static void SetDefault(string id) { Mta(() => { SetDefaultNow(id); return 0; }); }
+        public static void SetDeviceVolume(string id, int percent) { Mta(() => { SetDeviceVolumeNow(id, percent); return 0; }); }
+        public static void SetDeviceMute(string id, bool mute) { Mta(() => { SetDeviceMuteNow(id, mute); return 0; }); }
+        public static void SetProgram(string key, int percent, bool mute) { Mta(() => { SetProgramNow(key, percent, mute); return 0; }); }
+
+        // What the last Mixer() left out and why (AudioControl.ps1 -Probe)
+        public static List<string> Skipped = new List<string>();
 
         // Bangs to Rainmeter; false when it is not running
         public static bool Send(string bang)
@@ -551,18 +580,26 @@ $stepValue = 5
 if (-not [int]::TryParse($Step, [ref]$stepValue) -or $stepValue -lt 1) { $stepValue = 5 }
 $utf8 = New-Object System.Text.UTF8Encoding $false
 
-# The mode: the last one chosen on the tile (Mode= in the command file), the
-# tile's widget setting, the widget's setting
-$saved = Read-CommandFile $Cmd
-$mode = Get-AudioMode $saved.Mode
-if (-not $mode) { $mode = Get-AudioMode $TileMode }
-if (-not $mode) { $mode = Get-AudioMode $Mode }
+# The mode: the tile's widget setting
+$mode = Get-AudioMode $Mode
 if (-not $mode) { $mode = 'Devices' }
+
+if ($Probe) {
+    foreach ($m in 'Devices', 'Mixer') {
+        Write-Output "$m`:"
+        try {
+            $list = $(if ($m -eq 'Mixer') { [RaintileAudio.Audio]::Mixer() } else { [RaintileAudio.Audio]::Devices() })
+            foreach ($it in $list) { Write-Output ("  {0} | {1}% | muted {2} | default {3} | {4}" -f $it.Name, $it.Volume, $it.Mute, $it.Active, $it.Exe) }
+        } catch { Write-Output "  error: $($_.Exception.Message)" }
+    }
+    foreach ($why in [RaintileAudio.Audio]::Skipped) { Write-Output "  left out: $why" }
+    exit 0
+}
 
 # This copy owns the tile: an older one still running exits when it reads it
 $cmdDir = Split-Path -Parent $Cmd
 $tmp = "$Cmd.tmp"
-[IO.File]::WriteAllText($tmp, "[Cmd]`r`nOwner=$PID`r`nDo=`r`nMode=$mode`r`n", $utf8)
+[IO.File]::WriteAllText($tmp, "[Cmd]`r`nOwner=$PID`r`nDo=`r`n", $utf8)
 if (Test-Path -LiteralPath $Cmd) { Remove-Item -LiteralPath $Cmd -Force }
 Move-Item -LiteralPath $tmp -Destination $Cmd
 $cmdStamp = (Get-Item -LiteralPath $Cmd).LastWriteTimeUtc
@@ -597,7 +634,6 @@ function Read-Items {
 }
 
 function Invoke-AudioCommand($c) {
-    if ($c.Verb -eq 'mode') { $script:mode = $c.Value; return }
     $it = $null
     if ($c.Row -ge 1 -and $c.Row -le @($script:items).Count) { $it = @($script:items)[$c.Row - 1] }
     if (-not $it) { return }
@@ -646,11 +682,12 @@ while ($true) {
             }
         }
     }
+    $note = ''
     try { $script:items = Read-Items }
-    catch { $script:items = @() }
-    $key = $mode + '|' + (($script:items | ForEach-Object { $_.Key + '=' + $_.Name + '=' + $_.Volume + '=' + $_.Mute + '=' + $_.Active + '=' + $_.Icon }) -join ';')
+    catch { $script:items = @(); $note = Get-SafeText ('Sound not readable: ' + $_.Exception.Message) }
+    $key = $note + '|' + (($script:items | ForEach-Object { $_.Key + '=' + $_.Name + '=' + $_.Volume + '=' + $_.Mute + '=' + $_.Active + '=' + $_.Icon }) -join ';')
     if ($key -ne $last) {
         $last = $key
-        if (-not [RaintileAudio.Audio]::Send((Format-AudioBang $script:items $mode $prefix $group $Config $Rows $colors))) { exit 0 }
+        if (-not [RaintileAudio.Audio]::Send((Format-AudioBang $script:items $mode $prefix $group $Config $Rows $colors $Title $note))) { exit 0 }
     }
 }

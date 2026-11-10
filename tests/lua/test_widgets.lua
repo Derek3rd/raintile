@@ -179,8 +179,8 @@ function T.gallery_titles()
 end
 
 -- Audio control (widgets/AudioControl): its sizes written out (no variable of
--- its own left for Rainmeter), its rows, - and + and tabs parts of the tile,
--- its OnShow starting its script with a command file of its own
+-- its own left for Rainmeter), its rows the parts of the tile, the tile's
+-- mode to its script, its OnShow starting it with a command file of its own
 function T.gallery_audio_control()
 	local s = R.new({})
 	host_mkdir(s.data .. 'Widgets')
@@ -194,7 +194,7 @@ function T.gallery_audio_control()
 	t.ok(w, 'the widget tile is missing')
 	local g = grid(s)
 	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
-	for _, v in ipairs({ 'AP', 'AHF', 'ATop', 'AF', 'ANameH', 'AS', 'ABarH', 'ARowH', 'ATabW', 'ACmd' }) do
+	for _, v in ipairs({ 'AP', 'AHF', 'ATop', 'AF', 'ANameH', 'AS', 'ABarH', 'ARowH', 'ACmd' }) do
 		own = own or (g:find('#' .. v .. '#', 1, true) and v)
 	end
 	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
@@ -202,16 +202,42 @@ function T.gallery_audio_control()
 	local p = 'CW' .. i .. '_'
 	t.ok(g:find('[' .. p .. 'Hit8]', 1, true) and g:find('MeasureName=' .. p .. 'Vol1', 1, true), 'rows or their measures missing')
 	t.ok(g:find('Hidden=(((' .. '[' .. p .. 'Count]<1)', 1, true), 'the rows are not hidden past [Count]')
-	t.ok(g:find('-TileMode "Mixer"', 1, true), 'the tile\'s widget setting does not reach the script')
+	t.ok(g:find('-Mode "Mixer"', 1, true), 'the tile\'s widget setting does not reach the script')
 	t.ok(g:find('AudioControl\\cmd_' .. p .. 'Server.ini" -Mode', 1, true), 'the command file is not in the widget\'s folder')
 	local parts = s:upvalue('M').widgetParts(w)
-	for _, name in ipairs({ 'Hit1', 'Minus1', 'Plus1', 'Hit2', 'TabDev', 'TabMix' }) do
+	for _, name in ipairs({ 'Hit1', 'Hit2', 'Hit8' }) do
 		t.ok(parts[p .. name], name .. ' is not a part of the tile')
 	end
-	t.ok(not parts[p .. 'Track1'] and not parts[p .. 'Bar1'], 'the bar is a part (its click needs the mouse)')
+	for _, name in ipairs({ 'Minus1', 'Plus1', 'Track1', 'Bar1' }) do
+		t.ok(not parts[p .. name], name .. ' is a part (the keys go from row to row only)')
+	end
+	t.ok(g:find('KeyRightAction=[!WriteKeyValue Cmd Do "up 1"', 1, true), 'right on a row does not turn its volume up')
 	local api = s:upvalue('M').widgetInfo(w)
 	t.ok(api.onShow and api.onShow:find('!CommandMeasure ' .. p .. 'Server "Run"', 1, true), 'OnShow does not start the script: ' .. tostring(api.onShow))
 	t.ok(api.onShow:find('cmd_' .. p .. 'Server.ini', 1, true) and api.onHide:find('Do quit', 1, true), 'OnShow/OnHide do not use the command file')
+	-- the keys on a row (KeyLeftAction= / KeyRightAction=): its volume, the
+	-- highlight stays on it; up and down: the next row
+	for k, c in ipairs(s:upvalue('cats')) do
+		for _, tile in ipairs(c.tiles) do
+			if tile == w then s:call('Show()') s:call('SetCategory(' .. k .. ')') end
+		end
+	end
+	t.clean(s)
+	local M, skin = s:upvalue('M'), s.skin or s
+	s:call("HoverPart('" .. p .. "Hit1')")
+	local function last()
+		local list = skin.writes or {}
+		local x = list[#list]
+		return x and (x[2] .. '=' .. x[3]) or ''
+	end
+	s:call('Nav(1, 0)')
+	t.eq(last(), 'Do=up 1', 'right on the first row')
+	t.eq(M.kpart and M.kpart.name, p .. 'Hit1', 'right moved the highlight off the row')
+	s:call('Nav(-1, 0)')
+	t.eq(last(), 'Do=down 1', 'left on the first row')
+	s:call('Nav(0, 1)')
+	t.eq(M.kpart and M.kpart.name, p .. 'Hit2', 'down from the first row')
+	t.clean(s)
 end
 
 -- Keyboard and pad inside a widget with parts (the rows of its list): from

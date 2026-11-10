@@ -737,6 +737,9 @@ function Skin:bang(t)
 		self.vars[tostring(t[2]):lower()] = t[3] or ''
 	elseif name == '!writekeyvalue' then
 		if tostring(t[4] or ''):find('[\r\n]') then self:error('value on more than one line: ' .. table.concat(t, ' ')) end
+		-- (not written: kept for the tests, { section, key, value, file })
+		self.writes = self.writes or {}
+		self.writes[#self.writes + 1] = { t[2], t[3], t[4], t[5] }
 	elseif name == '!refresh' then
 		if elsewhere(t, 2) then return end
 		self.refresh = true

@@ -13,9 +13,10 @@ Test 'audio: commands of the widget' {
     Assert-Equal $c.Value 57.5 'value'
     Assert-Equal (ConvertFrom-AudioCommand 'set 1 140').Value 100.0 'a volume over 100'
     Assert-Equal (ConvertFrom-AudioCommand ' pick 2 ').Row 2 'pick'
-    Assert-Equal (ConvertFrom-AudioCommand 'mode mixer').Value 'Mixer' 'mode'
     Assert-Equal (ConvertFrom-AudioCommand 'quit').Verb 'quit' 'quit'
-    foreach ($bad in '', 'set 2', 'pick 0', 'pick x', 'mode stereo', 'format c:', 'up') {
+    Assert-Equal (Get-AudioMode ' mixer ') 'Mixer' 'the tile setting, any case'
+    Assert-True ($null -eq (Get-AudioMode '')) 'no tile setting: the default'
+    foreach ($bad in '', 'set 2', 'pick 0', 'pick x', 'mode mixer', 'format c:', 'up') {
         Assert-True ($null -eq (ConvertFrom-AudioCommand $bad)) "not a command: '$bad'"
     }
 }
@@ -46,7 +47,11 @@ Test 'audio: the rows sent to the meters' {
     Assert-True ($bang.Contains('[!SetOption "CW4_Vol2" "Formula" "75" "Raintile"]')) 'the volume'
     Assert-True ($bang.Contains('[!SetOption "CW4_Count" "Formula" "2" "Raintile"]')) 'as many rows as the meters'
     Assert-True (-not $bang.Contains('CW4_Name3')) 'no third row'
-    Assert-True ($bang.Contains('[!SetOption "CW4_TabMixLine" "Hidden" "1" "Raintile"]')) 'the Mixer tab not lit'
+    Assert-True ($bang.Contains('[!SetOption "CW4_Title" "Text" "Sound devices" "Raintile"]')) 'the title after the mode'
+    $mixer = Format-AudioBang @() 'Mixer' 'CW4_' 'CW4' 'Raintile' 8 $colors 'My "mix"' 'Sound not readable'
+    Assert-True ($mixer.Contains('[!SetOption "CW4_Title" "Text" "My ' + "'mix'" + '" "Raintile"]')) 'the Title setting'
+    Assert-True ($mixer.Contains('[!SetOption "CW4_Empty" "Text" "Sound not readable" "Raintile"]')) 'the note without rows'
+    Assert-True ($mixer.Contains('[!SetOption "CW4_IconOn" "Formula" "1" "Raintile"]')) 'icons in the mixer'
     Assert-True ($bang.EndsWith('[!Redraw "Raintile"]')) 'redrawn at the end'
 }
 
@@ -54,11 +59,10 @@ Test 'audio: the command file' {
     $dir = New-TestFolder
     $path = Join-Path $dir 'cmd_CW4_Server.ini'
     Assert-Equal (Read-CommandFile $path).Do '' 'no file'
-    [IO.File]::WriteAllText($path, "[Other]`r`nDo=x`r`n[Cmd]`r`nOwner=12`r`nDo=set 1 50`r`nMode=Mixer`r`n")
+    [IO.File]::WriteAllText($path, "[Other]`r`nDo=x`r`n[Cmd]`r`nOwner=12`r`nDo=set 1 50`r`n")
     $r = Read-CommandFile $path
     Assert-Equal $r.Owner '12' 'owner'
     Assert-Equal $r.Do 'set 1 50' 'command'
-    Assert-Equal $r.Mode 'Mixer' 'mode'
 }
 
 Test 'audio: its C# compiles' {

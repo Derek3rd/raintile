@@ -376,7 +376,15 @@ function Meter:opt(key, default)
 		end
 	end
 	if v == nil then return default end
-	return self.skin:replace(v)
+	v = self.skin:replace(v)
+	-- DynamicVariables=1: [Measure] is that measure's value
+	if l ~= 'dynamicvariables' and trim(self:opt('DynamicVariables', '0')) == '1' then
+		v = v:gsub('%[([%w_]+)%]', function(name)
+			local ms = self.skin.measures[name:lower()]
+			if ms then return tostring(ms:GetValue()) end
+		end)
+	end
+	return v
 end
 
 local function padding(m)
@@ -536,7 +544,11 @@ function Measure:GetStringValue()
 	end
 	return ''
 end
-function Measure:GetValue() return tonumber(self:GetStringValue()) or 0 end
+function Measure:GetValue()
+	-- (a Calc measure without a value of its own: its Formula)
+	if self.value == nil and (self.sec.keys.measure or ''):lower() == 'calc' then return self.skin:number(self:opt('Formula', '0'), 0) or 0 end
+	return tonumber(self:GetStringValue()) or 0
+end
 function Measure:Enable() end
 function Measure:Disable() end
 
@@ -725,6 +737,9 @@ function Skin:bang(t)
 		self.vars[tostring(t[2]):lower()] = t[3] or ''
 	elseif name == '!writekeyvalue' then
 		if tostring(t[4] or ''):find('[\r\n]') then self:error('value on more than one line: ' .. table.concat(t, ' ')) end
+		-- (not written: kept for the tests, { section, key, value, file })
+		self.writes = self.writes or {}
+		self.writes[#self.writes + 1] = { t[2], t[3], t[4], t[5] }
 	elseif name == '!refresh' then
 		if elsewhere(t, 2) then return end
 		self.refresh = true

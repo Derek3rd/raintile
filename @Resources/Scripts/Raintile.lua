@@ -3306,7 +3306,8 @@ function D.customWidgetText(t, i, w, h)
 			end)
 			if not changed then break end
 		end
-		return v
+		-- (and the settings written in one of its variables)
+		return (v:gsub('#[Oo][Pp][Tt][Ii][Oo][Nn]:([%w_]+)#', function(n) return opts[n:lower()] end))
 	end
 	local skip = false
 	local pending = {}
@@ -5955,6 +5956,12 @@ function M.partStep(dx, dy)
 	local kp, name = M.kpart, nil
 	if kp and kp.t == t then
 		if dx == 0 and dy == 0 then return true end
+		-- a part that takes that direction itself (KeyLeftAction= on its
+		-- meter, e.g. a volume): its action, the highlight stays
+		local m = SKIN:GetMeter(kp.name)
+		local key = dx < 0 and 'KeyLeftAction' or dx > 0 and 'KeyRightAction' or dy < 0 and 'KeyUpAction' or 'KeyDownAction'
+		local action = m and m:GetOption(key, '') or ''
+		if action ~= '' then SKIN:Bang(action) return true end
 		name = M.partNext(t, kp.name, dx, dy)
 		if not name then M.kpart = nil return false end   -- out of the tile
 	else

@@ -64,8 +64,8 @@ namespace RaintileOptions
 
         bool PlaceHas(int part)
         {
-            if (part == PlaceBg) return bgFrame.Bitmap != null;
-            if (part == PlaceLogo) return previewLogo.Source != null;
+            if (part == PlaceBg) return bgFrame.Bitmap != null && !placeBack;   // (the backdrop is not framed)
+            if (part == PlaceLogo) return previewLogo.Source != null && previewLogo.Visibility == Visibility.Visible;
             return previewInfo.Visibility == Visibility.Visible;
         }
 

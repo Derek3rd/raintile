@@ -55,9 +55,9 @@ namespace RaintileOptions
         NumberField zoomField, logoField;
         Button tileKeyButton, tileKeyClear, catIconDel, bgDel, logoDel, catColorClear, tileColorClear;
         TextBox catTileColor;
-        NumberField catOpacity, tileOpacity, gridCols, gridRows, sizeCols, sizeRows;
+        NumberField catOpacity, tileOpacity, gridCols, gridRows, sizeCols, sizeRows, catSizeCols, catSizeRows;
         SizeField catLogoSize;
-        Button catOpacityReset, tileOpacityReset, gridColsReset, gridRowsReset, catLogoSizeReset;
+        Button catOpacityReset, tileOpacityReset, gridColsReset, gridRowsReset, catLogoSizeReset, catSizeReset, tileSizeReset;
         Button catNew, catOpen, catUp, catDown, catDel, tileNew, tileDel, tileUp, tileDown;
         Button catColorSwatch;
         ComboBox widgetKind;
@@ -66,16 +66,22 @@ namespace RaintileOptions
         FrameworkElement widgetRow, widgetParamRow, placementRow;
         // the category page: preview column, All tiles card, inheritance chips
         Border allCard, previewCard, frameChip, logoChip;
-        FrameworkElement previewOnRow;
+        FrameworkElement previewOnRow, placeOnRow;
+        ComboBox placeOn;
+        Button resetFramingAll;   // All tiles: Reset every tile > Framing (none on the backdrop)
+        TextBlock frameWhy, logoWhy;
+        string infoNeverWhy;
         ComboBox previewOn;
         TextBlock allNote;
         Button btnFrameReset, btnLogoReset;
         // the play time line (InfoPos): its sample in the preview and its row
         Border previewInfo, infoChip;
-        TextBlock infoPosText;
+        TextBlock infoPosText, infoWhy, placeHow;
+        // rows of the grid only (Size=, NX, NY, IconSize) and their reason (UpdateGridOnlyRows)
+        readonly List<Tuple<Grid, TextBlock>> gridOnlyRows = new List<Tuple<Grid, TextBlock>>();
         Button btnInfoReset;
         Panel infoRow;
-        Panel previewColumn;
+        ScrollViewer previewScroll;
         BitmapSource placeholderBg, placeholderLogo;
 
         // Widgets: kind, label in the list, what Param= means
@@ -103,8 +109,7 @@ namespace RaintileOptions
 
         void UpdateWidgetHint()
         {
-            var item = widgetKind.SelectedItem as ComboBoxItem;
-            string kind = item != null ? (string)item.Tag : "";
+            string kind = ChoiceValue(widgetKind) ?? "";
             string hint = WIDGET_KINDS.Where(k => k[0] == kind).Select(k => k[2]).FirstOrDefault() ?? "";
             SetFormHelp(widgetHint, hint);
             widgetParamRow.Visibility = hint != "" ? Visibility.Visible : Visibility.Collapsed;
@@ -129,7 +134,7 @@ namespace RaintileOptions
             return m;
         }
 
-        void SetChanged(string file) { changedFiles[file] = true; UpdateDirty(); }
+        void SetChanged(string file) { changedFiles[file] = true; UpdateDirty(); PreviewChanged(file); }
 
         // Square thumbnail: image (or colour) in a rounded box
         Border NewThumb(double size)
@@ -420,8 +425,8 @@ namespace RaintileOptions
         }
 
         // Keys a tile can take from All tiles (framing, logo, play time line, TileColor,
-        // TileOpacity): a tile with one of them has settings of its own (the dot in the strip)
-        static readonly string[] OWN_KEYS = { "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "Color", "Opacity" };
+        // TileOpacity, TileSize): a tile with one of them has settings of its own (the dot in the strip)
+        static readonly string[] OWN_KEYS = { "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos", "Color", "Opacity", "Size" };
 
         static bool HasOwnValues(IniSection s)
         {
@@ -690,21 +695,102 @@ namespace RaintileOptions
         readonly LogoState logoPlace = new LogoState();
         readonly InfoState infoPlace = new InfoState();
 
-        // Size in pixels of a tile of category 'file' (only its proportions count)
-        double[] GetTileSize(string file)
+        // The grid area of the launcher (under the top row, inside the margins):
+        // width, height, gap
+        double[] GetArea()
         {
-            double[] area = null;
             try
             {
                 var parts = File.ReadAllText(Path.Combine(Core.Generated, "Area.txt")).Trim().Split(',');
-                if (parts.Length == 3) area = parts.Select(p => double.Parse(p, Inv)).ToArray();
+                if (parts.Length == 3) return parts.Select(p => double.Parse(p, Inv)).ToArray();
             }
             catch { }
-            if (area == null)
+            // skin not loaded yet: the screen without menu and margins, roughly
+            return new[] { screenPx[0] * 0.96, screenPx[1] * 0.88, 16 };
+        }
+
+        bool IsWheelLayout() { return V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase); }
+
+        // Where the logo and the lines of a tile are placed, as the launcher draws
+        // them: width, height and logo box (before LogoScale=), in pixels.
+        //  - the grid: the tile of the category (NX, NY, its Size=), its IconSize;
+        //  - the wheel: its thumbnail, a square (WheelTileSize), the logo 70% of it
+        //    (M.wheelGeometry); Size=, NX, NY and IconSize are the grid's. The
+        //    backdrop puts the logo and the lines where they sit on the thumbnail.
+        double[] GetPlaceShape(string file, IniSection s, bool all)
+        {
+            var area = GetArea();
+            if (!IsWheelLayout())
             {
-                // skin not loaded yet: the screen without menu and margins, roughly
-                area = new[] { screenPx[0] * 0.96, screenPx[1] * 0.88, 16 };
+                var size = GetTileSize(file, area);
+                // a tile of more cells (Size=, or TileSize= of All tiles): its own
+                // proportions (gaps left out)
+                var span = Core.GetSpan(Core.GetCategorySection(GetModel(file)), s != null && !all ? s : null);
+                size = new[] { size[0] * span[0], size[1] * span[1] };
+                return new[] { size[0], size[1], GetLogoBox(file) };
             }
+            if (placeBack)
+            {
+                // the backdrop (Place on): the area under the top row, the logo
+                // WheelBackdropLogoSize percent of its height (M.backdropLogo)
+                double pct = 30, p;
+                if (double.TryParse(V("WheelBackdropLogoSize").Trim(), NumberStyles.Float, Inv, out p)) pct = Math.Min(80, Math.Max(5, p));
+                return new[] { area[0], area[1], Math.Max(8, area[1] * pct / 100) };
+            }
+            double ts = 25, q;
+            if (double.TryParse(V("WheelTileSize").Trim(), NumberStyles.Float, Inv, out q)) ts = Math.Min(80, Math.Max(3, q));
+            double sz = Math.Max(16, Math.Min(Math.Floor(ts * Math.Min(screenPx[0], screenPx[1]) / 100), Math.Floor(Math.Min(area[0], area[1]))));
+            return new[] { sz, sz, Math.Floor(sz * 0.7) };
+        }
+
+        // How the preview of the tile editor works, and what it shows (GetPlaceShape)
+        string PlaceHowText()
+        {
+            string shape = !IsWheelLayout()
+                ? "The preview has the proportions of this category's tiles on this screen."
+                : placeBack
+                    ? "The preview is the wheel's backdrop under the top row: the selected tile's logo and lines go there, at their own place and size (Place on: Its thumbnail places them on the thumbnail). The backdrop is not framed: its image fills it from the centre."
+                    : "The preview is a thumbnail of the wheel: a square, whatever its size in the grid.";
+            return "Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. With the gamepad: A on the preview. " +
+                shape + " A tile follows All tiles until you move something on it (Own); its reset gives it back the placement of All tiles.";
+        }
+
+        // A stacked row of the editor that applies only with the grid (Size=, NX,
+        // NY, IconSize): the reason under its help, shown in the wheel
+        // (docs/OptionsUI.md, "What does not apply")
+        TextBlock AddGridOnlyReason(Grid row)
+        {
+            var help = FormHelp(row);
+            row.Children.Remove(help);
+            var why = NewHelp(WhenReason("ScrollMode=Grid", null), ResBrush("AccentBrush"));
+            why.Margin = T(0, Gap.Help, 0, 0);
+            var both = NewPanel();
+            AddTo(both, help);
+            AddTo(both, why);
+            Grid.SetRow(both, 1);
+            row.Children.Add(both);
+            gridOnlyRows.Add(new Tuple<Grid, TextBlock>(row, why));
+            return why;
+        }
+
+        // The rows of the grid only: disabled in the wheel, with the reason
+        void UpdateGridOnlyRows()
+        {
+            bool on = !IsWheelLayout();
+            foreach (var r in gridOnlyRows)
+            {
+                var label = (TextBlock)r.Item1.Children[0];
+                if (on) label.ClearValue(TextBlock.ForegroundProperty);
+                else label.Foreground = ResBrush("DimBrush");
+                foreach (UIElement c in r.Item1.Children)
+                    if (Grid.GetRow(c) == 2) c.IsEnabled = on;
+                r.Item2.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            }
+        }
+
+        // Size in pixels of a tile of category 'file' in the grid (only its proportions count)
+        double[] GetTileSize(string file, double[] area)
+        {
             var c = Core.GetCategorySection(GetModel(file));
             var n = new Dictionary<string, int>();
             foreach (var k in new[] { "NX", "NY" })
@@ -745,15 +831,29 @@ namespace RaintileOptions
         static string FormatFactor(double z) { return Math.Round(z, 2).ToString("0.##", Inv); }
 
         // Point of a placement key when nobody sets it: the centre, the top left for
-        // the play time line
-        static string DefaultPos(string key) { return key == "InfoPos" ? "0,0" : "50,50"; }
+        // the play time line (InfoPos, BackInfoPos)
+        static string DefaultPos(string key) { return key.EndsWith("InfoPos") ? "0,0" : "50,50"; }
+
+        // The place being edited: in the wheel with the logo or the lines on the
+        // backdrop, the backdrop (Place on), with its own keys; otherwise the tile
+        // (the grid's, or the wheel's thumbnail)
+        bool placeBack;
+        string LogoPosKey { get { return placeBack ? "BackLogoPos" : "LogoPos"; } }
+        string LogoScaleKey { get { return placeBack ? "BackLogoScale" : "LogoScale"; } }
+        string InfoPosKey { get { return placeBack ? "BackInfoPos" : "InfoPos"; } }
+
+        // The wheel's backdrop shows the selected tile's logo, its lines (WheelLogoOn,
+        // WheelInfoOn = Background, with WheelBackdrop: M.readWheel)
+        bool BackdropOn() { return IsWheelLayout() && V("WheelBackdrop") != "0"; }
+        bool LogoOnBack() { return BackdropOn() && V("WheelLogoOn").Equals("background", StringComparison.OrdinalIgnoreCase); }
+        bool InfoOnBack() { return BackdropOn() && V("WheelInfoOn").Equals("background", StringComparison.OrdinalIgnoreCase); }
 
         // The category's value of a key, formatted as saved (the default point or "1" when it has none)
         static string GetCategoryPlace(CategoryModel model, string key)
         {
             string raw = Core.GetKey(Core.GetCategorySection(model), key);
             double x, y;
-            if (key == "BgFocus" || key == "LogoPos" || key == "InfoPos")
+            if (key == "BgFocus" || key.EndsWith("Pos"))
                 return ParsePair(raw, out x, out y) ? FormatPair(Math.Min(100.0, x) / 100, Math.Min(100.0, y) / 100) : DefaultPos(key);
             if (!double.TryParse(raw, NumberStyles.Float, Inv, out x)) return "1";
             return FormatFactor(key == "BgZoom" ? Math.Min(4.0, Math.Max(1.0, x)) : Math.Min(3.0, Math.Max(0.25, x)));
@@ -834,18 +934,29 @@ namespace RaintileOptions
             var t = GetCurrentTile();
             var c = currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null;
             Func<IniSection, string, string, bool> has = (s, a, b) => s != null && (Core.GetKey(s, a) != "" || Core.GetKey(s, b) != "");
-            bool frameOwn = has(t, "BgFocus", "BgZoom"), logoOwn = has(t, "LogoPos", "LogoScale");
+            bool frameOwn = has(t, "BgFocus", "BgZoom"), logoOwn = has(t, LogoPosKey, LogoScaleKey);
             SetChip(frameChip, all ? null : (bool?)frameOwn);
             SetChip(logoChip, all ? null : (bool?)logoOwn);
             // a reset that would change nothing is hidden (docs/OptionsUI.md, 2)
             SetActionVisible(btnFrameReset, all ? has(c, "BgFocus", "BgZoom") : frameOwn);
-            SetActionVisible(btnLogoReset, all ? has(c, "LogoPos", "LogoScale") : logoOwn);
+            SetActionVisible(btnLogoReset, all ? has(c, LogoPosKey, LogoScaleKey) : logoOwn);
             btnFrameReset.ToolTip = all ? "Back to the centre, at zoom 1" : "Back to the framing of All tiles";
             btnLogoReset.ToolTip = all ? "Back to the centre, at the normal size" : "Back to the logo placement of All tiles";
-            bool infoOwn = t != null && Core.GetKey(t, "InfoPos") != "";
+            bool infoOwn = t != null && Core.GetKey(t, InfoPosKey) != "";
             SetChip(infoChip, all ? null : (bool?)infoOwn);
-            SetActionVisible(btnInfoReset, all ? c != null && Core.GetKey(c, "InfoPos") != "" : infoOwn);
+            SetActionVisible(btnInfoReset, all ? c != null && Core.GetKey(c, InfoPosKey) != "" : infoOwn);
             btnInfoReset.ToolTip = all ? "Back to the top left" : "Back to the play time placement of All tiles";
+        }
+
+        // A placement row of the tile editor that does not apply (as SetRowApplies):
+        // its controls disabled, its name dimmed, the reason shown
+        void SetPlaceApplies(Panel block, bool on, TextBlock why)
+        {
+            var name = (TextBlock)((Grid)block.Children[0]).Children[0];
+            if (on) name.ClearValue(TextBlock.ForegroundProperty);
+            else name.Foreground = ResBrush("DimBrush");
+            foreach (UIElement c in block.Children) if (c != block.Children[0] && c != why) c.IsEnabled = on;
+            why.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
         }
 
         // own: true = Own, false = From All tiles, null = hidden (All tiles itself)
@@ -904,8 +1015,12 @@ namespace RaintileOptions
                 int own = tiles.Count(t => Core.GetKey(t, pos) != "" || (size != null && Core.GetKey(t, size) != ""));
                 return text + (own > 0 ? " (" + own + (own == 1 ? " tile has its own)" : " tiles have their own)") : "");
             };
-            SetFormHelp(placementHint, "Puts every tile back at the default place (the centre, the top left for the play time), the ones with their own included. Now: logos " +
-                describe("LogoPos", "LogoScale") + "; framing " + describe("BgFocus", "BgZoom") + "; play time " + describe("InfoPos", null) + ".");
+            var span = Core.GetSpan(Core.GetCategorySection(model), null);
+            int ownSize = tiles.Count(t => Core.GetKey(t, "Size").Trim() != "");
+            SetFormHelp(placementHint, "Puts every tile back at the default place (the centre, the top left for the play time), the ones with their own included" +
+                (placeBack ? ", on the backdrop (Place on)" : "") + "; Size: at the size of All tiles. Now: logos " +
+                describe(LogoPosKey, LogoScaleKey) + (placeBack ? "" : "; framing " + describe("BgFocus", "BgZoom")) + "; play time " + describe(InfoPosKey, null) +
+                "; size " + span[0] + Times + span[1] + (ownSize > 0 ? " (" + ownSize + (ownSize == 1 ? " tile has its own)" : " tiles have their own)") : "") + ".");
         }
 
         void ReadFraming(IniSection section)
@@ -913,6 +1028,8 @@ namespace RaintileOptions
             bgFrame.FX = 0.5; bgFrame.FY = 0.5; bgFrame.Zoom = 1.0;
             if (section == null) return;
             double x, y, z;
+            // the backdrop is not framed: the image fills it from its centre
+            if (placeBack) return;
             if (ParsePair(GetPlaceKey(section, "BgFocus"), out x, out y)) { bgFrame.FX = Math.Min(100.0, x) / 100; bgFrame.FY = Math.Min(100.0, y) / 100; }
             if (double.TryParse(GetPlaceKey(section, "BgZoom"), NumberStyles.Float, Inv, out z)) bgFrame.Zoom = Math.Min(4.0, Math.Max(1.0, z));
         }
@@ -922,14 +1039,19 @@ namespace RaintileOptions
 
         FrameWindow GetFrameWindow()
         {
-            double iw = bgFrame.Bitmap.PixelWidth, ih = bgFrame.Bitmap.PixelHeight;
-            double pw = preview.Width, ph = preview.Height;
-            double s = Math.Max(pw / iw, ph / ih) * bgFrame.Zoom;
+            return FrameWindowOf(bgFrame.Bitmap.PixelWidth, bgFrame.Bitmap.PixelHeight, preview.Width, preview.Height, bgFrame.FX, bgFrame.FY, bgFrame.Zoom);
+        }
+
+        // The part of an iw x ih image a pw x ph tile shows, framed at focus fx, fy
+        // (0-1) and zoom (BgFocus, BgZoom): also the Preview window's thumbnails
+        static FrameWindow FrameWindowOf(double iw, double ih, double pw, double ph, double fx, double fy, double zoom)
+        {
+            double s = Math.Max(pw / iw, ph / ih) * zoom;
             double w = Math.Min(iw, pw / s), h = Math.Min(ih, ph / s);
             return new FrameWindow
             {
-                X = Math.Min(iw - w, Math.Max(0.0, bgFrame.FX * iw - w / 2)),
-                Y = Math.Min(ih - h, Math.Max(0.0, bgFrame.FY * ih - h / 2)),
+                X = Math.Min(iw - w, Math.Max(0.0, fx * iw - w / 2)),
+                Y = Math.Min(ih - h, Math.Max(0.0, fy * ih - h / 2)),
                 W = w, H = h, S = s, IW = iw, IH = ih,
             };
         }
@@ -944,14 +1066,19 @@ namespace RaintileOptions
 
         void UpdateFraming()
         {
-            // as large as the preview column allows (it follows the window)
-            double maxW = previewColumn != null && previewColumn.ActualWidth > 0 ? Math.Min(640.0, previewColumn.ActualWidth) : 384;
+            // as large as the preview column allows (it follows the window). Taken
+            // from the scroller, whose width the scroll bar does not change, less
+            // the room kept for the bar, the card's padding and its border: the
+            // inner column narrows while the bar shows, and a preview following it
+            // got shorter, hid the bar, grew and showed it again, over and over.
+            double col = previewScroll != null ? previewScroll.ActualWidth - Gap.ScrollBar - 2 * Gap.CardPadding - 2 : 0;
+            double maxW = col > 0 ? Math.Min(640.0, col) : 384;
             double k = Math.Min(maxW / bgFrame.TW, 440 / bgFrame.TH);
             preview.Width = Math.Max(40.0, Math.Round(bgFrame.TW * k));
             preview.Height = Math.Max(40.0, Math.Round(bgFrame.TH * k));
             previewBg.Source = bgFrame.Bitmap;
             bool has = bgFrame.Bitmap != null;
-            frameRow.IsEnabled = has;
+            frameRow.IsEnabled = has && !placeBack;   // (the backdrop is not framed)
             preview.Cursor = has || previewLogo.Source != null || previewInfo.Visibility == Visibility.Visible ? Cursors.SizeAll : null;
             zoomField.Show(bgFrame.Zoom.ToString("0.00", Inv), bgFrame.Zoom);
             if (!has) return;
@@ -1008,8 +1135,8 @@ namespace RaintileOptions
             logoPlace.X = 0.5; logoPlace.Y = 0.5; logoPlace.Scale = 1.0;
             if (section == null) return;
             double x, y, z;
-            if (ParsePair(GetPlaceKey(section, "LogoPos"), out x, out y)) { logoPlace.X = Math.Min(100.0, x) / 100; logoPlace.Y = Math.Min(100.0, y) / 100; }
-            if (double.TryParse(GetPlaceKey(section, "LogoScale"), NumberStyles.Float, Inv, out z)) logoPlace.Scale = Math.Min(3.0, Math.Max(0.25, z));
+            if (ParsePair(GetPlaceKey(section, LogoPosKey), out x, out y)) { logoPlace.X = Math.Min(100.0, x) / 100; logoPlace.Y = Math.Min(100.0, y) / 100; }
+            if (double.TryParse(GetPlaceKey(section, LogoScaleKey), NumberStyles.Float, Inv, out z)) logoPlace.Scale = Math.Min(3.0, Math.Max(0.25, z));
         }
 
         // Logo size of category 'file' in pixels (IconSize: pixels or % of the
@@ -1054,14 +1181,14 @@ namespace RaintileOptions
         // Point of the preview on the logo (a little margin for small logos)
         bool TestOnLogo(Point pt)
         {
-            if (previewLogo.Source == null) return false;
+            if (previewLogo.Source == null || previewLogo.Visibility != Visibility.Visible) return false;
             var r = GetLogoRect();
             return Math.Abs(pt.X - r.CX) <= r.VW / 2 + 6 && Math.Abs(pt.Y - r.CY) <= r.VH / 2 + 6;
         }
 
         void UpdateLogoPlace()
         {
-            bool has = previewLogo.Source != null;
+            bool has = previewLogo.Source != null && previewLogo.Visibility == Visibility.Visible;
             logoRow.IsEnabled = has;
             logoField.Show(logoPlace.Scale.ToString("0.00", Inv), logoPlace.Scale);
             if (!has) return;
@@ -1076,7 +1203,7 @@ namespace RaintileOptions
         // by default) removes them
         void SaveLogoPlace()
         {
-            SavePlace("LogoPos", "LogoScale", FormatPair(logoPlace.X, logoPlace.Y), FormatFactor(logoPlace.Scale));
+            SavePlace(LogoPosKey, LogoScaleKey, FormatPair(logoPlace.X, logoPlace.Y), FormatFactor(logoPlace.Scale));
         }
 
         // The position is not limited here: a logo pushed into a corner stays there
@@ -1098,7 +1225,7 @@ namespace RaintileOptions
             infoPlace.X = 0; infoPlace.Y = 0;
             if (section == null) return;
             double x, y;
-            if (ParsePair(GetPlaceKey(section, "InfoPos"), out x, out y)) { infoPlace.X = Math.Min(100.0, x) / 100; infoPlace.Y = Math.Min(100.0, y) / 100; }
+            if (ParsePair(GetPlaceKey(section, InfoPosKey), out x, out y)) { infoPlace.X = Math.Min(100.0, x) / 100; infoPlace.Y = Math.Min(100.0, y) / 100; }
         }
 
         // Preview pixels per screen pixel, and the margin of the line (LabelPad: pixels
@@ -1167,7 +1294,7 @@ namespace RaintileOptions
 
         void SaveInfoPlace()
         {
-            SavePlace("InfoPos", null, FormatPair(infoPlace.X, infoPlace.Y), null);
+            SavePlace(InfoPosKey, null, FormatPair(infoPlace.X, infoPlace.Y), null);
         }
 
         void UpdateTilePreview()
@@ -1188,23 +1315,39 @@ namespace RaintileOptions
             if (bgFrame.Path != bgKey) { bgFrame.Path = bgKey; bgFrame.Bitmap = bgKey == "*placeholder" ? GetPlaceholderBackground() : GetBitmap(bg, 1200); }
             if (bgKey == null) bgFrame.Bitmap = null;
             if (all) s = currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null;
+            // the wheel with the logo or the lines on the backdrop: Place on chooses
+            // the thumbnail or the backdrop, each with its keys
+            bool canBack = currentFile != null && (LogoOnBack() || InfoOnBack());
+            placeOnRow.Visibility = canBack ? Visibility.Visible : Visibility.Collapsed;
+            placeBack = canBack && placeOn.SelectedIndex == 1;
             ReadFraming(s);
-            var size = currentFile != null ? GetTileSize(currentFile) : new double[] { 16, 9 };
-            // a tile of more cells (Size=): its own proportions (gaps left out)
-            var span = Regex.Match(s != null && !all ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
-            if (span.Success)
-            {
-                size = new[] { size[0] * Math.Max(1, int.Parse(span.Groups[1].Value)), size[1] * Math.Max(1, int.Parse(span.Groups[2].Value)) };
-            }
-            bgFrame.TW = size[0]; bgFrame.TH = size[1];
+            // the tile in the grid, the square of the wheel, or the wheel's background
+            var shape = currentFile != null ? GetPlaceShape(currentFile, s, all) : new double[] { 16, 9, 96 };
+            bgFrame.TW = shape[0]; bgFrame.TH = shape[1];
+            if (placeHow != null) placeHow.Text = PlaceHowText();
+            UpdateGridOnlyRows();
             previewLogo.Source = all && sample == null ? GetPlaceholderLogo() : GetBitmap(logo, 384);
             ReadLogoPlace(s);
-            logoPlace.Box = currentFile != null ? GetLogoBox(currentFile) : 96.0;
+            logoPlace.Box = shape[2];
             ReadInfoPlace(s);
-            // the line is not drawn with TileInfo=Never, nor on widgets
-            bool info = currentFile != null && !IsWidget(all ? null : s) && !V("TileInfo").Equals("never", StringComparison.OrdinalIgnoreCase);
-            previewInfo.Visibility = info ? Visibility.Visible : Visibility.Collapsed;
-            infoRow.Visibility = info ? Visibility.Visible : Visibility.Collapsed;
+            // the lines are not drawn with TileInfo and UpdateInfo Never, nor on
+            // widgets (the place is the block of both: the update line and the
+            // play time): a widget has none (its row hidden), with both Never
+            // the row says why it is off
+            bool lineKind = currentFile != null && !IsWidget(all ? null : s);
+            bool lineOn = !(V("TileInfo").Equals("never", StringComparison.OrdinalIgnoreCase) && V("UpdateInfo").Equals("never", StringComparison.OrdinalIgnoreCase));
+            // in the wheel the lines are on the thumbnails or on the backdrop, not both
+            bool lineHere = placeBack ? InfoOnBack() : !InfoOnBack();
+            infoWhy.Text = !lineOn ? infoNeverWhy : WhenReason(placeBack ? "WheelInfoOn=Background" : "WheelInfoOn=Tile", null);
+            previewInfo.Visibility = lineKind && lineOn && lineHere ? Visibility.Visible : Visibility.Collapsed;
+            infoRow.Visibility = lineKind ? Visibility.Visible : Visibility.Collapsed;
+            SetPlaceApplies(infoRow, lineOn && lineHere, infoWhy);
+            // the backdrop: not framed; the logo only when it goes there
+            bool logoHere = !placeBack || LogoOnBack();
+            previewLogo.Visibility = logoHere ? Visibility.Visible : Visibility.Collapsed;
+            SetPlaceApplies(frameRow, !placeBack, frameWhy);
+            SetPlaceApplies(logoRow, logoHere, logoWhy);
+            if (resetFramingAll != null) resetFramingAll.IsEnabled = !placeBack;
             UpdateFraming();
             UpdateLogoPlace();
             UpdateInfoPlace();
@@ -1212,7 +1355,8 @@ namespace RaintileOptions
             string label = s != null && !all ? Core.GetKey(s, "Label") : "";
             if (label == "" && s != null && !all && bg == null && logo == null) label = s.Name;
             previewLabel.Text = label;
-            previewLabel.Visibility = label != "" && V("ShowLabels") != "0" ? Visibility.Visible : Visibility.Collapsed;
+            // (the label is on the tile, never on the backdrop)
+            previewLabel.Visibility = label != "" && V("ShowLabels") != "0" && !placeBack ? Visibility.Visible : Visibility.Collapsed;
             if (all) return;
             SetThumb(bgThumb, bg);
             SetThumb(logoThumb, logo);
@@ -1298,15 +1442,15 @@ namespace RaintileOptions
             // every tile can be a widget
             widgetRow.Visibility = Visibility.Visible;
             string kind = s != null ? Core.GetKey(s, "Widget").Trim().ToLowerInvariant() : "";
-            widgetKind.SelectedItem = widgetKind.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == kind) ?? widgetKind.Items[0];
+            if (!SelectChoice(widgetKind, kind)) widgetKind.SelectedIndex = 0;
             widgetParam.Text = s != null ? Core.GetKey(s, "Param") : "";
             widgetOption.Text = s != null ? Core.GetKey(s, "WidgetOption") : "";
             UpdateWidgetHint();
-            var size = Regex.Match(s != null ? Core.GetKey(s, "Size") : "", @"^\s*(\d+)\s*[xX*]\s*(\d+)\s*$");
-            int sc = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[1].Value))) : 1;
-            int sr = size.Success ? Math.Max(1, Math.Min(8, int.Parse(size.Groups[2].Value))) : 1;
-            sizeCols.Show(sc.ToString(), 1);
-            sizeRows.Show(sr.ToString(), 1);
+            // its own size, or the one of All tiles
+            var span = Core.GetSpan(currentFile != null ? Core.GetCategorySection(GetModel(currentFile)) : null, s);
+            sizeCols.Show(Math.Min(8, span[0]).ToString(), 1);
+            sizeRows.Show(Math.Min(8, span[1]).ToString(), 1);
+            SetActionVisible(tileSizeReset, s != null && Core.GetKey(s, "Size").Trim() != "");
             ShowTileOpacity(s);
             tileFields["Name"].Text = s != null ? s.Name : "";
             tileNote.Text = sel == null ? "No tiles yet: add one with the + button." : "";
@@ -1358,13 +1502,17 @@ namespace RaintileOptions
             // empty = the default of Layout, where the slider rests
             gridCols.Show(key("NX"), nx);
             gridRows.Show(key("NY"), ny);
+            var span = Core.GetSpan(c, null);
+            catSizeCols.Show(Math.Min(8, span[0]).ToString(), 1);
+            catSizeRows.Show(Math.Min(8, span[1]).ToString(), 1);
+            SetActionVisible(catSizeReset, key("TileSize") != "");
             catLogoSize.Show(key("IconSize"));
             SetActionVisible(gridColsReset, key("NX") != "");
             SetActionVisible(gridRowsReset, key("NY") != "");
             SetActionVisible(catLogoSizeReset, key("IconSize") != "");
-            SetFormHelp(gridColsHint, "Empty = the default (" + V("NX") + ", from Layout).");
-            SetFormHelp(gridRowsHint, "Empty = the default (" + V("NY") + ", from Layout).");
-            SetFormHelp(sizeHint, "Pixels or % of the screen height. Empty = the default (" + V("IconSize") + ", from Layout).");
+            SetFormHelp(gridColsHint, "Empty = the default (" + V("NX") + ", Tiles > Grid).");
+            SetFormHelp(gridRowsHint, "Empty = the default (" + V("NY") + ", Tiles > Grid).");
+            SetFormHelp(sizeHint, "Pixels or % of the screen height. Empty = the default (" + V("IconSize") + ", Tiles > Grid).");
             catTileColor.Text = key("TileColor");
             SetSwatch(catColorSwatch, catTileColor.Text);
             SetActionVisible(catColorClear, catTileColor.Text.Trim() != "");
@@ -1602,6 +1750,21 @@ namespace RaintileOptions
         }
 
         // The scroll viewer inside a control's template (the strip scrolls with the wheel)
+        // The room of the vertical scrollbar kept also when there is none, so the
+        // content's width never changes with it. The preview follows the width of
+        // its column and with it its height: without this, at some window sizes
+        // the bar showed (narrower: the preview shorter, everything fits), hid
+        // (wider: taller, it no longer fits) and showed again, over and over.
+        static void KeepScrollBarRoom(ScrollViewer sv, FrameworkElement content)
+        {
+            content.Margin = T(content.Margin.Left, content.Margin.Top, Gap.ScrollBar, content.Margin.Bottom);
+            sv.ScrollChanged += (s, e) =>
+            {
+                double right = sv.ComputedVerticalScrollBarVisibility == Visibility.Visible ? 0 : Gap.ScrollBar;
+                if (content.Margin.Right != right) content.Margin = T(content.Margin.Left, content.Margin.Top, right, content.Margin.Bottom);
+            };
+        }
+
         static ScrollViewer FindScrollViewer(DependencyObject d)
         {
             var sv = d as ScrollViewer;
@@ -1852,11 +2015,12 @@ namespace RaintileOptions
             grid.Children.Add(leftScroll);
             previewCard = new Border { Style = ResStyle("Card"), Padding = T(Gap.CardPadding, Gap.Card, Gap.CardPadding, Gap.Card), VerticalAlignment = VerticalAlignment.Top };
             leftScroll.Content = previewCard;
+            KeepScrollBarRoom(leftScroll, previewCard);
             var left = NewPanel();
             previewCard.Child = left;
-            previewColumn = left;
-            // the preview follows the width of the column
-            left.SizeChanged += (s, e) => { if (e.WidthChanged && preview != null) { UpdateFraming(); UpdateLogoPlace(); UpdateInfoPlace(); } };
+            previewScroll = leftScroll;
+            // the preview follows the width of the column (UpdateFraming)
+            leftScroll.SizeChanged +=(s, e) => { if (e.WidthChanged && preview != null) { UpdateFraming(); UpdateLogoPlace(); UpdateInfoPlace(); } };
 
             // All tiles: the tile whose images show the category's values
             var por = NewPanel(Orientation.Horizontal);
@@ -1869,6 +2033,23 @@ namespace RaintileOptions
             previewOnRow = por;
             AddTo(left, por);
             previewOn.SelectionChanged += (s, e) => { if (!loading && IsAllSelected()) UpdateTilePreview(); };
+
+            // The wheel with the logo or the lines on the backdrop: placed on the
+            // thumbnail (LogoPos, LogoScale, InfoPos) or on the backdrop (BackLogoPos,
+            // BackLogoScale, BackInfoPos)
+            var pon = NewPanel(Orientation.Horizontal);
+            pon.Margin = T(0, 0, 0, Gap.Group);
+            var ponl = NewText("Place on", Fs.Label);
+            ponl.VerticalAlignment = VerticalAlignment.Center;
+            ponl.Margin = T(0, 0, Gap.Control, 0);
+            placeOn = new ComboBox { MinWidth = FieldWidth.M, Height = FieldHeight };
+            placeOn.Items.Add(new ComboBoxItem { Content = "Its thumbnail" });
+            placeOn.Items.Add(new ComboBoxItem { Content = "The backdrop" });
+            placeOn.SelectedIndex = 1;
+            AddTo(pon, ponl); AddTo(pon, placeOn);
+            placeOnRow = pon;
+            AddTo(left, pon);
+            placeOn.SelectionChanged += (s, e) => { if (!loading) { UpdateTilePreview(); UpdatePlacementHint(); } };
 
             // the background sits on a canvas, positioned by the framing (sized by UpdateFraming)
             preview = new Border
@@ -1908,9 +2089,9 @@ namespace RaintileOptions
             // with the pad: A on the preview moves its parts
             AddPadArea(preview, StartPlace);
             AddTo(left, NewPlaceHint());
-            var how = NewHelp("Drag the background to frame it, the logo or the play time line to move them; the wheel zooms the background or resizes the logo under the mouse. With the gamepad: A on the preview. The preview has the proportions of this category's tiles on this screen. " +
-                "A tile follows All tiles until you move something on it (Own); its reset gives it back the placement of All tiles.");
+            var how = NewHelp(PlaceHowText());
             how.Margin = T(0, Gap.Control, 0, Gap.Line);
+            placeHow = how;
             AddTo(left, how);
 
             // framing, logo, play time: the name and the chip (Own / From All tiles) on
@@ -1936,13 +2117,17 @@ namespace RaintileOptions
             zoomField = NewNumberField(1, 4, 0.01, Times, t =>
             {
                 double n;
-                if (bgFrame.Bitmap == null || GetPlaceTarget() == null || !Core.TryNumber(t, out n)) return;
+                if (bgFrame.Bitmap == null || placeBack || GetPlaceTarget() == null || !Core.TryNumber(t, out n)) return;
                 SetFrameZoom(n);
             }, true, 0.05);
             FitFieldHeight(zoomField.Root);
             frameChip = NewChip();
             btnFrameReset = NewResetIcon("Back to the framing of All tiles");
             var frameBlock = placeBlock("Framing", zoomField.Root, frameChip, btnFrameReset);
+            // on the backdrop: off, with the reason
+            frameWhy = NewHelp("The backdrop is not framed: its image fills it from the centre. The framing is the thumbnail's.", ResBrush("AccentBrush"));
+            frameWhy.Margin = T(0, Gap.Help, 0, 0);
+            frameBlock.Children.Insert(1, frameWhy);
             frameRow = frameBlock;
             AddTo(left, frameBlock);
             logoField = NewNumberField(0.25, 3, 0.01, Times, t =>
@@ -1955,6 +2140,10 @@ namespace RaintileOptions
             logoChip = NewChip();
             btnLogoReset = NewResetIcon("Back to the logo placement of All tiles");
             var logoBlock = placeBlock("Logo", logoField.Root, logoChip, btnLogoReset);
+            // on the backdrop with the logo on the thumbnail: off, with the reason
+            logoWhy = NewHelp(WhenReason("WheelLogoOn=Background", null), ResBrush("AccentBrush"));
+            logoWhy.Margin = T(0, Gap.Help, 0, 0);
+            logoBlock.Children.Insert(1, logoWhy);
             logoRow = logoBlock;
             AddTo(left, logoBlock);
             // play time line: only a place, shown as text where the others have a slider
@@ -1963,9 +2152,20 @@ namespace RaintileOptions
             infoChip = NewChip();
             btnInfoReset = NewResetIcon("Back to the play time placement of All tiles");
             var infoBlock = placeBlock("Play time", infoPosText, infoChip, btnInfoReset);
-            var infoHelp = NewHelp("The line with the play time and the last launch (Appearance > Text): drag it in the preview.");
+            var infoHelp = NewHelp("The line with the play time and the last launch, and the Steam update above it (Tiles > Play time and updates): drag it in the preview.");
             infoHelp.Margin = T(0, Gap.Help, 0, 0);
             infoBlock.Children.Insert(1, infoHelp);
+            // with TileInfo and UpdateInfo Never: disabled, with the reason
+            // (docs/OptionsUI.md, 0): either of the two is enough, their page once
+            Page linesPage;
+            Schema.ItemOf("TileInfo", out linesPage);
+            string either = WhenReason("TileInfo=Hover|Always", linesPage).TrimEnd('.') + ", or "
+                + WhenReason("UpdateInfo=Hover|Always", linesPage).Substring("Only with ".Length).TrimEnd('.')
+                + (linesPage != null ? " (" + linesPage.Title + " page)." : ".");
+            infoNeverWhy = either;
+            infoWhy = NewHelp(either, ResBrush("AccentBrush"));
+            infoWhy.Margin = T(0, Gap.Help, 0, 0);
+            infoBlock.Children.Insert(2, infoWhy);
             infoRow = infoBlock;
             AddTo(left, infoBlock);
 
@@ -1989,7 +2189,7 @@ namespace RaintileOptions
                 }
                 else
                 {
-                    if (bgFrame.Bitmap == null) return;
+                    if (bgFrame.Bitmap == null || placeBack) return;
                     LimitFocus();
                     bgFrame.Dragging = true; bgFrame.DragPoint = pt; bgFrame.DragFX = bgFrame.FX; bgFrame.DragFY = bgFrame.FY;
                     bgFrame.Moved = false;
@@ -2052,7 +2252,7 @@ namespace RaintileOptions
                     SetLogoScale(logoPlace.Scale * Math.Pow(1.1, e.Delta / 120.0));
                     return;
                 }
-                if (bgFrame.Bitmap == null) return;
+                if (bgFrame.Bitmap == null || placeBack) return;
                 e.Handled = true;   // the page must not scroll
                 SetFrameZoom(bgFrame.Zoom * Math.Pow(1.1, e.Delta / 120.0), pt);
             };
@@ -2067,8 +2267,8 @@ namespace RaintileOptions
                 UpdateTilePreview();
             };
             btnFrameReset.Click += (s, e) => resetPlace(new[] { "BgFocus", "BgZoom" });
-            btnLogoReset.Click += (s, e) => resetPlace(new[] { "LogoPos", "LogoScale" });
-            btnInfoReset.Click += (s, e) => resetPlace(new[] { "InfoPos" });
+            btnLogoReset.Click += (s, e) => resetPlace(new[] { LogoPosKey, LogoScaleKey });
+            btnInfoReset.Click += (s, e) => resetPlace(new[] { InfoPosKey });
 
             // Row 1, right: the settings of the tile, or of the category under All tiles
             var sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
@@ -2077,6 +2277,7 @@ namespace RaintileOptions
             grid.Children.Add(sv);
             var details = NewPanel();
             sv.Content = details;
+            KeepScrollBarRoom(sv, details);
 
             // Imported game: read-only, can become a normal tile
             importedCard = NewCard("Imported game", "");
@@ -2114,19 +2315,38 @@ namespace RaintileOptions
                 SetActionVisible(reset, value != "");
                 UpdateTilePreview();   // the tile's proportions and logo size
             };
-            // grid and logo size as in Layout; empty = the default of Layout (help set by ShowAllTiles)
-            gridColsReset = NewResetIcon("Back to the default (Layout)");
-            gridRowsReset = NewResetIcon("Back to the default (Layout)");
-            catLogoSizeReset = NewResetIcon("Back to the default (Layout)");
-            gridCols = NewNumberField(1, 12, 1, "columns", t => setCatKey("NX", t, gridColsReset));
-            gridRows = NewNumberField(1, 8, 1, "rows", t => setCatKey("NY", t, gridRowsReset));
+            // grid and logo size as on Tiles > Grid; empty = its default (help set by ShowAllTiles)
+            gridColsReset = NewResetIcon("Back to the default (Tiles > Grid)");
+            gridRowsReset = NewResetIcon("Back to the default (Tiles > Grid)");
+            catLogoSizeReset = NewResetIcon("Back to the default (Tiles > Grid)");
+            gridCols = NewNumberField(1, 12, 1, "", t => setCatKey("NX", t, gridColsReset));
+            gridRows = NewNumberField(1, 8, 1, "", t => setCatKey("NY", t, gridRowsReset));
             catLogoSize = NewSizeField("H", v => setCatKey("IconSize", v, catLogoSizeReset));
             var colsRow = AddTo(af, NewFormRow("Columns", gridCols.Root, "", null, gridColsReset));
             gridColsHint = FormHelp(colsRow);
+            AddGridOnlyReason(colsRow);
             var rowsRow = AddTo(af, NewFormRow("Rows", gridRows.Root, "", null, gridRowsReset));
             gridRowsHint = FormHelp(rowsRow);
+            AddGridOnlyReason(rowsRow);
+            // cells of every tile without a size of its own (TileSize=, as Size= of a tile)
+            Action<string> catSizeChanged = x =>
+            {
+                if (loading || currentFile == null) return;
+                double nc, nr;
+                int c = Core.TryNumber(catSizeCols.Box.Text, out nc) ? Math.Max(1, Math.Min(8, (int)Math.Round(nc))) : 1;
+                int r = Core.TryNumber(catSizeRows.Box.Text, out nr) ? Math.Max(1, Math.Min(8, (int)Math.Round(nr))) : 1;
+                setCatKey("TileSize", c == 1 && r == 1 ? "" : c + "x" + r, catSizeReset);
+                UpdatePlacementHint();
+            };
+            catSizeReset = NewResetIcon("Back to one cell");
+            catSizeCols = NewNumberField(1, 8, 1, "columns", catSizeChanged);
+            catSizeRows = NewNumberField(1, 8, 1, "rows", catSizeChanged);
+            catSizeReset.Click += (s, e) => { setCatKey("TileSize", "", catSizeReset); ShowAllTiles(); };
+            AddGridOnlyReason(AddTo(af, NewFormRow("Tile width", catSizeCols.Root, "Cells every tile takes in the grid (at most the grid of the category), unless it has a size of its own (its Width and Height; Reset every tile > Size gives them this one).", null, catSizeReset)));
+            AddGridOnlyReason(AddTo(af, NewFormRow("Tile height", catSizeRows.Root)));
             var sizeFormRow = AddTo(af, NewFormRow("Logo size", catLogoSize.Root, "", null, catLogoSizeReset));
             sizeHint = FormHelp(sizeFormRow);
+            AddGridOnlyReason(sizeFormRow);
             Func<string, double> layout = k => { double n; return Core.TryNumber(V(k), out n) ? n : 1; };
             gridColsReset.Click += (s, e) => { setCatKey("NX", "", gridColsReset); gridCols.Show("", layout("NX")); };
             gridRowsReset.Click += (s, e) => { setCatKey("NY", "", gridRowsReset); gridRows.Show("", layout("NY")); };
@@ -2136,7 +2356,7 @@ namespace RaintileOptions
             catColorClear = NewClearButton("Clear the colour: the default tile colour");
             catColorClear.Click += (s, e) => catTileColor.Text = "";   // TextChanged writes it
             var catColorRow = NewFieldRow(catColorSwatch, catTileColor, null);
-            AddTo(af, NewFormRow("Colour", catColorRow, "Colour of the tiles without one of their own (their Colour), used when there is no background image. Empty = the default tile colour (Appearance). R,G,B,A: the A makes it transparent.", null, catColorClear));
+            AddTo(af, NewFormRow("Colour", catColorRow, "Colour of the tiles without one of their own (their Colour), used when there is no background image. Empty = the default tile colour (Tiles page). R,G,B,A: the A makes it transparent.", null, catColorClear));
             catColorSwatch.Click += (s, e) =>
             {
                 if (currentFile == null) return;
@@ -2161,18 +2381,26 @@ namespace RaintileOptions
             // framing, logo and play time line of every tile back to their default place,
             // the ones with their own too; the buttons share the column
             var btnResetLogos = NewButton("Logos");
-            var btnResetFraming = NewButton("Framing");
+            var btnResetFraming = resetFramingAll = NewButton("Framing");
             var btnResetInfo = NewButton("Play time");
-            var placeFormRow = NewFormRow("Reset every tile", NewEqualButtons(btnResetLogos, btnResetFraming, btnResetInfo));
+            var btnResetSize = NewButton("Size");
+            var placeFormRow = NewFormRow("Reset every tile", NewEqualButtons(btnResetLogos, btnResetFraming, btnResetInfo, btnResetSize));
             placementHint = FormHelp(placeFormRow);   // what the buttons do and the current placement
             placementRow = placeFormRow;
             AddTo(af, placementRow);
             autoArtRow = NewAutoArtRow();
             AddTo(af, autoArtRow);
             AddTo(af, NewSortRow());
-            btnResetLogos.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "logo placement", new[] { "LogoPos", "LogoScale" }); };
+            btnResetLogos.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, placeBack ? "logo placement on the backdrop" : "logo placement", new[] { LogoPosKey, LogoScaleKey }); };
             btnResetFraming.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "background framing", new[] { "BgFocus", "BgZoom" }); };
-            btnResetInfo.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, "play time placement", new[] { "InfoPos" }, "the top left"); };
+            // (Size= is a key of the tiles only: the category keeps its TileSize)
+            btnResetSize.Click += (s, e) =>
+            {
+                if (currentFile == null) return;
+                var span = Core.GetSpan(Core.GetCategorySection(GetModel(currentFile)), null);
+                ResetCategoryPlace(currentFile, "size", new[] { "Size" }, "the size of All tiles (" + span[0] + Times + span[1] + ")");
+            };
+            btnResetInfo.Click += (s, e) => { if (currentFile != null) ResetCategoryPlace(currentFile, placeBack ? "play time placement on the backdrop" : "play time placement", new[] { InfoPosKey }, "the top left"); };
 
             // Tile card
             tileCard = NewCard("Tile", "");
@@ -2192,8 +2420,7 @@ namespace RaintileOptions
             cmdRow.Children.Add(btnCmd);
             AddTo(f, NewFormRow("Command", cmdRow, "A program, a .lnk/.url shortcut, a URL (also steam://...), a folder or a Rainmeter bang."));
             // widgets: any tile, in any category
-            widgetKind = new ComboBox();
-            foreach (var k in WIDGET_KINDS) widgetKind.Items.Add(new ComboBoxItem { Content = k[1], Tag = k[0] });
+            widgetKind = NewChoiceBox(WIDGET_KINDS, "", null);
             widgetRow = NewFormRow("Widget", widgetKind, "What the tile shows instead of images. A click opens its Command, or the tool that fits.");
             AddTo(f, widgetRow);
             widgetParam = new TextBox();
@@ -2218,9 +2445,9 @@ namespace RaintileOptions
                 UpdateWidgetHint();
                 if (loading) return;
                 var t = GetCurrentTile();
-                var item = widgetKind.SelectedItem as ComboBoxItem;
-                if (t == null || item == null) return;
-                Core.SetKey(t, "Widget", (string)item.Tag);
+                string kind = ChoiceValue(widgetKind);
+                if (t == null || kind == null) return;
+                Core.SetKey(t, "Widget", kind);
                 SetChanged(currentFile);
             };
             widgetParam.TextChanged += (s, e) =>
@@ -2269,14 +2496,28 @@ namespace RaintileOptions
                 double nc, nr;
                 int c = Core.TryNumber(sizeCols.Box.Text, out nc) ? Math.Max(1, Math.Min(8, (int)Math.Round(nc))) : 1;
                 int r = Core.TryNumber(sizeRows.Box.Text, out nr) ? Math.Max(1, Math.Min(8, (int)Math.Round(nr))) : 1;
-                Core.SetKey(t, "Size", c == 1 && r == 1 ? "" : c + "x" + r);
+                // the size of All tiles: none of its own
+                var all = Core.GetSpan(Core.GetCategorySection(GetModel(currentFile)), null);
+                Core.SetKey(t, "Size", c == all[0] && r == all[1] ? "" : c + "x" + r);
                 SetChanged(currentFile);
+                SetActionVisible(tileSizeReset, Core.GetKey(t, "Size") != "");
+                UpdateTileDots();
                 UpdateTilePreview();
             };
             sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged);
             sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged);
-            AddTo(f, NewFormRow("Width", sizeCols.Root, "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Search, Favorites and Recent show it in one cell."));
-            AddTo(f, NewFormRow("Height", sizeRows.Root));
+            tileSizeReset = NewResetIcon("Back to the size of All tiles");
+            tileSizeReset.Click += (s, e) =>
+            {
+                var t = GetCurrentTile();
+                if (t == null) return;
+                Core.SetKey(t, "Size", "");
+                SetChanged(currentFile);
+                UpdateTileDots();
+                ShowTile();
+            };
+            AddGridOnlyReason(AddTo(f, NewFormRow("Width", sizeCols.Root, "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Without a size of its own it has the one of All tiles. Search, Favorites and Recent show it in one cell.", null, tileSizeReset)));
+            AddGridOnlyReason(AddTo(f, NewFormRow("Height", sizeRows.Root)));
             tagSuggestions = new WrapPanel();
             AddTo(f, NewFormRow("Tags", tileFields["Tags"], "Separated by commas, e.g. multiplayer, coop. Search finds them, and each tag is a chip of the filter bar above the search results.", tagSuggestions));
             AddTo(f, NewPinRow());

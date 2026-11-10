@@ -23,6 +23,10 @@ namespace RaintileOptions
     class FoundItem
     {
         public string Id, Kind, Store, Name, Command, Hero, Logo, Icon, SteamAppId;
+        // where it was found as the list shows it (the store's name, or the
+        // name of one of your folders) and when, the first time (ISO date)
+        public string Source, Found;
+        public string Category;   // a folder's own category (where it goes), else empty
         public bool New;
     }
 
@@ -37,7 +41,8 @@ namespace RaintileOptions
         List<FoundItem> foundItems = new List<FoundItem>();
         string foundScanned = "";
         readonly HashSet<string> foundSelected = new HashSet<string>();
-        string foundKind = "all", foundFilter = "";
+        string foundKind = "all", foundFilter = "", foundSource = "", foundSort = "name";
+        ComboBox foundSourceBox;
         bool foundShowAdded, foundCovers = true, foundBuilding;
         Process scanProcess;
         DispatcherTimer scanTimer;
@@ -56,6 +61,7 @@ namespace RaintileOptions
                 scanTimer.Stop();
                 foundScanButton.IsEnabled = true;
                 ReadFound();
+                RefreshFoundSources();
                 RefreshFoundList();
                 UpdateFoundStatus();
                 SetFoundSeen();
@@ -63,6 +69,15 @@ namespace RaintileOptions
                 InvokeRainmeter("!CommandMeasure MeasureScript \"OnMissing()\" \"" + Core.Config + "\"");
                 UpdateNavDots(true);
             };
+        }
+
+        // The name of where an item was found: a folder's own name (alias), or the
+        // store's label
+        static string SourceLabel(string store, string source)
+        {
+            if (store == "Folders" && !string.IsNullOrEmpty(source)) return source;
+            string label;
+            return Schema.STORE_LABELS.TryGetValue(store ?? "", out label) ? label : store;
         }
 
         static List<FoundItem> ReadFoundItems(string text)
@@ -80,7 +95,8 @@ namespace RaintileOptions
                 {
                     Id = Json.Str(d, "Id"), Kind = Json.Str(d, "Kind"), Store = Json.Str(d, "Store"), Name = Json.Str(d, "Name"),
                     Command = Json.Str(d, "Command"), Hero = Json.Str(d, "Hero"), Logo = Json.Str(d, "Logo"), Icon = Json.Str(d, "Icon"),
-                    SteamAppId = Json.Str(d, "SteamAppId"), New = Json.Bool(d, "New"),
+                    SteamAppId = Json.Str(d, "SteamAppId"), New = Json.Bool(d, "New"), Found = Json.Str(d, "Found"), Category = Json.Str(d, "Category"),
+                    Source = SourceLabel(Json.Str(d, "Store"), Json.Str(d, "Source")),
                 });
             }
             return list;
@@ -175,11 +191,13 @@ namespace RaintileOptions
 
         void UpdateFoundStatus(string extra = "")
         {
-            int games = foundItems.Count(i => i.Kind == "game"), apps = foundItems.Count(i => i.Kind == "app");
+            // "12 games and 30 apps found": each kind, in the order of the table
+            var counts = Schema.IMPORT_KINDS.Select(k => foundItems.Count(i => Schema.KindOf(i.Kind) == k) + " " + k.Plural.ToLowerInvariant()).ToList();
+            string what = counts.Count > 1 ? string.Join(", ", counts.Take(counts.Count - 1)) + " and " + counts.Last() : counts.FirstOrDefault();
             string when = "";
             DateTime d;
             if (DateTime.TryParse(foundScanned, out d)) when = ", searched " + d.ToString("g");
-            foundStatus.Text = foundScanned != "" ? games + " games and " + apps + " apps found" + when + "." : "Not searched yet.";
+            foundStatus.Text = foundScanned != "" ? what + " found" + when + "." : "Not searched yet.";
             if (extra != "") foundStatus.Text = extra + " " + foundStatus.Text;
         }
 
@@ -228,9 +246,7 @@ namespace RaintileOptions
             SetCol(t, 1);
             title.Children.Add(t);
             AddTo(texts, title);
-            string store;
-            if (!Schema.STORE_LABELS.TryGetValue(it.Store ?? "", out store)) store = it.Store;
-            AddTo(texts, NewText(store + "   " + Dot + "   " +(it.Kind == "game" ? "game" : "app"), Fs.Help, ResBrush("DimBrush")));
+            AddTo(texts, NewText(it.Source + "   " + Dot + "   " + Schema.KindOf(it.Kind).Singular, Fs.Help, ResBrush("DimBrush")));
             SetCol(texts, 2);
             g.Children.Add(texts);
             if (inCategory != null)
@@ -247,6 +263,32 @@ namespace RaintileOptions
             return li;
         }
 
+        // The order of the list (foundSort): by name, the newest found first, or by
+        // where they were found
+        IEnumerable<FoundItem> SortedFound()
+        {
+            if (foundSort == "new") return foundItems.OrderByDescending(i => i.Found ?? "").ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+            if (foundSort == "source") return foundItems.OrderBy(i => i.Source, StringComparer.CurrentCultureIgnoreCase).ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+            return foundItems.OrderBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase);
+        }
+
+        // The sources in the filter: the ones of the items found, by name
+        void RefreshFoundSources()
+        {
+            if (foundSourceBox == null) return;
+            var sources = foundItems.Select(i => i.Source).Where(x => !string.IsNullOrEmpty(x)).Distinct().OrderBy(x => x, StringComparer.CurrentCultureIgnoreCase).ToList();
+            if (foundSource != "" && !sources.Contains(foundSource)) foundSource = "";
+            foundBuilding = true;
+            try
+            {
+                foundSourceBox.Items.Clear();
+                foundSourceBox.Items.Add(new ComboBoxItem { Content = "All stores and folders", Tag = "" });
+                foreach (var x in sources) foundSourceBox.Items.Add(new ComboBoxItem { Content = x, Tag = x });
+                SelectChoice(foundSourceBox, foundSource);
+            }
+            finally { foundBuilding = false; }
+        }
+
         void RefreshFoundList()
         {
             if (foundList == null) return;
@@ -256,13 +298,14 @@ namespace RaintileOptions
                 foundList.Items.Clear();
                 var present = GetPresentMap();
                 var words = Regex.Split(foundFilter.ToLowerInvariant(), @"\s+").Where(w => w != "").ToList();
-                foreach (var it in foundItems)
+                foreach (var it in SortedFound())
                 {
-                    if (foundKind != "all" && it.Kind != foundKind) continue;
+                    if (foundKind != "all" && Schema.KindOf(it.Kind).Id != foundKind) continue;
+                    if (foundSource != "" && it.Source != foundSource) continue;
                     string inCat = GetPresentIn(it, present);
                     if (inCat != null) foundSelected.Remove(it.Id);
                     if (inCat != null && !foundShowAdded) continue;
-                    string hay = (it.Name + " " + it.Store).ToLowerInvariant();
+                    string hay = (it.Name + " " + it.Store + " " + it.Source).ToLowerInvariant();
                     if (words.Any(w => !hay.Contains(w))) continue;
                     var item = NewFoundEntry(it, inCat);
                     foundList.Items.Add(item);
@@ -401,13 +444,16 @@ namespace RaintileOptions
                     win.Dispatcher.Invoke(new Action(() => { }), DispatcherPriority.Background);
                     foundSelected.Remove(it.Id);
                     if (GetPresentIn(it, present) != null) continue;
-                    string b = target != "auto" ? Path.GetFileNameWithoutExtension(target) : it.Kind == "game" ? V("ImportCategory") : V("AppsCategory");
-                    if (b == "") b = it.Kind == "game" ? "Games" : "Apps";
+                    // by type: a folder's own category first, then the one of its kind
+                    string b = target != "auto" ? Path.GetFileNameWithoutExtension(target)
+                        : !string.IsNullOrEmpty(it.Category) ? Core.GetTileName(it.Category)
+                        : V(Schema.KindOf(it.Kind).CategoryKey);
+                    if (b == "") b = Schema.KindOf(it.Kind).DefaultCategory;
                     string file = GetCategoryFileFor(b);
                     var m = GetModel(file);
                     string name = Core.GetTileName(it.Name);
                     if (name == "") continue;
-                    if (TestTileName(m, name)) name = name + " (" + it.Store + ")";
+                    if (TestTileName(m, name)) name = name + " (" + it.Source + ")";
                     if (TestTileName(m, name)) continue;
                     var s = new IniSection { Name = name };
                     Core.SetKey(s, "Command", it.Command);
@@ -423,7 +469,7 @@ namespace RaintileOptions
                         {
                             string local = kind == "background" ? it.Hero : it.Logo;
                             if (local != "" && File.Exists(local)) { Core.CopyTileImage(b, kind, name, local); continue; }
-                            if (it.Kind == "game")
+                            if (Schema.KindOf(it.Kind).GameArt)
                             {
                                 if (DownloadTileImage(Art.SteamImage(it.SteamAppId, kind), b, kind, name)) continue;
                                 if (key != "")
@@ -465,7 +511,7 @@ namespace RaintileOptions
 
         Border NewFoundCard()
         {
-            var card = NewCard("Found on this PC", "Tick the games and apps to add, then Add selected: they become tiles at once, with their images. The text box filters by name or store.");
+            var card = NewCard(null, "Tick the games and apps to add, then Add selected: they become tiles at once, with their images. The text box filters by name, store or folder; the lists show one store or folder only, and set the order.");
             var f = CardPanel(card);
 
             int converted = ConvertOldImports();
@@ -490,16 +536,27 @@ namespace RaintileOptions
 
             // filters: type, text, already added, covers
             var filters = new WrapPanel { Margin = T(0, 0, 0, Gap.Text) };
-            foreach (var k in new[] { new[] { "all", "All" }, new[] { "game", "Games" }, new[] { "app", "Apps" } })
-            {
-                var rb = new RadioButton { Style = ResStyle("Segment"), Content = k[1], GroupName = "found_kind", IsChecked = foundKind == k[0] };
-                string kind = k[0];
-                rb.Click += (s, e) => { foundKind = kind; RefreshFoundList(); };
-                filters.Children.Add(rb);
-            }
-            var search = new TextBox { Width = FieldWidth.M, Margin = T(Gap.Text, 0, Gap.Group, 0), VerticalAlignment = VerticalAlignment.Center };
+            // the kind (a list: there can be more kinds than games and apps)
+            var kinds = new[] { new[] { "all", "All types" } }.Concat(Schema.IMPORT_KINDS.Select(k => new[] { k.Id, k.Plural }));
+            var kindBox = NewChoiceBox(kinds, foundKind, v => { foundKind = v ?? "all"; RefreshFoundList(); });
+            kindBox.Width = FieldWidth.S;
+            kindBox.Margin = T(0, 0, Gap.Control, 0);
+            kindBox.VerticalAlignment = VerticalAlignment.Center;
+            filters.Children.Add(kindBox);
+            var search = new TextBox { Width = FieldWidth.M, Margin = T(0, 0, Gap.Control, 0), VerticalAlignment = VerticalAlignment.Center };
             search.TextChanged += (s, e) => { foundFilter = search.Text; RefreshFoundList(); };
             filters.Children.Add(search);
+            // where they were found, and the order
+            foundSourceBox = NewChoiceBox(new[] { new[] { "", "All stores and folders" } }, "", v => { if (foundBuilding) return; foundSource = v ?? ""; RefreshFoundList(); });
+            foundSourceBox.Width = FieldWidth.M;
+            foundSourceBox.Margin = T(0, 0, Gap.Control, 0);
+            foundSourceBox.VerticalAlignment = VerticalAlignment.Center;
+            filters.Children.Add(foundSourceBox);
+            var sort = NewChoiceBox(new[] { new[] { "name", "By name" }, new[] { "new", "Newest found first" }, new[] { "source", "By store or folder" } }, foundSort, v => { foundSort = v ?? "name"; RefreshFoundList(); });
+            sort.Width = FieldWidth.M;
+            sort.Margin = T(0, 0, Gap.Group, 0);
+            sort.VerticalAlignment = VerticalAlignment.Center;
+            filters.Children.Add(sort);
             var showAdded = new CheckBox { Content = "Show added", Margin = T(0, 0, Gap.Group, 0), VerticalAlignment = VerticalAlignment.Center, IsChecked = foundShowAdded };
             showAdded.Click += (s, e) => { foundShowAdded = showAdded.IsChecked == true; RefreshFoundList(); };
             filters.Children.Add(showAdded);
@@ -538,7 +595,7 @@ namespace RaintileOptions
             all.Click += (s, e) => { foreach (ListBoxItem i in foundList.Items) if (i.IsEnabled) i.IsSelected = true; };
             none.Click += (s, e) => { foundList.UnselectAll(); foundSelected.Clear(); UpdateFoundCount(); };
             foundTarget = new ComboBox { Width = FieldWidth.L, Margin = T(0, 0, Gap.Control, 0) };
-            foundTarget.Items.Add(new ComboBoxItem { Content = "By type: games to " + V("ImportCategory") + ", apps to " + V("AppsCategory"), Tag = "auto" });
+            foundTarget.Items.Add(new ComboBoxItem { Content = "By type: " + string.Join(", ", Schema.IMPORT_KINDS.Select(k => k.Plural.ToLowerInvariant() + " to " + V(k.CategoryKey))) + " (or their folder's own)", Tag = "auto" });
             foreach (var e in GetCategoryEntries()) foundTarget.Items.Add(new ComboBoxItem { Content = "All to " + e.Name, Tag = e.File });
             foundTarget.SelectedIndex = 0;
             SetCol(foundTarget, 3);
@@ -551,6 +608,7 @@ namespace RaintileOptions
 
             foundScanButton.Click += (s, e) => StartFoundScan();
             ReadFound();
+            RefreshFoundSources();
             UpdateFoundStatus();
             RefreshFoundList();
             if (foundItems.Count > 0) SetFoundSeen(); else StartFoundScan();

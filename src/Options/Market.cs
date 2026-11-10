@@ -216,6 +216,9 @@ namespace RaintileOptions
                     if (r.Button != "Delete") return;
                     try { Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(Path.Combine(WidgetsDir, e.Id), Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin); }
                     catch (Exception ex) { ShowDialog("Delete widget", ex.Message); }
+                    // its settings not saved yet go with it
+                    widgetValues.Remove(e.Id);
+                    UpdateDirty();
                     LoadMarket();
                     BuildNav(navCurrent);
                 };
@@ -241,7 +244,7 @@ namespace RaintileOptions
                 page.Click += (s, a) => OpenUrl(e.Page);
                 AddTo(bar, page);
             }
-            return new Border { BorderBrush = ResBrush("LineBrush"), BorderThickness = T(0, 1, 0, 0), Child = row, Padding = T(0, Gap.Line) };
+            return new CardRow(ResBrush("LineBrush")) { Child = row, Padding = T(0, Gap.Line) };
         }
 
         async Task InstallWidget(MarketEntry e, bool offerTile)

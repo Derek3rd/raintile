@@ -27,8 +27,8 @@ local WIDGET = table.concat({
 }, '\r\n')
 
 -- A skin whose Dashboard has one more tile: the test widget
-local function skinWithWidget(settings)
-	local s = R.new({})
+local function skinWithWidget(settings, skin)
+	local s = R.new({ settings = skin })
 	local dir = s.data .. 'Widgets\\TestW\\'
 	host_mkdir(s.data .. 'Widgets')
 	host_mkdir(dir)
@@ -103,6 +103,147 @@ function T.list_y()
 	local hit = w.widget.partsAt['W' .. w.widget.idx .. 'RowHit1']
 	t.ok(hit, 'the first row is not a part of the tile')
 	t.eq(hit[2], math.floor(api.listY), 'the first row does not start at ListY=')
+end
+
+-- The wheel: the highlight goes onto a row of the list (a part of the tile),
+-- in pixels from the tile (in the wheel a fraction of a line is a place on
+-- the arc, not a distance in the tile)
+function T.list_part_in_the_wheel()
+	local s = skinWithWidget(nil, { ScrollMode = 'Wheel', LauncherMode = 'Dock', DockSide = 'Left' })
+	local w = testWidget(s)
+	for i, c in ipairs(s:upvalue('cats')) do
+		for _, tile in ipairs(c.tiles) do
+			if tile == w then s:call('Show()') s:call('SetCategory(' .. i .. ')') end
+		end
+	end
+	t.clean(s)
+	local name = 'W' .. w.widget.idx .. 'RowHit1'
+	s:call('HoverPart(\'' .. name .. '\')')
+	t.clean(s)
+	local M, V = s:upvalue('M'), s:upvalue('V')
+	local slot
+	for sl, e in pairs(M.wv) do
+		if s:upvalue('tileAt')(sl) == w and (not slot or math.abs(e.d) < math.abs(M.wv[slot].d)) then slot = sl end
+	end
+	t.ok(slot, 'the widget is not on the wheel')
+	local hit = w.widget.partsAt[name]
+	t.ok(hit, 'the first row is not a part of the tile')
+	local box, hl = s.meters['tilebox' .. slot], s.meters['tilehover']
+	local bx, by = tonumber(box:opt('X', '0')) - V.PadX, tonumber(box:opt('Y', '0')) - V.GridY
+	local hx, hy = tonumber(hl:opt('X', '0')), tonumber(hl:opt('Y', '0'))
+	t.ok(not hl.hidden, 'no highlight on the row')
+	t.ok(math.abs(hx - (bx + hit[1])) <= 1 and math.abs(hy - (by + hit[2])) <= 1,
+		string.format('highlight at %d,%d, the row at %d,%d', hx, hy, bx + hit[1], by + hit[2]))
+end
+
+-- The list widgets of the gallery (widgets/): a title of their own at the top,
+-- the rows under it (ListY=, read with Clamp as Rainmeter does)
+function T.gallery_titles()
+	for _, id in ipairs({ 'Modrinth', 'SteamAchievements' }) do
+		local s = R.new({})
+		host_mkdir(s.data .. 'Widgets')
+		host_copytree(s.repo .. '\\widgets\\' .. id, s.data .. 'Widgets\\' .. id, '')
+		local cat = s.data .. 'Categories\\Dashboard.ini'
+		R.writeFile(cat, R.readFile(cat) .. '\r\n[Gallery widget]\r\nWidget=custom\r\nParam=' .. id .. '\r\n')
+		s:start()
+		t.clean(s)
+		local w
+		for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == id then w = x end end
+		t.ok(w, id .. ': the widget tile is missing')
+		local api = s:upvalue('M').widgetInfo(w)
+		-- (the title is 9 to 20 pt: the rows start two of its lines and 12 px down)
+		t.ok(api.listY and api.listY >= 30 and api.listY <= 52, id .. ': ListY= not under the title: ' .. tostring(api.listY))
+		t.ok(grid(s):find('Text=' .. (id == 'Modrinth' and 'Modrinth' or 'Steam achievements'), 1, true), id .. ': no title meter in Grid.inc')
+	end
+	-- its settings: another text, or no title (the rows from the top)
+	for _, case in ipairs({ { 'ShowTitle=1\r\nTitle=My mods\r\n', true }, { 'ShowTitle=0\r\n', false } }) do
+		local s = R.new({})
+		host_mkdir(s.data .. 'Widgets')
+		host_copytree(s.repo .. '\\widgets\\Modrinth', s.data .. 'Widgets\\Modrinth', '')
+		R.writeFile(s.data .. 'Widgets\\Modrinth\\settings.inc', case[1])
+		local cat = s.data .. 'Categories\\Dashboard.ini'
+		R.writeFile(cat, R.readFile(cat) .. '\r\n[Gallery widget]\r\nWidget=custom\r\nParam=Modrinth\r\n')
+		s:start()
+		t.clean(s)
+		local w
+		for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == 'Modrinth' then w = x end end
+		local api = s:upvalue('M').widgetInfo(w)
+		if case[2] then
+			t.ok(grid(s):find('Text=My mods', 1, true), 'the Title setting is not the title')
+			t.ok(api.listY >= 30, 'with the title the rows start under it: ' .. tostring(api.listY))
+		else
+			t.ok(api.listY < 10, 'without the title the rows start at the top: ' .. tostring(api.listY))
+			t.ok(grid(s):find('Hidden=(1-0)', 1, true), 'the title is not hidden with ShowTitle=0')
+		end
+	end
+end
+
+-- Keyboard and pad inside a widget with parts (the rows of its list): from
+-- row to row, out of the tile at the last one, back onto the nearest row
+function T.parts_with_keys()
+	local s = skinWithWidget('Rows=7\r\n')
+	local w = testWidget(s)
+	for i, c in ipairs(s:upvalue('cats')) do
+		for _, tile in ipairs(c.tiles) do
+			if tile == w then s:call('Show()') s:call('SetCategory(' .. i .. ')') end
+		end
+	end
+	t.clean(s)
+	local M, hover = s:upvalue('M'), s:upvalue('hover')
+	local i = w.widget.idx
+	local row1, row2 = 'W' .. i .. 'RowHit1', 'W' .. i .. 'RowHit2'
+	t.ok(w.widget.partsAt[row1] and w.widget.partsAt[row2], 'the test widget has no two rows')
+	s:call("HoverPart('" .. row1 .. "')")
+	t.eq(M.kpart and M.kpart.name, row1, 'the mouse on a row: the keys go on from it')
+	s:call('Nav(0, 1)')
+	t.clean(s)
+	t.eq(M.kpart and M.kpart.name, row2, 'down from the first row')
+	t.eq(hover.toy, w.widget.partsAt[row2][2], 'the highlight on the second row')
+	s:call('Nav(0, -1)')
+	t.eq(M.kpart and M.kpart.name, row1, 'up from the second row')
+	-- up from the first row: out of the tile (onto the one above, if any)
+	local idx = hover.idx
+	s:call('Nav(0, -1)')
+	t.clean(s)
+	t.ok(M.kpart == nil or M.kpart.t ~= w, 'still in the widget past its first row')
+	if hover.idx ~= idx then
+		-- and down again: onto its first row, not the whole tile
+		s:call('Nav(0, 1)')
+		t.clean(s)
+		t.eq(M.kpart and M.kpart.name, row1, 'back down into the widget')
+	end
+	-- Confirm on a row: the row, not the tile (no launch animation)
+	s:call('Confirm()')
+	t.ok(not s:upvalue('launching'), 'Confirm on a row launched the tile')
+end
+
+-- The wheel: a custom widget (its own container, drawn after the tiles) is
+-- cut by the tiles nearer the middle, as its tile is
+function T.custom_widget_under_nearer_tiles()
+	local s = skinWithWidget(nil, { ScrollMode = 'Wheel', LauncherMode = 'Dock', DockSide = 'Left' })
+	local w = testWidget(s)
+	for i, c in ipairs(s:upvalue('cats')) do
+		for _, tile in ipairs(c.tiles) do
+			if tile == w then s:call('Show()') s:call('SetCategory(' .. i .. ')') end
+		end
+	end
+	t.clean(s)
+	local M = s:upvalue('M')
+	local slot = M.slotOfTile(w)
+	t.ok(slot and M.wv[slot], 'the widget is not on the wheel')
+	local box = s.meters['cw' .. w.widget.idx .. 'box']
+	t.ok(box, 'no container of the custom widget')
+	local shapes = {}
+	for k = 1, 30 do
+		local v = box:opt(k == 1 and 'Shape' or ('Shape' .. k), '')
+		if v ~= '' then shapes[#shapes + 1] = v end
+	end
+	local text = table.concat(shapes, '\n')
+	if math.abs(M.wv[slot].d) >= 0.5 then
+		t.ok(text:find('Exclude', 1, true), 'a side widget not cut by the nearer tiles:\n' .. text)
+	else
+		t.ok(not text:find('Exclude', 1, true), 'the middle widget cut:\n' .. text)
+	end
 end
 
 return T

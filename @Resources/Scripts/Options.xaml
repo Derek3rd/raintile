@@ -132,37 +132,6 @@
     </Setter>
   </Style>
 
-  <!-- Segmented choices and chips (RadioButton / ToggleButton) -->
-  <Style x:Key="Segment" TargetType="ToggleButton">
-    <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
-    <Setter Property="Cursor" Value="Hand"/>
-    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-    <Setter Property="Margin" Value="0,0,6,0"/>
-    <Setter Property="Template">
-      <Setter.Value>
-        <ControlTemplate TargetType="ToggleButton">
-          <Border x:Name="b" Background="{StaticResource FieldBg}" BorderBrush="{StaticResource LineBrush}"
-                  BorderThickness="1" CornerRadius="6" Padding="12,5" Margin="0,2">
-            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          </Border>
-          <ControlTemplate.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource DimBrush}"/>
-            </Trigger>
-            <Trigger Property="IsChecked" Value="True">
-              <Setter TargetName="b" Property="Background" Value="{StaticResource AccentSoftBrush}"/>
-              <Setter TargetName="b" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
-              <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
-            </Trigger>
-            <Trigger Property="IsEnabled" Value="False">
-              <Setter Property="Opacity" Value="0.4"/>
-            </Trigger>
-          </ControlTemplate.Triggers>
-        </ControlTemplate>
-      </Setter.Value>
-    </Setter>
-  </Style>
-
   <!-- On/off switch -->
   <Style TargetType="CheckBox">
     <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
@@ -495,6 +464,10 @@
             <Trigger Property="IsDragging" Value="True">
               <Setter TargetName="e" Property="Fill" Value="{StaticResource AccentBrush}"/>
             </Trigger>
+            <!-- the slider being changed with the gamepad (Gamepad.cs, PadEditTag) -->
+            <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Slider}}" Value="PadEdit">
+              <Setter TargetName="e" Property="Fill" Value="{StaticResource AccentBrush}"/>
+            </DataTrigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>

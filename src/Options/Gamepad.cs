@@ -17,6 +17,7 @@
 //   Start                Save and refresh (alone, on release: Back + Start is the
 //                        launcher's toggle, read by the helper)
 //   right stick          scrolls
+//   (on the field of a gamepad setting, A waits for the button to pick: PadDial.cs)
 
 using System;
 using System.Collections.Generic;
@@ -96,7 +97,7 @@ namespace RaintileOptions
     {
         // XInput buttons, and the triggers pressed past half way (as Helper.ps1)
         const int PadUp = 0x1, PadDown = 0x2, PadLeft = 0x4, PadRight = 0x8, PadStart = 0x10,
-            PadLB = 0x100, PadRB = 0x200, PadA = 0x1000, PadB = 0x2000, PadX = 0x4000, PadY = 0x8000,
+            PadView = 0x20, PadLS = 0x40, PadRS = 0x80, PadLB = 0x100, PadRB = 0x200, PadA = 0x1000, PadB = 0x2000, PadX = 0x4000, PadY = 0x8000,
             PadLT = 0x10000, PadRT = 0x20000;
         const int PadDirs = PadUp | PadDown | PadLeft | PadRight;
 
@@ -113,15 +114,36 @@ namespace RaintileOptions
         Win32.Point padCursor;
         ComboBox padCombo;            // list opened with A
         int padComboStart;
+        Slider padSlider;             // slider being changed: A on it, until A or B
+        double padSliderStart;
+        // Tag of the slider being changed: its thumb turns accent (Options.xaml)
+        const string PadEditTag = "PadEdit";
         readonly List<TextBlock> padHints = new List<TextBlock>();   // glyphs of the pad buttons on buttons
         readonly uint padProcess = (uint)Process.GetCurrentProcess().Id;
 
         static readonly MethodInfo buttonOnClick = typeof(ButtonBase).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic);
 
+        // A timer whose work runs in a dispatcher operation of its own, not in its
+        // Tick: the work may open a modal dialog (the pad pressing a button that
+        // asks something), and a DispatcherTimer does not tick while its own Tick
+        // is inside one, so the pad would stop in the dialog. This way the work
+        // runs inside the dialog's loop too, one call queued at a time.
+        public static DispatcherTimer NewLoopTimer(TimeSpan interval, DispatcherPriority priority, Action work)
+        {
+            var t = new DispatcherTimer(priority) { Interval = interval };
+            bool queued = false;
+            t.Tick += (s, e) =>
+            {
+                if (queued) return;
+                queued = true;
+                t.Dispatcher.BeginInvoke(new Action(() => { queued = false; if (t.IsEnabled) work(); }), priority);
+            };
+            return t;
+        }
+
         void InitGamepad()
         {
-            padTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = TimeSpan.FromMilliseconds(16) };
-            padTimer.Tick += (s, e) => PadTick();
+            padTimer = NewLoopTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Input, PadTick);
             // only while this program is in the foreground (its dialogs too)
             app.Activated += (s, e) => StartPad();
             win.Activated += (s, e) => StartPad();
@@ -130,8 +152,18 @@ namespace RaintileOptions
             // a click or a key: mouse and keyboard take over
             EventManager.RegisterClassHandler(typeof(Window), UIElement.PreviewMouseDownEvent, new MouseButtonEventHandler((s, e) => PadModeOff(true)));
             EventManager.RegisterClassHandler(typeof(Window), UIElement.PreviewKeyDownEvent, new KeyEventHandler((s, e) => PadModeOff(true)));
+            AddPadHint((Button)win.FindName("BtnPreview"), Glyph.PadY);
             AddPadHint(btnSave, Glyph.PadStart);
             AddPadHint((Button)win.FindName("BtnClose"), Glyph.PadB);
+        }
+
+        // A new text for a button with a pad hint, its glyph kept
+        static void SetPadHintText(Button b, string text)
+        {
+            var sp = b.Content as StackPanel;
+            var t = sp != null && sp.Children.Count > 0 ? sp.Children[sp.Children.Count - 1] as TextBlock : null;
+            if (t != null) t.Text = text; else b.Content = text;
+            AutomationProperties.SetName(b, text);
         }
 
         // The glyph of the pad button that presses b, before its text, shown only
@@ -184,12 +216,17 @@ namespace RaintileOptions
             padTimer.Stop();
             CloseOsk(true);
             EndPlace(true);
+            EndSliderEdit(true);
+            EndPadCapture();
+            padIgnoreHeld = false;
             padCombo = null;
         }
 
         void PadModeOff(bool closeOsk)
         {
             if (closeOsk) { CloseOsk(true); EndPlace(true); }
+            EndSliderEdit(true);
+            EndPadCapture();
             if (!padMode) return;
             padMode = false;
             HideRing();
@@ -229,6 +266,9 @@ namespace RaintileOptions
                 if (Math.Abs((int)st.ThumbRX) > Math.Abs(rx)) rx = st.ThumbRX;
                 if (Math.Abs((int)st.ThumbRY) > Math.Abs(ry)) ry = st.ThumbRY;
             }
+            // as they are, for picking a button (PadDial.cs)
+            padRawPrev = padRaw;
+            padRaw = buttons;
             int dead = PadSetting("GamepadDeadZone", 12000, 0, 32767);
             if (Math.Abs(lx) > dead || Math.Abs(ly) > dead)
                 buttons |= Math.Abs(lx) > Math.Abs(ly) ? (lx > 0 ? PadRight : PadLeft) : (ly > 0 ? PadUp : PadDown);
@@ -321,12 +361,23 @@ namespace RaintileOptions
             }
             if (root == win && refreshing) return;
 
+            // a button was just picked (PadDial.cs): it does nothing more, Start
+            // does not save on its release
+            if (padIgnoreHeld)
+            {
+                if (buttons == 0) { padIgnoreHeld = false; padStartAlone = false; }
+                return;
+            }
+            if (padCaptureField != null) { PadCaptureInput(); return; }
+            if (padDial != null && padDial.IsOpen) { PadDialInput(); return; }
+
             if (oskTarget != null) { OskInput(fire, start); return; }
             if (padCombo != null)
             {
                 if (padCombo.IsDropDownOpen) { PadComboInput(fire); return; }
                 padCombo = null;
             }
+            if (padSlider != null) { PadSliderInput(fire); return; }
             if (placePart >= 0 && root == win) { PadPlaceInput(fire, start, dt); return; }
             if (rx != 0 || ry != 0) PadScroll(root, rx, ry);
             if (padMode)
@@ -353,6 +404,8 @@ namespace RaintileOptions
             else if ((fire & PadB) != 0) PadBack(root);
             else if ((fire & PadLB) != 0 && root == win) PadPage(-1);
             else if ((fire & PadRB) != 0 && root == win) PadPage(1);
+            // the preview beside the window, as its button in the footer
+            else if ((fire & PadY) != 0 && root == win && btnPreview != null) btnPreview.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             else if (start && root == win)
             {
                 // the button takes the focus first, as with a click: fields that
@@ -370,13 +423,6 @@ namespace RaintileOptions
             return fe is ButtonBase || fe is TextBox || fe is PasswordBox || fe is ComboBox || fe is Slider || fe is ListBoxItem || padAreas.ContainsKey(fe);
         }
 
-        // The field next to a slider: the pad changes the value with the slider
-        static bool IsSliderField(FrameworkElement fe)
-        {
-            var p = VisualTreeHelper.GetParent(fe) as Panel;
-            return fe is TextBox && p != null && p.Children.OfType<Slider>().Any();
-        }
-
         static void CollectPadTargets(DependencyObject d, List<FrameworkElement> list)
         {
             var fe = d as FrameworkElement;
@@ -385,7 +431,7 @@ namespace RaintileOptions
                 if (!fe.IsVisible || !fe.IsEnabled || fe is ScrollBar) return;
                 if (IsPadTarget(fe))
                 {
-                    if (fe.Focusable && !IsSliderField(fe)) list.Add(fe);
+                    if (fe.Focusable) list.Add(fe);
                     return;
                 }
             }
@@ -401,6 +447,16 @@ namespace RaintileOptions
         void EnsurePadFocus(Window root)
         {
             if (PadUsable(padFocus, root)) return;
+            // the control hid itself (a reset or clear button with nothing left to
+            // do): the first control of its row, not the menu
+            var row = PadRowOf(padFocus);
+            if (row != null && row.IsVisible && Window.GetWindow(row) == root)
+            {
+                var inRow = new List<FrameworkElement>();
+                CollectPadTargets(row, inRow);
+                var first = PadFirst(inRow, root);
+                if (first != null) { PadSetFocus(first, false); return; }
+            }
             FrameworkElement next = null;
             // the control with the keyboard focus (the field of an editable list: the list)
             var focused = Keyboard.FocusedElement as FrameworkElement;
@@ -411,7 +467,10 @@ namespace RaintileOptions
             {
                 var all = new List<FrameworkElement>();
                 CollectPadTargets(root, all);
-                next = all.OfType<Button>().FirstOrDefault(b => b.IsDefault) ?? all.FirstOrDefault();
+                // a dialog that asks for a text (a name): its field, ready for A
+                // (the keyboard), whether or not it has the focus yet
+                next = (root != win ? all.OfType<TextBox>().FirstOrDefault(t => !t.IsReadOnly) : null)
+                    ?? all.OfType<Button>().FirstOrDefault(b => b.IsDefault) ?? all.FirstOrDefault();
             }
             if (next != null) PadSetFocus(next, false);
         }
@@ -429,8 +488,9 @@ namespace RaintileOptions
         {
             if (!padMode || padFocus == null) return;
             // in the menu the background of the selected entry is enough (the
-            // ring would be cut by the list at its sides)
-            if (InMenu(padFocus)) { HideRing(); return; }
+            // ring would be cut by the list at its sides); a slider being changed
+            // shows it with its thumb
+            if (InMenu(padFocus) || padSlider != null) { HideRing(); return; }
             if (padRing != null && padRing.AdornedElement == padFocus) return;
             HideRing();
             var layer = AdornerLayer.GetAdornerLayer(padFocus);
@@ -592,13 +652,6 @@ namespace RaintileOptions
 
         void PadMove(Window root, int dir)
         {
-            // a slider changes with left and right
-            var slider = padFocus as Slider;
-            if (slider != null && (dir == PadLeft || dir == PadRight))
-            {
-                (dir == PadRight ? Slider.IncreaseSmall : Slider.DecreaseSmall).Execute(null, slider);
-                return;
-            }
             // the menu: up and down select (round its end), right goes into the page
             if (root == win && InMenu(padFocus))
             {
@@ -623,21 +676,43 @@ namespace RaintileOptions
         void PadPageStart()
         {
             var all = new List<FrameworkElement>();
+            // the switch beside the page title (Page.Switch) first: it is at the top
+            CollectPadTargets(pageSwitch, all);
             CollectPadTargets(pageHost, all);
+            var best = PadFirst(all, win);
+            if (best != null) PadSetFocus(best);
+        }
+
+        // Of these controls, the top one, the left one of a row
+        public static FrameworkElement PadFirst(IEnumerable<FrameworkElement> all, Visual root)
+        {
             FrameworkElement best = null;
             Rect bestRect = Rect.Empty;
             foreach (var c in all)
             {
-                var r = PadRect(c, win);
+                var r = PadRect(c, root);
                 if (r.IsEmpty) continue;
-                // a row: what is level with the best counts as the same row
-                if (best == null || r.Top < bestRect.Top - 4 || (Math.Abs(r.Top - bestRect.Top) <= 4 && r.Left < bestRect.Left))
+                // a row: what overlaps the best up and down counts as the same row
+                // (a slider is lower than the box after it, centred in the row)
+                bool sameRow = best != null && r.Top < bestRect.Bottom && r.Bottom > bestRect.Top;
+                if (best == null || (sameRow ? r.Left < bestRect.Left : r.Top < bestRect.Top))
                 {
                     best = c;
                     bestRect = r;
                 }
             }
-            if (best != null) PadSetFocus(best);
+            return best;
+        }
+
+        // The row of a settings card (NewRow) that holds d, if any
+        public static CardRow PadRowOf(DependencyObject d)
+        {
+            for (var p = d; p != null; p = VisualTreeHelper.GetParent(p))
+            {
+                var row = p as CardRow;
+                if (row != null) return row;
+            }
+            return null;
         }
 
         // --- Acting ------------------------------------------------------------------
@@ -656,6 +731,8 @@ namespace RaintileOptions
                 cb.IsDropDownOpen = true;
                 return;
             }
+            var slider = fe as Slider;
+            if (slider != null) { StartSliderEdit(slider); return; }
             var tb = fe as TextBox;
             if ((tb != null && !tb.IsReadOnly) || fe is PasswordBox) { OpenOsk(fe); return; }
             var item = fe as ListBoxItem;
@@ -724,6 +801,37 @@ namespace RaintileOptions
                 cb.IsDropDownOpen = false;
                 padCombo = null;
             }
+        }
+
+        // A slider is passed over like any control: A starts changing it (the ring
+        // goes, its thumb turns accent), left / right change it, A keeps the value,
+        // B puts back the one it had. So the number box next to it can be reached.
+        void StartSliderEdit(Slider s)
+        {
+            padSlider = s;
+            padSliderStart = s.Value;
+            s.Tag = PadEditTag;
+            HideRing();
+        }
+
+        void EndSliderEdit(bool keep)
+        {
+            var s = padSlider;
+            if (s == null) return;
+            padSlider = null;
+            if (!keep && s.Value != padSliderStart) s.Value = padSliderStart;
+            s.ClearValue(FrameworkElement.TagProperty);
+            ShowRing();
+        }
+
+        void PadSliderInput(int fire)
+        {
+            // gone (page rebuilt): the value stays as it is
+            if (!padSlider.IsVisible) { EndSliderEdit(true); return; }
+            int d = FirstDir(fire);
+            if (d == PadLeft || d == PadRight) (d == PadRight ? Slider.IncreaseSmall : Slider.DecreaseSmall).Execute(null, padSlider);
+            else if ((fire & PadA) != 0) EndSliderEdit(true);
+            else if ((fire & PadB) != 0) EndSliderEdit(false);
         }
 
         // Right stick: scrolls the area the pad is in (or the page)

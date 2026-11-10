@@ -72,9 +72,7 @@ namespace RaintileOptions
             var grid = NewGrid("*", Gap.Control.ToString(System.Globalization.CultureInfo.InvariantCulture), "Auto");
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            sortBox = new ComboBox();
-            foreach (var s in SORTS) sortBox.Items.Add(new ComboBoxItem { Content = s[1], Tag = s[0] });
-            sortBox.SelectedIndex = 0;
+            sortBox = NewChoiceBox(SORTS, "", null);
             sortNow = NewButton("Sort now");
             sortKeep = new CheckBox { Content = "Keep sorted", VerticalAlignment = VerticalAlignment.Center, Margin = T(0, Gap.Control, 0, 0) };
             SetCol(sortNow, 2);
@@ -98,8 +96,7 @@ namespace RaintileOptions
 
         string SelectedSort()
         {
-            var item = sortBox.SelectedItem as ComboBoxItem;
-            return item != null ? (string)item.Tag : "name";
+            return ChoiceValue(sortBox) ?? "name";
         }
 
         // Sort= of the category: the order it keeps, null for none (the order of the file)
@@ -126,7 +123,7 @@ namespace RaintileOptions
             string kept = GetKeptSort(currentFile);
             sortLoading = true;
             sortKeep.IsChecked = kept != null;
-            if (kept != null) sortBox.SelectedItem = sortBox.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag == kept);
+            if (kept != null) SelectChoice(sortBox, kept);
             sortLoading = false;
         }
 

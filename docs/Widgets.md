@@ -79,6 +79,39 @@ ListY=
 
 Raintile writes no title on a custom widget's tile (the tile's `Label=` is not used): the whole tile is the widget's, and a widget that wants a title draws it with a meter of its own.
 
+The widgets of the gallery with a list (Modrinth, Steam achievements) draw a title like the one of the system widgets, small and dimmed at the top left, with the launcher's font and colour, and start their rows under it; the title and whether it shows are settings of the widget:
+
+```ini
+[Raintile]
+List=list.txt
+ListY=(#OPTION:ShowTitle#*(Clamp(#WIDGETH#/18,9,20)*2+12)+(1-#OPTION:ShowTitle#)*7)
+
+[Option:ShowTitle]
+Label=Title
+Kind=bool
+Default=1
+
+[Option:Title]
+Label=Title text
+When=ShowTitle=1
+Default=Modrinth
+
+[Title]
+Meter=String
+X=12
+Y=10
+W=(#WIDGETW#-24)
+ClipString=1
+FontFace=#FontFace#
+FontSize=(Clamp(#WIDGETH#/18,9,20))
+FontColor=#TextDimColor#
+AntiAlias=1
+Text=#OPTION:Title#
+Hidden=(1-#OPTION:ShowTitle#)
+```
+
+`ListY=` takes `#WIDGETW#`, `#WIDGETH#`, `#OPTION:<Name>#` and Rainmeter's functions (`Clamp`, `Min`, `Max`), not the launcher's variables; the meters take both.
+
 ### OnShow and OnHide
 
 Bangs run when the widget's category comes on screen (the launcher opens on it, or the menu goes to it) and when it leaves the screen (another category, the launcher hidden). This is where a widget starts its work: reading its data, loading something. Nothing runs while the launcher is hidden.
@@ -114,7 +147,7 @@ and Raintile reads its list again and draws the tile. The usual place is the `Fi
 
 ## Settings of a widget
 
-A widget can have settings of its own, the same for all its tiles: Options > Widgets shows one entry per installed widget, with its settings. Each one is an `[Option:<Name>]` section (`<Name>`: letters, digits, `_`):
+A widget can have settings of its own, the same for all its tiles: Options > Widgets shows one entry per installed widget, with its settings as rows like the other pages (each with the arrow back to its `Default`) and its `Information=` as the page's description. Each one is an `[Option:<Name>]` section (`<Name>`: letters, digits, `_`):
 
 ```ini
 [Option:ApiKey]
@@ -132,12 +165,13 @@ Default=6
 | Key | |
 | --- | --- |
 | `Label` | the name shown (default: `<Name>`) |
-| `Kind` | `text` (default), `secret` (a key or password: hidden, saved encrypted), `bool` (`1`/`0`), `number`, `choice` |
+| `Kind` | `text` (default), `secret` (a key or password: hidden, saved encrypted), `bool` (`1`/`0`), `number` (the box takes only a number, decimals and a minus sign included; one not finished, such as `-`, is outlined in red and not saved), `choice` (a drop-down list) |
 | `Choices` | for `choice`: the values, separated by `\|` |
 | `Default` | the value until the user sets one |
 | `Help` | a line under it |
+| `When` | `<Name>=<value>`: the setting applies only while another one of the widget has that value (`When=ShowTitle=1`; a `bool` is `1` or `0`); otherwise it is greyed out, with the reason under it |
 
-The values are saved in the widget's folder, `settings.inc`, one `<Name>=<value>` per line (an update from the gallery keeps the file). The launcher writes them in place of `#OPTION:<Name>#` in the `.ini` (the file is read again when the settings change), and scripts read the file: pass it as `-Settings "#WIDGETPATH#settings.inc"`. A `secret` is never written into the launcher; see [Keys of the user's](#keys-of-the-users).
+The values are saved in the widget's folder, `settings.inc`, one `<Name>=<value>` per line, by **Save and refresh** like the other settings (an update from the gallery keeps the file; a value never set is not written, so the option follows its `Default`). Profiles (Options > General > Profiles) hold them too, not the secrets. The launcher writes them in place of `#OPTION:<Name>#` in the `.ini` (the file is read again when the settings change), and scripts read the file: pass it as `-Settings "#WIDGETPATH#settings.inc"`. A `secret` is never written into the launcher; see [Keys of the user's](#keys-of-the-users).
 
 Settings of one tile only (which game, which folder) go in its `WidgetOption=` instead ([`#WIDGETOPTION#`](#variables-raintile-fills-in)).
 
@@ -158,7 +192,7 @@ LeftMouseUpAction=["steam://rungameid/570"]
 - The part is the meter's rectangle: write `X=` and `Y=` as numbers or formulas from the tile's top left corner (not `r`/`R`, relative to the meter before).
 - A tile with parts is never highlighted whole: between two parts the highlight stays on the last one.
 - The meter's own `MouseOverAction` / `MouseLeaveAction` still run.
-- The keyboard and the gamepad select the whole tile.
+- The keyboard and the gamepad go from part to part too: coming onto the tile the highlight lands on the part nearest the side it comes from, the arrows (D-pad) move to the next part in that direction, and past the last one onto the next tile; `Enter` / `A` does what a click on the part does (its `LeftMouseUpAction`; a row of a list: its command). With the mouse on a part, the keys go on from it.
 
 ## Getting data: scripts
 

@@ -23,7 +23,8 @@ local laidOut = false -- menu already measured and centred
 local appear = nil    -- steps since the tiles started appearing (nil = none)
 -- Highlight of the tile under the mouse, in grid units (column, row) so it
 -- follows the tiles while scrolling; a = opacity 0-1.
-local hover = { idx = 0, on = false, gx = 0, gy = 0, tx = 0, ty = 0, a = 0, w = 0, h = 0, tw = 0, th = 0, anchor = 0 }
+local hover = { idx = 0, on = false, gx = 0, gy = 0, tx = 0, ty = 0, a = 0, w = 0, h = 0, tw = 0, th = 0, anchor = 0,
+	ox = 0, oy = 0, tox = 0, toy = 0 } -- o: a part of a widget, in pixels from its tile
 local pillPos = nil   -- { x, w } of the active category pill
 -- Tiles whose logo is (or is going back from being) lit by hover: [tile] = true.
 -- tile.zoom (0-1) is the progress, used for the logo's zoom and colour.
@@ -398,21 +399,29 @@ local function logoPlacement(t, pos, scale)
 	end
 end
 
--- Centre of tile t's logo in the tile, in pixels, for a logo box of the
--- given size. The box is square and the image fits inside it, so the
--- visible part is what has to stay in the tile: the slots are clipped by the
--- grid, not by the tile, and the logo would spill onto the next one. A
--- centred logo stays centred, also when larger than the tile.
-local function logoCentre(t, size)
+-- The visible part of tile t's logo in a square box of the given size: the
+-- image fits inside it (width, height)
+function M.logoVisible(t, size)
 	local vw, vh = size, size
 	if t.logoRatio then
 		if t.logoRatio >= 1 then vh = size / t.logoRatio else vw = size * t.logoRatio end
 	end
+	return vw, vh
+end
+
+-- Centre of tile t's logo in the tile, in pixels, for a logo box of the
+-- given size. The box is square and the image fits inside it, so the
+-- visible part is what has to stay in the tile: the slots are clipped by the
+-- grid, not by the tile, and the logo would spill onto the next one. A
+-- centred logo stays centred, also when larger than the tile. W, H, px, py:
+-- another area and place than the tile's (the wheel's backdrop: BackLogoPos=).
+local function logoCentre(t, size, W, H, px, py)
+	local vw, vh = M.logoVisible(t, size)
 	local function place(p, n, total)
 		if n >= total then return total / 2 end
 		return math.min(total - n / 2, math.max(n / 2, p * total))
 	end
-	return place(t.logoX, vw, V.TileW), place(t.logoY, vh, V.TileH)
+	return place(px or t.logoX, vw, W or V.TileW), place(py or t.logoY, vh, H or V.TileH)
 end
 
 -- Placement of the play time line (TileInfo): InfoPos=X,Y is where it goes in
@@ -423,6 +432,28 @@ local function infoPlacement(t, pos)
 	local x, y = trim(pos or ''):match('^([%d%.]+)%s*,%s*([%d%.]+)$')
 	t.infoX = math.min(100, math.max(0, tonumber(x) or 0)) / 100
 	t.infoY = math.min(100, math.max(0, tonumber(y) or 0)) / 100
+end
+
+-- Placement of the logo and of the lines on the wheel's backdrop (WheelLogoOn,
+-- WheelInfoOn = Background), of the tile or its category, as LogoPos=,
+-- LogoScale= and InfoPos= are on the tile: BackLogoPos= (the logo's centre,
+-- default the middle), BackLogoScale= (times WheelBackdropLogoSize),
+-- BackInfoPos= (default the top left). Their own keys: the backdrop is a
+-- much larger place than the thumbnail. Sets t.backLogoX, t.backLogoY,
+-- t.backLogoScale, t.backInfoX, t.backInfoY (0-1).
+function M.backPlacement(t, logoPos, logoScale, infoPos)
+	local function pair(v, def)
+		local x, y = trim(v or ''):match('^([%d%.]+)%s*,%s*([%d%.]+)$')
+		return math.min(100, math.max(0, tonumber(x) or def)) / 100, math.min(100, math.max(0, tonumber(y) or def)) / 100
+	end
+	t.backLogoX, t.backLogoY = pair(logoPos, 50)
+	t.backLogoScale = math.min(3, math.max(0.25, tonumber(trim(logoScale or '')) or 1))
+	t.backInfoX, t.backInfoY = pair(infoPos, 0)
+	-- (the logo's proportions, to keep what is visible of it inside: logoPlacement)
+	if t.logo and not t.logoRatio and (t.backLogoX ~= 0.5 or t.backLogoY ~= 0.5) then
+		local d = imageSize(t.logo)
+		if d then t.logoRatio = d[1] / d[2] end
+	end
 end
 
 -- Automatic tile colour (AutoTileColor=1): a tile without a background image
@@ -460,6 +491,7 @@ end
 -- Grid of a category: NX x NY visible tiles (Settings.inc by default), sized
 -- to fill the grid area.
 local function categoryGeometry(c, nx, ny, iconSize)
+	if V.Wheel then return M.wheelGeometry(c, iconSize) end
 	c.nx = math.max(1, math.floor(nx or V.DefNX))
 	c.ny = math.max(1, math.floor(ny or V.DefNY))
 	c.tw = math.floor((V.AreaW - (c.nx - 1) * V.Gap) / c.nx)
@@ -487,7 +519,7 @@ end
 -- Steam:570) or from the command. nil for programs and apps.
 local STORE_NAMES = {
 	steam = 'Steam', epic = 'Epic Games', gog = 'GOG', ubisoft = 'Ubisoft', ['battle.net'] = 'Battle.net',
-	battlenet = 'Battle.net', ea = 'EA', xbox = 'Xbox',
+	battlenet = 'Battle.net', ea = 'EA', xbox = 'Xbox', googleplay = 'Google Play Games',
 }
 local function tileStore(command, store, source)
 	local low = command:lower()
@@ -504,6 +536,7 @@ local function tileStore(command, store, source)
 		elseif low:find('^uplay://') or low:find('^ubisoft://') then name = 'Ubisoft'
 		elseif low:find('battle%.net') or low:find('^battlenet://') then name = 'Battle.net'
 		elseif low:find('^origin2?://') or low:find('^link2ea://') or low:find('^ea://') then name = 'EA'
+		elseif low:find('^googleplaygames://') then name = 'Google Play Games'
 		end
 	end
 	return name, steamId
@@ -584,6 +617,9 @@ local function loadCategory(file)
 	c.bgFocus, c.bgZoom = own(catKeys.bgfocus), own(catKeys.bgzoom)
 	c.logoPos, c.logoScale = own(catKeys.logopos), own(catKeys.logoscale)
 	c.infoPos = own(catKeys.infopos)
+	c.back = { own(catKeys.backlogopos), own(catKeys.backlogoscale), own(catKeys.backinfopos) }
+	-- cells of its tiles (TileSize=, as Size=), when a tile has no Size= of its own
+	c.tileSize = own(catKeys.tilesize)
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -607,13 +643,16 @@ local function loadCategory(file)
 			}
 			local opacity = tonumber(trim(k.opacity or '')) or c.tileOpacity or 100
 			t.opacity = math.max(0, math.min(100, opacity)) / 100
-			if V.AutoTileColor and not color and not c.tileColor and t.logo and not t.background then
+			-- (the wheel with logos only: always, the background is not shown)
+			local iconsOnly = V.Wheel and V.WheelIconsOnly
+			if (V.AutoTileColor or iconsOnly) and not color and not c.tileColor and t.logo and (not t.background or iconsOnly) then
 				autoColor(t, t.logo)
 			end
 			-- originals, used full screen by the launch animation
 			t.backgroundFull, t.logoFull = t.background, t.logo
-			-- cells taken (Size=2x1: two columns, one row), at most the grid
-			local sw, sh = trim(k.size or ''):match('^(%d+)%s*[xX*]%s*(%d+)$')
+			-- cells taken (Size=2x1: two columns, one row; or the category's
+			-- TileSize=), at most the grid
+			local sw, sh = (own(k.size) or c.tileSize or ''):match('^(%d+)%s*[xX*]%s*(%d+)$')
 			t.cols = math.max(1, math.min(c.nx, tonumber(sw) or 1))
 			t.rows = math.max(1, math.min(c.ny, tonumber(sh) or 1))
 			if t.cols > 1 or t.rows > 1 then c.spans = true end
@@ -623,6 +662,7 @@ local function loadCategory(file)
 				pw, ph, V.BgThumbMode, t.frame)
 			logoPlacement(t, own(k.logopos) or c.logoPos, own(k.logoscale) or c.logoScale)
 			infoPlacement(t, own(k.infopos) or c.infoPos)
+			M.backPlacement(t, own(k.backlogopos) or c.back[1], own(k.backlogoscale) or c.back[2], own(k.backinfopos) or c.back[3])
 			-- logo thumbnails are made at the largest size (zoom included)
 			local logoMax = math.floor(c.iconSize * t.logoScale * V.HoverLogoScale + 0.5)
 			t.logo = thumbnail(t.logo, t, 'logo', base .. '\\logo', s.name,
@@ -958,8 +998,9 @@ function M.sortTiles(c)
 		local shown = V.Horizontal and c.nx or c.ny
 		if i and (M.tileLine(c, i) < c.offset or M.tileLine(c, i) >= c.offset + shown) then i = nil end
 		if not i then
+			-- (in the carousel the first of the line in the middle)
 			for j = 1, #c.tiles do
-				if M.tileLine(c, j) >= c.offset then i = j break end
+				if M.tileLine(c, j) >= c.offset + M.half(c) then i = j break end
 			end
 		end
 		if i then anchor, before = c.tiles[i], M.tileLine(c, i) end
@@ -980,10 +1021,10 @@ function M.sortTiles(c)
 	end)
 	if c.pack then packTiles(c) end -- tiles of more cells: placed again
 	if anchor then
-		local o = math.max(0, c.offset + M.tileLine(c, indexOf(c.tiles, anchor)) - before)
+		local o = math.max(0 - M.half(c), c.offset + M.tileLine(c, indexOf(c.tiles, anchor)) - before)
 		if o ~= c.offset then
 			c.offset = o
-			SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(o), data .. 'State.inc')
+			M.writeScroll(c)
 		end
 	end
 end
@@ -1242,7 +1283,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 16
+local GRID_VERSION = 20
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1251,7 +1292,7 @@ local function filterSpace()
 end
 
 local function signature()
-	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode }
+	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode, V.Wheel and ('wheel' .. (cats[1] and cats[1].tw or 0) .. (V.WheelRing and 'r' or '')) or 'grid' }
 	for _, chip in ipairs(filter.chips) do s[#s + 1] = 'chip:' .. chip.label end
 	if V.TileKeysOpen then s[#s + 1] = 'keys:open' end
 	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
@@ -1380,15 +1421,74 @@ local function writeGrid(path, sig, files)
 		end
 	end
 
+	-- The wheel's inner ring of categories (WheelMenu=Ring): a disc for each,
+	-- with its icon or its initial, and the name of the active one (placed by
+	-- M.ringRender); below the tiles. The wheel of the mouse turns it.
+	if V.Wheel and V.WheelRing then
+		for i, c in ipairs(cats) do
+			if not c.virtual then
+				w('[RingDot' .. i .. ']')
+				w('Meter=Shape')
+				w('Hidden=1')
+				w('LeftMouseUpAction=[!CommandMeasure MeasureScript "SetCategory(' .. i .. ')"]')
+				w('MouseOverAction=[!CommandMeasure MeasureScript "HoverCategory(' .. i .. ')"]')
+				w('MouseLeaveAction=[!CommandMeasure MeasureScript "HoverCategory(0)"]')
+				w('MouseScrollUpAction=[!CommandMeasure MeasureScript "NextCategory(-1)"]')
+				w('MouseScrollDownAction=[!CommandMeasure MeasureScript "NextCategory(1)"]')
+				w('')
+				if c.icon then
+					w('[RingIcon' .. i .. ']')
+					w('Meter=Image')
+					w('ImageName=' .. c.icon)
+					w('PreserveAspectRatio=1')
+					w('AntiAlias=1')
+					w('Hidden=1')
+				else
+					w('[RingText' .. i .. ']')
+					w('Meter=String')
+					w('FontFace=#FontFace#')
+					w('FontWeight=700')
+					w('StringAlign=CenterCenter')
+					w('AntiAlias=1')
+					w('Text=' .. D.text(c.label:sub(1, 1):upper()))
+					w('Hidden=1')
+				end
+				w('')
+			end
+		end
+		w('[RingName]')
+		w('Meter=String')
+		w('FontFace=#FontFace#')
+		w('FontWeight=700')
+		w('FontSize=(#MenuFontSize#*0.85)')
+		w('FontColor=#AccentColor#')
+		w('AntiAlias=1')
+		w('Hidden=1')
+		w('')
+	end
+
 	-- Grid slots, inside the GridClip container: as many as the category with
 	-- the largest grid needs. The script sets each slot's position and size
 	-- according to the active category's grid.
 	for slot = 1, slots do
+		-- the wheel: each tile in a container of its own, its rounded rectangle
+		-- (cut to the grid area): tiles overlap there, and one shape for all of
+		-- them (roundClip) would square the corners that fall on a neighbour
+		local box = V.Wheel and ('Container=TileBox' .. slot) or nil
+		if box then
+			w('[TileBox' .. slot .. ']')
+			w('Meter=Shape')
+			w('Shape=Rectangle 0,0,1,1 | Fill Color 0,0,0,255 | StrokeWidth 0')
+			w('Hidden=1')
+			w('')
+		end
 		w('[Tile' .. slot .. ']')
 		w('Meter=Image')
 		w('MeterStyle=StyleTile')
+		if box then w(box) end
 		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "Launch(' .. slot .. ')"]')
-		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ')"]')
+		-- (where the mouse is: the wheel turns to a tile only when the mouse moved)
+		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverTile(' .. slot .. ', \'$MouseX$\', \'$MouseY$\')"]')
 		w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeaveTile(' .. slot .. ')"]')
 		w('')
 		-- Steam update: the coloured part of a greyscale background, the
@@ -1396,30 +1496,49 @@ local function writeGrid(path, sig, files)
 		w('[TileReveal' .. slot .. ']')
 		w('Meter=Image')
 		w('MeterStyle=StyleTileReveal')
+		if box then w(box) end
 		w('')
 		w('[TileBar' .. slot .. ']')
 		w('Meter=Shape')
 		w('MeterStyle=StyleTileGlow')
+		if box then w(box) end
 		w('')
 		w('[TileGlow' .. slot .. ']')
 		w('Meter=Shape')
 		w('MeterStyle=StyleTileGlow')
+		if box then w(box) end
 		w('')
 		w('[TileIcon' .. slot .. ']')
 		w('Meter=Image')
 		w('MeterStyle=StyleTileIcon')
+		if box then w(box) end
 		w('')
 		w('[TileLabel' .. slot .. ']')
 		w('Meter=String')
 		w('MeterStyle=StyleTileLabel')
+		if box then w(box) end
 		w('')
 		w('[TileUpd' .. slot .. ']')
 		w('Meter=String')
 		w('MeterStyle=StyleTileInfo')
+		if box then w(box) end
 		w('')
 		w('[TileInfo' .. slot .. ']')
 		w('Meter=String')
 		w('MeterStyle=StyleTileInfo')
+		if box then w(box) end
+		w('')
+	end
+
+	-- The wheel: a container drawn after the tiles' own (TileBox), so the
+	-- widgets are drawn over the tiles (inside GridClip, drawn before those,
+	-- they were under every tile)
+	local wcont = V.Wheel and 'Container=WidgetClip' or nil
+	if wcont then
+		w('[WidgetClip]')
+		w('Meter=Shape')
+		w('Shape=Rectangle 0,0,1,1 | Fill Color 0,0,0,255 | StrokeWidth 0')
+		w('Hidden=1')
 		w('')
 	end
 
@@ -1430,12 +1549,14 @@ local function writeGrid(path, sig, files)
 			w('[W' .. i .. part .. ']')
 			w('Meter=Shape')
 			w('MeterStyle=StyleWidgetShape')
+			if wcont then w(wcont) end
 			w('')
 		end
 		for _, part in ipairs({ 'Title', 'Value', 'Sub', 'List' }) do
 			w('[W' .. i .. part .. ']')
 			w('Meter=String')
 			w('MeterStyle=StyleWidgetText')
+			if wcont then w(wcont) end
 			if part == 'Value' then w('FontWeight=600') end
 			w('')
 		end
@@ -1445,13 +1566,14 @@ local function writeGrid(path, sig, files)
 				w('[W' .. i .. 'RowHit' .. k .. ']')
 				w('Meter=Shape')
 				w('MeterStyle=StyleWidgetShape')
+				if wcont then w(wcont) end
 				w('MouseOverAction=[!CommandMeasure MeasureScript "HoverPart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
 				w('MouseLeaveAction=[!CommandMeasure MeasureScript "LeavePart(\'W' .. i .. 'RowHit' .. k .. '\')"]')
 				w('LeftMouseUpAction=[!CommandMeasure MeasureScript "WidgetRowClick(' .. i .. ',' .. k .. ')"]')
 				w('')
 				w('[W' .. i .. 'RowIcon' .. k .. ']')
 				w('Meter=Image')
-				w('Container=GridClip')
+				w(wcont or 'Container=GridClip')
 				w('PreserveAspectRatio=1')
 				w('Hidden=1')
 				w('')
@@ -1459,6 +1581,7 @@ local function writeGrid(path, sig, files)
 					w('[W' .. i .. part .. k .. ']')
 					w('Meter=String')
 					w('MeterStyle=StyleWidgetText')
+					if wcont then w(wcont) end
 					if part == 'RowName' then w('FontWeight=600') end
 					w('')
 				end
@@ -1664,20 +1787,56 @@ local function visibleLines()
 end
 
 local function maxOffset()
+	-- the carousel: up to the last line in the middle
+	if M.carousel() then return math.max(M.minOffset(), lineCount() - 1 - M.half()) end
 	return math.max(0, lineCount() - visibleLines())
 end
 
 -- Infinite scroll: after the last row the first one comes back. Only if the
 -- tiles don't all fit on screen (otherwise they would show up twice).
 local function infinite()
-	return V.InfiniteScroll and lineCount() > visibleLines()
+	-- also with few tiles (they all fit): they repeat, so it still scrolls round
+	return V.InfiniteScroll and #cur().tiles > 1 and lineCount() > 0
 end
 
--- Brings a saved scroll position within the active category's limits.
+-- Carousel (CenterSelection=1): the grid keeps the selected line (column, or
+-- row when it scrolls vertically) in the middle of the screen; the wheel, the
+-- keys and the gamepad move it by one tile. offset = the selected line's
+-- middle - M.half(): with an even number of lines on screen, or a tile of an
+-- even number of them, a multiple of 1/2, and a half line shows at each side.
+-- Without infinite scroll the ends come to the middle too, with empty room
+-- beside them.
+function M.carousel(c)
+	c = c or cur()
+	return not V.Wheel and V.CenterSelection and c.nx ~= nil
+end
+
+-- Lines from the first on screen to the middle of the screen (0: not a
+-- carousel); x.5 with an even number of them
+function M.half(c)
+	c = c or cur()
+	if not M.carousel(c) then return 0 end
+	return ((V.Horizontal and c.nx or c.ny) - 1) / 2
+end
+
+-- The smallest offset: the first line in the middle
+function M.minOffset()
+	if infinite() then return 0 end
+	return 0 - M.half() -- (0 - 0: never a -0 written to State.inc)
+end
+
+-- Brings a saved scroll position within the active category's limits; nil:
+-- the start (the first line at the top, or in the middle of the carousel).
+-- The carousel: a middle on a line or between two (a tile of an even size).
 local function normalizeOffset(o)
-	o = math.floor(o or 0)
+	if M.carousel() then
+		local h = M.half()
+		o = math.floor(((o or 0 - h) + h) * 2 + 0.5) / 2 - h
+	else
+		o = math.floor(o or 0)
+	end
 	if infinite() then return o % lineCount() end
-	return math.min(math.max(0, o), maxOffset())
+	return math.min(math.max(M.minOffset(), o), maxOffset())
 end
 
 local function slotRC(slot)
@@ -1693,8 +1852,15 @@ local function saveScroll()
 	local o = normalizeOffset(offset)
 	if c.offset ~= o then
 		c.offset = o
-		SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(o), data .. 'State.inc')
+		M.writeScroll(c)
 	end
+end
+
+-- Scroll_<category> in State.inc: the first line on screen or, in the
+-- carousel, the line in the middle (0 is the start in both, so turning the
+-- carousel on or off keeps the place)
+function M.writeScroll(c)
+	SKIN:Bang('!WriteKeyValue', 'Variables', 'Scroll_' .. c.name, tostring(c.offset + M.half(c)), data .. 'State.inc')
 end
 
 -- With tiles of more cells (c.pack): what the slots show for the 'base'
@@ -1730,6 +1896,7 @@ end
 
 -- Index (in cur().tiles) of the tile in the slot, with the current contents.
 local function indexAt(slot)
+	if V.Wheel then return M.wv[slot] and M.wv[slot].idx end
 	if cur().pack then return view[slot] and view[slot].idx end
 	local r, c = slotRC(slot)
 	local line = base + (V.Horizontal and c or r)
@@ -1745,6 +1912,7 @@ end
 -- Pixel position (relative to the grid) of a point in grid units (column,
 -- row), at the current scroll position.
 local function gridToPx(gx, gy)
+	if V.Wheel then return M.wheelPx(V.Horizontal and gx or gy) end
 	if V.Horizontal then gx = gx - pos else gy = gy - pos end
 	return gx * V.StepX, gy * V.StepY
 end
@@ -1759,6 +1927,11 @@ end
 -- Grid coordinates (column, row) of the slot with the current contents; with
 -- infinite scroll the row (or column) is not wrapped back.
 local function slotToGrid(slot)
+	if V.Wheel then
+		local k = M.wv[slot] and M.wv[slot].k or 0
+		if V.Horizontal then return k, 0 end
+		return 0, k
+	end
 	local e = cur().pack and view[slot]
 	if e then
 		if V.Horizontal then return e.line, e.cross end
@@ -1769,8 +1942,574 @@ local function slotToGrid(slot)
 	return c, base + r
 end
 
+-- Wheel (ScrollMode=Wheel) ---------------------------------------------------------
+-- One line of tiles on an arc of a circle: the tile at the scroll position
+-- (pos, as tile index) is the selected one, in the middle; the others follow
+-- along the arc and fade towards the ends. The grid model is reused with one
+-- tile per line (nx = ny = 1): offset/pos count tiles, Nav and Scroll move
+-- by tiles. The slots (WheelVisible + 2) are given to the tiles near pos
+-- every frame, the farthest first: the meters of a slot are written together
+-- in Grid.inc, so the later slot is drawn on top and the middle tile, last,
+-- covers the others where they overlap. Tiles do not change size, so widgets
+-- stay what they are.
+M.wv = {} -- per slot: { k (tile line, not wrapped), idx (in cur().tiles), d (k - pos), a (alpha) }
+M.wheel = { from = 0, to = 0, t = 0, dur = 0 }
+
+function M.readWheel()
+	V.Wheel = SKIN:GetVariable('ScrollMode', 'Grid'):lower() == 'wheel'
+	local function word(name, default) return SKIN:GetVariable(name, default):lower() end
+	V.WheelAxis = word('WheelAxis', 'auto')
+	V.WheelOut = word('WheelCurve', 'out') ~= 'in'
+	V.WheelRadius = math.max(5, num('WheelRadius', 70))
+	V.WheelSpacing = math.max(5, num('WheelSpacing', 50))
+	V.WheelAnchor = math.min(100, math.max(0, num('WheelAnchor', 69)))
+	V.WheelTileSize = math.min(80, math.max(3, num('WheelTileSize', 25)))
+	V.WheelVisible = math.max(1, math.floor(num('WheelVisible', 11)))
+	if V.WheelVisible % 2 == 0 then V.WheelVisible = V.WheelVisible + 1 end
+	V.WheelFade = math.min(100, math.max(0, num('WheelFade', 65)))
+	V.WheelLabelsAll = word('WheelLabels', 'center') == 'all'
+	V.WheelStepTime = math.max(16, num('WheelStepTime', 350))
+	V.WheelTurn = word('WheelHover', 'turn') == 'turn'
+	V.WheelClickLaunch = word('WheelClick', 'launch') ~= 'center'
+	V.WheelRing = word('WheelMenu', 'ring') ~= 'bar'
+	V.WheelMenuGap = math.max(0, num('WheelMenuGap', 50))
+	V.WheelMenuSize = math.min(150, math.max(10, num('WheelMenuSize', 50)))
+	V.WheelBackdrop = num('WheelBackdrop', 1) ~= 0
+	V.WheelBackdropOpacity = math.min(100, math.max(0, num('WheelBackdropOpacity', 40)))
+	V.WheelIconsOnly = num('WheelIconsOnly', 0) ~= 0
+	-- the logo and the lines of the selected tile on the backdrop (M.backdropLogo,
+	-- M.backdropInfo) instead of on its tile
+	V.WheelLogoBack = V.Wheel and V.WheelBackdrop and word('WheelLogoOn', 'tile') == 'background'
+	V.WheelInfoBack = V.Wheel and V.WheelBackdrop and word('WheelInfoOn', 'tile') == 'background'
+	V.WheelBackLogoSize = math.min(80, math.max(5, num('WheelBackdropLogoSize', 30)))
+	-- the band behind the top row: with the selected tile's background only
+	SKIN:Bang('!SetOption', 'MeterTopBar', 'Hidden', (V.Wheel and V.WheelBackdrop) and '0' or '1')
+	-- the wheel: every tile in its own container (TileBox), the widgets in
+	-- WidgetClip; GridClip, with no meters in it, would be drawn by Rainmeter
+	-- as a plain shape (a black rectangle over the grid)
+	set('GridClip', 'Hidden', V.Wheel and '1' or '0')
+	if not V.Wheel then return end
+	-- along which axis: Auto follows the docked side
+	local vertical
+	if V.WheelAxis == 'vertical' then vertical = true
+	elseif V.WheelAxis == 'horizontal' then vertical = false
+	else vertical = V.Mode == 'dock' and (V.DockSide == 'left' or V.DockSide == 'right') end
+	-- the grid model scrolls the same way (Nav: up/down or left/right)
+	V.Horizontal = not vertical
+end
+
+-- One line, as many slots as shown plus one beyond each end; square tiles
+-- of WheelTileSize percent of the smaller side of the screen
+function M.wheelGeometry(c, iconSize)
+	local short = math.min(V.MonW or V.ScreenW, V.MonH or V.ScreenH)
+	local sz = math.floor(V.WheelTileSize * short / 100)
+	sz = math.max(16, math.min(sz, math.floor(math.min(V.AreaW, V.AreaH))))
+	c.nx, c.ny = 1, 1
+	c.tw, c.th = sz, sz
+	c.rows, c.cols = 1, V.WheelVisible + 2
+	-- the logo: a share of the thumbnail (IconSize is the grid's)
+	c.iconSize = math.floor(sz * 0.7)
+end
+
+-- The circle, in the coordinates of the grid (GridClip): its centre C, radius
+-- R, the direction into the screen (n) and along the wheel (t), the angle
+-- between two tiles. Worked out each frame (the filter bar changes the area).
+function M.wheelFrame()
+	local W, H = V.ClipW or V.AreaW, V.ClipH or V.AreaH
+	local vertical = not V.Horizontal
+	local n
+	if vertical then n = (V.Mode == 'dock' and V.DockSide == 'right') and { -1, 0 } or { 1, 0 }
+	elseif V.Mode == 'dock' then n = V.DockSide == 'bottom' and { 0, -1 } or { 0, 1 }
+	else n = { 0, -1 } end -- free: bulging up
+	local t = vertical and { 0, 1 } or { 1, 0 }
+	local along, across = vertical and H or W, vertical and W or H
+	-- the selected tile: across at WheelAnchor (from the docked side), along in the middle
+	local a = (n[1] + n[2] > 0 and V.WheelAnchor or 100 - V.WheelAnchor) / 100 * across
+	local cx, cy
+	if vertical then cx, cy = a, H / 2 else cx, cy = W / 2, a end
+	local R = math.max(1, V.WheelRadius / 100 * along)
+	local sgn = V.WheelOut and 1 or -1
+	local f = M.wf or {}
+	f.n, f.t, f.R, f.sgn = n, t, R, sgn
+	f.cx, f.cy = cx - sgn * n[1] * R, cy - sgn * n[2] * R
+	f.step = (V.TileW * V.WheelSpacing / 100) / R
+	f.half = (V.WheelVisible - 1) / 2
+	M.wf = f
+	return f
+end
+
+-- Top left corner (in the grid) of the tile at line k (fractional too)
+function M.wheelPx(k)
+	local f = M.wf or M.wheelFrame()
+	local th = (k - pos) * f.step
+	local c, sn = f.sgn * f.R * math.cos(th), f.R * math.sin(th)
+	local x = f.cx + c * f.n[1] + sn * f.t[1]
+	local y = f.cy + c * f.n[2] + sn * f.t[2]
+	return x - V.TileW / 2, y - V.TileH / 2
+end
+
+-- The image of tile t in the wheel: logos only (WheelIconsOnly), the tile's
+-- colour behind its logo; but the selected tile (sel) whose logo is on the
+-- backdrop (WheelLogoOn=Background) keeps its art, or it would be empty
+function M.wheelImage(t, sel)
+	if V.WheelIconsOnly and t.logo and not (sel and V.WheelLogoBack) then return '' end
+	return t.background or ''
+end
+
+-- Which tile each slot shows this frame (and its alpha); the images of a
+-- slot change only when it gets another tile
+function M.wheelAssign()
+	local f = M.wheelFrame()
+	local tiles = cur().tiles
+	local L = #tiles
+	local list = {}
+	if L > 0 then
+		local inf = infinite()
+		for k = math.ceil(pos - f.half - 1), math.floor(pos + f.half + 1) do
+			if inf or (k >= 0 and k < L) then
+				local d = k - pos
+				local ad = math.abs(d)
+				local a = 1 - V.WheelFade / 100 * math.min(1, ad / math.max(0.5, f.half + 0.5))
+				-- past the last place shown: fading out completely
+				if ad > f.half + 0.5 then a = a * math.max(0, 1 - (ad - f.half - 0.5) * 2) end
+				list[#list + 1] = { k = k, idx = k % L + 1, d = d, a = a }
+			end
+		end
+	end
+	table.sort(list, function(p, q) return math.abs(p.d) > math.abs(q.d) end)
+	local first = V.Slots - #list
+	local old = M.wv
+	M.wv = {}
+	for i, e in ipairs(list) do
+		local slot = first + i
+		if slot >= 1 then
+			M.wv[slot] = e
+			if not old[slot] or old[slot].idx ~= e.idx or base ~= 0 then
+				local t = tiles[e.idx]
+				-- logos only (WheelIconsOnly): the tile's colour behind the logo
+				set('Tile' .. slot, 'ImageName', M.wheelImage(t, false))
+				if t.logo then set('TileIcon' .. slot, 'ImageName', t.logo) end
+				-- (a widget away from the middle is a plain tile: its title)
+				local text = t.label or (t.widget and (t.widget.title or t.name))
+				if text then set('TileLabel' .. slot, 'Text', text) end
+			end
+		end
+	end
+	base = 0 -- (contents set: a reset (base = -1) refills every slot once)
+	M.backdropUpdate()
+end
+
+-- The launcher's background takes the selected tile's (WheelBackdrop): the
+-- image of the tile the wheel turns to goes on the other backdrop meter and
+-- fades in while the current one fades out (WheelStepTime x 1.5)
+M.backdrop = { img = nil, front = 1, f = 1, t = 0 }
+function M.backdropUpdate()
+	if not V.WheelBackdrop then return end
+	local tiles = cur().tiles
+	local L = #tiles
+	local t = L > 0 and tiles[math.floor(offset + 0.5) % L + 1]
+	local img = t and not t.widget and (t.backgroundFull or t.background) or ''
+	local b = M.backdrop
+	-- the logo follows the tile, and the area (the filter bar changes it)
+	local area = table.concat({ M.backdropArea() }, ',')
+	if (t or nil) ~= b.tile or area ~= b.area then
+		b.tile, b.area = t or nil, area
+		M.backdropLogo()
+	end
+	if img == b.img then return end
+	b.prev, b.img = b.img or '', img
+	b.front = 3 - b.front
+	set('MeterBackdrop' .. b.front, 'ImageName', img)
+	-- a game no longer installed: greyed out and dimmed, as its thumbnail
+	local missing = t and t.missing
+	b.dim = b.dim or { 1, 1 }
+	b.dim[b.front] = missing and 0.45 or 1
+	local rows = missing and M.GREY_ROWS or M.IDENTITY_ROWS
+	for n = 1, 3 do set('MeterBackdrop' .. b.front, 'ColorMatrix' .. n, rows[n]) end
+	b.f, b.t = 0, 0
+	if V.AnimScroll and ready then M.startTicker() else b.f = 1 end
+	M.backdropAlpha()
+end
+function M.backdropAlpha()
+	local b = M.backdrop
+	local a = 255 * V.WheelBackdropOpacity / 100
+	local dim = b.dim or { 1, 1 }
+	local front, back = 'MeterBackdrop' .. b.front, 'MeterBackdrop' .. (3 - b.front)
+	set(front, 'ImageAlpha', tostring(math.floor(a * dim[b.front] * b.f + 0.5)))
+	set(back, 'ImageAlpha', tostring(math.floor(a * dim[3 - b.front] * (1 - b.f) + 0.5)))
+	show(front, b.img ~= '' and b.f > 0)
+	show(back, b.f < 1 and (b.prev or '') ~= '')
+	-- the logo on it comes with the new background
+	if b.logo then set('BackdropLogo', 'ImageAlpha', tostring(math.floor(255 * b.f + 0.5))) end
+end
+
+-- The area of the backdrop where the logo and the lines go: under the top
+-- row, where the wheel is (x, y on the skin, W, H)
+function M.backdropArea()
+	return V.PadX, V.GridY, V.ClipW or V.AreaW, V.ClipH or V.AreaH
+end
+
+-- The selected tile's logo on the backdrop (WheelLogoOn=Background): at its
+-- own place there (BackLogoPos=, M.backPlacement; the tile editor shows the
+-- backdrop to place it), WheelBackdropLogoSize percent of the area's height
+-- times BackLogoScale=; the full-size image, not the tile's thumbnail.
+-- b.logo: its box { cx, cy, size }, where the launch animation starts.
+function M.backdropLogo()
+	local b = M.backdrop
+	local t = b.tile
+	b.logo = nil
+	if not (V.WheelLogoBack and t and t.logo and not t.widget) then
+		show('BackdropLogo', false)
+		return
+	end
+	local ax, ay, W, H = M.backdropArea()
+	local size = math.max(8, math.floor(H * V.WheelBackLogoSize / 100 * t.backLogoScale + 0.5))
+	local lx, ly = logoCentre(t, size, W, H, t.backLogoX, t.backLogoY)
+	b.logo = { cx = ax + lx, cy = ay + ly, size = size }
+	set('BackdropLogo', 'ImageName', t.logoFull or t.logo)
+	set('BackdropLogo', 'X', tostring(math.floor(ax + lx - size / 2)))
+	set('BackdropLogo', 'Y', tostring(math.floor(ay + ly - size / 2)))
+	set('BackdropLogo', 'W', tostring(size))
+	set('BackdropLogo', 'H', tostring(size))
+	set('BackdropLogo', 'ImageAlpha', tostring(math.floor(255 * b.f + 0.5)))
+	-- a game no longer installed: in greyscale, as on its tile
+	local rows = t.missing and M.GREY_ROWS or M.IDENTITY_ROWS
+	set('BackdropLogo', 'ColorMatrix1', rows[1])
+	set('BackdropLogo', 'ColorMatrix2', rows[2])
+	set('BackdropLogo', 'ColorMatrix3', rows[3])
+	show('BackdropLogo', true)
+end
+
+-- Top left of the block of the update line (uw x uh) over the play time
+-- (iw x ih) in an area W x H, and its width: InfoPos= (or px, py: the
+-- backdrop's BackInfoPos=) places it in the room it leaves inside the
+-- margins (LabelPad), 0,0 the top left
+function M.infoBlock(t, uw, uh, iw, ih, W, H, px, py)
+	px, py = px or t.infoX, py or t.infoY
+	local bw, bh = math.max(uw, iw), uh + ih
+	local bx, by = V.LabelPad, V.LabelPad
+	if (px > 0 or py > 0) and not t.widget then
+		bx = bx + math.floor(px * math.max(0, W - 2 * V.LabelPad - bw) + 0.5)
+		by = by + math.floor(py * math.max(0, H - 2 * V.LabelPad - bh) + 0.5)
+	end
+	return bx, by, bw
+end
+
+-- The selected tile's lines on the backdrop (WheelInfoOn=Background), with
+-- the texts and opacities its slot worked out (placeSlots); t nil: none
+function M.backdropInfo(t, updText, updAlpha, infoText, infoAlpha)
+	local hasUpd = t ~= nil and updText ~= nil and updText ~= false
+	local hasInfo = t ~= nil and not t.widget and infoText ~= nil and infoAlpha > 0.01
+	show('BackdropUpd', hasUpd)
+	show('BackdropInfo', hasInfo)
+	if not (hasUpd or hasInfo) then return end
+	local uw, uh, iw, ih = 0, 0, 0, 0
+	if hasUpd then
+		set('BackdropUpd', 'Text', updText)
+		uw, uh = M.lineSize('BackdropUpd', updText)
+	end
+	if hasInfo then
+		set('BackdropInfo', 'Text', infoText)
+		iw, ih = M.lineSize('BackdropInfo', infoText)
+	end
+	local ax, ay, W, H = M.backdropArea()
+	local px, py = t.backInfoX or 0, t.backInfoY or 0
+	local bx, by, bw = M.infoBlock(t, uw, uh, iw, ih, W, H, px, py)
+	bx, by = ax + bx, ay + by
+	if hasUpd then
+		set('BackdropUpd', 'X', tostring(bx + math.floor(px * (bw - uw) + 0.5)))
+		set('BackdropUpd', 'Y', tostring(by))
+		set('BackdropUpd', 'FontColor', fade(V.TextColor, updAlpha))
+		set('BackdropUpd', 'SolidColor', fade('0,0,0,150', updAlpha))
+	end
+	if hasInfo then
+		set('BackdropInfo', 'X', tostring(bx + math.floor(px * (bw - iw) + 0.5)))
+		set('BackdropInfo', 'Y', tostring(by + uh))
+		set('BackdropInfo', 'FontColor', fade(V.TextColor, infoAlpha))
+		set('BackdropInfo', 'SolidColor', fade('0,0,0,150', infoAlpha))
+	end
+end
+function M.backdropAdvance()
+	local b = M.backdrop
+	if b.f >= 1 then return false end
+	b.t = b.t + 16 * M.animScale
+	b.f = math.min(1, b.t / (V.WheelStepTime * 1.5))
+	M.animFast = true
+	M.backdropAlpha()
+	return b.f < 1
+end
+
+-- The rounded container of a slot at x, y of the grid, cut to the grid area
+function M.placeBox(slot, x, y)
+	local box = 'TileBox' .. slot
+	local r = math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))
+	set(box, 'X', tostring(math.floor(V.PadX + x)))
+	set(box, 'Y', tostring(math.floor(V.GridY + y)))
+	set(box, 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', V.TileW, V.TileH, r))
+	set(box, 'Shape2', string.format('Rectangle %d,%d,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0',
+		-math.floor(x), -math.floor(y), math.floor(V.ClipW or V.AreaW), math.floor(V.ClipH or V.AreaH)))
+	set(box, 'Shape3', 'Combine Shape | Intersect Shape2')
+	show(box, true)
+end
+
+-- The wheel: the widgets' container (WidgetClip, drawn after the tiles) lets
+-- each widget show only where its tile is seen: its rounded tile, in the
+-- grid, minus the tiles nearer the middle that cover it (drawn after it).
+-- boxes: slot -> { x, y } of the tiles shown; live: slots of the widgets.
+-- With no widget it is hidden and empty: a container with none of its
+-- meters shown is drawn by Rainmeter as a plain (black) shape.
+function M.widgetMask(boxes, live)
+	local r = math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))
+	local fill = ' | Fill Color 0,0,0,255 | StrokeWidth 0'
+	-- where the grid is, as GridClip (the widgets are placed in its coordinates)
+	set('WidgetClip', 'X', tostring(math.floor(V.PadX)))
+	set('WidgetClip', 'Y', tostring(math.floor(V.GridY)))
+	local n = 0
+	local function add(text)
+		n = n + 1
+		set('WidgetClip', n == 1 and 'Shape' or ('Shape' .. n), text)
+		return n == 1 and 'Shape' or ('Shape' .. n)
+	end
+	local function box(b) return string.format('Rectangle %d,%d,%d,%d,%d', b[1], b[2], V.TileW, V.TileH, r) .. fill end
+	local grid = string.format('Rectangle 0,0,%d,%d', math.floor(V.ClipW or V.AreaW), math.floor(V.ClipH or V.AreaH)) .. fill
+	for _, slot in ipairs(live) do
+		local b = boxes[slot]
+		local ops = { 'Combine ' .. add(box(b)), 'Intersect ' .. add(grid) }
+		-- slots after this one are nearer the middle, drawn over it
+		for other, o in pairs(boxes) do
+			if other > slot and math.abs(o[1] - b[1]) < V.TileW and math.abs(o[2] - b[2]) < V.TileH then
+				ops[#ops + 1] = 'Exclude ' .. add(box(o))
+			end
+		end
+		add(table.concat(ops, ' | '))
+	end
+	if n == 0 then add('Rectangle 0,0,1,1 | Fill Color 0,0,0,0 | StrokeWidth 0') end
+	for k = n + 1, M.maskShapes or 0 do set('WidgetClip', 'Shape' .. k, '') end
+	M.maskShapes = n
+	show('WidgetClip', #live > 0)
+	-- custom widgets: their own container (CW<i>Box, at the tile, drawn after
+	-- the tiles) cut the same way, by the nearer tiles (D.placeWidget gave it
+	-- the whole tile)
+	M.cwShapes = M.cwShapes or {}
+	for _, slot in ipairs(live) do
+		local b, t = boxes[slot], boxes[slot][3]
+		if t and t.widget and t.widget.kind == 'custom' and t.widget.boxed then
+			local name, k = 'CW' .. t.widget.idx .. 'Box', 1
+			local ops = { 'Combine Shape' }
+			-- (the same as D.placeWidget's, so the two do not set it in turn)
+			set(name, 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 255,255,255,255 | StrokeWidth 0', V.TileW, V.TileH, r))
+			for other, o in pairs(boxes) do
+				if other > slot and math.abs(o[1] - b[1]) < V.TileW and math.abs(o[2] - b[2]) < V.TileH then
+					k = k + 1
+					set(name, 'Shape' .. k, box({ o[1] - b[1], o[2] - b[2] }))
+					ops[#ops + 1] = 'Exclude Shape' .. k
+				end
+			end
+			if k > 1 then
+				k = k + 1
+				set(name, 'Shape' .. k, table.concat(ops, ' | '))
+			end
+			for j = k + 1, M.cwShapes[name] or 0 do set(name, 'Shape' .. j, '') end
+			M.cwShapes[name] = k
+		end
+	end
+end
+
+-- The wheel: the highlight is drawn after every tile (HoverClip, above them):
+-- its container is cut by the tiles nearer the middle than the highlighted
+-- one, which are drawn over it, as M.widgetMask cuts the widgets; and it
+-- fades as its tile does towards the ends (WheelFade). x, y: where the
+-- highlight is, in the grid. Returns that fade. (Shape, the grid area, is
+-- set by setGridArea.)
+function M.hoverMask(x, y)
+	local f = M.wf or M.wheelFrame()
+	local d = math.abs((V.Horizontal and hover.gx or hover.gy) - pos)
+	local fade = 1 - V.WheelFade / 100 * math.min(1, d / math.max(0.5, f.half + 0.5))
+	local r = math.min(V.TileRadius, math.floor(math.min(V.TileW, V.TileH) / 2))
+	local n, ops = 1, { 'Combine Shape' }
+	for slot = 1, V.Slots do
+		local b, e = M.wboxes and M.wboxes[slot], M.wv[slot]
+		if b and e and math.abs(e.d) < d - 0.01 and math.abs(b[1] - x) < V.TileW and math.abs(b[2] - y) < V.TileH then
+			n = n + 1
+			set('HoverClip', 'Shape' .. n, string.format('Rectangle %d,%d,%d,%d,%d | Fill Color 0,0,0,255 | StrokeWidth 0', b[1], b[2], V.TileW, V.TileH, r))
+			ops[#ops + 1] = 'Exclude Shape' .. n
+		end
+	end
+	if n > 1 then
+		n = n + 1
+		set('HoverClip', 'Shape' .. n, table.concat(ops, ' | '))
+	end
+	for j = n + 1, M.hoverShapes or 1 do set('HoverClip', 'Shape' .. j, '') end
+	M.hoverShapes = n
+	return fade
+end
+
+-- Time-based turn towards offset: WheelStepTime per tile (a little less each
+-- for several at once); a new target starts again from where it is
+function M.wheelAdvance()
+	local w = M.wheel
+	if w.to ~= offset then
+		w.from, w.to, w.t = pos, offset, 0
+		w.dur = V.WheelStepTime * math.sqrt(math.max(1, math.abs(offset - pos)))
+	end
+	if pos == offset then return false end
+	w.t = w.t + 16 * M.animScale
+	local p = math.min(1, w.t / w.dur)
+	pos = w.from + (w.to - w.from) * easeOut(p)
+	M.animFast = true
+	if p >= 1 then pos = offset return false end
+	return true
+end
+
+-- Mouse resting on a side tile (WheelHover=Turn): after a moment the wheel
+-- turns to it (MeasureWheelDwell); not while it turns, so a tile passing
+-- under a still mouse does not turn it again
+M.dwell = nil
+function M.wheelHover(k)
+	if not (V.Wheel and V.WheelTurn) or pos ~= offset or k == offset then return end
+	-- a tile that came under a still mouse with the last turn: not again
+	local a, b = M.turnMouse, M.mouse
+	if a and b and a[1] and b[1] and math.abs(a[1] - b[1]) + math.abs(a[2] - b[2]) < 3 then return end
+	M.dwell = k
+	SKIN:Bang('!CommandMeasure', 'MeasureWheelDwell', 'Stop 1')
+	SKIN:Bang('!CommandMeasure', 'MeasureWheelDwell', 'Execute 1')
+end
+function M.wheelLeave()
+	if M.dwell == nil then return end
+	M.dwell = nil
+	SKIN:Bang('!CommandMeasure', 'MeasureWheelDwell', 'Stop 1')
+end
+function WheelDwell()
+	local k = M.dwell
+	M.dwell = nil
+	if not ready or launching or not V.Wheel or k == nil or pos ~= offset or not hover.on then return end
+	if (V.Horizontal and hover.tx or hover.ty) ~= k then return end
+	M.turnMouse = M.mouse
+	offset = k
+	if V.AnimScroll then M.startTicker() else pos = offset M.frame() end
+end
+
+-- The inner ring of categories (WheelMenu=Ring): the categories of the menu
+-- (not Favorites, Recent, Not played yet: their buttons stay next to the
+-- search bar) on a smaller circle with the wheel's centre, the active one
+-- in line with the selected tile; it turns to the category chosen (Q / E,
+-- LB / RB, a click, the wheel of the mouse over it).
+M.ring = { from = 0, to = 0, t = 0, dur = 0 }
+function M.ringOn() return V.Wheel and V.WheelRing end
+function M.ringCats()
+	local list = {}
+	for i, c in ipairs(cats) do
+		if not c.virtual then list[#list + 1] = i end
+	end
+	return list
+end
+
+-- Turn the ring to the active category (the shorter way round)
+function M.ringGo()
+	local list = M.ringCats()
+	local n = #list
+	local j
+	for k, i in ipairs(list) do if i == active then j = k - 1 end end
+	if not j or n == 0 then return end
+	local r = M.ring
+	if r.pos == nil then r.pos, r.to = j, j return end
+	local d = ((j - r.to + n / 2) % n) - n / 2
+	if d == 0 then return end
+	r.from, r.to, r.t = r.pos, r.to + d, 0
+	r.dur = V.WheelStepTime * math.sqrt(math.abs(r.to - r.pos))
+	if V.AnimCategory then M.startTicker() else r.pos = r.to end
+end
+
+function M.ringAdvance()
+	local r = M.ring
+	if r.pos == nil or r.pos == r.to then return false end
+	r.t = r.t + 16 * M.animScale
+	local p = math.min(1, r.t / math.max(1, r.dur))
+	r.pos = r.from + (r.to - r.from) * easeOut(p)
+	M.animFast = true
+	if p >= 1 then r.pos = r.to end
+	M.ringRender()
+	return r.pos ~= r.to
+end
+
+function M.ringRender()
+	local list = M.ringCats()
+	local n = #list
+	if n == 0 then return end
+	local f = M.wf or M.wheelFrame()
+	local S = V.TileW
+	local rad = math.max(10, f.R - f.sgn * S * (0.5 + V.WheelMenuGap / 100))
+	local d = math.max(12, math.floor(S * V.WheelMenuSize / 100))
+	local stepA = d * 1.35 / rad
+	local ox, oy = V.PadX, V.GridY -- the grid's corner in the skin
+	local rp = M.ring.pos or 0
+	local nameAt
+	for j, i in ipairs(list) do
+		local dd = ((j - 1 - rp + n / 2) % n) - n / 2
+		local a = math.abs(dd)
+		local th = dd * stepA
+		local cx = ox + f.cx + f.sgn * rad * math.cos(th) * f.n[1] + rad * math.sin(th) * f.t[1]
+		local cy = oy + f.cy + f.sgn * rad * math.cos(th) * f.n[2] + rad * math.sin(th) * f.t[2]
+		local sz = math.floor(d * (1 - 0.35 * math.min(1, a / 2)) + 0.5)
+		local alpha = math.max(0, 1 - 0.45 * a)
+		local on, hot = i == active and not searchCat, i == hovered
+		local fill = on and V.ActiveCategoryColor or (hot and V.HoverCategoryColor or '255,255,255,20')
+		local stroke = on and V.AccentColor or '255,255,255,40'
+		local x, y = math.floor(cx - sz / 2 + 0.5), math.floor(cy - sz / 2 + 0.5)
+		local dot = 'RingDot' .. i
+		set(dot, 'X', tostring(x))
+		set(dot, 'Y', tostring(y))
+		set(dot, 'Shape', string.format('Ellipse %d,%d,%d | Fill Color %s | StrokeWidth 2 | Stroke Color %s',
+			math.floor(sz / 2), math.floor(sz / 2), math.max(1, math.floor(sz / 2) - 1), fade(fill, alpha), fade(stroke, alpha)))
+		show(dot, alpha > 0.02)
+		local c = cats[i]
+		if c.icon then
+			local m = math.floor(sz * 0.22)
+			set('RingIcon' .. i, 'X', tostring(x + m))
+			set('RingIcon' .. i, 'Y', tostring(y + m))
+			set('RingIcon' .. i, 'W', tostring(sz - 2 * m))
+			set('RingIcon' .. i, 'H', tostring(sz - 2 * m))
+			set('RingIcon' .. i, 'ImageAlpha', tostring(math.floor(255 * alpha * ((on or hot) and 1 or 0.7) + 0.5)))
+			show('RingIcon' .. i, alpha > 0.02)
+		else
+			set('RingText' .. i, 'X', tostring(math.floor(cx + 0.5)))
+			set('RingText' .. i, 'Y', tostring(math.floor(cy + 0.5)))
+			set('RingText' .. i, 'FontSize', tostring(math.max(6, math.floor(sz * 0.3))))
+			set('RingText' .. i, 'FontColor', fade(V.TextColor, alpha * ((on or hot) and 1 or 0.7)))
+			show('RingText' .. i, alpha > 0.02)
+		end
+		if on and a < 0.5 then nameAt = { cx, cy, sz, c } end
+	end
+	-- the name of the active category: above its disc (a wheel along the
+	-- height), beside it otherwise
+	if nameAt then
+		local cx, cy, sz, c = nameAt[1], nameAt[2], nameAt[3], nameAt[4]
+		set('RingName', 'Text', D.text(c.label))
+		if V.Horizontal then
+			set('RingName', 'StringAlign', 'LeftCenter')
+			set('RingName', 'X', tostring(math.floor(cx + sz / 2 + 8)))
+			set('RingName', 'Y', tostring(math.floor(cy)))
+		else
+			set('RingName', 'StringAlign', 'CenterBottom')
+			set('RingName', 'X', tostring(math.floor(math.max(V.PadX + 40, cx))))
+			set('RingName', 'Y', tostring(math.floor(cy - sz / 2 - 4)))
+		end
+	end
+	show('RingName', nameAt ~= nil)
+end
+
 -- Measures the (already updated) menu entries and centres the chain horizontally.
 local function layoutMenu()
+	-- the inner ring of the wheel takes the categories' place
+	if M.ringOn() then
+		for i, c in ipairs(cats) do
+			c.l, c.r = nil, nil
+			for _, name in ipairs(c.parts) do show(name, false) end
+			if not c.virtual then show('CatHit' .. i, false) end
+		end
+		laidOut = true
+		return
+	end
 	local first, last
 	for _, c in ipairs(cats) do
 		c.l, c.r = nil, nil
@@ -1903,6 +2642,13 @@ local startTicker -- defined further down
 
 local function renderCategories()
 	renderSide()
+	if M.ringOn() then
+		show('CatPillActive', false)
+		show('CatPillHover', false)
+		M.ringGo()
+		M.ringRender()
+		return
+	end
 	for i, c in ipairs(cats) do
 		local on = i == active or i == hovered
 		if c.showText then
@@ -2136,15 +2882,22 @@ local function renderFilters()
 end
 
 local function renderScrollBar()
-	local maxOff = maxOffset()
-	if maxOff == 0 then
+	local maxOff, total, half = maxOffset(), lineCount(), M.half()
+	if V.Wheel or (half > 0 and total <= 1) or (half == 0 and maxOff == 0) then
 		show('MeterScrollBar', false)
 		return
 	end
 
-	local total = lineCount()
-	-- fraction of the thumb travel (with infinite scroll: position within the loop)
-	local at = infinite() and (pos % total) / maxOff or pos / maxOff
+	-- fraction of the thumb travel (with infinite scroll: position within the
+	-- loop; the carousel: the line in the middle, from the first to the last)
+	local at
+	if half > 0 then
+		local line = pos + half
+		if infinite() then line = line % total end
+		at = line / (total - 1)
+	else
+		at = infinite() and (pos % total) / maxOff or pos / maxOff
+	end
 	at = math.min(1, math.max(0, at))
 	local size = V.ScrollBarSize
 	local x, y, w, h, tx, ty, tw, th
@@ -2998,6 +3751,7 @@ end
 -- Colour matrices (rows 1-3) of a normal image and of a greyed-out one
 local IDENTITY_ROWS = { '1;0;0;0;0', '0;1;0;0;0', '0;0;1;0;0' }
 local GREY_ROWS = { '0.3;0.3;0.3;0;0', '0.59;0.59;0.59;0;0', '0.11;0.11;0.11;0;0' }
+M.IDENTITY_ROWS, M.GREY_ROWS = IDENTITY_ROWS, GREY_ROWS -- (for the code above this)
 
 -- Size of a line whose text changes often (the download line): only its last
 -- text is kept, not one size per text like infoSize
@@ -3031,7 +3785,7 @@ function M.greyWindow(t, st, x, y)
 	if st.phase ~= 'download' and st.phase ~= 'paused' and st.phase ~= 'install' then return nil end
 	return bgWindow(t, x, y)
 end
-function M.placeUpdate(slot, t, st, x, y, f, op)
+function M.placeUpdate(slot, t, st, x, y, f, op, noImage)
 	local glow, bar, reveal = 'TileGlow' .. slot, 'TileBar' .. slot, 'TileReveal' .. slot
 	if not st then
 		show(glow, false) show(bar, false) show(reveal, false)
@@ -3064,8 +3818,9 @@ function M.placeUpdate(slot, t, st, x, y, f, op)
 	end
 	-- greyscale background, coloured up to 'part' from the left: the tile in
 	-- grey, its coloured copy cut to that width over it (the same part of
-	-- the image: the left of the tile's window on it)
-	local win = M.greyWindow(t, st, x, y)
+	-- the image: the left of the tile's window on it). noImage: the tile
+	-- shows no image (the wheel with logos only), so neither does this
+	local win = not noImage and M.greyWindow(t, st, x, y)
 	if win then
 		local cx, cy, cw, ch = win:match('^(%-?%d+),(%-?%d+),(%d+),(%d+)$')
 		local rw = math.floor(w * part + 0.5)
@@ -3084,6 +3839,18 @@ function M.placeUpdate(slot, t, st, x, y, f, op)
 	else
 		show(reveal, false)
 	end
+end
+
+-- Opacity of a line on the tile of a slot that shows 'always', 'hover' (only
+-- on the highlighted tile, fading with the highlight) or 'never'; nil when it
+-- is not shown
+function M.lineAlpha(mode, slot, f)
+	if mode == 'never' then return nil end
+	if mode ~= 'hover' then return f end
+	if indexAt(slot) == hover.idx and (hover.on or hover.a > 0) then
+		return f * (V.TileHover and hover.a or (hover.on and 1 or 0))
+	end
+	return nil
 end
 
 -- Position, opacity and visibility of the slots (also on every animation step).
@@ -3143,6 +3910,18 @@ local function placeSlots()
 	dash.shown = {}
 	dash.skinsWanted = {}
 	dash.customShown = {}
+	local wboxes, wlive = {}, {} -- the wheel: where each tile is, widgets shown
+	local backLines = false -- the selected tile's lines went to the backdrop
+	-- the wheel repeating few tiles: a widget has one set of meters, for the
+	-- copy nearest the middle
+	local nearest = {}
+	if V.Wheel then
+		for slot, e in pairs(M.wv) do
+			local t = slot <= V.Slots and tileAt(slot)
+			local n = t and t.widget and nearest[t.widget.idx]
+			if t and t.widget and (not n or math.abs(e.d) < math.abs(M.wv[n].d)) then nearest[t.widget.idx] = slot end
+		end
+	end
 	for slot = 1, slots do
 		local inUse = slot <= V.Slots -- slots beyond the category grid: hidden
 		local t = inUse and tileAt(slot)
@@ -3150,7 +3929,12 @@ local function placeSlots()
 		local extra = r >= V.NY or c >= V.NX -- extra row/column
 		local e = cur().pack and view[slot]
 		if e then extra = e.line >= base + visibleLines() end
-		local visible = t and (not extra or frac > 0)
+		local wv = V.Wheel and M.wv[slot]
+		if V.Wheel then extra = false end
+		-- a widget repeated (few tiles): its data on the copy nearest the
+		-- middle, the others plain tiles with its title
+		local live = not (wv and t and t.widget and nearest[t.widget.idx] ~= slot)
+		local visible = t and (not extra or frac > 0) and (not V.Wheel or (wv and wv.a > 0.01))
 		local tile, icon, label = 'Tile' .. slot, 'TileIcon' .. slot, 'TileLabel' .. slot
 		local infoMeter = 'TileInfo' .. slot
 
@@ -3168,6 +3952,20 @@ local function placeSlots()
 				y = y + (1 - f) * V.AnimSlide
 			end
 			x, y = math.floor(x + 0.5), math.floor(y + 0.5)
+			-- the wheel: fading towards the ends; the slot's meters in its own
+			-- rounded container (TileBox), at 0,0 in it (wx, wy: where it is)
+			local wx, wy = 0, 0
+			-- the selected tile: its logo and lines may be on the backdrop
+			local sel = wv and wv.k == math.floor(offset + 0.5)
+			if wv then
+				-- (logos only, the selected tile's logo on the backdrop: its art)
+				set(tile, 'ImageName', M.wheelImage(t, sel))
+				f = f * wv.a
+				M.placeBox(slot, x, y)
+				wboxes[slot] = { x, y, t }
+				if t.widget and live then wlive[#wlive + 1] = slot end
+				wx, wy, x, y = x, y, 0, 0
+			end
 			local alpha = tostring(math.floor(255 * f + 0.5))
 
 			set(tile, 'X', tostring(x))
@@ -3189,14 +3987,14 @@ local function placeSlots()
 			local sr, sg, sb, sa = solid:match('^(%d+),(%d+),(%d+),(%d+)$')
 			if sa and tonumber(sa) < 1 then solid = sr .. ',' .. sg .. ',' .. sb .. ',1' end
 			set(tile, 'SolidColor', solid)
-			-- Steam update: the border, the progress, the first line (always
-			-- shown), the background in greyscale while it downloads
-			local tileRows = (missing or M.greyWindow(t, st, x, y)) and GREY_ROWS or IDENTITY_ROWS
+			-- Steam update: the border, the progress, the first line
+			-- (UpdateInfo), the background in greyscale while it downloads
+			local tileRows = (missing or M.greyWindow(t, st, x + wx, y + wy)) and GREY_ROWS or IDENTITY_ROWS
 			set(tile, 'ColorMatrix1', tileRows[1])
 			set(tile, 'ColorMatrix2', tileRows[2])
 			set(tile, 'ColorMatrix3', tileRows[3])
 			local framedOriginal = t.frame and t.background == t.backgroundFull
-			local crop = (V.BgStyle ~= 'crop' or framedOriginal) and t.background and bgWindow(t, x, y)
+			local crop = (V.BgStyle ~= 'crop' or framedOriginal) and t.background and bgWindow(t, x + wx, y + wy)
 			set(tile, 'PreserveAspectRatio', crop and '0' or '2')
 			set(tile, 'ImageCrop', crop or '')
 			if t.logo then
@@ -3214,7 +4012,8 @@ local function placeSlots()
 				set(icon, 'ColorMatrix2', rows[2])
 				set(icon, 'ColorMatrix3', rows[3])
 			end
-			local hasLabel = V.ShowLabels and t.label ~= nil
+			local hasLabel = V.ShowLabels and (t.label ~= nil or (t.widget and not live))
+				and (not wv or V.WheelLabelsAll or math.abs(wv.d) < 0.5 or (t.widget and not live))
 			if hasLabel then
 				set(label, 'W', tostring(V.TileW - 2 * V.LabelPad))
 				set(label, 'X', tostring(x + V.LabelPad))
@@ -3222,20 +4021,32 @@ local function placeSlots()
 				set(label, 'FontColor', fade(V.TextColor, f))
 				set(label, 'FontEffectColor', fade('0,0,0,200', f))
 			end
+			-- the update line and the play time: always, only on the
+			-- highlighted tile (fading with the highlight) or never (UpdateInfo,
+			-- TileInfo); "Not installed" always
 			local updText = st and M.updateInfo(t)
-			M.placeUpdate(slot, t, st, x, y, f, op)
-			-- play time / last launch: always, only on the highlighted tile
-			-- (fading with the highlight) or never; "Not installed" always
+			local updAlpha = updText and M.lineAlpha(V.UpdateInfo, slot, f) or 0
+			if updAlpha <= 0.01 then updText = nil end
+			M.placeUpdate(slot, t, st, x, y, f, op, wv and M.wheelImage(t, sel) == '')
 			local infoAlpha = f
 			local infoText, sticky = tileInfo(t)
-			if not sticky and V.TileInfo == 'never' then infoText = nil end
-			if infoText and not sticky and V.TileInfo == 'hover' then
-				local idx = indexAt(slot)
-				if idx == hover.idx and (hover.on or hover.a > 0) then
-					infoAlpha = f * (V.TileHover and hover.a or (hover.on and 1 or 0))
-				else
-					infoText = nil
+			if infoText and not sticky then
+				infoAlpha = M.lineAlpha(V.TileInfo, slot, f) or 0
+				if infoAlpha <= 0 then infoText = nil end
+			end
+			-- the lines on the backdrop: the selected tile's there, none on the
+			-- tiles of the wheel. The backdrop shows the selected tile, so its
+			-- lines are those of a highlighted tile (Hover as Always), wherever
+			-- the mouse is
+			if wv and V.WheelInfoBack then
+				if sel then
+					local u = st and V.UpdateInfo ~= 'never' and M.updateInfo(t) or nil
+					local i, sticky = tileInfo(t)
+					if i and not sticky and V.TileInfo == 'never' then i = nil end
+					M.backdropInfo(t, u, f, i, f)
+					backLines = true
 				end
+				updText, infoText = nil, nil
 			end
 			local hasInfo = infoText ~= nil and infoAlpha > 0.01
 			if hasInfo or updText then
@@ -3249,17 +4060,13 @@ local function placeSlots()
 				local placed = (t.infoX > 0 or t.infoY > 0) and not t.widget
 				if updText then uw, uh = M.lineSize(updMeter, updText) end
 				if hasInfo and (placed or updText) then iw, ih = infoSize(infoMeter, infoText) end
-				local bw, bh = math.max(uw, iw), uh + ih
-				local bx, by = x + V.LabelPad, y + V.LabelPad
-				if placed then
-					bx = bx + math.floor(t.infoX * math.max(0, V.TileW - 2 * V.LabelPad - bw) + 0.5)
-					by = by + math.floor(t.infoY * math.max(0, V.TileH - 2 * V.LabelPad - bh) + 0.5)
-				end
+				local bx, by, bw = M.infoBlock(t, uw, uh, iw, ih, V.TileW, V.TileH)
+				bx, by = x + bx, y + by
 				if updText then
 					set(updMeter, 'X', tostring(bx + math.floor(t.infoX * (bw - uw) + 0.5)))
 					set(updMeter, 'Y', tostring(by))
-					set(updMeter, 'FontColor', fade(V.TextColor, f))
-					set(updMeter, 'SolidColor', fade('0,0,0,150', f))
+					set(updMeter, 'FontColor', fade(V.TextColor, updAlpha))
+					set(updMeter, 'SolidColor', fade('0,0,0,150', updAlpha))
 				end
 				if hasInfo then
 					set(infoMeter, 'X', tostring(bx + math.floor(t.infoX * (bw - iw) + 0.5)))
@@ -3268,16 +4075,16 @@ local function placeSlots()
 					set(infoMeter, 'SolidColor', fade('0,0,0,150', infoAlpha))
 				end
 			end
-			show('TileUpd' .. slot, updText ~= nil and updText ~= false)
+			show('TileUpd' .. slot, updText ~= nil)
 			show(tile, true)
-			show(icon, t.logo ~= nil and not t.widget)
-			show(label, hasLabel and not t.widget)
+			show(icon, t.logo ~= nil and not t.widget and not (sel and V.WheelLogoBack))
+			show(label, hasLabel and (not t.widget or not live))
 			show(infoMeter, infoText ~= nil and infoAlpha > 0.01 and not t.widget)
-			if t.widget then D.placeWidget(t, x, y, f) end
-			rects[#rects + 1] = { x, y, V.TileW, V.TileH }
+			if t.widget and live then D.placeWidget(t, x + wx, y + wy, f) end
+			if not wv then rects[#rects + 1] = { x, y, V.TileW, V.TileH } end
 			-- cut by the edge: how much, for each line across the scroll (a
 			-- row, or a column when the grid scrolls vertically) it covers
-			if V.EdgeFade and not appear then
+			if V.EdgeFade and not appear and not V.Wheel then
 				local along, size, step = x, V.TileW, V.StepY
 				local across, span, edge = y, V.TileH, V.ClipW or V.GridW
 				if not V.Horizontal then
@@ -3300,6 +4107,7 @@ local function placeSlots()
 			end
 			V.TileW, V.TileH = catW, catH
 		else
+			if V.Wheel then show('TileBox' .. slot, false) end
 			show(tile, false)
 			show(icon, false)
 			show(label, false)
@@ -3308,12 +4116,13 @@ local function placeSlots()
 			M.placeUpdate(slot, nil)
 		end
 	end
+	if V.WheelInfoBack and not backLines then M.backdropInfo(nil) end
 	roundClip(rects)
 	-- one fade per line, as strong as its tiles are cut: lines next to each
 	-- other touch, so a tile of more cells is covered all along
 	local edges = {}
 	fadeMoving = false
-	if V.EdgeFade then
+	if V.EdgeFade and not V.Wheel then
 		local lines = V.Horizontal and V.NY or V.NX
 		local step = V.Horizontal and V.StepY or V.StepX
 		local full = V.Horizontal and (V.ClipH or V.GridH) or (V.ClipW or V.GridW)
@@ -3360,6 +4169,10 @@ local function placeSlots()
 		end
 		if t.widget.boxed and not dash.customShown[n] then show('CW' .. n .. 'Box', false) end
 	end
+	if V.Wheel then
+		M.widgetMask(wboxes, wlive)
+		M.wboxes = wboxes -- (the highlight is cut by them: M.hoverMask)
+	end
 end
 
 local function placeHover()
@@ -3368,21 +4181,28 @@ local function placeHover()
 		return
 	end
 	local x, y = gridToPx(hover.gx, hover.gy)
+	x, y = x + hover.ox, y + hover.oy
+	-- the wheel: under the nearer tiles, faded as its tile
+	local a = V.Wheel and hover.a * M.hoverMask(x, y) or hover.a
 	set('TileHover', 'X', tostring(math.floor(x + 0.5)))
 	set('TileHover', 'Y', tostring(math.floor(y + 0.5)))
 	set('TileHover', 'Shape', string.format(
 		'Rectangle 1,1,%d,%d,%d | Fill Color %s | StrokeWidth 2 | Stroke Color %s',
 		math.floor(hover.w + 0.5) - 2, math.floor(hover.h + 0.5) - 2, math.max(0, V.TileRadius - 1),
-		fade(V.HoverColor, hover.a), fade(V.AccentColor, hover.a)))
+		fade(V.HoverColor, a), fade(V.AccentColor, a)))
 	show('TileHover', true)
 end
 
 -- Applies the current state to the grid and redraws.
 local function frame()
-	local b = math.floor(pos)
-	if b ~= base then
-		base = b
-		fillSlots()
+	if V.Wheel then
+		M.wheelAssign()
+	else
+		local b = math.floor(pos)
+		if b ~= base then
+			base = b
+			fillSlots()
+		end
 	end
 	placeSlots()
 	placeHover()
@@ -3462,12 +4282,14 @@ applyFilter = function()
 	for _ in pairs(filter.stores) do n = n + 1 end
 	for _ in pairs(filter.tags) do n = n + 1 end
 	filter.n, filter.ver = n, filter.ver + 1
-	offset, pos, base = 0, 0, -1
+	offset = normalizeOffset(nil)
+	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
 	updateEmptyHint()
 	if V.AnimCategory then appear = 0 startTicker() end
+	if M.carousel() then M.focusSelected() end
 	render(true)
 end
 
@@ -3523,6 +4345,8 @@ startTicker = function()
 	SKIN:Bang('!CommandMeasure', 'MeasureAnim', 'Execute ' .. tickList)
 end
 
+M.startTicker = function() startTicker() end -- (for the functions defined above it)
+
 local function stopTicker()
 	if not ticking then return end
 	ticking = false
@@ -3565,8 +4389,10 @@ local function advance()
 		end
 	end
 
-	pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth)
+	if V.Wheel then moving = M.wheelAdvance() else pos, moving = approach(pos, offset, 0.002, V.AnimScrollSmooth) end
 	busy = busy or moving or fadeMoving
+	if M.ringOn() and M.ringAdvance() then busy = true end
+	if V.Wheel and V.WheelBackdrop and M.backdropAdvance() then busy = true end
 
 	-- Steam updates, when the launcher opens: progress filling up, borders turning
 	if M.dl.anim then
@@ -3591,6 +4417,10 @@ local function advance()
 		hover.w, moving = approach(hover.w, hover.tw, 0.5, V.AnimHoverSmooth)
 		busy = busy or moving
 		hover.h, moving = approach(hover.h, hover.th, 0.5, V.AnimHoverSmooth)
+		busy = busy or moving
+		hover.ox, moving = approach(hover.ox, hover.tox, 0.5, V.AnimHoverSmooth)
+		busy = busy or moving
+		hover.oy, moving = approach(hover.oy, hover.toy, 0.5, V.AnimHoverSmooth)
 		busy = busy or moving
 		hover.a, moving = approach(hover.a, hover.on and 1 or 0, 0.02, V.AnimHoverSmooth)
 		busy = busy or moving
@@ -3637,6 +4467,8 @@ function Tick(list)
 	M.animFast = false
 	local busy = advance()
 	frame()
+	-- a backdrop fade that started in this frame (the wheel just stopped on a tile)
+	if V.Wheel and M.backdrop.f < 1 then busy = true end
 	if busy then
 		M.tickMs = (M.animFast or fadeMoving) and (V.FrameMs or 16) or 50
 		tickList = tickListFor(M.tickMs)
@@ -3828,6 +4660,7 @@ function Initialize()
 	V.DefNY = math.max(1, math.floor(num('NY', 2)))
 	V.Horizontal = SKIN:GetVariable('ScrollDir', 'V'):upper():sub(1, 1) == 'H'
 	V.ScrollStep = math.max(1, math.floor(num('ScrollStep', 1)))
+	V.CenterSelection = num('CenterSelection', 0) ~= 0
 	V.ScreenX, V.ScreenY = num('ScreenX', 0), num('ScreenY', 0)
 	V.ScreenW = num('ScreenW', 1920)
 	V.ScreenH = num('ScreenH', 1080) -- before the sizes: percentages need it
@@ -3853,11 +4686,14 @@ function Initialize()
 	V.LaunchAnimFrames = math.max(0, math.floor(num('LaunchAnimFrames', 15)))
 	V.LaunchLogoSize = math.floor(num('LaunchLogoSize', 400))
 	V.CloseOnLaunch = num('CloseOnLaunch', 1) ~= 0
+	-- hide when it loses the focus (FocusLost); its keys go off in any case
+	V.AutoHide = num('AutoHide', 1) ~= 0
 	V.CloseAction = SKIN:GetVariable('CloseAction', '[!CommandMeasure MeasureScript "Hide()"]')
 	V.StartHidden = num('StartHidden', 0) ~= 0
 	V.ShowZPos = SKIN:GetVariable('ShowZPos', '')
 	V.HotKey = trim(SKIN:GetVariable('CloseHotKey', ''))
-	-- The close key mini-skin: only active while the launcher is visible
+	-- The close key mini-skin: only active while the launcher is visible and
+	-- has the focus
 	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
 	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
 	V.DebugLog = num('DebugLog', 0) ~= 0
@@ -3874,7 +4710,15 @@ function Initialize()
 	V.ShowClock = num('ShowClock', 1) ~= 0
 	V.ShowPower = num('ShowPower', 1) ~= 0
 	V.TrackPlaytime = num('TrackPlaytime', 1) ~= 0
-	V.GameUpdates = num('GameUpdates', 1) ~= 0
+	-- Steam updates waiting: the line always, on the highlighted tile only
+	-- (hover) or never (no border nor bar either). GameUpdates=0/1: the
+	-- setting it replaced, still there in a settings file Data.ps1 has not
+	-- merged yet (UpdateInfo then comes from the defaults)
+	local upd = SKIN:GetVariable('UpdateInfo', ''):lower()
+	local old = SKIN:GetVariable('GameUpdates', '')
+	if old ~= '' then upd = (tonumber(old) or 1) ~= 0 and 'hover' or 'never' end
+	V.UpdateInfo = (upd == 'always' or upd == 'never') and upd or 'hover'
+	V.GameUpdates = V.UpdateInfo ~= 'never'
 	-- Steam downloads: what the update line says, the colours of the border
 	-- and the bar, how the progress shows, how long the border turns
 	V.DownloadInfo = {}
@@ -3929,6 +4773,7 @@ function Initialize()
 	SKIN:Bang('!SetOption', 'MeasureLaunchAnim', 'ActionList1', 'Repeat Step, ' .. V.LaunchStepMs .. ', ' .. V.LaunchSteps
 		.. ' | Wait ' .. math.floor(num('LaunchHold', 1500)) .. ' | Finish')
 	V.InfiniteScroll = num('InfiniteScroll', 1) ~= 0
+	M.readWheel()
 	-- Smoothing of each animation; AnimSmooth if empty
 	local function smooth(name)
 		return math.min(1, math.max(0.02, num(name, V.AnimSmooth)))
@@ -3941,6 +4786,9 @@ function Initialize()
 	V.LogoGreyscale = num('LogoGreyscale', 1) ~= 0
 	local bg = SKIN:GetVariable('BgStyle', 'Crop'):lower()
 	V.BgStyle = (bg == 'pan' or bg == 'parallax' or bg == 'zoom') and bg or 'crop'
+	-- the styles are the grid's: the thumbnails of the wheel are cropped (a
+	-- parallax across a "grid" one tile wide stayed at one end)
+	if V.Wheel then V.BgStyle = 'crop' end
 	V.BgOverscan = math.max(1, num('BgOverscan', 1.15))
 	V.BgPanFrames = math.max(1, math.floor(num('BgPanFrames', 180)))
 	V.BgHoverZoom = math.max(1, num('BgHoverZoom', 1.08))
@@ -3981,9 +4829,10 @@ function Initialize()
 
 	active = math.min(math.max(1, math.floor(num('LastCategory', 1))), #cats)
 	applyGeometry(cats[active])
-	-- saved scroll position of each category
+	-- saved scroll position of each category (M.writeScroll); none: the start
 	for _, c in ipairs(cats) do
-		c.offset = math.floor(num('Scroll_' .. c.name, 0))
+		local o = num('Scroll_' .. c.name, nil)
+		c.offset = o and math.floor(o) - M.half(c)
 	end
 	offset = normalizeOffset(cats[active].offset)
 	pos = offset
@@ -4014,7 +4863,10 @@ function M.writeTileKeys()
 	if f then f:write(text) f:close() end
 end
 
+-- Only while the launcher has the focus (M.setFocus): typing in another
+-- program, with the launcher left open beside it, the keys are its own.
 local function hotKey(on)
+	on = on and M.focused
 	if V.TileKeysOpen and #tileKeys > 0 then
 		if on then
 			SKIN:Bang('!ActivateConfig', V.TileKeysConfig, 'TileKeys.ini')
@@ -4056,7 +4908,7 @@ function Update()
 		show('MeterPower', V.ShowPower and not M.compact)
 		updateDashState()
 		if showNow then
-			if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+			M.zpos(true)
 			SKIN:Bang('!Show')
 		end
 		if startHidden then
@@ -4064,6 +4916,8 @@ function Update()
 			SKIN:Bang('!Hide')
 			hotKey(false)
 		else
+			-- shown on load: ready for the keys and the gamepad, as when opened
+			M.focused = true
 			hotKey(true)
 			if appear then startTicker() end
 			ClockTick(0)
@@ -4282,13 +5136,15 @@ local function stopClock()
 	SKIN:Bang('!CommandMeasure', 'MeasureClock', 'Stop 2')
 end
 
-function Show()
-	dbg('Show: visible=' .. tostring(visible))
+-- how = 'edge': opened by the mouse on the docked edge (Helper.ps1), without
+-- the focus: the keys stay with the program in front until a click on it
+function Show(how)
+	dbg('Show: visible=' .. tostring(visible) .. ' how=' .. tostring(how))
 	if not ready then return end
 	if visible then
 		-- a refresh while hidden (e.g. saving in the Options window) leaves
 		-- the window hidden although the script starts as visible: show it
-		if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+		M.zpos(true)
 		SKIN:Bang('!Show')
 		return
 	end
@@ -4321,6 +5177,7 @@ function Show()
 	end
 	updateEmptyHint()
 	if V.AnimOpen then appear = 0 end
+	M.focusSelected()
 	-- Steam updates: the progress fills up and the borders turn (M.placeUpdate),
 	-- and the helper follows the downloads while the launcher is open
 	M.dl.f = 0
@@ -4333,8 +5190,9 @@ function Show()
 		M.dock.dir = 1
 		M.dockPlace(M.dock.p)
 	end
-	if V.ShowZPos ~= '' then SKIN:Bang('!ZPos', V.ShowZPos) end
+	M.zpos(true)
 	SKIN:Bang('!Show')
+	M.focused = how ~= 'edge'
 	hotKey(true)
 	if appear or M.dock.dir ~= 0 or M.dl.anim then startTicker() end
 	ReadPlaytime(60)
@@ -4387,7 +5245,15 @@ function M.finishHide()
 	SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
 end
 
+-- Open, or close; a launcher left open without the focus (a window, AutoHide=0,
+-- behind a game) comes back in front with its keys first.
 function Toggle()
+	if visible and not M.focused and not launching then
+		M.zpos(true)
+		SKIN:Bang('!Show')
+		M.setFocus(true)
+		return
+	end
 	if visible then Hide() else Show() end
 end
 
@@ -4710,6 +5576,7 @@ function M.togglePin(t)
 		offset = normalizeOffset(c.offset or offset)
 		pos, base = offset, -1
 		hover.idx, hover.on, hover.a = 0, false, 0
+		if M.carousel() then M.focusSelected() end
 		render(true)
 	end
 end
@@ -4734,6 +5601,7 @@ local function toggleFavorite(t)
 		pos, base = offset, -1
 		hover.idx, hover.on, hover.a = 0, false, 0
 		updateEmptyHint()
+		if M.carousel() then M.focusSelected() end
 		render(true)
 	end
 end
@@ -4918,15 +5786,19 @@ end
 -- Moves the highlight (mouse or keyboard) to tile t, index idx, at grid
 -- coordinates tx, ty.
 -- (w, h: the size of a part of the tile, M.hoverPart; otherwise the tile's)
-local function focus(t, idx, tx, ty, w, h)
+local function focus(t, idx, tx, ty, w, h, ox, oy)
 	if not w then w, h = tileSize(t) end
-	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty and hover.tw == w and hover.th == h then return end
+	ox, oy = ox or 0, oy or 0
+	if hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty and hover.tw == w and hover.th == h
+		and hover.tox == ox and hover.toy == oy then return end
 	hover.tx, hover.ty = tx, ty
 	hover.tw, hover.th = w, h
+	hover.tox, hover.toy = ox, oy
 	if hover.a < 0.05 or not V.AnimHover then
 		-- it was off: appear directly on the new tile
 		hover.gx, hover.gy = hover.tx, hover.ty
 		hover.w, hover.h = hover.tw, hover.th
+		hover.ox, hover.oy = ox, oy
 	end
 	hover.idx, hover.on = idx, true
 
@@ -4951,8 +5823,9 @@ function M.menuOverGrid()
 	return M.picked ~= nil and os.time() - M.picked <= 1
 end
 
-function HoverTile(slot)
+function HoverTile(slot, mx, my)
 	M.picked = nil
+	M.mouse = { tonumber(mx), tonumber(my) }
 	if M.more.open or power.open then return end
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
@@ -4970,10 +5843,12 @@ function HoverTile(slot)
 	hover.anchor = V.Horizontal and ty or tx
 	hover.part = nil
 	focus(t, indexAt(slot), tx, ty)
+	if V.Wheel then M.wheelHover(V.Horizontal and tx or ty) end
 end
 
 function LeaveTile(slot)
 	if ready then leavePointed(tileAt(slot)) end
+	M.wheelLeave()
 	if not ready or not tileAt(slot) or indexAt(slot) ~= hover.idx or not hover.on then return end
 	-- the mouse went onto a part of it (a meter of its widget with Part=1)
 	if hover.part then return end
@@ -4995,16 +5870,126 @@ function HoverPart(name)
 	local t = n and widgets[n]
 	local m = t and SKIN:GetMeter(name)
 	if not m then return end
-	local slot
-	for s = 1, V.Slots do
-		if tileAt(s) == t then slot = s break end
-	end
+	local slot = M.slotOfTile(t)
 	if not slot then return end
 	M.picked = nil
 	setPointed(t)
 	hover.part = name
 	hover.lastPart = { t = t, name = name }
 	M.focusPart(t, slot, name)
+	-- the keyboard and the pad go on from this part
+	M.kpart = { t = t, name = name }
+end
+
+-- The slot of tile t; the wheel repeating few tiles: the copy with the widget
+-- (nearest the middle)
+function M.slotOfTile(t)
+	local slot
+	for s = 1, V.Slots do
+		if tileAt(s) == t and (not slot or not V.Wheel or math.abs((M.wv[s] or {}).d or 1e9) < math.abs((M.wv[slot] or {}).d or 1e9)) then slot = s end
+		if slot and not V.Wheel then break end
+	end
+	return slot
+end
+
+-- Keyboard and pad inside a widget with parts (its meters with Part=1, the
+-- rows of its list): the highlight goes from part to part as from tile to
+-- tile. Coming onto the tile it lands on the part nearest the side it comes
+-- from; with no part further that way it leaves the tile; Confirm presses the
+-- part. M.kpart: the part highlighted, { t = tile, name = meter }.
+M.kpart = nil
+
+-- The parts of tile t as rectangles in the tile: { name, x, y, w, h }
+function M.partRects(t)
+	local list = {}
+	for name, p in pairs(M.widgetParts(t)) do
+		local m = SKIN:GetMeter(name)
+		local w, h = p[3] or (m and m:GetW()) or 0, p[4] or (m and m:GetH()) or 0
+		if w > 0 and h > 0 then list[#list + 1] = { name, p[1], p[2], w, h } end
+	end
+	-- (the same order every time: by place)
+	table.sort(list, function(a, b) if a[3] ~= b[3] then return a[3] < b[3] end return a[2] < b[2] end)
+	return list
+end
+
+-- The part of t to land on coming in direction dx, dy (0, 0: the first one)
+function M.partEnter(t, dx, dy)
+	local best, bs
+	for _, r in ipairs(M.partRects(t)) do
+		local cx, cy = r[2] + r[4] / 2, r[3] + r[5] / 2
+		-- coming down: the top one (then the left); up: the bottom one; right:
+		-- the left one (then the top); left: the right one
+		local score = dy > 0 and cy * 1e4 + cx or dy < 0 and -cy * 1e4 + cx
+			or dx > 0 and cx * 1e4 + cy or dx < 0 and -cx * 1e4 + cy or cy * 1e4 + cx
+		if not bs or score < bs then best, bs = r[1], score end
+	end
+	return best
+end
+
+-- The next part from the highlighted one in direction dx, dy (nil: none)
+function M.partNext(t, name, dx, dy)
+	local rects, cur = M.partRects(t), nil
+	for _, r in ipairs(rects) do if r[1] == name then cur = r end end
+	if not cur then return nil end
+	local cx, cy = cur[2] + cur[4] / 2, cur[3] + cur[5] / 2
+	local best, bs
+	for _, r in ipairs(rects) do
+		if r ~= cur then
+			local rx, ry = r[2] + r[4] / 2, r[3] + r[5] / 2
+			local along, across = (rx - cx) * dx + (ry - cy) * dy, math.abs(dx ~= 0 and ry - cy or rx - cx)
+			if along > 1 then
+				local score = along + 2 * across
+				if not bs or score < bs then best, bs = r[1], score end
+			end
+		end
+	end
+	return best
+end
+
+-- Nav inside the highlighted widget: true when the highlight stayed in it
+function M.partStep(dx, dy)
+	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
+	if not (t and t.widget and next(M.widgetParts(t))) then M.kpart = nil return false end
+	local slot = M.slotOfTile(t)
+	if not slot then return false end
+	local kp, name = M.kpart, nil
+	if kp and kp.t == t then
+		if dx == 0 and dy == 0 then return true end
+		name = M.partNext(t, kp.name, dx, dy)
+		if not name then M.kpart = nil return false end   -- out of the tile
+	else
+		-- the whole tile highlighted (its parts placed only now): into it
+		name = M.partEnter(t, dx, dy)
+		if not name then return false end
+	end
+	M.kpart = { t = t, name = name }
+	hover.part = nil
+	M.focusPart(t, slot, name)
+	return true
+end
+
+-- After Nav moved onto a widget with parts: onto its part nearest that side
+function M.partArrive(dx, dy)
+	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
+	M.kpart = nil
+	if not (t and t.widget and next(M.widgetParts(t))) then return end
+	local slot, name = M.slotOfTile(t), M.partEnter(t, dx, dy)
+	if not (slot and name) then return end
+	M.kpart = { t = t, name = name }
+	M.focusPart(t, slot, name)
+end
+
+-- Confirm on a part: what a click on it does
+function M.partPress()
+	local kp = M.kpart
+	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
+	if not (kp and kp.t == t) then return false end
+	local i, k = kp.name:match('^W(%d+)RowHit(%d+)$')
+	if i then WidgetRowClick(tonumber(i), tonumber(k)) return true end
+	local m = SKIN:GetMeter(kp.name)
+	local action = m and m:GetOption('LeftMouseUpAction', '') or ''
+	if action ~= '' then SKIN:Bang(action) end
+	return true
 end
 
 -- Where the parts of widget tile t are (its meters with Part=1, and its rows)
@@ -5021,7 +6006,10 @@ function M.focusPart(t, slot, name)
 	hover.anchor = V.Horizontal and ty or tx
 	local p = M.widgetParts(t)[name]
 	local px, py = p and p[1] or m:GetX(), p and p[2] or m:GetY()
-	focus(t, indexAt(slot), tx + px / V.StepX, ty + py / V.StepY, p and p[3] or m:GetW(), p and p[4] or m:GetH())
+	-- (from the tile, in pixels: in the wheel a fraction of a line is a
+	-- place on the arc, not a distance in the tile)
+	focus(t, indexAt(slot), tx, ty, p and p[3] or m:GetW(), p and p[4] or m:GetH(), px, py)
+	if V.Wheel then M.wheelHover(V.Horizontal and tx or ty) end
 end
 
 function LeavePart(name)
@@ -5059,14 +6047,17 @@ function SetCategory(i)
 	end
 	if i == active then
 		-- click on the category already open: back to the start (with infinite
-		-- scroll, to the nearest start of the loop)
-		local target = 0
+		-- scroll, to the nearest start of the loop; the carousel: the first
+		-- tile in the middle)
+		local half = M.half()
+		local target = 0 - half
 		if infinite() then
-			local L, o = lineCount(), offset % lineCount()
+			local L, o = lineCount(), (offset + half) % lineCount()
 			target = o <= L / 2 and offset - o or offset + L - o
 		end
 		if target ~= offset then
 			offset = target
+			if M.carousel() then M.focusSelected() end
 			if V.AnimScroll then startTicker() else pos = offset frame() end
 		end
 		return
@@ -5087,6 +6078,7 @@ function SetCategory(i)
 		appear = 0
 		startTicker()
 	end
+	M.focusSelected()
 	M.reveal()
 	render(true)
 	updateDashState()
@@ -5114,12 +6106,38 @@ function HoverCategory(i)
 	SKIN:Bang('!Redraw')
 end
 
+-- The wheel: the highlight on the selected tile, the middle one (after a
+-- turn, and when the launcher opens or the category changes, so the tile in
+-- the middle is highlighted from the start). The carousel: the tile in the
+-- middle.
+function M.focusSelected()
+	if M.carousel() then
+		if #cur().tiles > 0 then M.navTiles(0, 0) end
+		return
+	end
+	if not V.Wheel then return end
+	local tiles = cur().tiles
+	if #tiles == 0 then return end
+	local idx = offset % #tiles + 1
+	if V.Horizontal then focus(tiles[idx], idx, offset, 0) else focus(tiles[idx], idx, 0, offset) end
+end
+
 function Scroll(delta)
 	if not ready or launching then return end
+	if M.carousel() then
+		-- one tile per notch, whatever ScrollStep, as the keys (not from part
+		-- to part of a widget: the notch moves the carousel)
+		if #cur().tiles == 0 or delta == 0 then return end
+		local d = delta > 0 and 1 or -1
+		if V.Horizontal then M.navTiles(d, 0) M.partArrive(d, 0) else M.navTiles(0, d) M.partArrive(0, d) end
+		return
+	end
 	local new = offset + delta * V.ScrollStep
 	if not infinite() then new = math.min(math.max(0, new), maxOffset()) end
 	if new ~= offset then
 		offset = new
+		-- the wheel: the highlight goes with the selection (the middle tile)
+		M.focusSelected()
 		if V.AnimScroll then
 			startTicker()
 		else
@@ -5146,7 +6164,15 @@ local function drawSplash(p)
 	set('SplashBg', 'W', tostring(w))
 	set('SplashBg', 'H', tostring(h))
 	local cx, cy = x + math.floor(w / 2), y + math.floor(h / 2)
-	if a.tile.logoFull then
+	if a.tile.logoFull and a.logo then
+		-- the logo was on the backdrop (WheelLogoOn=Background): from there to
+		-- the centre of the screen
+		local size = lerp(a.logo.size, V.LaunchLogoSize)
+		set('SplashLogo', 'X', tostring(lerp(a.logo.cx, V.ScreenW / 2) - math.floor(size / 2)))
+		set('SplashLogo', 'Y', tostring(lerp(a.logo.cy, V.ScreenH / 2) - math.floor(size / 2)))
+		set('SplashLogo', 'W', tostring(size))
+		set('SplashLogo', 'H', tostring(size))
+	elseif a.tile.logoFull then
 		local t = a.tile
 		local size = lerp(V.IconSize * t.logoScale, V.LaunchLogoSize)
 		-- the logo starts where it sits in the tile and ends at the centre
@@ -5236,6 +6262,8 @@ local function launchTile(t, x, y)
 	stopTicker()
 	local tw, th = tileSize(t)
 	launching = { tile = t, x = V.PadX + math.floor(x), y = V.GridY + math.floor(y), w = tw, h = th, frame = 0 }
+	-- the selected tile's logo on the backdrop: the animation takes it from there
+	if V.WheelLogoBack and M.backdrop.tile == t then launching.logo = M.backdrop.logo end
 	hover.on, hover.a = false, 0
 	show('TileHover', false)
 
@@ -5277,6 +6305,14 @@ end
 function Launch(slot)
 	if not ready or launching then return end
 	if M.menuOverGrid() then M.picked = nil return end
+	-- the wheel: a side tile turns to the middle (WheelClick=Center)
+	local e = V.Wheel and M.wv[slot]
+	if e and not V.WheelClickLaunch and math.abs(e.k - offset) >= 0.5 then
+		M.wheelLeave()
+		offset = e.k
+		if V.AnimScroll then startTicker() else pos = offset frame() end
+		return
+	end
 	local x, y = gridToPx(slotToGrid(slot))
 	launchTile(tileAt(slot), x, y)
 end
@@ -5284,7 +6320,8 @@ end
 -- Keyboard -------------------------------------------------------------------
 -- WASD/arrows move the highlight (the same one as the mouse), Space/Enter
 -- launch the highlighted tile, Q/E switch category. The keys are registered by
--- the Raintile\Navigation mini-skin, only active while the launcher is visible.
+-- the Raintile\Navigation mini-skin, only active while the launcher is visible
+-- and has the focus (see Focus).
 
 -- Nav() in a grid with tiles of more cells (c.pack): to the next tile in
 -- that direction. Up and down keep the column the highlight came from
@@ -5311,9 +6348,20 @@ local function navPacked(dx, dy, p)
 		return id, l - (wrap(l) - p.at[id][1])
 	end
 	local idx, line
-	local e = hover.idx ~= 0 and p.at[hover.idx]
+	local from, start = hover.idx, V.Horizontal and hover.tx or hover.ty
+	local carousel = M.carousel()
+	if carousel then
+		-- the carousel: from the tile in the middle, also with the mouse on
+		-- another one (in the row of the highlight)
+		local h = from ~= 0 and p.at[from]
+		local x = h and math.min(math.max(hover.anchor or h[2], h[2]), h[2] + h[4] - 1) or 0
+		-- (the line under the middle of the screen: of a tile of an even size,
+		-- the first of its two middle ones)
+		from, start = nearest(math.floor(offset + M.half()), x)
+		from = from or 0
+	end
+	local e = from ~= 0 and p.at[from]
 	if e then
-		local start = V.Horizontal and hover.tx or hover.ty
 		local anchor = math.min(math.max(hover.anchor or e[2], e[2]), e[2] + e[4] - 1)
 		if dl ~= 0 then
 			local l = dl > 0 and start + e[3] or start - 1
@@ -5336,11 +6384,12 @@ local function navPacked(dx, dy, p)
 				x = x + dc
 			end
 		else
-			idx, line = hover.idx, start
+			idx, line = from, start
 		end
 	else
-		-- no highlighted tile: the first visible one
-		local l = offset
+		-- no highlighted tile: the first visible one (the carousel: of the
+		-- line in the middle)
+		local l = math.floor(offset + M.half())
 		for _ = 1, L do
 			if not inRange(l) then break end
 			idx, line = nearest(l, 0)
@@ -5351,20 +6400,34 @@ local function navPacked(dx, dy, p)
 	end
 	if not idx then return end -- at the edge: the highlight stays
 	local at = p.at[idx]
-	if line < offset then
+	if carousel then
+		-- its middle in the middle of the screen (between two lines when it
+		-- has an even number of them)
+		offset = line + (at[3] - 1) / 2 - M.half()
+	elseif line < offset then
 		offset = line
 	elseif line + at[3] - 1 > offset + vis - 1 then
 		offset = line + at[3] - vis
 	end
-	if not inf then offset = math.min(math.max(0, offset), maxOffset()) end
-	if pos ~= offset then
+	if not inf then offset = math.min(math.max(M.minOffset(), offset), maxOffset()) end
+	local scrolled = pos ~= offset
+	if scrolled then
 		if V.AnimScroll then startTicker() else pos = offset end
 	end
 	if V.Horizontal then
-		focus(tiles[idx], idx, line, at[2])
+		M.navFocus(tiles[idx], idx, line, at[2], scrolled)
 	else
-		focus(tiles[idx], idx, at[2], line)
+		M.navFocus(tiles[idx], idx, at[2], line, scrolled)
 	end
+end
+
+-- focus() after Nav: without AnimScroll the grid that scrolled is drawn here
+-- when focus() has nothing to do (the highlight was already on that tile: in
+-- the carousel, the mouse on the tile next to the middle and a wheel notch)
+function M.navFocus(t, idx, tx, ty, scrolled)
+	local same = hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty
+	focus(t, idx, tx, ty)
+	if same and scrolled and not V.AnimScroll then frame() end
 end
 
 -- Moves the highlight by dx columns and dy rows, scrolling the grid just
@@ -5372,14 +6435,33 @@ end
 function Nav(dx, dy)
 	if not ready or launching or not visible then return end
 	if osk.open then oskMove(dx, dy) return end
+	if #cur().tiles == 0 then return end
+	-- inside a widget with parts: from part to part first
+	if M.partStep(dx, dy) then return end
+	M.navTiles(dx, dy)
+	M.partArrive(dx, dy)
+end
+
+-- Nav() from tile to tile (also the wheel notch of the carousel). The
+-- carousel: from the tile in the middle, and the grid scrolls to bring the
+-- new one to the middle.
+function M.navTiles(dx, dy)
 	local tiles = cur().tiles
-	if #tiles == 0 then return end
-	if cur().pack then return navPacked(dx, dy, cur().pack) end
+	if cur().pack then
+		navPacked(dx, dy, cur().pack)
+		return
+	end
 	local L, per, vis = lineCount(), (V.Horizontal and V.NY or V.NX), visibleLines()
+	local carousel = M.carousel()
 
 	-- line = row (or column, when horizontal) along the scroll direction
 	local line, cross
-	if hover.idx ~= 0 then
+	if carousel then
+		-- the line in the middle, also with the mouse on another tile (in the
+		-- row of the highlight)
+		line = math.floor(offset + M.half() + 0.5) + (V.Horizontal and dx or dy)
+		cross = (hover.idx ~= 0 and (V.Horizontal and hover.ty or hover.tx) or 0) + (V.Horizontal and dy or dx)
+	elseif hover.idx ~= 0 then
 		line = (V.Horizontal and hover.tx or hover.ty) + (V.Horizontal and dx or dy)
 		cross = (V.Horizontal and hover.ty or hover.tx) + (V.Horizontal and dy or dx)
 	else
@@ -5392,20 +6474,23 @@ function Nav(dx, dy)
 	local wrapped = line % L
 	cross = math.min(cross, #tiles - wrapped * per - 1)
 
-	if line < offset then
+	if carousel then
+		offset = line - M.half()
+	elseif line < offset then
 		offset = line
 	elseif line > offset + vis - 1 then
 		offset = line - vis + 1
 	end
-	if pos ~= offset then
+	local scrolled = pos ~= offset
+	if scrolled then
 		if V.AnimScroll then startTicker() else pos = offset end
 	end
 
 	local idx = wrapped * per + cross + 1
 	if V.Horizontal then
-		focus(tiles[idx], idx, line, cross)
+		M.navFocus(tiles[idx], idx, line, cross, scrolled)
 	else
-		focus(tiles[idx], idx, cross, line)
+		M.navFocus(tiles[idx], idx, cross, line, scrolled)
 	end
 end
 
@@ -5419,6 +6504,7 @@ function Confirm()
 		Nav(0, 0)
 		return
 	end
+	if M.partPress() then return end
 	local x, y = gridToPx(hover.tx, hover.ty)
 	launchTile(cur().tiles[hover.idx], x, y)
 end
@@ -5426,6 +6512,15 @@ end
 -- Previous (-1) or next (+1) category, wrapping around.
 function NextCategory(delta)
 	if not ready or launching or not visible then return end
+	if M.ringOn() then
+		local list = M.ringCats()
+		if #list == 0 then return end
+		local j = 0
+		for k, i in ipairs(list) do if i == active then j = k end end
+		if j == 0 then SetCategory(list[1]) return end
+		SetCategory(list[(j - 1 + delta) % #list + 1])
+		return
+	end
 	SetCategory((active - 1 + delta) % #cats + 1)
 end
 
@@ -5501,6 +6596,7 @@ leaveSearch = function()
 	updateSearchBar()
 	updateEmptyHint()
 	updateDashState()
+	if M.carousel() then M.focusSelected() end
 	return true
 end
 
@@ -5551,7 +6647,8 @@ local function runSearch(text)
 	filter.ver = filter.ver + 1
 	setGridArea(true)
 	applyGeometry(searchCat)
-	offset, pos, base = 0, 0, -1
+	offset = normalizeOffset(nil) -- the start (the carousel: the first result in the middle)
+	pos, base = offset, -1
 	hover.idx, hover.on, hover.a = 0, false, 0
 	for t in pairs(zooming) do t.zoom, t.pan = 0, 0 end
 	zooming = {}
@@ -5569,6 +6666,10 @@ end
 
 function SearchOpen()
 	if not ready or launching or not visible or typing then return end
+	-- the keys arrive only with the focus, the gamepad's through Pad(): here
+	-- without it, this is a click on the bar, which gives the launcher the
+	-- focus (FocusGained may come after it)
+	M.focused = true
 	typing = true
 	typed = query
 	hotKey(false) -- the letters (WASD, Q, E, F...) are typed now
@@ -5619,8 +6720,10 @@ end
 -- Turns the keys back on after the search (called by MeasureKeysDelay).
 -- On-screen keyboard ---------------------------------------------------------------
 -- GamepadSearch (Y) opens the search with a keyboard at the bottom of the
--- screen: D-pad / stick move on it, A types the key, X deletes, Start (or
--- Done) keeps the results, B closes the search. The mouse can click its keys.
+-- screen: the moves (D-pad / stick) move on it, GamepadConfirm (A) types the
+-- key, GamepadDelete (X, PadX) deletes, GamepadDone (Start, PadStart) or the
+-- Done key keeps the results, GamepadBack (B) closes the search. The buttons
+-- are the helper's (Helper.ps1). The mouse can click its keys.
 
 renderOsk = function()
 	local k = math.floor(V.MenuH * 1.15)
@@ -5722,17 +6825,68 @@ oskMove = function(dx, dy)
 end
 
 function KeysReady()
-	if ready and visible and not typing then hotKey(true) end
+	if ready and visible and not typing and M.focused then hotKey(true) end
 end
 
--- The launcher lost focus (from Helper.ps1, AutoHide=1). Ignored during the
--- launch animation: the game window, or its launcher's, popping up must not
--- interrupt it.
+-- Focus ------------------------------------------------------------------------
+-- Opened with a shortcut the launcher does not become the active window, so
+-- its focus is kept here: it has it when opened (Show) or clicked
+-- (FocusGained), and loses it to a click elsewhere or another program in
+-- front (FocusLost, both from Helper.ps1). Its keys (hotKey) and the gamepad
+-- (Pad) work only while it has it; the mouse always.
+
+-- Losing the focus also ends the typing in the search (the results stay, as
+-- with Enter), so the letters are free again.
+function M.setFocus(on)
+	if M.focused == on then return end
+	M.focused = on
+	if not on then stopTyping() end
+	hotKey(on and not typing)
+end
+
+-- Window level: front = shown or in use, otherwise the focus went elsewhere.
+-- Rainmeter keeps a Normal skin (ShowZPos=0) with the desktop, under every
+-- window, even right after showing it: so the launcher is on top (1) while
+-- in use and goes back to Normal, behind the others, when the focus goes.
+function M.zpos(front)
+	if V.ShowZPos == '0' then
+		SKIN:Bang('!ZPos', front and '1' or '0')
+	elseif front and V.ShowZPos ~= '' then
+		SKIN:Bang('!ZPos', V.ShowZPos)
+	end
+end
+
+-- The launcher lost the focus: its keys go off. With AutoHide=1 it also
+-- hides, but not as a window (it stays open beside the others) nor during
+-- the launch animation (the game window, or its launcher's, popping up must
+-- not interrupt it).
 function FocusLost()
 	dbg('focus lost: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
-	if not ready or not visible or launching then return end
-	if V.Mode == 'window' then return end -- a window stays open beside the others
+	if not ready or not visible then return end
+	M.setFocus(false)
+	M.zpos(false)
+	if launching or V.Mode == 'window' or not V.AutoHide then return end
 	Hide()
+end
+
+-- A click on the launcher: its keys come back.
+function FocusGained()
+	if not ready or not visible then return end
+	if not M.focused then
+		dbg('focus gained')
+		M.zpos(true)
+	end
+	M.setFocus(true)
+end
+
+-- A gamepad button (Helper.ps1), all but the open/close combination (Toggle):
+-- only while the launcher is shown and has the focus, so the pad never acts
+-- on a launcher left open behind another program.
+function Pad(name, a, b)
+	if not ready or not visible or not M.focused then return end
+	local f = ({ Nav = Nav, Confirm = Confirm, Escape = Escape, NextCategory = NextCategory,
+		PadSearch = PadSearch, PadStart = PadStart, PadOptions = PadOptions, PadX = PadX, PadChip = PadChip })[name]
+	if f then f(a, b) end
 end
 
 -- Esc: closes the search if open, otherwise hides the launcher.

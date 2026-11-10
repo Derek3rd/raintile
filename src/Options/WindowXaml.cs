@@ -32,14 +32,22 @@ namespace RaintileOptions
         <RowDefinition Height=""*""/>
         <RowDefinition Height=""Auto""/>
       </Grid.RowDefinitions>
-      <StackPanel Margin=""36,24,36,14"">
-        <TextBlock x:Name=""PageTitle"" FontSize=""24"" FontWeight=""SemiBold""/>
-        <TextBlock x:Name=""PageDesc"" Foreground=""{StaticResource DimBrush}"" Margin=""0,5,0,0"" TextWrapping=""Wrap"" HorizontalAlignment=""Left""/>
-      </StackPanel>
+      <Grid Margin=""36,24,36,14"">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width=""*""/>
+          <ColumnDefinition Width=""Auto""/>
+        </Grid.ColumnDefinitions>
+        <StackPanel>
+          <TextBlock x:Name=""PageTitle"" FontSize=""24"" FontWeight=""SemiBold""/>
+          <TextBlock x:Name=""PageDesc"" Foreground=""{StaticResource DimBrush}"" Margin=""0,5,0,0"" TextWrapping=""Wrap"" HorizontalAlignment=""Left""/>
+        </StackPanel>
+        <ContentControl x:Name=""PageSwitch"" Grid.Column=""1"" Focusable=""False"" VerticalAlignment=""Top"" Margin=""24,6,0,0""/>
+      </Grid>
       <Grid x:Name=""PageHost"" Grid.Row=""1""/>
       <Border Grid.Row=""2"" BorderBrush=""{StaticResource LineBrush}"" BorderThickness=""0,1,0,0"" Padding=""36,12"">
         <DockPanel>
           <StackPanel DockPanel.Dock=""Right"" Orientation=""Horizontal"">
+            <Button x:Name=""BtnPreview"" Content=""Preview"" MinWidth=""90"" Margin=""0,0,8,0"" ToolTip=""The launcher with these settings, in a window beside this one""/>
             <Button x:Name=""BtnSave"" Content=""Save and refresh"" Style=""{StaticResource AccentButton}"" ToolTip=""Ctrl+S""/>
             <Button x:Name=""BtnClose"" Content=""Close"" MinWidth=""90"" Margin=""8,0,0,0""/>
           </StackPanel>

@@ -46,9 +46,12 @@ namespace RaintileOptions
                 if (File.Exists(path)) Core.WriteCategory(path, models[file]);
             }
             changedFiles.Clear();
+            var failed = WriteWidgetValues();
+            SaveCurrentProfile();
             if (!noRefresh) needsRefresh = false;
             UpdateDirty();
             status.Text = "Saved.";
+            if (failed.Count > 0) ShowDialog("Save", "The settings of these widgets could not be saved:\r\n" + string.Join("\r\n", failed));
             if (!noRefresh) InvokeRainmeter("!Refresh \"" + Core.Config + "\"");
         }
 

@@ -124,3 +124,58 @@ Test 'Data.ps1: after an update, the data comes from the backup' {
     Assert-True (Test-Path -LiteralPath (Join-Path $i.Data 'Categories\Old.ini')) 'categories of the backup'
     Assert-Equal (Get-Setting (Join-Path $i.Data 'Settings.inc') 'NY') '5' 'settings of the backup'
 }
+
+Test 'Data.ps1: the kind of your folders moves onto each folder' {
+    $i = New-Install
+    Invoke-Data $i | Out-Null
+    $settings = Join-Path $i.Data 'Settings.inc'
+    # an older version: one kind for every folder
+    Set-Setting $settings 'ImportFolders' 'D:\Emu|Retro=E:\Old>Game'
+    [IO.File]::AppendAllText($settings, "ImportFoldersKind=App`r`n")
+    Invoke-Data $i | Out-Null
+    Assert-Equal (Get-Setting $settings 'ImportFolders') 'D:\Emu>App|Retro=E:\Old>Game' 'the old kind on the folders without one'
+    Assert-Equal (Get-Setting $settings 'ImportFoldersKind') $null 'the old setting'
+    # and again: nothing changes
+    $out = Invoke-Data $i
+    Assert-True (-not ($out -match '^Settings updated')) 'a second run rewrote Settings.inc'
+}
+
+Test 'Data.ps1: the Steam updates switch becomes UpdateInfo' {
+    $i = New-Install
+    Invoke-Data $i | Out-Null
+    $settings = Join-Path $i.Data 'Settings.inc'
+    foreach ($case in @(@('0', 'Never'), @('1', 'Hover'))) {
+        # an older version: GameUpdates in place of UpdateInfo
+        $text = [IO.File]::ReadAllText($settings) -replace '(?m)^UpdateInfo=.*$', ('GameUpdates=' + $case[0])
+        [IO.File]::WriteAllText($settings, $text)
+        Invoke-Data $i | Out-Null
+        Assert-Equal (Get-Setting $settings 'UpdateInfo') $case[1] ('GameUpdates=' + $case[0])
+        Assert-Equal (Get-Setting $settings 'GameUpdates') $null 'the old setting'
+    }
+    # both there (a file edited by hand): UpdateInfo wins
+    Set-Setting $settings 'UpdateInfo' 'Always'
+    [IO.File]::AppendAllText($settings, "GameUpdates=0`r`n")
+    Invoke-Data $i | Out-Null
+    Assert-Equal (Get-Setting $settings 'UpdateInfo') 'Always' 'UpdateInfo kept'
+    $out = Invoke-Data $i
+    Assert-True (-not ($out -match '^Settings updated')) 'a second run rewrote Settings.inc'
+}
+
+Test 'Data.ps1: X, LT and RT of an older file stay with GamepadSearch / GamepadOptions' {
+    $i = New-Install
+    Invoke-Data $i | Out-Null
+    $settings = Join-Path $i.Data 'Settings.inc'
+    Set-Setting $settings 'GamepadOptions' 'LT'
+    # an older version: the buttons of the on-screen keyboard and of the chips had no settings
+    $lines = @([IO.File]::ReadAllLines($settings) | Where-Object { $_ -notmatch '^Gamepad(Delete|PrevChip|NextChip)=' })
+    [IO.File]::WriteAllText($settings, (($lines -join "`r`n") + "`r`n"))
+    Invoke-Data $i | Out-Null
+    Assert-Equal (Get-Setting $settings 'GamepadPrevChip') '' 'GamepadPrevChip (LT is the Options button)'
+    Assert-Equal (Get-Setting $settings 'GamepadNextChip') 'RT' 'GamepadNextChip'
+    Assert-Equal (Get-Setting $settings 'GamepadDelete') 'X' 'GamepadDelete'
+    Assert-Equal (Get-Setting $settings 'GamepadOptions') 'LT' 'GamepadOptions'
+    # and once there, they are yours: LT put back on the chip stays
+    Set-Setting $settings 'GamepadPrevChip' 'LT'
+    Invoke-Data $i | Out-Null
+    Assert-Equal (Get-Setting $settings 'GamepadPrevChip') 'LT' 'GamepadPrevChip set by hand'
+}

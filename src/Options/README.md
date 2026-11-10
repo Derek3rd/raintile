@@ -27,6 +27,10 @@ The Options window of Raintile as a Windows program: C#, WPF, .NET Framework 4.8
 | `Save.cs` | saving, Save and refresh, backup and restore |
 | `Gamepad.cs` | the window with a controller (XInput): moving between controls, pressing, pages |
 | `Osk.cs` | on-screen keyboard for text fields, for the controller |
+| `PadDial.cs` | picking the button of a gamepad setting: the dial around its field, or the next button of the controller |
 | `PadPlace.cs` | framing, logo and play time line of the tile preview with the controller |
 | `TileAction.cs` | the tile menu's Run as administrator and Remove (`-Action`) |
-| `WidgetOptions.cs` | the settings of each installed widget (Widgets > the widget) |
+| `WidgetOptions.cs` | the settings of each installed widget (Widgets > the widget), written by Save and refresh |
+| `Profiles.cs` | profiles (General > Profiles): saved sets of the settings, the categories' look and the widgets' settings |
+| `PreviewWindow.cs` | the preview window beside the Options window (Preview button; it stays where it is moved or sized by hand, Attach puts it back): the launcher with the settings and tiles not saved yet, the grid |
+| `WheelPreview.cs` | the preview's drawing: the screen, the launcher, the wheel and the inner ring with the launcher's formulas |

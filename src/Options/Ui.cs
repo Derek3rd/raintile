@@ -4,10 +4,13 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Markup;
 using System.Windows.Media;
@@ -38,11 +41,17 @@ namespace RaintileOptions
         public const int Clear = 0xE711;    // a field emptied (its image or icon file to the Recycle Bin, asked)
         public const int Delete = 0xE74D;   // an entry of a list goes away (list header only): always asked
         public const int Add = 0xE710;
+        public const int Edit = 0xE70F;     // a row of a list shown read-only: edit it in place (Done again)
         public const int Up = 0xE74A, Down = 0xE74B, Left = 0xE72B, Right = 0xE72A;   // move an entry
         public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
         public const int Pin = 0xE718;      // marks a pinned tile (not a button)
-        // the pad button that presses a button, before its text while the pad is in use (AddPadHint)
-        public const int PadB = 0xF094, PadStart = 0xEDE3;
+        // the pad button that presses a button, before its text while the pad is in use
+        // (AddPadHint), and on the keys and the hint line of the on-screen keyboard
+        public const int PadA = 0xF093, PadB = 0xF094, PadY = 0xF095, PadX = 0xF096, PadStart = 0xEDE3;
+        public const int PadLT = 0xF10A, PadRT = 0xF10B, PadLB = 0xF10C, PadRB = 0xF10D;
+        // and as the value of a gamepad setting (NewPadFace), with the ones above
+        public const int PadBack = 0xEECA, PadLS = 0xF108, PadRS = 0xF109, PadDpad = 0xF10E;
+        public static readonly FontFamily Font = new FontFamily("Segoe MDL2 Assets");
     }
 
     // Type sizes
@@ -85,12 +94,45 @@ namespace RaintileOptions
         public const double S = 120;     // numbers (with their unit inside), sizes
         public const double M = 220;     // short fields outside rows (filters, lists)
         public const double L = 300;
-        public const double Wrap = 470;  // panels of segments or switches
+        public const double Wrap = 470;  // panels of chips or switches
+        public const double Unit = 72;   // the px / % combo after a size box
         // the control column of side-by-side rows: one width for every page, half
         // the room of a card between these two (UpdateControlColumn); text fields
         // and sliders fill it
         public const double ControlMin = 300, ControlMax = 440;
         public const string ControlKey = "ControlColumn";   // its GridLength in the resources
+    }
+
+    // A row of a card (NewRow): the line above it parts it from what comes
+    // before. First: nothing comes before it, the card's border is there.
+    public class CardRow : Border
+    {
+        readonly Brush line;
+        public CardRow(Brush line) { this.line = line; BorderBrush = line; BorderThickness = OptionsApp.T(0, 1, 0, 0); }
+        public bool First
+        {
+            // (only the colour: the row keeps its height)
+            set { var b = value ? Brushes.Transparent : line; if (BorderBrush != b) BorderBrush = b; }
+        }
+    }
+
+    // The panel of a card (NewCard, NewSwitchCard): the first thing shown in it,
+    // when it is a row, has no line, also when what was above it (a reason, a
+    // row of the tile editor) is hidden. docs/OptionsUI.md, "A card".
+    public class CardStack : StackPanel
+    {
+        protected override Size MeasureOverride(Size available)
+        {
+            bool first = true;
+            foreach (UIElement c in InternalChildren)
+            {
+                if (c == null || c.Visibility == Visibility.Collapsed) continue;
+                var row = c as CardRow;
+                if (row != null) row.First = first;
+                first = false;
+            }
+            return base.MeasureOverride(available);
+        }
     }
 
     // A number: slider + text box + unit (NewNumberField). Show() puts a value in
@@ -123,13 +165,15 @@ namespace RaintileOptions
         }
     }
 
-    // A length in pixels or in % of the screen: text box + px / % (NewSizeField)
+    // A length in pixels or in % of the screen: text box + px / % combo (NewSizeField)
     public class SizeField
     {
         public TextBox Box;
-        public RadioButton Px, Pct;
+        public ComboBox Unit;   // item 0 px, item 1 %
         public FrameworkElement Root;
         public bool Sync;
+
+        public bool IsPct { get { return Unit.SelectedIndex == 1; } }
 
         public void Show(string value)
         {
@@ -137,11 +181,9 @@ namespace RaintileOptions
             try
             {
                 string v = (value ?? "").Trim();
-                bool pct = v.EndsWith("%");
                 Box.Text = v.TrimEnd('%').Trim();
                 Box.ClearValue(Control.BorderBrushProperty);   // a value put in is valid again
-                Pct.IsChecked = pct;
-                Px.IsChecked = !pct;
+                Unit.SelectedIndex = v.EndsWith("%") ? 1 : 0;
             }
             finally { Sync = false; }
         }
@@ -149,7 +191,7 @@ namespace RaintileOptions
         // as written to the file: "" when empty
         public string Value
         {
-            get { string t = Box.Text.Trim(); return t == "" ? "" : t + (Pct.IsChecked == true ? "%" : ""); }
+            get { string t = Box.Text.Trim(); return t == "" ? "" : t + (IsPct ? "%" : ""); }
         }
     }
 
@@ -243,9 +285,48 @@ namespace RaintileOptions
         public TextBlock NewGlyph(int code, double size = 14)
         {
             var t = NewText(((char)code).ToString(), size);
-            t.FontFamily = new FontFamily("Segoe MDL2 Assets");
+            t.FontFamily = Glyph.Font;
             t.VerticalAlignment = VerticalAlignment.Center;
             return t;
+        }
+
+        // A gamepad button (Schema.GAMEPAD_BUTTONS) as it shows in its field and on
+        // the dial: its glyph; the D-pad's with the arrow of the direction
+        public static int PadGlyphOf(string button)
+        {
+            switch (button)
+            {
+                case "A": return Glyph.PadA;
+                case "B": return Glyph.PadB;
+                case "X": return Glyph.PadX;
+                case "Y": return Glyph.PadY;
+                case "LB": return Glyph.PadLB;
+                case "RB": return Glyph.PadRB;
+                case "LT": return Glyph.PadLT;
+                case "RT": return Glyph.PadRT;
+                case "BACK": return Glyph.PadBack;
+                case "START": return Glyph.PadStart;
+                case "LS": return Glyph.PadLS;
+                case "RS": return Glyph.PadRS;
+                default: return Glyph.PadDpad;
+            }
+        }
+
+        public FrameworkElement NewPadFace(string button, Brush brush = null)
+        {
+            if (string.IsNullOrEmpty(button)) return NewText("None", Fs.Label, brush, true);
+            var sp = NewPanel(Orientation.Horizontal);
+            sp.HorizontalAlignment = HorizontalAlignment.Center;
+            var g = NewGlyph(PadGlyphOf(button), Fs.Label);
+            if (brush != null) g.Foreground = brush;
+            AddTo(sp, g);
+            if (button == "UP" || button == "DOWN" || button == "LEFT" || button == "RIGHT")
+            {
+                var arrow = NewText(Schema.FormatHotKey(button), Fs.Label, brush, true);
+                arrow.Margin = T(Gap.Line, 0, 0, 0);
+                AddTo(sp, arrow);
+            }
+            return sp;
         }
 
         public Button NewButton(string text, string style = "", string tip = "")
@@ -285,6 +366,67 @@ namespace RaintileOptions
             return NewText((title ?? "").ToUpperInvariant(), Fs.Section, ResBrush("DimBrush"), true);
         }
 
+        // A row that applies only with other settings (Item.When): the reason under
+        // its label, shown while it does not apply (SetRowApplies)
+        public TextBlock AddRowReason(Border row, string reason)
+        {
+            return AddRowNote(row, reason);
+        }
+
+        // A note in the accent colour under the label of a row, after its help:
+        // a reason (AddRowReason) or a state to notice (the settings in the window
+        // differ from the profile). Its caller shows and hides it.
+        public TextBlock AddRowNote(Border row, string text)
+        {
+            var left = (StackPanel)((Grid)row.Child).Children[0];
+            var note = NewHelp(text, ResBrush("AccentBrush"));
+            note.Margin = T(0, Gap.Help, 0, 0);
+            AddTo(left, note);
+            return note;
+        }
+
+        // A row that does not apply: its controls disabled (the gamepad passes
+        // over them), its label dimmed, the reason shown
+        public void SetRowApplies(Border row, bool on, TextBlock why)
+        {
+            SetRowApplies(row, on, why, !on);
+        }
+
+        // explain: the reason shown (not when the whole card does not apply: it
+        // says why under its title)
+        public void SetRowApplies(Border row, bool on, TextBlock why, bool explain)
+        {
+            var g = (Grid)row.Child;
+            var left = (StackPanel)g.Children[0];
+            var label = (TextBlock)left.Children[0];
+            if (on) label.ClearValue(TextBlock.ForegroundProperty);
+            else label.Foreground = ResBrush("DimBrush");
+            foreach (UIElement c in g.Children) if (c != left) c.IsEnabled = on;
+            if (why != null) why.Visibility = explain ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // A card (group) that applies only with other settings (Group.When): the
+        // reason under its title, shown while it does not apply (SetCardApplies)
+        public TextBlock AddCardReason(Border card, string reason)
+        {
+            var sp = (StackPanel)card.Child;
+            var why = NewHelp(reason, ResBrush("AccentBrush"));
+            why.Margin = T(0, 0, 0, Gap.Control);
+            // under the title (the first child when the card has one)
+            sp.Children.Insert(sp.Children.Count > 0 && sp.Children[0] is TextBlock ? 1 : 0, why);
+            return why;
+        }
+
+        // A card that does not apply: every row of it as SetRowApplies, the reason
+        // under the title instead of under each row
+        public void SetCardApplies(Border card, bool on, TextBlock why)
+        {
+            foreach (var row in ((StackPanel)card.Child).Children.Cast<UIElement>().OfType<Border>())
+                if (row.Child is Grid && ((Grid)row.Child).Children.Count > 0 && ((Grid)row.Child).Children[0] is StackPanel)
+                    SetRowApplies(row, on, null, false);
+            if (why != null) why.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        }
+
         // Label with its help below: the left part of a row, or the top of a stacked one
         public StackPanel NewLabelBlock(string label, string help)
         {
@@ -309,6 +451,7 @@ namespace RaintileOptions
 
         // Empties a field (an image or icon file goes to the Recycle Bin: its click asks first)
         public Button NewClearButton(string tip) { return NewActionIcon(Glyph.Clear, tip); }
+        public Button NewEditButton(string tip) { return NewActionIcon(Glyph.Edit, tip); }
 
         // Deletes an entry of a list: its click asks first
         public Button NewDeleteButton(string tip) { return NewActionIcon(Glyph.Delete, tip); }
@@ -370,11 +513,13 @@ namespace RaintileOptions
             // the unit inside the box, on the right (UnitBox style: the unit is the Tag)
             tb.Style = ResStyle("UnitBox");
             if (!string.IsNullOrEmpty(unit)) tb.Tag = unit;
+            NumericOnly(tb, min < 0, step != Math.Floor(step));
             f.Slider = sl; f.Box = tb; f.Root = g;
             sl.ValueChanged += (s, e) =>
             {
                 if (f.Sync) return;
-                string t = Core.FormatNumber(sl.Value, step);
+                double v = sl.Value;
+                string t = Core.FormatNumber(v, step);
                 f.Sync = true;
                 tb.Text = t;
                 f.Sync = false;
@@ -400,18 +545,19 @@ namespace RaintileOptions
             return f;
         }
 
-        // Text box + px / % for a length; switching the unit converts the number on the
-        // main screen (axis "W" or "H"). 'changed' gets the value as written ("" when empty).
+        // Text box + px / % combo for a length; switching the unit converts the number on
+        // the main screen (axis "W" or "H"). 'changed' gets the value as written ("" when empty).
         public SizeField NewSizeField(string axis, Action<string> changed)
         {
             var f = new SizeField();
             var sp = NewPanel(Orientation.Horizontal);
             var tb = new TextBox { Width = FieldWidth.S, TextAlignment = TextAlignment.Right, Margin = T(0, 0, Gap.Control, 0), VerticalAlignment = VerticalAlignment.Center };
-            string group = "size_" + Guid.NewGuid().ToString("N");
-            var px = new RadioButton { Style = ResStyle("Segment"), Content = "px", GroupName = group, MinWidth = 42, IsChecked = true };
-            var pct = new RadioButton { Style = ResStyle("Segment"), Content = "%", GroupName = group, MinWidth = 42 };
-            AddTo(sp, tb); AddTo(sp, px); AddTo(sp, pct);
-            f.Box = tb; f.Px = px; f.Pct = pct; f.Root = sp;
+            NumericOnly(tb, false, true);   // a length: never below 0
+            var unit = NewChoiceBox(new[] { new[] { "px", "px" }, new[] { "%", "%" } }, "px", null);
+            unit.Width = FieldWidth.Unit;
+            unit.VerticalAlignment = VerticalAlignment.Center;
+            AddTo(sp, tb); AddTo(sp, unit);
+            f.Box = tb; f.Unit = unit; f.Root = sp;
             tb.TextChanged += (s, e) =>
             {
                 if (f.Sync) return;
@@ -420,22 +566,124 @@ namespace RaintileOptions
                 MarkInvalid(tb, bad);
                 if (!bad) changed(f.Value);
             };
-            RoutedEventHandler unitClick = (s, e) =>
+            unit.SelectionChanged += (s, e) =>
             {
-                bool toPct = pct.IsChecked == true;
+                if (f.Sync) return;
                 int full = axis == "W" ? screenPx[0] : screenPx[1];
                 string t = tb.Text.Trim();
                 double n;
                 if (full > 0 && Core.TryNumber(t, out n))
-                    t = toPct ? Core.FormatNumber(n * 100 / full, 0.01) : Core.FormatNumber(n * full / 100, 1);
+                    t = f.IsPct ? Core.FormatNumber(n * 100 / full, 0.01) : Core.FormatNumber(n * full / 100, 1);
                 f.Sync = true;
                 tb.Text = t;
                 f.Sync = false;
                 changed(f.Value);
             };
-            px.Click += unitClick;
-            pct.Click += unitClick;
             return f;
+        }
+
+        // One of a fixed set (docs/OptionsUI.md, 3): a combo of { value, label } pairs,
+        // 'current' selected; 'changed' (may be null) gets the value picked. Callers
+        // that put a value in (SelectChoice) keep their own guard against the echo.
+        public static ComboBox NewChoiceBox(IEnumerable<string[]> choices, string current, Action<string> changed)
+        {
+            var cb = new ComboBox();
+            if (!SetChoices(cb, choices, current) && cb.Items.Count > 0) cb.SelectedIndex = 0;
+            if (changed != null)
+                cb.SelectionChanged += (s, e) => { string v = ChoiceValue(cb); if (v != null) changed(v); };
+            return cb;
+        }
+
+        // The { value, label } pairs of a combo, again (a list read from disk that
+        // changed), 'current' selected; false when it is not one of them (nothing
+        // selected). It reports the change like a pick: callers keep their guard.
+        public static bool SetChoices(ComboBox cb, IEnumerable<string[]> choices, string current)
+        {
+            cb.SelectedIndex = -1;
+            cb.Items.Clear();
+            foreach (var c in choices) cb.Items.Add(new ComboBoxItem { Content = c[1], Tag = c[0] });
+            return SelectChoice(cb, current);
+        }
+
+        // Selects the item with this value (case-insensitive); false when there is none
+        public static bool SelectChoice(ComboBox cb, string value)
+        {
+            foreach (var o in cb.Items)
+            {
+                var i = o as ComboBoxItem;
+                if (i != null && string.Equals(i.Tag as string, value ?? "", StringComparison.OrdinalIgnoreCase))
+                {
+                    cb.SelectedItem = i;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // The value of the item selected, null when none
+        public static string ChoiceValue(ComboBox cb)
+        {
+            var i = cb.SelectedItem as ComboBoxItem;
+            return i != null ? i.Tag as string : null;
+        }
+
+        // The characters a box of NumericOnly takes, null for any other field (the
+        // on-screen keyboard shows its number pad with them)
+        static readonly ConditionalWeakTable<TextBox, string> numericChars = new ConditionalWeakTable<TextBox, string>();
+
+        public static string NumericChars(FrameworkElement field)
+        {
+            string chars;
+            var tb = field as TextBox;
+            return tb != null && numericChars.TryGetValue(tb, out chars) ? chars : null;
+        }
+
+        // Text a number box can hold while it is written: digits, the minus sign once
+        // and at the start, the decimal point once, each only if 'chars' has it.
+        // The keyboard, a paste and the on-screen keyboard go through it.
+        public static bool IsPartialNumber(string chars, string text)
+        {
+            int i = text.Length > 0 && text[0] == '-' && chars.IndexOf('-') >= 0 ? 1 : 0;
+            bool dot = false;
+            for (; i < text.Length; i++)
+            {
+                char ch = text[i];
+                if (ch >= '0' && ch <= '9') continue;
+                if (ch == '.' && !dot && chars.IndexOf('.') >= 0) { dot = true; continue; }
+                return false;
+            }
+            return true;
+        }
+
+        // A box for numbers only: typing and pasting change it only into what can
+        // still be a number (IsPartialNumber; a comma becomes the decimal point).
+        // What is not a number yet (a lone "-") gets MarkInvalid. A value that was
+        // not a number to begin with (a formula) can only be deleted.
+        public static void NumericOnly(TextBox tb, bool negative, bool decimals)
+        {
+            string chars = "0123456789" + (decimals ? "." : "") + (negative ? "-" : "");
+            numericChars.Remove(tb);
+            numericChars.Add(tb, chars);
+            // the text with the selection replaced by 's'
+            Func<string, string> after = s => tb.Text.Remove(tb.SelectionStart, tb.SelectionLength).Insert(tb.SelectionStart, s);
+            InputMethod.SetIsInputMethodEnabled(tb, false);
+            tb.PreviewTextInput += (s, e) =>
+            {
+                string t = decimals && e.Text == "," ? "." : e.Text;
+                e.Handled = true;
+                if (!IsPartialNumber(chars, after(t))) return;
+                if (t == e.Text) { e.Handled = false; return; }
+                int at = tb.SelectionStart;
+                tb.SelectedText = t;
+                tb.CaretIndex = at + t.Length;
+            };
+            // Space does not come as text input
+            tb.PreviewKeyDown += (s, e) => { if (e.Key == Key.Space) e.Handled = true; };
+            DataObject.AddPastingHandler(tb, (s, e) =>
+            {
+                var text = e.DataObject.GetDataPresent(DataFormats.UnicodeText) ? e.DataObject.GetData(DataFormats.UnicodeText) as string : null;
+                if (text == null || !IsPartialNumber(chars, after(text.Trim()))) e.CancelCommand();
+            });
         }
 
         // Buttons of the same width filling a row, 8 apart (docs/OptionsUI.md, 4)

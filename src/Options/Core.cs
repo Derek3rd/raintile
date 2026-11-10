@@ -123,6 +123,16 @@ namespace RaintileOptions
             File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n", Utf8);
         }
 
+        // A whole file written safely: a .tmp first, then put in its place, so a
+        // failure never leaves it half written (UTF-8 without BOM)
+        public static void WriteAllTextAtomic(string path, string text)
+        {
+            string tmp = path + ".tmp";
+            File.WriteAllText(tmp, text, Utf8);
+            if (File.Exists(path)) File.Replace(tmp, path, null);
+            else File.Move(tmp, path);
+        }
+
         // --- Colours -----------------------------------------------------------------
 
         // R, G, B[, A] from "R,G,B[,A]" or hex RRGGBB[AA] (with or without # or 0x)
@@ -365,6 +375,17 @@ namespace RaintileOptions
             var n = new IniSection { Name = "Category" };
             model.Sections.Insert(0, n);
             return n;
+        }
+
+        // Cells a tile takes in the grid, columns and rows: its Size= ("3x1") or,
+        // without one, the TileSize= of its category (tile null: that one); one
+        // cell when not set or not WxH, as Raintile.lua reads them
+        public static int[] GetSpan(IniSection category, IniSection tile)
+        {
+            string own = GetKey(tile, "Size").Trim();
+            var m = Regex.Match(own != "" ? own : GetKey(category, "TileSize").Trim(), @"^(\d{1,3})\s*[xX*]\s*(\d{1,3})$");
+            if (!m.Success) return new[] { 1, 1 };
+            return new[] { Math.Max(1, int.Parse(m.Groups[1].Value)), Math.Max(1, int.Parse(m.Groups[2].Value)) };
         }
 
         public static List<IniSection> GetTiles(CategoryModel model)

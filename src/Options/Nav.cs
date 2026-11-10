@@ -21,7 +21,7 @@ namespace RaintileOptions
     // What a menu entry leads to. Ids: page:<id>, group:<id>, categories, cat:<file>
     class NavTag
     {
-        public string Type, Group, First, File, Id;
+        public string Type, Group, File, Id;
         public Page Page;
         public TextBlock Title;
         public Image Icon;
@@ -33,11 +33,14 @@ namespace RaintileOptions
     {
         ListBox nav, navBottom;
         Grid pageHost;
+        // the switch of the page shown (Page.Switch), beside its title
+        ContentControl pageSwitch;
+        readonly Dictionary<string, UIElement> pageSwitches = new Dictionary<string, UIElement>();
         TextBlock pageTitle, pageDesc, status;
         Button btnSave;
         string version = "", information = "";
         readonly Dictionary<string, UIElement> pages = new Dictionary<string, UIElement>();
-        readonly Dictionary<string, bool> navOpen = new Dictionary<string, bool> { { "keybindings", true }, { "categories", true } };
+        readonly Dictionary<string, bool> navOpen = new Dictionary<string, bool> { { "tiles", true }, { "toprow", true }, { "keybindings", true }, { "import", true }, { "categories", true } };
         bool navBuilding;
         string navCurrent, navPending;
         bool[] navDots;   // new found / missing, update
@@ -77,6 +80,7 @@ namespace RaintileOptions
             nav = (ListBox)win.FindName("Nav");
             navBottom = (ListBox)win.FindName("NavBottom");
             pageHost = (Grid)win.FindName("PageHost");
+            pageSwitch = (ContentControl)win.FindName("PageSwitch");
             UpdateControlColumn();
             pageHost.SizeChanged += (s, e) => UpdateControlColumn();
             pageTitle = (TextBlock)win.FindName("PageTitle");
@@ -109,33 +113,16 @@ namespace RaintileOptions
                 navBuilding = true;
                 navBottom.SelectedItem = null;
                 navBuilding = false;
-                var tag = (NavTag)sel.Tag;
-                if (tag.Type == "group")
-                {
-                    // reached with the keyboard: open the group on its first entry
-                    navOpen[tag.Group] = true;
-                    OpenNav(tag.First);
-                    return;
-                }
-                ShowNavTarget(tag);
+                ShowNavTarget((NavTag)sel.Tag);
             };
-            // Up and down go round the menu and pass over an open group: selected,
-            // it would go straight back to its first entry
+            // Up and down go round the menu
             foreach (var list in new[] { nav, navBottom })
                 list.PreviewKeyDown += (s, e) =>
                 {
                     if ((e.Key != Key.Up && e.Key != Key.Down) || Keyboard.Modifiers != ModifierKeys.None) return;
                     e.Handled = true;
                     var next = NavStep(e.Key == Key.Down ? 1 : -1);
-                    if (next == null) return;
-                    next.Focus();
-                    // a closed group: the keys stay on its first page once the menu is rebuilt
-                    if (((NavTag)next.Tag).Type == "group")
-                        win.Dispatcher.BeginInvoke(new Action(() =>
-                        {
-                            var sel = nav.SelectedItem as ListBoxItem;
-                            if (sel != null) sel.Focus();
-                        }));
+                    if (next != null) next.Focus();
                 };
 
             btnSave.Click += (s, e) => StartSaveAndRefresh();
@@ -158,6 +145,7 @@ namespace RaintileOptions
             };
             win.SourceInitialized += (s, e) => SetDarkTitle(win);
             InitGamepad();
+            InitPreview();
             // Started without a console: bring the window to the foreground explicitly
             win.ContentRendered += (s, e) =>
             {
@@ -188,7 +176,7 @@ namespace RaintileOptions
             // The menu is built before the window appears, the page right after
             if (openPage == "info") BuildNav("");
             else if (editTile != null) { navOpen["categories"] = true; BuildNav("cat:" + editTile[0]); }
-            else BuildNav(openPage == "import" ? "page:import" : "page:general");
+            else BuildNav(openPage == "import" ? "page:found" : "page:general");
             AddStartStep("menu");
             UpdateDirty();
             win.ShowDialog();
@@ -309,7 +297,26 @@ namespace RaintileOptions
             tag.Id = id;
             tag.Title = t;
             item.Tag = tag;
+            SetNavApplies(item);
             return item;
+        }
+
+        // The page of a mode not in use (Page.When: Grid, Wheel): its entry greyed
+        // out and passed over, until the setting it needs changes
+        void SetNavApplies(ListBoxItem item)
+        {
+            var tag = (NavTag)item.Tag;
+            if (tag.Page == null || string.IsNullOrEmpty(tag.Page.When)) return;
+            bool on = WhenHolds(tag.Page.When);
+            item.IsEnabled = on;
+            if (on) tag.Title.ClearValue(TextBlock.ForegroundProperty);
+            else tag.Title.Foreground = ResBrush("DimBrush");
+        }
+
+        void UpdateNavApplies()
+        {
+            if (nav == null) return;
+            foreach (ListBoxItem it in nav.Items) SetNavApplies(it);
         }
 
         // Import: games or apps found and not seen in the list yet
@@ -359,9 +366,11 @@ namespace RaintileOptions
                 {
                     if (node.Children != null)
                     {
-                        bool open = navOpen.ContainsKey(node.Id) && navOpen[node.Id];
-                        nav.Items.Add(NewNavItem("group:" + node.Id, node.Title, node.Icon, 0,
-                            new NavTag { Type = "group", Group = node.Id, First = "page:" + node.Children[0] }, "", open));
+                        // a page with sub-pages below it: a click on it shows it and
+                        // opens them, a click when it is shown closes them
+                        var page = Schema.ById(node.Page);
+                        bool open = navOpen.ContainsKey(node.Page) && navOpen[node.Page];
+                        nav.Items.Add(NewNavItem("page:" + node.Page, page.Title, page.Icon, 0, new NavTag { Type = "page", Group = node.Page, Page = page }, "", open));
                         if (open)
                             foreach (var c in node.Children)
                                 nav.Items.Add(NewNavItem("page:" + c, Schema.ById(c).Title, 0, 1, new NavTag { Type = "page", Page = Schema.ById(c) }));
@@ -406,24 +415,15 @@ namespace RaintileOptions
             finally { navBuilding = false; }
         }
 
-        // The pages of the menu in order: an open group is left out (its entries
-        // follow it), a closed one counts as one and opens on its first page
+        // The entries of the menu in order, the bottom ones (Info) last; not the
+        // disabled ones
         List<ListBoxItem> NavEntries()
         {
-            var entries = new List<ListBoxItem>();
-            foreach (ListBoxItem it in nav.Items)
-            {
-                var tag = (NavTag)it.Tag;
-                if (tag.Type == "group" && navOpen.ContainsKey(tag.Group) && navOpen[tag.Group]) continue;
-                entries.Add(it);
-            }
-            foreach (ListBoxItem it in navBottom.Items) entries.Add(it);
-            return entries;
+            return nav.Items.OfType<ListBoxItem>().Concat(navBottom.Items.OfType<ListBoxItem>()).Where(it => it.IsEnabled).ToList();
         }
 
         // Selects the entry 'delta' steps from the selected one, round the end of
-        // the menu (keyboard arrows, D-pad, LB / RB). A group rebuilds the menu:
-        // the entry returned is then gone, and the selected one is its first page.
+        // the menu (keyboard arrows, D-pad, LB / RB).
         ListBoxItem NavStep(int delta)
         {
             var entries = NavEntries();
@@ -455,20 +455,13 @@ namespace RaintileOptions
             OpenNav("cat:" + file);
         }
 
-        // Click on a group: opens or closes it. Keybindings has no page of its own
-        // and goes to its first entry; Categories opens on the first click and only
-        // closes when its page is already shown.
+        // Click on a page with entries below it (sub-pages, categories, widgets):
+        // it opens on the first click and only closes when its page is already shown.
         void SwitchNavGroup(ListBoxItem item, MouseButtonEventArgs e)
         {
             var tag = (NavTag)item.Tag;
             bool open = navOpen.ContainsKey(tag.Group) && navOpen[tag.Group];
-            if (tag.Type == "group")
-            {
-                e.Handled = true;
-                navOpen[tag.Group] = !open;
-                OpenNav(!open ? tag.First : navCurrent);
-            }
-            else if (navCurrent == tag.Id)
+            if (navCurrent == tag.Id)
             {
                 e.Handled = true;
                 navOpen[tag.Group] = !open;
@@ -501,6 +494,8 @@ namespace RaintileOptions
             pageHost.Children.Add(pages[page.Id]);
             pageTitle.Text = page.Title;
             pageDesc.Text = page.Desc;
+            UIElement sw;
+            pageSwitch.Content = pageSwitches.TryGetValue(page.Id, out sw) ? sw : null;
         }
 
         void ShowCategoryPage(string file)
@@ -508,11 +503,13 @@ namespace RaintileOptions
             if (!pages.ContainsKey("category")) pages["category"] = NewCategoryPage();
             currentFile = file;
             ShowCategory();
+            PreviewFollow(file);
             pageHost.Children.Clear();
             pageHost.Children.Add(pages["category"]);
             var c = Core.GetCategorySection(GetModel(file));
             string name = Core.GetKey(c, "Name");
             pageTitle.Text = name != "" ? name : System.IO.Path.GetFileNameWithoutExtension(file);
+            pageSwitch.Content = null;
             pageDesc.Text = "Categories\\" + file + ": its tiles. All tiles, the first entry, holds the settings of the whole category; name and icon are on the Categories page.";
         }
 
@@ -686,6 +683,12 @@ namespace RaintileOptions
         {
             var card = NewCard("Updates", "");
             var f = CardPanel(card);
+            // its settings (the Updates group of the Info page in the schema)
+            foreach (var item in Schema.ById("info").Groups[0].Items)
+            {
+                var row = NewItemRow(item);
+                if (row != null) f.Children.Add(row);
+            }
             updInstalled = NewHelp("", ResBrush("TextBrush"));
             updLatest = NewHelp("", ResBrush("TextBrush"));
             foreach (var row in new[] { Tuple.Create(updInstalled, "Installed"), Tuple.Create(updLatest, "Latest version") })

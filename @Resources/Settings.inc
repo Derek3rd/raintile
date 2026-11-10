@@ -34,22 +34,99 @@ NX=4
 NY=2
 ; Scroll direction: V (vertical, by rows) or H (horizontal, by columns)
 ScrollDir=V
-; Rows/columns scrolled per mouse wheel notch
+; Mouse wheel notch: rows/columns scrolled in the grid, tiles turned in the wheel
 ScrollStep=1
-; 1 = infinite scroll: after the last row the first comes back (only in
-; categories with more tiles than fit on screen); 0 = stop at the end
+; 1 = infinite scroll: after the last row the first comes back; with fewer
+; tiles than fit on screen they repeat, so it still scrolls round; 0 = stop at
+; the end
 InfiniteScroll=1
+; 1 = carousel: the selected column (row with ScrollDir=V) stays in the
+; middle of the screen, and a mouse wheel notch, the keys and the gamepad
+; bring the previous or next tile there (one at a time, whatever ScrollStep).
+; With an even number of columns (rows), or a tile of an even size, the grid
+; is half a column off: a half column shows at each side. Without
+; InfiniteScroll the first and last tiles come to the middle too, with empty
+; room beside them. The mouse highlights and launches as in the grid.
+CenterSelection=0
+
+; --- Wheel ----------------------------------------------------------------------
+; Grid: the tiles in rows and columns (NX, NY, ScrollDir). Wheel: one line of
+; square tiles on an arc (the thumbnails); the selected tile stays in the
+; middle and the wheel turns, and it can be the launcher's backdrop
+; (WheelBackdrop). Every thumbnail is one cell (Size=, NX, NY, IconSize and
+; BgStyle are the grid's); best when docked.
+ScrollMode=Grid
+; Auto: along the docked side (vertical docked left or right, horizontal
+; otherwise); Vertical or Horizontal
+WheelAxis=Auto
+; Out: the arc bulges towards the screen; In: hollow
+WheelCurve=Out
+; Radius of the arc, in percent of the launcher's length along the wheel
+WheelRadius=70
+; Space from one tile to the next, in percent of a tile (under 100 they overlap:
+; the middle one is drawn on top)
+WheelSpacing=50
+; Place of the selected tile across the launcher, in percent from its docked side
+WheelAnchor=69
+; Size of the thumbnails, in percent of the smaller side of the screen; their
+; logo is 70% of it (times LogoScale= of the tile)
+WheelTileSize=25
+; Tiles shown (odd): the selected one and as many on each side
+WheelVisible=11
+; How much the tiles fade towards the ends, in percent
+WheelFade=65
+; Names: Center (the selected tile only) or All
+WheelLabels=Center
+; Time to turn by one tile, in ms
+WheelStepTime=350
+; Mouse resting on a side tile: Turn (the wheel turns to it) or Highlight
+WheelHover=Turn
+; Click on a side tile: Launch (starts it) or Center (turns it to the middle)
+WheelClick=Launch
+; Categories: Ring (on an inner wheel; Q / E or LB / RB turn it) or Bar (the
+; menu at the top)
+WheelMenu=Ring
+; Inner wheel: distance from the wheel of tiles and size of its entries, in
+; percent of a tile
+WheelMenuGap=50
+WheelMenuSize=50
+; 1 = the backdrop: the launcher's background takes the background image of
+; the selected tile, filling it as a desktop wallpaper (cut from its centre,
+; not framed; fading from one to the next), at WheelBackdropOpacity percent
+; over BgColor
+WheelBackdrop=1
+WheelBackdropOpacity=40
+; With WheelBackdrop=1, where the selected tile shows its logo and its lines
+; (the update line and the play time): Tile (on its thumbnail) or Background
+; (on the backdrop, under the top row, at their own place: BackLogoPos=,
+; BackLogoScale=, BackInfoPos= of the tile or the category). The other
+; thumbnails keep their logo (with WheelIconsOnly the selected one shows its
+; background image instead); with the lines on the backdrop no thumbnail
+; shows any.
+WheelLogoOn=Tile
+; Height of the logo on the backdrop, in percent of the area under the top
+; row (times BackLogoScale= of the tile)
+WheelBackdropLogoSize=30
+WheelInfoOn=Tile
+; 1 = the tiles of the wheel show only their logo, on a colour taken from it
+; (as AutoTileColor; a Color= of the tile or the category still wins). Tiles
+; without a logo keep their background.
+WheelIconsOnly=0
 
 ; --- Spacing --------------------------------------------------------------------
 ; Sizes are written in pixels (e.g. 40) or as a percentage of the screen
 ; (e.g. 2%): of the width for PadX, SearchW, MenuItemPad, MenuGap and
 ; MenuIconGap, of the height for all the others.
+; Gap: under the top row, and between the tiles of the grid
 Gap=18
 ; Outer margins: PadX holds the vertical scrollbar, PadY the horizontal one.
 PadX=40
 PadY=24
-; Side of the logo box in the tiles (per category: IconSize= in [Category])
+; Side of the logo box in the tiles of the grid (per category: IconSize= in
+; [Category]); the wheel's thumbnails have their own (WheelTileSize)
 IconSize=96
+; Inner margin of a tile: from its edge to the label and to the lines of the
+; play time and updates
 LabelPad=14
 ScrollBarSize=4
 
@@ -106,15 +183,18 @@ CloseSize=14
 ; last two want a second click)
 ShowPower=1
 ; Key that closes the launcher (HotKey plugin), registered only while the
-; launcher is visible. Empty = no key.
+; launcher is visible and has the focus. Empty = no key.
 CloseHotKey=ESCAPE
 ; Hot keys of the tiles (HotKey= in the category files): Always = they start
 ; their tile also while the launcher is closed; Open = only while it is open
-; (the keys stay free for other programs the rest of the time)
+; and has the focus (the keys stay free for other programs the rest of the
+; time)
 TileKeysWhen=Always
-; Keyboard navigation, only active while the launcher is visible (HotKey
-; plugin): 1 = on, 0 = off. Each action has two keys (HotKey plugin names:
-; letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
+; Keyboard navigation, only active while the launcher is visible and has the
+; focus (HotKey plugin): 1 = on, 0 = off. The launcher has the focus when it
+; is opened or clicked, and loses it to a click on another program or another
+; program in front; the shortcut gives it back. Each action has two keys
+; (HotKey plugin names: letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
 KeyboardNav=1
 NavUp=W
 NavUp2=UP
@@ -135,12 +215,15 @@ NavSearch=F
 ; 1 = hide the launcher after launching a tile, 0 = keep it open
 CloseOnLaunch=1
 ; 1 = hide when it loses focus: a click outside its window (e.g. on the second
-; monitor) or another program coming to the foreground
+; monitor) or another program coming to the foreground. Not as a window. With
+; 0 (or as a window) it stays open, without its keys and the gamepad.
 AutoHide=1
 ; 1 = when Rainmeter starts the launcher stays hidden until the shortcut
 StartHidden=0
-; Window level when it is shown: 1 = above other windows, -2 = on the
-; desktop, empty = leave it as is
+; Window level when it is shown: 1 = above other windows, 0 = normal (above
+; them while in use, behind them once the focus goes; the shortcut brings it
+; back), -2 = on the desktop (focus loss is not seen there: it keeps its keys
+; while visible), empty = leave it as is
 ShowZPos=1
 
 ; --- Tile launch ----------------------------------------------------------------
@@ -191,6 +274,7 @@ AnimLogoSmooth=0.2
 ; LaunchAnimFrames (launch expansion)
 
 ; --- Tile backgrounds -----------------------------------------------------------
+; In the grid (the wheel's thumbnails are always cropped):
 ; BgStyle: Crop     = fixed crop at the centre of the image
 ;          Pan      = under the mouse the tile slowly slides over the image
 ;          Parallax = while scrolling the image moves slower than the tile
@@ -219,25 +303,43 @@ FrameRate=Auto
 FadeDuration=0
 
 ; --- Gamepad (XInput: Xbox and compatible controllers) --------------------------
-; D-pad/left stick = move, A = launch, B = back/close,
-; LB/RB = previous/next category, GamepadToggle = open/close.
 ; 1 = on (background helper), 0 = off
 Gamepad=1
-; Buttons to hold together to open/close the launcher
-; (A B X Y LB RB BACK START LS RS UP DOWN LEFT RIGHT)
+; The buttons of each action: one button, or two (or more) held together; empty
+; = no button. Buttons: A B X Y LB RB LT RT BACK START LS RS UP DOWN LEFT RIGHT
+; (LS/RS = the stick clicks, LT/RT = the triggers, UP...RIGHT = the D-pad). A
+; button that is also part of a combination of another action acts when it is
+; released (Start alone, Back + Start). The same buttons on two actions: only
+; the first one here acts.
+; Open/close the launcher, also while it is hidden
 GamepadToggle=BACK START
 ; Stick dead zone (0-32767) and repeat while holding a direction: first delay
 ; and interval, in ms
 GamepadDeadZone=12000
 GamepadRepeatDelay=350
 GamepadRepeatRate=110
-; Button that opens the search with the on-screen keyboard: D-pad/stick move
-; on it, A types, X deletes, Start keeps the results, B closes. LT/RT pick
-; the filter chips of the results.
+; Move the highlight (repeats while held); the left stick always moves too
+GamepadUp=UP
+GamepadDown=DOWN
+GamepadLeft=LEFT
+GamepadRight=RIGHT
+; Launch the highlighted tile (on the on-screen keyboard: type the key)
+GamepadConfirm=A
+; Close the search, or the launcher
+GamepadBack=B
+; Previous / next category
+GamepadPrevCategory=LB
+GamepadNextCategory=RB
+; Open the search with the on-screen keyboard: the moves move on it, Launch
+; types, Delete deletes, Done keeps the results, Back closes
 GamepadSearch=Y
-; Button that opens the Options window, as the gear (RS = right stick click).
-; It does nothing on a button of GamepadSearch or GamepadToggle; on X, LT or
-; RT it takes their place. Empty = no button.
+; On the on-screen keyboard: delete the last letter / keep the results
+GamepadDelete=X
+GamepadDone=START
+; Previous / next filter chip of the search results
+GamepadPrevChip=LT
+GamepadNextChip=RT
+; Open the Options window, as the gear
 GamepadOptions=RS
 
 ; --- Search ---------------------------------------------------------------------
@@ -276,14 +378,18 @@ ClockFontSize=18
 ; the games and apps installed on this PC are listed, and the ones you pick
 ; become normal tiles. Nothing is added by itself.
 ; Where to look, separated by |: Steam Epic GOG Ubisoft Battlenet EA Xbox
-; (games), Folders (the programs in ImportFolders) and Apps (the Start menu)
-ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|Folders|Apps
+; GooglePlay (games), Folders (the programs in ImportFolders) and Apps (the
+; Start menu)
+ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|GooglePlay|Folders|Apps
 ; Folders of your own (portable games, emulators...), separated by |: every
 ; program (.exe) in them and in their subfolders is listed, named after its
-; file (installers, uninstallers, redistributables and helpers left out)
+; file (installers, uninstallers, redistributables and helpers left out).
+; Each entry: Name=Folder>Kind>Category, all but the folder optional (e.g.
+; Emulators=E:\Emu>App>Emulators): its name, shown in the list of found ones
+; and offered by its filter (without one, the folder's name); Game or App
+; (without one: Game); the category its programs go to (without one, the one
+; of their kind: ImportCategory or AppsCategory)
 ImportFolders=
-; What they are: Game (to ImportCategory) or App (to AppsCategory)
-ImportFoldersKind=Game
 ; 1 = look for new games and apps in the background on every skin load: new
 ; ones light a dot on the gear (nothing is added). The same search finds the
 ; tiles of games no longer installed: they are greyed out, light the dot and
@@ -326,12 +432,14 @@ InfoFontSize=10
 ; background helper looks for the game started by the tile and counts how
 ; long it runs (TimePlayed.txt in the data folder)
 TrackPlaytime=1
-; 1 = Steam games with an update waiting say so on a line above the play
-; time, always shown: "Update 5.4 GB - Sat 06:27" (size and time Steam
-; scheduled it), "Downloading 40% - 25.3 MB/s - 2:35 left" while it
-; downloads (followed live while the launcher is open). Their tile gets a
-; border in DownloadColor1 and DownloadColor2.
-GameUpdates=1
+; Steam games with an update waiting say so on a line above the play time:
+; "Update 5.4 GB - Sat 06:27" (size and time Steam scheduled it),
+; "Downloading 40% - 25.3 MB/s - 2:35 left" while it downloads (followed live
+; while the launcher is open), and their tile gets a border in DownloadColor1
+; and DownloadColor2. Hover (the line only on the highlighted tile; the
+; border and the bar always), Always (the line on every such tile) or Never
+; (none of it).
+UpdateInfo=Hover
 ; What the update line says, in any order: percent, size (downloaded / total),
 ; speed, eta (time left), schedule (when Steam will download it)
 DownloadInfo=percent speed eta size schedule
@@ -351,6 +459,10 @@ LabelFontSize=14
 ; Colours: R,G,B,A (alpha optional) or hex #RRGGBBAA / #RRGGBB (the # is
 ; optional). The same formats work for Color= in the category files.
 BgColor=8,8,12,200
+; Band behind the row at the top (clock, search, buttons, close) while the
+; wheel shows the selected tile's background (WheelBackdrop): one rounded band
+; from the search to the close button, so the row stays readable over the picture
+TopBarColor=0,0,0,255
 TileColor=36,36,44,255
 ; Rounded corners of the tiles, in pixels (0 = square)
 TileRadius=0

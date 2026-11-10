@@ -20,12 +20,27 @@ namespace RaintileOptions
         public double Min, Max, Step = 1;
         public string Unit = "", Axis = "H";
         public bool NoSlider;
+        // stores: the sources of ImportStores this item shows, a row each
+        public string[] Stores;
+        // the settings this one applies with, "Key=value" (values separated by
+        // |, conditions by ;): otherwise disabled, with the reason under it
+        public string When;
     }
 
     public class Group
     {
         public string Title, Help;
-        public bool Found, Other, Market, Dash;
+        // the settings the whole group applies with (as Item.When): otherwise
+        // the card is disabled, with the reason under its title
+        public string When;
+        // a bool (one of Items) that turns the whole group on or off: in the
+        // card's header, its label as the card's title; the rest applies with it
+        public string Switch;
+        // a source of ImportStores (Folders) that turns the group on or off: its
+        // switch in the card's header, as Switch
+        public string Store;
+        // Profiles: the card of the saved sets of settings (Profiles.cs)
+        public bool Found, Other, Market, Dash, Profiles;
         public List<Item> Items = new List<Item>();
     }
 
@@ -33,10 +48,27 @@ namespace RaintileOptions
     {
         public string Id, Title, Desc;
         public int Icon;
+        // a page for one mode (as Item.When): its menu entry is disabled otherwise
+        public string When;
+        // a bool that turns the whole page on or off (the first setting of its
+        // first group): beside the page title, the page disabled while it is off
+        public string Switch;
         public List<Group> Groups = new List<Group>();
     }
 
-    // Menu on the left: a page, a group with sub-pages, or the categories
+    // A kind of the games and apps found (Import): its id in Found.json and in
+    // ImportFolders, its names, the setting of the category it goes to (and
+    // that category without one), and whether its images are looked for as a
+    // game's (Steam, SteamGridDB) or as an app's (Dashboard Icons, its icon).
+    // Schema.IMPORT_KINDS lists them: a new kind is one more entry there (and
+    // in $IMPORT_KINDS of Scan.ps1); the window offers only those.
+    public class ImportKind
+    {
+        public string Id, Plural, Singular, CategoryKey, DefaultCategory;
+        public bool GameArt;
+    }
+
+    // Menu on the left: a page (with its sub-pages, Children), or the categories
     public class NavNode
     {
         public string Page, Id, Title;
@@ -50,6 +82,17 @@ namespace RaintileOptions
         public static Page ById(string id)
         {
             return Pages.FirstOrDefault(p => p.Id == id);
+        }
+
+        // The item of a Settings.inc key and its page (null when no page shows it)
+        public static Item ItemOf(string key, out Page page)
+        {
+            foreach (var p in Pages)
+                foreach (var g in p.Groups)
+                    foreach (var it in g.Items)
+                        if (string.Equals(it.Key, key, System.StringComparison.OrdinalIgnoreCase)) { page = p; return it; }
+            page = null;
+            return null;
         }
 
         // Settings.inc keys the schema shows on a page

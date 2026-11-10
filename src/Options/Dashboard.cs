@@ -14,7 +14,7 @@ namespace RaintileOptions
     {
         Border NewDashCard()
         {
-            var card = NewCard("Widgets", "Any tile can be a widget, in any category: processor, graphics card, memory, disks, network, temperatures, your skins. Pick Widget in the tile editor.");
+            var card = NewCard("Example Dashboard", "Any tile can be a widget, in any category: processor, graphics card, memory, disks, network, temperatures, your skins, or a custom widget (a Rainmeter .ini in the Widgets folder of your data). Pick Widget in the tile editor (Categories > the category > the tile).");
             var f = CardPanel(card);
             bool has = File.Exists(Path.Combine(Core.CategoriesDir, "Dashboard.ini"));
             AddTo(f, NewHelp(has

@@ -1,28 +1,81 @@
-# Screenshots of every page of the Options window (RaintileOptions.exe) and, with
-# -Base, of the same pages at another git ref, compared pixel by
+# Screenshots of every page of the Options window (RaintileOptions.exe), or of the
+# ones named with -Page, and, with -Base, of the same pages at another git ref, compared pixel by
 # pixel: a check by eye of what a change does to the layout. It opens the windows
 # and takes a few minutes, so it is run by hand when the window changed, never by
 # tools/check.py; with -Base it stops at once when nothing of the window changed.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\options-shots.ps1 -Base origin/nightly
+#   ... -Base HEAD     while working on a change: against its last commit
+#   ... -Page General  only the entries of the menu named (General,Tiles: several)
 #
-# Output in build\options-shots\ (git-ignored): current\ and base\ (program\,
-# one PNG per page and screen), diff\ (the current shot dimmed, the
-# changed pixels red) and report.txt. The windows use a copy of the data folder and
-# the skin name RaintileShots, so nothing is saved and no bang reaches the skin.
+# -Page names the entries as the report does (General, Playtimeandupdates): spaces,
+# case, the number before and the screen after do not matter, so a file name of the
+# report works too. Only those entries are reached and shot, at both refs, and only
+# they are compared. Their shots are a content of their own in the cache: a page
+# reached on its own may look different from the same page reached after the others
+# (Found marks the games found as seen, and the dot of the menu goes), so they never
+# mix with the shots of every page, and a later run without -Page shoots every page.
+# A name that is no entry of the menu (at both refs) stops the run; an entry greyed
+# out (a mode not in use) is said in the report, not shot.
+#
+# Shots are kept: build\options-shots\cache\<key>\ (git-ignored) holds the shots of
+# one content of the window's sources (src\Options, @Resources, Raintile.ini) with
+# the inputs below, and the same content is never shot twice. A ref already shot
+# (the nightly branch, the last commit, a branch merged as it was) costs nothing; only
+# what changed is built and shot. The last 12 contents are kept. Shots taken by an
+# older version of this script, which reached the pages otherwise, are not reused
+# ($shotsVersion below): the first run after such a change shoots both refs again.
+#
+# The inputs are frozen in inputs\ at the first run: a copy of the data folder and of
+# @Resources\Generated (the games found), so that shots taken days apart differ only
+# by the code. -NewInputs takes a new copy (after the data changed): what was
+# shot with the old one is shot again.
+#
+# Output: diff\ (the current shot dimmed, the changed pixels red) and report.txt.
+# Shots are named after the entry of the menu and its place there (05-Search.png,
+# 20-Games-tile-1.png) but compared by page: an entry added to the menu or removed
+# moves the number of every later one, so the two refs are paired without it. A new
+# page is then the only one at one ref, the others are still compared, and a page
+# shot whole at one ref and scrolled at the other is compared by its first screen.
+# The programs are built from their sources, never taken from @Resources\Bin (it may
+# be older than the sources, or locked by an open Options window). Each window runs
+# from stage\, a copy of the skin always at the same place (the folders shown on Info
+# are the same for every ref), with a fresh copy of the data and the skin name
+# RaintileShots, so nothing is saved and no bang reaches the skin.
 # Pages are reached with UI Automation: every entry of the menu, every screen of a
 # page scrolled, and on a category page also its first tile. Dialogs are not shot.
+# The menu is walked to its end: an entry out of its view is scrolled into it first,
+# as a click would need. Before a page is shot, the title over it must be the name of
+# the entry selected (and the first tile of a category selected, before its shots):
+# a selection that did not take is tried again, and after 3 tries the run stops, so
+# the shots of another page never go into the cache as this one's.
 param(
     [string]$Base = '',     # git ref to compare with; empty: only the shots of this checkout
     [string]$Out = '',
     [int]$Width = 1280,
     [int]$Height = 1000,
-    [switch]$Force          # with -Base: compare even when the window did not change
+    [switch]$Force,         # with -Base: compare even when the window did not change
+    [switch]$NewInputs,     # a new copy of the data folder and of Generated
+    [string[]]$Page = @()   # entries of the menu to shoot; empty: every page
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $Out) { $Out = Join-Path $repo 'build\options-shots' }
 $windowFiles = @('src/Options', '@Resources/Scripts/Options.xaml')
+# Part of every key: raised when this script shoots the same content otherwise (other
+# entries reached, a page shown another way), so that shots cached before are not
+# compared with the new ones. 2: the entries out of the menu's view reached too.
+$shotsVersion = 2
+
+# An entry's name as the report writes it, lower case: what -Page is matched with
+function Get-PageName([string]$s) {
+    $s = $s.Trim() -replace '\.png$', '' -replace '^\d+-', '' -replace '(-tile)?(-\d+)?$', ''
+    return ($s -replace '[^A-Za-z0-9]', '').ToLowerInvariant()
+}
+# a list given through -File arrives as one string: General,Tiles
+$pageNames = @($Page | ForEach-Object { $_ -split ',' } | ForEach-Object { Get-PageName $_ } | Where-Object { $_ } | Select-Object -Unique)
+[Array]::Sort($pageNames, [StringComparer]::Ordinal)
+if ($Page.Count -gt 0 -and $pageNames.Count -eq 0) { throw ('-Page: no name of an entry in "' + ($Page -join ',') + '"') }
 
 function Invoke-Git {
     # git writes progress to stderr: in PowerShell 5.1 with 'Stop' that would be an error
@@ -108,12 +161,70 @@ $Scope = [System.Windows.Automation.TreeScope]
 
 function New-Condition($property, $value) { return New-Object System.Windows.Automation.PropertyCondition($property, $value) }
 
-function Copy-Data([string]$dest) {
+$cache = Join-Path $Out 'cache'
+$inputs = Join-Path $Out 'inputs'
+
+# The frozen inputs (data folder, Generated): copied once; returns their id, part of
+# every key. id.txt is written last: a copy that was stopped is made again.
+function Initialize-Inputs {
+    $idFile = Join-Path $inputs 'id.txt'
+    if (-not $NewInputs -and (Test-Path -LiteralPath $idFile)) { return ([System.IO.File]::ReadAllText($idFile)).Trim() }
+    if (Test-Path -LiteralPath $inputs) { Remove-Item -LiteralPath $inputs -Recurse -Force }
+    New-Item -ItemType Directory -Force $inputs | Out-Null
     $src = Join-Path $env:APPDATA 'Rainmeter\Raintile'
-    if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Recurse -Force }
-    if (-not (Test-Path -LiteralPath (Join-Path $src 'Settings.inc'))) { return '' }   # the skin's defaults
-    Copy-Item -LiteralPath $src -Destination $dest -Recurse
-    return $dest
+    # without a data folder the window uses the skin's defaults
+    if (Test-Path -LiteralPath (Join-Path $src 'Settings.inc')) { Copy-Item -LiteralPath $src -Destination (Join-Path $inputs 'data') -Recurse }
+    $gen = Join-Path $repo '@Resources\Generated'
+    if (Test-Path -LiteralPath $gen) { Copy-Item -LiteralPath $gen -Destination (Join-Path $inputs 'Generated') -Recurse }
+    $id = [guid]::NewGuid().ToString('N')
+    [System.IO.File]::WriteAllText($idFile, $id)
+    return $id
+}
+
+# The key of a content of the window's sources: the blobs of its files, at a ref or
+# in the working tree (hash-object normalises line ends as 'git add' would), with
+# the inputs and the window size
+$keyPaths = @('src/Options', '@Resources', 'Raintile.ini')
+function Get-Key([string]$ref, [string]$inputsId) {
+    if ($ref) {
+        $lines = @(Invoke-Git -c core.quotePath=false ls-tree -r $ref '--' @keyPaths | ForEach-Object {
+            $p = $_ -split "`t", 2
+            ($p[0] -split ' ')[2] + ' ' + $p[1]
+        })
+    }
+    else {
+        $files = @(Invoke-Git -c core.quotePath=false ls-files --cached --others --exclude-standard '--' @keyPaths |
+            Where-Object { $_ -and (Test-Path -LiteralPath (Join-Path $repo $_)) })
+        # as arguments, in blocks (PowerShell 5.1 puts a BOM before what it pipes to git)
+        $hashes = @()
+        for ($i = 0; $i -lt $files.Count; $i += 100) {
+            $hashes += @(Invoke-Git hash-object '--' @($files[$i..([Math]::Min($i + 99, $files.Count - 1))]))
+        }
+        if ($hashes.Count -ne $files.Count) { throw 'git hash-object: not a hash for every file' }
+        $lines = @(for ($i = 0; $i -lt $files.Count; $i++) { $hashes[$i] + ' ' + $files[$i] })
+    }
+    [Array]::Sort($lines, [StringComparer]::Ordinal)
+    $text = 'shots ' + $shotsVersion + "`n" + $inputsId + "`n" + $Width + 'x' + $Height + "`n" + ($lines -join "`n")
+    # the shots of some pages: a content of their own (see -Page above)
+    if ($pageNames.Count -gt 0) { $text = 'pages ' + ($pageNames -join ',') + "`n" + $text }
+    $sha = New-Object System.Security.Cryptography.SHA1Managed
+    $bytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($text))
+    return ((($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 16))
+}
+
+# The skin as the window sees it: Raintile.ini and @Resources of the tree, with the
+# Generated of the inputs; always at the same place
+function New-Stage([string]$tree) {
+    $stage = Join-Path $Out 'stage'
+    if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+    $res = Join-Path $stage '@Resources'
+    New-Item -ItemType Directory -Force $res | Out-Null
+    Copy-Item -LiteralPath (Join-Path $tree 'Raintile.ini') -Destination $stage
+    Get-ChildItem -LiteralPath (Join-Path $tree '@Resources') | Where-Object { $_.Name -ne 'Generated' -and $_.Name -ne 'Bin' } |
+        Copy-Item -Destination $res -Recurse
+    $gen = Join-Path $inputs 'Generated'
+    if (Test-Path -LiteralPath $gen) { Copy-Item -LiteralPath $gen -Destination $res -Recurse }
+    return $res
 }
 
 function Save-Shot([IntPtr]$hwnd, [string]$file) {
@@ -140,6 +251,83 @@ function Select-Item($item) {
     Start-Sleep -Milliseconds 1500
 }
 
+# The menu: the lists left of the pages, in their order (Info, at the bottom, is a
+# list of its own and comes first). They are virtualized: an entry scrolled out of
+# the menu may not be in the tree at all, so the entries are walked with
+# ItemContainerPattern, not looked for among the descendants.
+function Find-MenuEntry($win, [int]$n) {
+    $lists = @($win.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::List))) |
+        Where-Object { $_.Current.BoundingRectangle.X -lt 200 })
+    foreach ($list in $lists) {
+        $ic = $list.GetCurrentPattern([System.Windows.Automation.ItemContainerPattern]::Pattern)
+        $item = $ic.FindItemByProperty($null, $null, $null)
+        while ($item -and $n -gt 0) { $n--; $item = $ic.FindItemByProperty($item, $null, $null) }
+        if ($item) { return $item }
+    }
+    return $null
+}
+
+function Test-Offscreen($item) {
+    # a virtualized entry has no state to read until it is realized
+    try { return $item.Current.IsOffscreen } catch { return $true }
+}
+
+# Entry n of the menu (from 0), scrolled into view first when it is out of it, as a
+# click on it would need; $null after the last one
+function Get-MenuEntry($win, [int]$n) {
+    $item = Find-MenuEntry $win $n
+    if (-not $item -or -not (Test-Offscreen $item)) { return $item }
+    $p = $null
+    if ($item.TryGetCurrentPattern([System.Windows.Automation.VirtualizedItemPattern]::Pattern, [ref]$p)) { $p.Realize() }
+    elseif ($item.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$p)) { $p.ScrollIntoView() }
+    else { throw "menu entry ${n}: out of view, and it cannot be scrolled into it" }
+    Start-Sleep -Milliseconds 400
+    $item = Find-MenuEntry $win $n
+    if (-not $item -or (Test-Offscreen $item)) { throw "menu entry ${n}: still out of view after scrolling to it" }
+    return $item
+}
+
+function Get-PageTitle($win) {
+    $t = $win.FindFirst($Scope::Descendants, (New-Condition $UA::AutomationIdProperty 'PageTitle'))
+    if ($t) { return $t.Current.Name }
+    return '(no title found)'
+}
+
+# Selects entry n of the menu and waits for its page: the title over the page is the
+# name of the entry (pages, categories and widgets alike). A selection may not take
+# while the window is busy, and the shots of the page left on screen would be cached
+# as this entry's: it is selected again, and a page that never shows stops the run.
+function Show-MenuEntry($win, [int]$n, [string]$label) {
+    $want = $label -replace '[^A-Za-z0-9]', ''
+    $title = ''
+    for ($try = 0; $try -lt 3; $try++) {
+        # found again: building a page may rebuild the menu
+        Select-Item (Get-MenuEntry $win $n)
+        for ($w = 0; $w -lt 10; $w++) {
+            $title = Get-PageTitle $win
+            if (($title -replace '[^A-Za-z0-9]', '') -ceq $want) { return }
+            Start-Sleep -Milliseconds 500
+        }
+    }
+    throw ('menu entry {0} ({1}): the page on screen is still "{2}" after 3 tries' -f $n, $label, $title)
+}
+
+# The tiles of the category page on screen (the strip right of the menu)
+function Get-TileStrip($win) {
+    return @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -gt 300 -and $_.Current.BoundingRectangle.Width -lt 200 })
+}
+
+# Selects the first tile of the category on screen (after All tiles), checked as the
+# entries of the menu are
+function Show-FirstTile($win, [string]$label) {
+    for ($try = 0; $try -lt 3; $try++) {
+        Select-Item (Get-TileStrip $win)[1]
+        $strip = Get-TileStrip $win
+        if ($strip.Count -gt 1 -and $strip[1].GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) { return }
+    }
+    throw "the first tile of ${label}: not selected after 3 tries"
+}
+
 # The page on screen and the rest of it scrolled, one shot per screen
 function Save-Page($win, [IntPtr]$hwnd, [string]$dir, [string]$name) {
     $scroll = @($win.FindAll($Scope::Descendants, (New-Condition $UA::IsScrollPatternAvailableProperty $true)) |
@@ -161,12 +349,20 @@ function Save-Page($win, [IntPtr]$hwnd, [string]$dir, [string]$name) {
     $sp.SetScrollPercent(-1, 0)
 }
 
-# Opens one window (the program 'exe') and shoots every page into 'dir'
+# Opens one window (the program 'exe') and shoots every page (with -Page, the
+# entries named) into 'dir'; menu.txt there lists every entry, ' greyed' after those
+# that cannot be selected
 function Save-Window([string]$exe, [string]$resources, [string]$dir) {
     New-Item -ItemType Directory -Force $dir | Out-Null
-    $data = Copy-Data (Join-Path $Out 'data')   # a fresh copy: a page may mark things as seen
     $a = @('-Resources', ('"' + $resources + '"'), '-Config', 'RaintileShots')
-    if ($data) { $a += @('-Data', ('"' + $data + '"')) }
+    # a fresh copy of the frozen data for every window: a page may mark things as seen
+    $data = Join-Path $Out 'data'
+    if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
+    $frozen = Join-Path $inputs 'data'
+    if (Test-Path -LiteralPath $frozen) {
+        Copy-Item -LiteralPath $frozen -Destination $data -Recurse
+        $a += @('-Data', ('"' + $data + '"'))
+    }
     $p = Start-Process $exe -ArgumentList $a -PassThru
     try {
         $win = $null
@@ -180,26 +376,34 @@ function Save-Window([string]$exe, [string]$resources, [string]$dir) {
         $hwnd = [IntPtr]$win.Current.NativeWindowHandle
         [void][ShotsWin32]::MoveWindow($hwnd, 0, 0, $Width, $Height, $true)
         Start-Sleep -Milliseconds 2500   # the first page is built after the window shows
-        $menu = @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -lt 200 })
-        for ($i = 0; $i -lt $menu.Count; $i++) {
+        $entries = New-Object System.Collections.Generic.List[string]
+        for ($i = 0; ; $i++) {
+            if ($i -ge 200) { throw 'more than 200 entries in the menu: the walk does not end' }
             # the entries are found again: building a page may rebuild the menu
-            $item = @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -lt 200 })[$i]
+            $item = Get-MenuEntry $win $i
+            if (-not $item) { break }
             $label = @($item.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text))) |
                 ForEach-Object { $_.Current.Name } | Where-Object { $_ -match '[A-Za-z]' }) | Select-Object -Last 1
             $name = '{0:00}-{1}' -f $i, ($label -replace '[^A-Za-z0-9]', '')
-            Select-Item $item
+            # a page of a mode not in use (Page.When) is greyed out: it cannot be selected
+            $enabled = $item.Current.IsEnabled
+            if ($enabled) { $entries.Add($name) } else { $entries.Add("$name greyed") }
+            if (-not $enabled) { continue }
+            if ($pageNames.Count -gt 0 -and $pageNames -notcontains (Get-PageName $label)) { continue }
+            Show-MenuEntry $win $i $label
             Save-Page $win $hwnd $dir $name
             # a category page: also its first tile (after All tiles)
-            $strip = @(Get-ListItems $win | Where-Object { $_.Current.BoundingRectangle.X -gt 300 -and $_.Current.BoundingRectangle.Width -lt 200 })
-            if ($strip.Count -gt 1) {
-                Select-Item $strip[1]
+            if ((Get-TileStrip $win).Count -gt 1) {
+                Show-FirstTile $win $label
                 Save-Page $win $hwnd $dir "$name-tile"
             }
         }
+        [System.IO.File]::WriteAllLines((Join-Path $dir 'menu.txt'), $entries)
         Write-Output ('  {0}: {1} shots' -f $dir.Substring($Out.Length + 1), @(Get-ChildItem $dir -Filter *.png).Count)
     }
     finally { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
 }
+
 
 # The program of a source tree: built from its src\Options into 'bin'
 function Build-Program([string]$tree, [string]$bin) {
@@ -208,81 +412,167 @@ function Build-Program([string]$tree, [string]$bin) {
     return (Join-Path $bin 'RaintileOptions.exe')
 }
 
-# Shoots the window of a source tree whose @Resources (Options.xaml) and program
-# are given
-function Save-Tree([string]$label, [string]$exe, [string]$tree) {
-    $res = Join-Path $tree '@Resources'
-    if ($exe -and (Test-Path -LiteralPath $exe)) { Save-Window $exe $res (Join-Path $Out "$label\program") }
-    else { Write-Output "  $label\program: no RaintileOptions.exe (no .NET SDK?), not shot" }
+# The shots of one content by the page they show, as the comparison pairs them: the
+# file name without the number of the menu entry (an entry added or removed moves
+# the number of every later one; one greyed out keeps its number), with screen 0 for
+# a page shot whole (it may scroll at the other ref). Two entries with the same name (two categories
+# called alike) are told apart by their order in the menu. Values: the file and the
+# number of its entry.
+function Get-ShotsByPage([string]$dir) {
+    $shots = @(Get-ChildItem -LiteralPath $dir -Filter *.png | ForEach-Object {
+            $m = [regex]::Match($_.Name, '^(\d+)-([A-Za-z0-9]*)(-tile)?(?:-(\d+))?\.png$')
+            if (-not $m.Success) { throw ('a shot not named as Save-Window names them: ' + $_.FullName) }
+            $screen = $m.Groups[4].Value
+            if (-not $screen) { $screen = '0' }
+            New-Object PSObject -Property @{ File = $_.Name; Index = [int]$m.Groups[1].Value; Label = $m.Groups[2].Value; Rest = $m.Groups[3].Value + '-' + $screen }
+        })
+    $byPage = @{}
+    foreach ($s in $shots) {
+        $pageKey = $s.Label
+        $before = @($shots | Where-Object { $_.Label -eq $s.Label -and $_.Index -lt $s.Index } | ForEach-Object { $_.Index } | Sort-Object -Unique).Count
+        if ($before -gt 0) { $pageKey += '~' + ($before + 1) }
+        $pageKey += $s.Rest + '.png'
+        if ($byPage.ContainsKey($pageKey)) { throw ('two shots of the same page in ' + $dir + ': ' + $byPage[$pageKey].File + ', ' + $s.File) }
+        $byPage[$pageKey] = $s
+    }
+    return $byPage
 }
 
-foreach ($d in @('current', 'base', 'diff', 'base-bin')) {
+function Test-Cached([string]$key) { return (Test-Path -LiteralPath (Join-Path (Join-Path $cache $key) 'done.txt')) }
+
+# The shots of a source tree into the cache, unless that content was shot already
+function Save-Tree([string]$label, [string]$tree, [string]$key) {
+    $dir = Join-Path $cache $key
+    if (Test-Cached $key) {
+        (Get-Item -LiteralPath $dir).LastWriteTime = Get-Date   # recently used: kept by the pruning
+        Write-Output "  ${label}: from the cache ($key)"
+        return
+    }
+    if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }   # left by a run that was stopped
+    Save-Window (Build-Program $tree (Join-Path $Out "$label-bin")) (New-Stage $tree) $dir
+    $what = $label
+    if ($pageNames.Count -gt 0) { $what += ', pages ' + ($pageNames -join ',') }
+    [System.IO.File]::WriteAllText((Join-Path $dir 'done.txt'), $what)
+}
+
+# With -Page: what became of a name in the shots of 'key', as a phrase of the report;
+# empty when it was shot. Shots of every page made before menu.txt never get here.
+function Get-PageState([string]$key, [string]$page) {
+    $menuFile = Join-Path (Join-Path $cache $key) 'menu.txt'
+    $entries = @([System.IO.File]::ReadAllLines($menuFile) | Where-Object { (Get-PageName ($_ -replace ' greyed$', '')) -eq $page })
+    if ($entries.Count -eq 0) { return 'not in the menu' }
+    if (@($entries | Where-Object { $_ -notmatch ' greyed$' }).Count -eq 0) { return 'greyed out (a mode not in use), not shot' }
+    return ''
+}
+
+# With -Page: a name that is no entry of the menu at any ref shot stops the run, with
+# the entries there are (of this checkout)
+function Assert-Pages([string[]]$keys) {
+    $unknown = @($pageNames | Where-Object {
+            $n = $_
+            @($keys | Where-Object { (Get-PageState $_ $n) -ne 'not in the menu' }).Count -eq 0
+        })
+    if ($unknown.Count -eq 0) { return }
+    $known = @([System.IO.File]::ReadAllLines((Join-Path (Join-Path $cache $keys[0]) 'menu.txt')) |
+        ForEach-Object { ($_ -replace ' greyed$', '') -replace '^\d+-', '' })
+    throw ('-Page: no entry ' + ($unknown -join ', ') + ' in the menu. The entries: ' + ($known -join ', '))
+}
+
+# current\ and base\ were the shots before the cache
+foreach ($d in @('diff', 'stage', 'current-bin', 'base-bin', 'current', 'base')) {
     $p = Join-Path $Out $d
     if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Recurse -Force }
 }
-New-Item -ItemType Directory -Force $Out | Out-Null
-$hasDotnet = [bool](Get-Command dotnet -ErrorAction SilentlyContinue)
-
-Write-Output 'Shooting this checkout...'
-$exe = Join-Path $repo '@Resources\Bin\RaintileOptions.exe'
-if ($hasDotnet) {
-    # rebuilds only when a source is newer than the program
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'dev-build.ps1') | Out-Null
+New-Item -ItemType Directory -Force $cache | Out-Null
+if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+    throw 'the .NET SDK (dotnet) is needed: the programs are built from their sources'
 }
-Save-Tree 'current' $exe $repo
+$inputsId = Initialize-Inputs
+
+if ($pageNames.Count -gt 0) { Write-Output ('Pages: ' + ($pageNames -join ', ')) }
+Write-Output 'This checkout...'
+$curKey = Get-Key '' $inputsId
+Save-Tree 'current' $repo $curKey
+if ($pageNames.Count -gt 0 -and -not $Base) { Assert-Pages @($curKey) }
 
 if ($Base) {
-    Write-Output "Shooting $Base..."
-    $tree = Join-Path $Out 'base-src'
-    # left by a run that was stopped
-    if (Test-Path -LiteralPath $tree) {
-        try { [void](Invoke-Git worktree remove --force $tree) } catch { Remove-Item -LiteralPath $tree -Recurse -Force }
-        [void](Invoke-Git worktree prune)
+    Write-Output "$Base..."
+    $baseKey = Get-Key $Base $inputsId
+    if (Test-Cached $baseKey) { Save-Tree 'base' '' $baseKey }
+    else {
+        $tree = Join-Path $Out 'base-src'
+        # left by a run that was stopped
+        if (Test-Path -LiteralPath $tree) {
+            try { [void](Invoke-Git worktree remove --force $tree) } catch { Remove-Item -LiteralPath $tree -Recurse -Force }
+            [void](Invoke-Git worktree prune)
+        }
+        # no hooks: a post-checkout hook could build or write into the new tree
+        $noHooks = Join-Path $Out 'no-hooks'
+        New-Item -ItemType Directory -Force $noHooks | Out-Null
+        [void](Invoke-Git -c "core.hooksPath=$noHooks" worktree add --detach $tree $Base)
+        try { Save-Tree 'base' $tree $baseKey }
+        finally { [void](Invoke-Git worktree remove --force $tree) }
     }
-    # no hooks: a post-checkout hook could build or write into the new tree
-    $noHooks = Join-Path $Out 'no-hooks'
-    New-Item -ItemType Directory -Force $noHooks | Out-Null
-    [void](Invoke-Git -c "core.hooksPath=$noHooks" worktree add --detach $tree $Base)
-    try {
-        # what the skin found (games, icons) for the Import page, as in this checkout
-        $gen = Join-Path $repo '@Resources\Generated'
-        if (Test-Path -LiteralPath $gen) { Copy-Item -Path (Join-Path $gen '*') -Destination (Join-Path $tree '@Resources\Generated') -Recurse -Force }
-        $baseExe = ''
-        if ($hasDotnet) { $baseExe = Build-Program $tree (Join-Path $Out 'base-bin') }
-        Save-Tree 'base' $baseExe $tree
-    }
-    finally { [void](Invoke-Git worktree remove --force $tree) }
+    # a page only in one of them (added or removed) is compared as such
+    if ($pageNames.Count -gt 0) { Assert-Pages @($curKey, $baseKey) }
 
     $report = New-Object System.Collections.Generic.List[string]
-    $report.Add("Options window: this checkout against $Base (changed pixels, area x0,y0-x1,y1;")
-    $report.Add('changes on 2 rows or fewer, the edges of a scrolled view, count as the same)')
-    foreach ($kind in @('program')) {
-        $a = Join-Path $Out "base\$kind"
-        $b = Join-Path $Out "current\$kind"
-        if (-not ((Test-Path -LiteralPath $a) -and (Test-Path -LiteralPath $b))) { continue }
-        $diffDir = Join-Path $Out "diff\$kind"
-        New-Item -ItemType Directory -Force $diffDir | Out-Null
-        $report.Add('')
-        $report.Add("== $kind")
-        $names = @(@(Get-ChildItem $a -Filter *.png) + @(Get-ChildItem $b -Filter *.png) | ForEach-Object { $_.Name } | Sort-Object -Unique)
-        $same = 0
-        foreach ($f in $names) {
-            $fa = Join-Path $a $f
-            $fb = Join-Path $b $f
-            if (-not (Test-Path -LiteralPath $fa)) { $report.Add(('  {0,-34} only in this checkout' -f $f)); continue }
-            if (-not (Test-Path -LiteralPath $fb)) { $report.Add(('  {0,-34} only in {1}' -f $f, $Base)); continue }
-            $r = [ShotsDiff]::Compare($fa, $fb, (Join-Path $diffDir $f))
-            if ($r[0] -lt 0) { $report.Add(('  {0,-34} another size' -f $f)) }
-            # on 2 rows at most: a border cut at the edge of a scrolled view, drawn a
-            # pixel apart from one run to the next
-            elseif ($r[0] -eq 0 -or $r[5] -le 2) { $same++ }
-            else { $report.Add(('  {0,-34} {1,7} px  {2},{3}-{4},{5}' -f $f, $r[0], $r[1], $r[2], $r[3], $r[4])) }
+    $report.Add("Options window: this checkout ($curKey) against $Base ($baseKey)")
+    if ($pageNames.Count -gt 0) { $report.Add('Only the pages ' + ($pageNames -join ', ')) }
+    $report.Add('(changed pixels, area x0,y0-x1,y1; changes on 2 rows or fewer, the edges of a scrolled view, count as the same)')
+    $report.Add('')
+    foreach ($n in $pageNames) {
+        foreach ($side in @(@($curKey, 'this checkout'), @($baseKey, $Base))) {
+            $state = Get-PageState $side[0] $n
+            if ($state) { $report.Add(('  {0,-34} {1} in {2}' -f $n, $state, $side[1])) }
         }
-        $report.Add(('  {0} of {1} the same' -f $same, $names.Count))
     }
+    $a = Join-Path $cache $baseKey
+    $b = Join-Path $cache $curKey
+    $diffDir = Join-Path $Out 'diff'
+    New-Item -ItemType Directory -Force $diffDir | Out-Null
+    # paired by page, not by file name (see Get-ShotsByPage); in the order of the menu
+    # of this checkout, a page only at the other ref at its place there
+    $pa = Get-ShotsByPage $a
+    $pb = Get-ShotsByPage $b
+    $pages = @(@($pa.Keys) + @($pb.Keys) | Sort-Object -Unique |
+        Sort-Object { if ($pb.ContainsKey($_)) { $pb[$_].Index } else { $pa[$_].Index } }, { $_ })
+    $same = 0
+    $moved = 0
+    foreach ($pageKey in $pages) {
+        if (-not $pa.ContainsKey($pageKey)) { $report.Add(('  {0,-34} only in this checkout' -f $pb[$pageKey].File)); continue }
+        if (-not $pb.ContainsKey($pageKey)) { $report.Add(('  {0,-34} only in {1}' -f $pa[$pageKey].File, $Base)); continue }
+        $fa = $pa[$pageKey].File
+        $f = $pb[$pageKey].File
+        # the name at the other ref, when it is another one
+        $was = ''
+        if ($fa -cne $f) { $was = "  ($fa in $Base)" }
+        if ($pa[$pageKey].Index -ne $pb[$pageKey].Index) { $moved++ }
+        $r = [ShotsDiff]::Compare((Join-Path $a $fa), (Join-Path $b $f), (Join-Path $diffDir $f))
+        if ($r[0] -lt 0) { $report.Add(('  {0,-34} another size' -f $f) + $was) }
+        # on 2 rows at most: a border cut at the edge of a scrolled view, drawn a
+        # pixel apart from one run to the next
+        elseif ($r[0] -eq 0 -or $r[5] -le 2) { $same++ }
+        else { $report.Add(('  {0,-34} {1,7} px  {2},{3}-{4},{5}' -f $f, $r[0], $r[1], $r[2], $r[3], $r[4]) + $was) }
+    }
+    $report.Add(('  {0} of {1} the same' -f $same, $pages.Count))
+    # an entry added or removed before them: the menu drawn on the left of the shots
+    # differs too, so even a page that did not change is listed
+    if ($moved -gt 0) { $report.Add(('  The menu differs from the one of {0}: {1} shots compared with the same page at another place there, and the menu on the left of the shots differs as well' -f $Base, $moved)) }
     [System.IO.File]::WriteAllLines((Join-Path $Out 'report.txt'), $report)
     $report
     Write-Output ''
-    Write-Output ('Shots and pictures of the changes: ' + $Out)
+    Write-Output ('Pictures of the changes: ' + $diffDir)
+    Write-Output ('Shots: ' + $b + ' (this checkout), ' + $a + " ($Base)")
 }
-else { Write-Output ('Shots: ' + (Join-Path $Out 'current')) }
+else {
+    foreach ($n in $pageNames) {
+        $state = Get-PageState $curKey $n
+        if ($state) { Write-Output "  ${n}: $state" }
+    }
+    Write-Output ('Shots: ' + (Join-Path $cache $curKey))
+}
+
+# the 12 contents used last are kept
+Get-ChildItem -LiteralPath $cache -Directory | Sort-Object LastWriteTime -Descending | Select-Object -Skip 12 |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Recurse -Force }

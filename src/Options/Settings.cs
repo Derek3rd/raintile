@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -20,10 +21,12 @@ namespace RaintileOptions
         public string Kind;
         public CheckBox Box;
         public Panel Panel;
+        public List<CheckBox> Boxes;   // stores: one switch per store
         public TextBox Text;
         public Button Swatch, Button, Clear;
-        public Control Input;   // text, font, category, secret
-        public WrapPanel Area, Monitor;
+        public Button[] Buttons, Clears;   // pad: the two fields and their clear buttons
+        public Control Input;   // text, font, category, secret, choice
+        public ComboBox Area, Monitor;
         public NumberField Num;
         public SizeField Size;
     }
@@ -69,14 +72,22 @@ namespace RaintileOptions
             try { screenPx = GetScreenPixels(); } catch { }
         }
 
-        void UpdateDirty()
+        // Something in the window that Save and refresh would write: settings,
+        // category files, widget settings (the profile in use aside)
+        bool SettingsUnsaved()
         {
             bool changed = values.Any(kv => { string f; fileValues.TryGetValue(kv.Key, out f); return kv.Value != f; });
-            bool dirty = changed || changedFiles.Count > 0 || needsRefresh;
+            return changed || changedFiles.Count > 0 || needsRefresh || widgetValues.Count > 0;
+        }
+
+        void UpdateDirty()
+        {
+            bool dirty = SettingsUnsaved() || ProfileUnsaved;
             dirtySettings = dirty;
             status.Text = dirty ? "Unsaved changes." : "";
             status.Foreground = dirty ? ResBrush("AccentBrush") : ResBrush("DimBrush");
             win.Title = dirty ? "Raintile - Options *" : "Raintile - Options";
+            QueueProfileState();
         }
 
         void UpdateResets()
@@ -130,28 +141,78 @@ namespace RaintileOptions
             UpdateDirty();
             UpdateResets();
             if (keyButtons.ContainsKey(key)) UpdateKeyConflicts();
-            if (key == "LauncherMode") UpdateModeRows();
+            UpdateWhenRows();
+            // the wheel's preview follows every setting (sizes, mode, colours)
+            if (wheelCanvas != null) DrawWheel();
         }
 
-        // Rows that only matter in one LauncherMode: the window size, the docked side
-        static readonly Dictionary<string, string> MODE_KEYS = new Dictionary<string, string>
-        {
-            { "WindowW", "window" }, { "WindowH", "window" },
-            { "DockSide", "dock" }, { "DockSize", "dock" }, { "DockEdge", "dock" }, { "DockEdgeDelay", "dock" },
-        };
-        readonly Dictionary<string, UIElement> modeRows = new Dictionary<string, UIElement>();
+        // Rows that apply only with other settings (Item.When): disabled, with
+        // the reason under their label, so they are seen and can be found
+        class WhenRow { public string When, GroupWhen; public Border Row; public TextBlock Why; }
+        readonly List<WhenRow> whenRows = new List<WhenRow>();
+        // and whole cards (Group.When)
+        // (Outer: the page's switch, Own: the group's When, whose reason Why shows)
+        class WhenCard { public string Outer, Own; public Border Card; public TextBlock Why; public UIElement Keep; }
+        readonly List<WhenCard> whenCards = new List<WhenCard>();
 
-        void UpdateModeRows()
+        // "Key=a|b;Key2=c": every condition holds (one of its values)
+        bool WhenHolds(string when)
         {
-            string mode = V("LauncherMode").Trim().ToLowerInvariant();
-            foreach (var r in modeRows)
-                r.Value.Visibility = MODE_KEYS[r.Key] == mode ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var cond in when.Split(';'))
+            {
+                var kv = cond.Split(new[] { '=' }, 2);
+                // (a list, ImportStores "Steam|Folders": one of its values is enough)
+                var have = V(kv[0]).Split('|').Select(x => x.Trim().Replace(".", ""));
+                if (!kv[1].Split('|').Any(x => have.Contains(x, StringComparer.OrdinalIgnoreCase))) return false;
+            }
+            return true;
+        }
+
+        // "Only with Layout: Wheel (Tiles page)": the settings it needs by their
+        // labels, with their page when it is another one
+        static string WhenReason(string when, Page here)
+        {
+            var parts = new List<string>();
+            foreach (var cond in when.Split(';'))
+            {
+                var kv = cond.Split(new[] { '=' }, 2);
+                Page page; var item = Schema.ItemOf(kv[0], out page);
+                if (item == null) { parts.Add(cond); continue; }
+                string what = item.Kind == "bool" ? item.Label + " on"
+                    : item.Label + ": " + string.Join(" or ", kv[1].Split('|').Select(v =>
+                        { var c = item.Choices == null ? null : item.Choices.FirstOrDefault(x => string.Equals(x[0], v, StringComparison.OrdinalIgnoreCase)); return c != null ? c[1] : v; }));
+                if (page != null && page != here) what += " (" + page.Title + " page)";
+                parts.Add(what);
+            }
+            return "Only with " + string.Join(" and ", parts) + ".";
+        }
+
+        void UpdateWhenRows()
+        {
+            foreach (var c in whenCards)
+            {
+                bool outer = c.Outer == null || WhenHolds(c.Outer), own = c.Own == null || WhenHolds(c.Own);
+                SetCardApplies(c.Card, outer && own, null);
+                // a card with a header switch (Group.Store): what is not a row (the
+                // folders' grid) follows it too, the switch stays usable
+                if (c.Keep != null)
+                    foreach (UIElement x in CardPanel(c.Card).Children)
+                        if (x != c.Keep && !(x is Border) && !(x is TextBlock)) x.IsEnabled = outer && own;
+                if (c.Why != null) c.Why.Visibility = outer && !own ? Visibility.Visible : Visibility.Collapsed;
+            }
+            foreach (var w in whenRows)
+            {
+                // in a card that does not apply: disabled, the reason is the card's
+                bool card = w.GroupWhen == null || WhenHolds(w.GroupWhen), own = WhenHolds(w.When);
+                SetRowApplies(w.Row, card && own, w.Why, card && !own);
+            }
+            UpdateNavApplies();
         }
 
         // Shows the current value of 'key' in its controls (after a reset)
         void UpdateControl(string key)
         {
-            if (key == "LauncherMode") UpdateModeRows();
+            UpdateWhenRows();
             Ctl c;
             if (!ctl.TryGetValue(key, out c)) return;
             string v = V(key);
@@ -163,9 +224,7 @@ namespace RaintileOptions
                 switch (c.Kind)
                 {
                     case "bool": c.Box.IsChecked = v == "1"; break;
-                    case "choice":
-                        foreach (RadioButton rb in c.Panel.Children) rb.IsChecked = string.Equals(((string[])rb.Tag)[1], v, StringComparison.OrdinalIgnoreCase);
-                        break;
+                    case "choice": SelectChoice((ComboBox)c.Input, v); break;
                     case "int":
                     case "float": c.Num.Show(v, c.Num.Slider.Minimum); break;
                     case "size": c.Size.Show(v); break;
@@ -176,20 +235,14 @@ namespace RaintileOptions
                     case "secret": ((PasswordBox)c.Input).Password = Core.UnprotectSecret(v); break;
                     case "category": ((ComboBox)c.Input).SelectedItem = v; break;
                     case "stores":
-                        foreach (CheckBox cb in c.Panel.Children) cb.IsChecked = v.Split('|').Contains(((string[])cb.Tag)[1]);
+                        foreach (var cb in c.Boxes) cb.IsChecked = v.Split('|').Select(x => x.Trim().Replace(".", "")).Contains(((string[])cb.Tag)[1]);
                         break;
-                    case "pad":
-                        foreach (ToggleButton tb in c.Panel.Children) tb.IsChecked = Regex.Split(v, @"\s+").Contains(((string[])tb.Tag)[1]);
-                        break;
+                    case "pad": ShowPadSlots(key); break;
                     case "key":
                     case "combo": c.Button.Content = Schema.FormatHotKey(v); SetActionVisible(c.Clear, v.Trim() != ""); break;
                     case "screen":
                         var sa = Core.ScreenAreaFrom(values);
-                        if (sa != null)
-                        {
-                            foreach (RadioButton rb in c.Area.Children) rb.IsChecked = ((string[])rb.Tag)[1] == sa[0];
-                            foreach (var rb in c.Monitor.Children.OfType<RadioButton>()) rb.IsChecked = ((string[])rb.Tag)[1] == sa[1];
-                        }
+                        if (sa != null) { SelectChoice(c.Area, sa[0]); SelectChoice(c.Monitor, sa[1]); }
                         break;
                 }
             }
@@ -206,19 +259,12 @@ namespace RaintileOptions
             return cb;
         }
 
+        // one of a fixed set: a combo filling the control column
         UIElement NewChoiceControl(string key, List<string[]> choices)
         {
-            var wp = new WrapPanel { MaxWidth = FieldWidth.Wrap, HorizontalAlignment = HorizontalAlignment.Right };
-            foreach (var c in choices)
-            {
-                var rb = new RadioButton { Style = ResStyle("Segment"), Content = c[1], GroupName = "choice_" + key, Tag = new[] { key, c[0] } };
-                rb.IsChecked = string.Equals(V(key), c[0], StringComparison.OrdinalIgnoreCase);
-                string val = c[0];
-                rb.Click += (s, e) => SetValue(key, val);
-                wp.Children.Add(rb);
-            }
-            ctl[key] = new Ctl { Kind = "choice", Panel = wp };
-            return wp;
+            var cb = NewChoiceBox(choices, V(key), v => SetValue(key, v));
+            ctl[key] = new Ctl { Kind = "choice", Input = cb };
+            return cb;
         }
 
         UIElement NewNumberControl(Item item)
@@ -311,40 +357,136 @@ namespace RaintileOptions
             return cb;
         }
 
-        UIElement NewStoresControl(string key)
+        // Where to look (ImportStores, "Steam|Epic|..."): a row per store with its
+        // switch, as any other setting; the stores of an item (Item.Stores) in
+        // their group, the folders' one in the header of Your folders. All the
+        // switches write the one list, in the order of Schema.SOURCES.
+        CheckBox NewStoreBox(string key, string store)
         {
-            var wp = new WrapPanel { MaxWidth = FieldWidth.Wrap, HorizontalAlignment = HorizontalAlignment.Right };
+            Ctl c;
+            if (!ctl.TryGetValue(key, out c) || c.Boxes == null) ctl[key] = c = new Ctl { Kind = "stores", Boxes = new List<CheckBox>() };
+            var boxes = c.Boxes;
             var current = V(key).Split('|').Select(x => x.Trim().Replace(".", "")).ToList();
-            foreach (var store in Schema.SOURCES)
+            var cb = new CheckBox { Tag = new[] { key, store }, IsChecked = current.Contains(store), HorizontalAlignment = HorizontalAlignment.Right };
+            cb.Click += (s, e) =>
             {
-                var cb = new CheckBox { Content = Schema.STORE_LABELS[store], Margin = T(Gap.Indent, Gap.Line, 0, Gap.Line), Tag = new[] { key, store }, IsChecked = current.Contains(store) };
-                cb.Click += (s, e) =>
-                {
-                    var on = wp.Children.OfType<CheckBox>().Where(x => x.IsChecked == true).Select(x => ((string[])x.Tag)[1]);
-                    SetValue(key, string.Join("|", on));
-                };
-                wp.Children.Add(cb);
-            }
-            ctl[key] = new Ctl { Kind = "stores", Panel = wp };
-            return wp;
+                var on = boxes.Where(x => x.IsChecked == true).Select(x => ((string[])x.Tag)[1]).ToList();
+                SetValue(key, string.Join("|", Schema.SOURCES.Where(on.Contains)));
+            };
+            boxes.Add(cb);
+            return cb;
         }
 
+        List<UIElement> NewStoresRows(Item item)
+        {
+            var rows = new List<UIElement>();
+            foreach (var store in item.Stores ?? Schema.SOURCES)
+            {
+                string help;
+                if (!Schema.STORE_HELP.TryGetValue(store, out help)) help = "Games";
+                rows.Add(NewRow(Schema.STORE_LABELS[store], help, NewStoreBox(item.Key, store), null));
+            }
+            return rows;
+        }
+
+        // Gamepad buttons (GamepadToggle, GamepadConfirm...): two fields as the
+        // keys of the Keyboard page, the button's glyph in each; the second one,
+        // when set, is held together with the first. Clicked (mouse, keys) a
+        // field opens the dial of the buttons around it, pressed with the pad it
+        // waits for the next button of the pad (PadDial.cs).
         UIElement NewPadControl(string key)
         {
-            var wp = new WrapPanel { MaxWidth = FieldWidth.Wrap, HorizontalAlignment = HorizontalAlignment.Right };
-            var current = Regex.Split(V(key).ToUpperInvariant(), @"\s+");
-            foreach (var b in Schema.GAMEPAD_BUTTONS)
+            var kp = NewPanel(Orientation.Horizontal);
+            kp.HorizontalAlignment = HorizontalAlignment.Right;
+            var c = new Ctl { Kind = "pad", Buttons = new Button[2], Clears = new Button[2] };
+            ctl[key] = c;
+            for (int i = 0; i < 2; i++)
             {
-                var tb = new ToggleButton { Style = ResStyle("Segment"), Content = b, Tag = new[] { key, b }, IsChecked = current.Contains(b) };
-                tb.Click += (s, e) =>
+                int slot = i;
+                var sp = NewPanel(Orientation.Horizontal);
+                sp.Margin = T(Gap.Control, 0, 0, 0);
+                var b = NewButton("", "KeyButton");
+                var clear = NewClearButton("Clear the button");
+                AddTo(sp, b); AddTo(sp, clear);
+                AddTo(kp, sp);
+                c.Buttons[i] = b;
+                c.Clears[i] = clear;
+                b.Click += (s, e) =>
                 {
-                    var on = wp.Children.OfType<ToggleButton>().Where(x => x.IsChecked == true).Select(x => ((string[])x.Tag)[1]);
-                    SetValue(key, string.Join(" ", on));
+                    if (padMode) StartPadCapture(key, slot);
+                    else OpenPadDial(key, slot);
                 };
-                wp.Children.Add(tb);
+                clear.Click += (s, e) => SetPadSlot(key, slot, "");
             }
-            ctl[key] = new Ctl { Kind = "pad", Panel = wp };
-            return wp;
+            ShowPadSlots(key);
+            return kp;
+        }
+
+        // The buttons of a pad setting: "BACK START" -> BACK, START (as the
+        // helper reads them; more than two stay, after the two fields)
+        static List<string> PadButtons(string value)
+        {
+            return Regex.Split((value ?? "").ToUpperInvariant(), @"[\s+|,]+").Where(x => x != "").Distinct().ToList();
+        }
+
+        // The button of one field: the other keeps its own (an empty first field
+        // takes the second one's)
+        void SetPadSlot(string key, int slot, string button)
+        {
+            var list = PadButtons(V(key));
+            while (list.Count < 2) list.Add("");
+            list[slot] = button;
+            if (button != "" && list[1 - slot] == button) list[1 - slot] = "";
+            SetValue(key, string.Join(" ", list.Where(x => x != "")));
+            ShowPadSlots(key);
+        }
+
+        void ShowPadSlots(string key)
+        {
+            Ctl c;
+            if (!ctl.TryGetValue(key, out c) || c.Kind != "pad") return;
+            var list = PadButtons(V(key));
+            for (int i = 0; i < 2; i++)
+            {
+                string b = i < list.Count ? list[i] : "";
+                c.Buttons[i].Content = NewPadFace(b);
+                string name;
+                AutomationProperties.SetName(c.Buttons[i], b == "" ? "None" : Schema.PAD_LABELS.TryGetValue(b, out name) ? name : b);
+                SetActionVisible(c.Clears[i], b != "");
+            }
+            UpdatePadConflicts();
+        }
+
+        // The same buttons on two actions: only the first one acts (Helper.ps1),
+        // both are marked. After every change of a pad setting (ShowPadSlots, also
+        // from UpdateControl: a reset, a profile)
+        void UpdatePadConflicts()
+        {
+            var pads = ctl.Where(kv => kv.Value.Kind == "pad" && kv.Value.Buttons != null).ToList();
+            Func<string, string> combo = k => string.Join(" ", PadButtons(V(k)).OrderBy(x => x, StringComparer.Ordinal));
+            foreach (var kv in pads)
+            {
+                string mine = combo(kv.Key);
+                var others = mine == "" ? new List<string>() : pads.Where(o => o.Key != kv.Key && combo(o.Key) == mine)
+                    .Select(o => { Page pg; var it = Schema.ItemOf(o.Key, out pg); return it != null ? it.Label : o.Key; }).ToList();
+                var list = PadButtons(V(kv.Key));
+                for (int i = 0; i < 2; i++)
+                {
+                    var b = kv.Value.Buttons[i];
+                    if (b == padCaptureField) continue;
+                    string name, tip = i < list.Count && Schema.PAD_LABELS.TryGetValue(list[i], out name) ? name + ". " : "";
+                    if (others.Count > 0 && i < list.Count)
+                    {
+                        b.BorderBrush = ResBrush("DangerBrush");
+                        b.ToolTip = tip + "Also used by: " + string.Join(", ", others) + " (only the first one acts)";
+                    }
+                    else
+                    {
+                        b.ClearValue(Control.BorderBrushProperty);
+                        b.ToolTip = tip + "Click to pick the button, or press A on the pad and then the button";
+                    }
+                }
+            }
         }
 
         // Key binding: click, then press the key (with the modifiers for 'combo')
@@ -419,40 +561,22 @@ namespace RaintileOptions
         UIElement NewScreenControl()
         {
             var sa = Core.ScreenAreaFrom(values) ?? new[] { "", "" };
-            var sp = NewPanel();
-            sp.HorizontalAlignment = HorizontalAlignment.Right;
-            var area = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
-            var mon = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right, Margin = T(0, Gap.Control, 0, 0) };
-            foreach (var a in new[] { new[] { "SCREENAREA", "Whole screen" }, new[] { "WORKAREA", "Work area" } })
-            {
-                var rb = new RadioButton { Style = ResStyle("Segment"), Content = a[1], GroupName = "screen_area", Tag = new[] { "area", a[0] }, IsChecked = sa[0] == a[0] };
-                area.Children.Add(rb);
-            }
-            var monLabel = NewText("Monitor", Fs.Help, ResBrush("DimBrush"));
-            monLabel.Margin = T(0, 0, Gap.Control, 0);
-            monLabel.VerticalAlignment = VerticalAlignment.Center;
-            mon.Children.Add(monLabel);
-            foreach (var m in new[] { new[] { "", "Main" }, new[] { "1", "1" }, new[] { "2", "2" }, new[] { "3", "3" }, new[] { "4", "4" } })
-            {
-                var rb = new RadioButton { Style = ResStyle("Segment"), Content = m[1], GroupName = "screen_monitor", Tag = new[] { "monitor", m[0] }, MinWidth = 38, IsChecked = sa[1] == m[0] };
-                mon.Children.Add(rb);
-            }
-            AddTo(sp, area); AddTo(sp, mon);
+            // the area and the monitor side by side, filling the column
+            var area = NewChoiceBox(new[] { new[] { "SCREENAREA", "Whole screen" }, new[] { "WORKAREA", "Work area" } }, sa[0], null);
+            var mon = NewChoiceBox(new[] { new[] { "", "Main monitor" }, new[] { "1", "Monitor 1" }, new[] { "2", "Monitor 2" }, new[] { "3", "Monitor 3" }, new[] { "4", "Monitor 4" } }, sa[1], null);
             var c = new Ctl { Kind = "screen", Area = area, Monitor = mon };
             ctl["ScreenX"] = c;
-            foreach (var rb in area.Children.OfType<RadioButton>().Concat(mon.Children.OfType<RadioButton>()))
+            SelectionChangedEventHandler changed = (s, e) =>
             {
-                rb.Click += (s, e) =>
-                {
-                    var ar = area.Children.OfType<RadioButton>().FirstOrDefault(x => x.IsChecked == true);
-                    var mr = mon.Children.OfType<RadioButton>().FirstOrDefault(x => x.IsChecked == true);
-                    var n = Core.ScreenAreaTo(ar != null ? ((string[])ar.Tag)[1] : "SCREENAREA", mr != null ? ((string[])mr.Tag)[1] : "");
-                    foreach (var kv in n) values[kv.Key] = kv.Value;
-                    SetValue("ScreenX", n["ScreenX"]);
-                };
-            }
+                if (updating) return;
+                var n = Core.ScreenAreaTo(ChoiceValue(area) ?? "SCREENAREA", ChoiceValue(mon) ?? "");
+                foreach (var kv in n) values[kv.Key] = kv.Value;
+                SetValue("ScreenX", n["ScreenX"]);
+            };
+            area.SelectionChanged += changed;
+            mon.SelectionChanged += changed;
             ctl["ScreenY"] = c; ctl["ScreenW"] = c; ctl["ScreenH"] = c;
-            return sp;
+            return NewEqualButtons(area, mon);
         }
 
         UIElement NewActionControl(string action, string label)
@@ -502,13 +626,13 @@ namespace RaintileOptions
             }
             else Grid.SetColumnSpan(left, 3);   // text only: the whole row
             if (reset != null) { SetCol(reset, 2); g.Children.Add(reset); }
-            return new Border { BorderBrush = ResBrush("LineBrush"), BorderThickness = T(0, 1, 0, 0), Child = g };
+            return new CardRow(ResBrush("LineBrush")) { Child = g };
         }
 
         public Border NewCard(string title, string help)
         {
             var b = new Border { Style = ResStyle("Card") };
-            var sp = NewPanel();
+            var sp = new CardStack();
             b.Child = sp;
             if (!string.IsNullOrEmpty(title))
             {
@@ -522,6 +646,59 @@ namespace RaintileOptions
                 x.Margin = T(0, 0, 0, Gap.Control);
                 AddTo(sp, x);
             }
+            return b;
+        }
+
+        // A card whose header is a switch (Group.Switch): its label as the title,
+        // the switch and its reset in the control and action columns, its help
+        // (or the group's) below
+        Border NewSwitchCard(Item sw, string help)
+        {
+            var b = new Border { Style = ResStyle("Card") };
+            var sp = new CardStack();
+            b.Child = sp;
+            var g = NewGrid("*", "Auto", Gap.ActionColumn.ToString(CultureInfo.InvariantCulture));
+            g.ColumnDefinitions[1].SetResourceReference(ColumnDefinition.WidthProperty, FieldWidth.ControlKey);
+            g.Margin = T(0, Gap.Group, 0, Gap.Line);
+            var h = NewSectionTitle(sw.Label);
+            h.VerticalAlignment = VerticalAlignment.Center;
+            g.Children.Add(h);
+            var control = NewBoolControl(sw.Key);
+            ((FrameworkElement)control).VerticalAlignment = VerticalAlignment.Center;
+            SetCol(control, 1);
+            g.Children.Add(control);
+            var reset = NewResetButton(new[] { sw.Key });
+            SetCol(reset, 2);
+            g.Children.Add(reset);
+            AddTo(sp, g);
+            string text = !string.IsNullOrEmpty(help) ? help : sw.Help;
+            if (!string.IsNullOrEmpty(text))
+            {
+                var x = NewHelp(text);
+                x.Margin = T(0, 0, 0, Gap.Control);
+                AddTo(sp, x);
+            }
+            return b;
+        }
+
+        // A card whose header is the switch of a source of ImportStores
+        // (Group.Store): the group's title, the switch of that source
+        Border NewStoreSwitchCard(Group group)
+        {
+            var b = new Border { Style = ResStyle("Card") };
+            var sp = new CardStack();
+            b.Child = sp;
+            var g = NewGrid("*", "Auto", Gap.ActionColumn.ToString(CultureInfo.InvariantCulture));
+            g.ColumnDefinitions[1].SetResourceReference(ColumnDefinition.WidthProperty, FieldWidth.ControlKey);
+            g.Margin = T(0, Gap.Group, 0, Gap.Line);
+            var h = NewSectionTitle(group.Title);
+            h.VerticalAlignment = VerticalAlignment.Center;
+            g.Children.Add(h);
+            var control = NewStoreBox("ImportStores", group.Store);
+            control.VerticalAlignment = VerticalAlignment.Center;
+            SetCol(control, 1);
+            g.Children.Add(control);
+            AddTo(sp, g);
             return b;
         }
 
@@ -586,7 +763,6 @@ namespace RaintileOptions
                 case "secret": control = NewSecretControl(k); break;
                 case "font": control = NewFontControl(k); break;
                 case "category": control = NewCategoryControl(k); break;
-                case "stores": control = NewStoresControl(k); break;
                 case "pad": control = NewPadControl(k); break;
                 case "key": control = NewKeyControl(k); break;
                 case "combo": control = NewKeyControl(k, true); break;
@@ -617,9 +793,30 @@ namespace RaintileOptions
             StackPanel sp;
             var sv = NewPageScroller(out sp);
             var schemaKeys = new HashSet<string>(Schema.SchemaKeys(), StringComparer.OrdinalIgnoreCase);
+            // the page's switch beside its title (ShowPage), the page applying with it
+            string pageWhen = null;
+            Item pageSw = null;
+            if (page.Switch != null)
+            {
+                pageSw = page.Groups[0].Items.First(i => i.Key == page.Switch);
+                pageWhen = page.Switch + "=1";
+                var head = NewPanel(Orientation.Horizontal);
+                var control = NewBoolControl(page.Switch);
+                AutomationProperties.SetName(control, pageSw.Label);
+                ((FrameworkElement)control).VerticalAlignment = VerticalAlignment.Center;
+                AddTo(head, control);
+                var reset = NewResetButton(new[] { page.Switch });
+                reset.Margin = T(Gap.Icon, 0, 0, 0);
+                AddTo(head, reset);
+                pageSwitches[page.Id] = head;
+            }
             foreach (var group in page.Groups)
             {
-                var card = NewCard(group.Title, group.Help);
+                // a group with a switch: the switch in the header, its label the title
+                var sw = group.Switch == null ? null : group.Items.First(i => i.Key == group.Switch);
+                var card = sw != null ? NewSwitchCard(sw, group.Help) : group.Store != null ? NewStoreSwitchCard(group) : NewCard(group.Title, group.Help);
+                string own = group.When ?? (sw != null ? sw.Key + "=1" : group.Store != null ? "ImportStores=" + group.Store : null);
+                string groupWhen = pageWhen == null ? own : own == null ? pageWhen : pageWhen + ";" + own;
                 int rows = 0;
                 if (group.Found)
                 {
@@ -630,6 +827,7 @@ namespace RaintileOptions
                     continue;
                 }
                 if (group.Dash) { AddTo(sp, NewDashCard()); continue; }
+                if (group.Profiles) { AddTo(sp, NewProfilesCard(group)); continue; }
                 if (group.Market)
                 {
                     // widgets to download (its own card)
@@ -650,14 +848,36 @@ namespace RaintileOptions
                 {
                     foreach (var item in group.Items)
                     {
+                        if (item == sw || item == pageSw) { rows++; continue; }
+                        if (item.Kind == "stores")
+                        {
+                            foreach (var r in NewStoresRows(item)) { CardPanel(card).Children.Add(r); rows++; }
+                            continue;
+                        }
+                        // your folders: a grid as wide as the card (name, folder, kind, category)
+                        if (item.Key == "ImportFolders")
+                        {
+                            var help = NewHelp(item.Help);
+                            help.Margin = T(0, 0, 0, Gap.Control);
+                            AddTo(CardPanel(card), help);
+                            AddTo(CardPanel(card), NewFoldersControl(item.Key));
+                            rows++;
+                            continue;
+                        }
                         var row = NewItemRow(item);
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
-                        if (row != null && item.Key != null && MODE_KEYS.ContainsKey(item.Key)) modeRows[item.Key] = row;
+                        var b = row as Border;
+                        // the categories the carousel cannot centre (UpdateCarouselNote)
+                        if (b != null && !string.IsNullOrEmpty(item.When))
+                            whenRows.Add(new WhenRow { When = item.When, GroupWhen = groupWhen, Row = b, Why = AddRowReason(b, WhenReason(item.When, page)) });
                     }
                 }
+                // (with a switch, no reason: the switch is in the header)
+                if (rows > 0 && groupWhen != null)
+                    whenCards.Add(new WhenCard { Outer = pageWhen, Own = own, Card = card, Why = sw != null || group.When == null ? null : AddCardReason(card, WhenReason(group.When, page)), Keep = group.Store != null ? ((Grid)CardPanel(card).Children[0]) : null });
                 if (rows > 0) AddTo(sp, card);
             }
-            UpdateModeRows();
+            UpdateWhenRows();
             return sv;
         }
     }

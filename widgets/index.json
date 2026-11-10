@@ -2,6 +2,18 @@
   "version": 1,
   "widgets": [
     {
+      "id": "AudioControl",
+      "name": "Audio control",
+      "author": "Raintile",
+      "version": "1.0",
+      "kind": "custom",
+      "category": "General",
+      "description": "The sound devices of the PC with their volume (a click makes one the default), or the volume of each program as in Windows' volume mixer: the tile's widget setting says which, so two tiles can show one each. Give the tile more cells for more rows.",
+      "base": "AudioControl",
+      "files": ["AudioControl.ini", "AudioControl.ps1"],
+      "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/AudioControl"
+    },
+    {
       "id": "BigClock",
       "name": "Big clock",
       "author": "Raintile",

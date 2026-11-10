@@ -295,11 +295,12 @@ function T.gallery_spotify()
 	t.ok(w, 'the widget tile is missing')
 	local g = grid(s)
 	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
-	for _, v in ipairs({ 'PF', 'PS', 'PB', 'PC', 'PR', 'PT', 'PTF', 'PTW', 'PH', 'PCmd' }) do
+	for _, v in ipairs({ 'PN', 'PA', 'PF', 'PS', 'PB', 'PC', 'PR', 'PT', 'PTF', 'PTW', 'PH', 'PCmd' }) do
 		own = own or (g:find('#' .. v .. '#', 1, true) and v)
 	end
 	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
 	local p = 'CW' .. w.widget.idx .. '_'
+	t.ok(g:find('Hidden=(1-1)', 1, true), 'the title and the artist are not shown by default')
 	local parts = s:upvalue('M').widgetParts(w)
 	for _, name in ipairs({ 'Cover', 'Shuffle', 'Previous', 'Play', 'Next', 'Repeat', 'Like', 'Seek' }) do
 		t.ok(parts[p .. name], name .. ' is not a part of the tile')

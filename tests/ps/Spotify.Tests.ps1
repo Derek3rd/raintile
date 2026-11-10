@@ -37,6 +37,7 @@ Test 'spotify: the song in the meters' {
     $song = @{ Title = 'A "song" [live]'; Artist = 'Someone'; State = 'PLAYING'; Position = 50; Duration = 200; Liked = $true; Shuffle = $true; Repeat = 'ONE'; Cover = ''; Note = '' }
     $bang = Format-SpotifyBang $song 'CW3_' 'CW3' 'Raintile' @{ Text = 'T'; Accent = 'A' }
     Assert-True ($bang.Contains('[!SetOption "CW3_Cover" "ToolTipText" "A ''song'' (live) - Someone" "Raintile"]')) 'the title, safe in a bang'
+    Assert-True ($bang.Contains('[!SetOption "CW3_Artist" "Text" "Someone" "Raintile"]')) 'the artist over the cover'
     Assert-True ($bang.Contains('[!SetOption "CW3_ShuffleGlyph" "FontColor" "A" "Raintile"]')) 'shuffle on'
     Assert-True ($bang.Contains('[!SetOption "CW3_RepeatGlyph" "Text" "' + [char]0xE8ED + '" "Raintile"]')) 'repeat one'
     Assert-True ($bang.Contains('[!SetOption "CW3_Progress" "Formula" "25" "Raintile"]')) 'the progress'

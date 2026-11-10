@@ -144,6 +144,7 @@ Xbox and compatible controllers (XInput). Every action has its buttons, set in O
 | `B` (`GamepadBack`) | leave a widget entered with `A`, close the search, or the launcher |
 | `LB` / `RB` (`GamepadPrevCategory`, `GamepadNextCategory`) | previous / next category |
 | `Y` (`GamepadSearch`) | search with the on-screen keyboard |
+| `Start` (`GamepadDone`) | the menu of the highlighted tile, as a right click (Edit, Favorites, Pin, Open file location, Run as administrator, Remove): up / down move in it, `A` picks, `B` or `Start` again close it |
 | `X` / `Start` (`GamepadDelete`, `GamepadDone`) | on the on-screen keyboard: delete / done |
 | `LT` / `RT` (`GamepadPrevChip`, `GamepadNextChip`) | with search results: the previous / next filter chip |
 | `RS`, the right stick click (`GamepadOptions`) | open the [Options window](#options-window), as the gear |
@@ -193,6 +194,8 @@ Right click on a tile adds, after Raintile's own entries, the ones that apply to
 | **Open file location** | opens the folder of the program, with the file selected (only for commands that are a file on this PC) |
 | **Run as administrator** | starts the program as administrator; Windows asks for confirmation (only for `.exe`, `.lnk`, `.bat`, `.cmd`) |
 | **Remove from \<category\>...** | removes the tile from its category file, after asking; its images stay in `Images\` |
+
+With a controller, `Start` (`GamepadDone`) opens the same entries over the highlighted tile: up / down move in them, `A` picks one, `B` or `Start` again close them (the mouse works on them too).
 
 *Run as administrator* and *Remove* go through the Options program (`Bin\RaintileOptions.exe`, without its window), which reads the tile's command from its category file.
 
@@ -761,7 +764,7 @@ Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Contai
 
 ### Gamepad
 
-See [Gamepad](#gamepad): `Gamepad`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms), `GamepadLegend` (1 = the legend of the buttons while the pad is in use), and the buttons of the actions (one, or several held together; empty = none): `GamepadToggle` (`BACK START`), `GamepadUp` / `GamepadDown` / `GamepadLeft` / `GamepadRight` (the D-pad), `GamepadConfirm` (`A`), `GamepadBack` (`B`), `GamepadPrevCategory` / `GamepadNextCategory` (`LB` / `RB`), `GamepadSearch` (`Y`), `GamepadDelete` (`X`), `GamepadDone` (`START`), `GamepadPrevChip` / `GamepadNextChip` (`LT` / `RT`), `GamepadOptions` (`RS`).
+See [Gamepad](#gamepad): `Gamepad`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms), `GamepadLegend` (1 = the legend of the buttons while the pad is in use), and the buttons of the actions (one, or several held together; empty = none): `GamepadToggle` (`BACK START`), `GamepadUp` / `GamepadDown` / `GamepadLeft` / `GamepadRight` (the D-pad), `GamepadConfirm` (`A`), `GamepadBack` (`B`), `GamepadPrevCategory` / `GamepadNextCategory` (`LB` / `RB`), `GamepadSearch` (`Y`), `GamepadDelete` (`X`), `GamepadDone` (`START`: done on the on-screen keyboard, the [tile menu](#tile-menu) elsewhere), `GamepadPrevChip` / `GamepadNextChip` (`LT` / `RT`), `GamepadOptions` (`RS`).
 
 ### Search
 

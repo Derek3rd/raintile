@@ -337,7 +337,9 @@ GamepadNextCategory=RB
 ; Open the search with the on-screen keyboard: the moves move on it, Launch
 ; types, Delete deletes, Done keeps the results, Back closes
 GamepadSearch=Y
-; On the on-screen keyboard: delete the last letter / keep the results
+; On the on-screen keyboard: delete the last letter / keep the results; Done,
+; elsewhere: the menu of the highlighted tile (the entries of the right-click
+; menu: up / down, Launch picks, Back closes)
 GamepadDelete=X
 GamepadDone=START
 ; Previous / next filter chip of the search results

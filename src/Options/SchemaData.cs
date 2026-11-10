@@ -319,7 +319,7 @@ namespace RaintileOptions
                     new Item { Kind = "pad", Key = "GamepadNextCategory", Label = "Next category", Help = "" },
                     new Item { Kind = "pad", Key = "GamepadSearch", Label = "Search with the on-screen keyboard", Help = "The moves move on it, Launch types, Close closes the search." },
                     new Item { Kind = "pad", Key = "GamepadDelete", Label = "Delete", Help = "On the on-screen keyboard: the last letter." },
-                    new Item { Kind = "pad", Key = "GamepadDone", Label = "Done", Help = "On the on-screen keyboard: closes it and keeps the results." },
+                    new Item { Kind = "pad", Key = "GamepadDone", Label = "Done / tile menu", Help = "On the on-screen keyboard: closes it and keeps the results. Elsewhere: the menu of the highlighted tile, as a right click (up and down move in it, Launch picks, Close closes it)." },
                     new Item { Kind = "pad", Key = "GamepadPrevChip", Label = "Previous filter chip", Help = "Of the search results." },
                     new Item { Kind = "pad", Key = "GamepadNextChip", Label = "Next filter chip", Help = "" },
                     new Item { Kind = "pad", Key = "GamepadOptions", Label = "Open these options", Help = "As the gear." },

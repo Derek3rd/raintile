@@ -370,4 +370,75 @@ function T.pad_legend()
 	t.clean(s)
 end
 
+-- The tile's menu for the pad (Start on a tile): the entries of the
+-- right-click menu, up / down in it, Confirm picks, Back closes it (the
+-- launcher stays), another button closes it and acts
+function T.pad_tile_menu()
+	local s = opened({})
+	for i, c in ipairs(s:upvalue('cats')) do
+		if c.file == 'Apps.ini' then s:call('SetCategory(' .. i .. ')') end
+	end
+	s:call("Pad('Nav',0,0)")
+	t.clean(s)
+	local M, hover = s:upvalue('M'), s:upvalue('hover')
+	t.ok(hover.on and hover.idx ~= 0, 'no tile highlighted')
+	local tile = s:upvalue('cur')().tiles[hover.idx]
+	local function shown()
+		local list = {}
+		for i = 1, 6 do
+			local m = s.meters['metertilemenuitem' .. i]
+			if not m.hidden then list[#list + 1] = m:opt('Text', '') end
+		end
+		return list
+	end
+	local function legend()
+		local out = {}
+		for i = 1, 6 do
+			local k = s.meters['padlegendkey' .. i]
+			if not k.hidden then out[#out + 1] = k:opt('Text', '') .. '=' .. s.meters['padlegendtext' .. i]:opt('Text', '') end
+		end
+		return table.concat(out, ' ')
+	end
+	t.eq(#shown(), 0, 'the menu shown before Start')
+	t.ok(legend():find('Start=Menu', 1, true), 'the legend without the menu: ' .. legend())
+	s:call("Pad('PadStart')")
+	t.eq(legend(), 'A=Choose B=Close', 'the legend of the menu')
+	local list = shown()
+	t.ok(#list >= 2, 'the menu did not open: ' .. #list .. ' entries')
+	t.ok(list[1]:find('Edit ' .. tile.name, 1, true), 'the first entry is not Edit: ' .. tostring(list[1]))
+	t.eq(#list, #M.tileMenuItems(tile), 'not the entries of the right-click menu')
+	t.eq(M.tmenu.sel, 1, 'the first entry not selected')
+	s:call("Pad('Nav',0,1)")
+	t.eq(M.tmenu.sel, 2, 'down did not move in the menu')
+	t.eq(s:upvalue('cur')().tiles[hover.idx], tile, 'down moved the highlight under the menu')
+	s:call("Pad('Nav',0,-1)")
+	s:call("Pad('Nav',0,-1)")
+	t.eq(M.tmenu.sel, #list, 'up from the first entry does not go to the last')
+	-- Back: closed, the launcher open
+	s:call("Pad('Escape')")
+	t.eq(#shown(), 0, 'Back did not close the menu')
+	t.ok(s:upvalue('visible'), 'Back on the menu closed the launcher')
+	-- Start twice: open and closed
+	s:call("Pad('PadStart')")
+	s:call("Pad('PadStart')")
+	t.eq(#shown(), 0, 'Start again did not close the menu')
+	-- another button: closed, and it acts
+	local active = s:upvalue('active')
+	s:call("Pad('PadStart')")
+	s:call("Pad('NextCategory',1)")
+	t.eq(#shown(), 0, 'the next category kept the menu')
+	t.ok(s:upvalue('active') ~= active, 'the next category did not move')
+	-- Confirm on Edit: the tile goes to Options, nothing launched
+	s:call("Pad('NextCategory',-1)")
+	s:call("Pad('Nav',0,0)")
+	tile = s:upvalue('cur')().tiles[hover.idx]
+	os.remove(s.resources .. 'Generated\\EditTile.txt')
+	s:call("Pad('PadStart')")
+	s:call("Pad('Confirm')")
+	t.eq(#shown(), 0, 'the menu stayed after a pick')
+	t.ok(not s:upvalue('launching'), 'Confirm on the menu launched the tile')
+	t.eq(R.readFile(s.resources .. 'Generated\\EditTile.txt'), tile.file .. '|' .. tile.name, 'Edit did not reach Options')
+	t.clean(s)
+end
+
 return T

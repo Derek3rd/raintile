@@ -353,8 +353,10 @@ function T.gallery_now_playing()
 	end
 end
 
--- Keyboard and pad inside a widget with parts (the rows of its list): from
--- row to row, out of the tile at the last one, back onto the nearest row
+-- Keyboard and pad and a widget with parts (the rows of its list): the
+-- whole tile highlighted, Confirm enters it onto its first row, the arrows
+-- go from row to row and stay in it at its edges, Back leaves it (the whole
+-- tile again, the launcher still open), the arrows then go on to the tiles
 function T.parts_with_keys()
 	local s = skinWithWidget('Rows=7\r\n')
 	local w = testWidget(s)
@@ -368,25 +370,41 @@ function T.parts_with_keys()
 	local i = w.widget.idx
 	local row1, row2 = 'W' .. i .. 'RowHit1', 'W' .. i .. 'RowHit2'
 	t.ok(w.widget.partsAt[row1] and w.widget.partsAt[row2], 'the test widget has no two rows')
-	s:call("HoverPart('" .. row1 .. "')")
-	t.eq(M.kpart and M.kpart.name, row1, 'the mouse on a row: the keys go on from it')
+	-- the keys onto the widget's tile: the whole tile, not a row
+	local tiles = s:upvalue('cur')().tiles
+	local idx
+	for k, x in ipairs(tiles) do if x == w then idx = k end end
+	for _ = 1, 40 do
+		if hover.on and hover.idx == idx then break end
+		s:call('Nav(1, 0)')
+		if not (hover.on and hover.idx == idx) then s:call('Nav(0, 1)') end
+	end
+	t.eq(hover.idx, idx, 'the keys did not reach the widget\'s tile')
+	t.eq(M.kpart, nil, 'the keys went into the widget without Confirm')
+	-- Confirm: into it, onto its first row, nothing launched
+	s:call('Confirm()')
+	t.clean(s)
+	t.ok(not s:upvalue('launching'), 'Confirm on the widget launched the tile')
+	t.eq(M.kpart and M.kpart.name, row1, 'Confirm did not go into the widget onto its first row')
 	s:call('Nav(0, 1)')
 	t.clean(s)
 	t.eq(M.kpart and M.kpart.name, row2, 'down from the first row')
 	t.eq(hover.toy, w.widget.partsAt[row2][2], 'the highlight on the second row')
 	s:call('Nav(0, -1)')
 	t.eq(M.kpart and M.kpart.name, row1, 'up from the second row')
-	-- up from the first row: out of the tile (onto the one above, if any)
-	local idx = hover.idx
+	-- up from the first row: still in it
 	s:call('Nav(0, -1)')
+	t.eq(M.kpart and M.kpart.name, row1, 'out of the widget past its first row')
+	-- Back: out of it, the whole tile, the launcher open
+	s:call('Escape()')
 	t.clean(s)
-	t.ok(M.kpart == nil or M.kpart.t ~= w, 'still in the widget past its first row')
-	if hover.idx ~= idx then
-		-- and down again: onto its first row, not the whole tile
-		s:call('Nav(0, 1)')
-		t.clean(s)
-		t.eq(M.kpart and M.kpart.name, row1, 'back down into the widget')
-	end
+	t.eq(M.kpart, nil, 'Back did not leave the widget')
+	t.ok(s:upvalue('visible'), 'Back in the widget closed the launcher')
+	t.eq(hover.idx, idx, 'Back left the widget\'s tile')
+	t.eq(hover.toy, 0, 'the whole tile is not highlighted again')
+	-- the mouse on a row: inside, the keys go on from it
+	s:call("HoverPart('" .. row2 .. "')")
+	t.eq(M.kpart and M.kpart.name, row2, 'the mouse on a row: the keys go on from it')
 	-- Confirm on a row: the row, not the tile (no launch animation)
 	s:call('Confirm()')
 	t.ok(not s:upvalue('launching'), 'Confirm on a row launched the tile')

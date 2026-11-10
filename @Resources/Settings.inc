@@ -318,6 +318,10 @@ GamepadToggle=BACK START
 GamepadDeadZone=12000
 GamepadRepeatDelay=350
 GamepadRepeatRate=110
+; 1 = a legend at the bottom of the launcher with what the buttons do (Launch,
+; Search, Category, Close...; not the moves), from a button of the pad until
+; the mouse or the keyboard is used again; 0 = none
+GamepadLegend=1
 ; Move the highlight (repeats while held); the left stick always moves too
 GamepadUp=UP
 GamepadDown=DOWN

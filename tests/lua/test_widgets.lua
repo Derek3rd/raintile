@@ -205,24 +205,18 @@ function T.gallery_audio_control()
 	t.ok(g:find('-Mode "Mixer"', 1, true), 'the tile\'s widget setting does not reach the script')
 	t.ok(g:find('AudioControl\\cmd_' .. p .. 'Server.ini" -Mode', 1, true), 'the command file is not in the widget\'s folder')
 	local parts = s:upvalue('M').widgetParts(w)
-	for _, name in ipairs({ 'Hit1', 'Hit2', 'Hit8' }) do
+	for _, name in ipairs({ 'Hit1', 'Hit2', 'Hit8', 'Track1', 'Track2' }) do
 		t.ok(parts[p .. name], name .. ' is not a part of the tile')
 	end
-	for _, name in ipairs({ 'Minus1', 'Plus1', 'Track1', 'Bar1' }) do
-		t.ok(not parts[p .. name], name .. ' is a part (the keys go from row to row only)')
+	for _, name in ipairs({ 'Minus1', 'Plus1', 'Bar1' }) do
+		t.ok(not parts[p .. name], name .. ' is a part (the mouse\'s only)')
 	end
-	t.ok(g:find('KeyRightAction=[!WriteKeyValue Cmd Do "up 1"', 1, true), 'right on a row does not turn its volume up')
-	-- the highlight of a row takes its bar too
-	local hit
-	for _, r in ipairs(s:upvalue('M').partRects(w)) do if r[1] == p .. 'Hit1' then hit = r end end
-	local track = s.meters[(p .. 'Track1'):lower()]
-	local ty = s:number(track:opt('Y', '0'), 0)
-	t.ok(hit and hit[3] + hit[5] >= ty + track:GetH(), 'the row\'s part ends above its bar')
 	local api = s:upvalue('M').widgetInfo(w)
 	t.ok(api.onShow and api.onShow:find('!CommandMeasure ' .. p .. 'Server "Run"', 1, true), 'OnShow does not start the script: ' .. tostring(api.onShow))
 	t.ok(api.onShow:find('cmd_' .. p .. 'Server.ini', 1, true) and api.onHide:find('Do quit', 1, true), 'OnShow/OnHide do not use the command file')
-	-- the keys on a row (KeyLeftAction= / KeyRightAction=): its volume, the
-	-- highlight stays on it; up and down: the next row
+	-- the keys: from a row's name right to its bar, where left and right
+	-- change its volume (KeyLeftAction= / KeyRightAction=) and the highlight
+	-- stays; down to the next bar; left from a name: out of the tile
 	for k, c in ipairs(s:upvalue('cats')) do
 		for _, tile in ipairs(c.tiles) do
 			if tile == w then s:call('Show()') s:call('SetCategory(' .. k .. ')') end
@@ -236,13 +230,22 @@ function T.gallery_audio_control()
 		local x = list[#list]
 		return x and (x[2] .. '=' .. x[3]) or ''
 	end
+	local before = #(skin.writes or {})
 	s:call('Nav(1, 0)')
-	t.eq(last(), 'Do=up 1', 'right on the first row')
-	t.eq(M.kpart and M.kpart.name, p .. 'Hit1', 'right moved the highlight off the row')
+	t.eq(M.kpart and M.kpart.name, p .. 'Track1', 'right from the name is not its bar')
+	t.eq(#(skin.writes or {}), before, 'right from the name changed the volume')
+	s:call('Nav(1, 0)')
+	t.eq(last(), 'Do=up 1', 'right on the bar')
+	t.eq(M.kpart and M.kpart.name, p .. 'Track1', 'right moved the highlight off the bar')
 	s:call('Nav(-1, 0)')
-	t.eq(last(), 'Do=down 1', 'left on the first row')
+	t.eq(last(), 'Do=down 1', 'left on the bar')
 	s:call('Nav(0, 1)')
-	t.eq(M.kpart and M.kpart.name, p .. 'Hit2', 'down from the first row')
+	t.eq(M.kpart and M.kpart.name, p .. 'Track2', 'down from the bar is not the next bar')
+	s:call("HoverPart('" .. p .. "Hit1')")
+	s:call('Nav(0, 1)')
+	t.eq(M.kpart and M.kpart.name, p .. 'Hit2', 'down from the name is not the next name')
+	-- left from a name: no part further left, so out of the tile
+	t.eq(M.partNext(w, p .. 'Hit2', -1, 0), nil, 'left from a name goes to another part of the widget')
 	t.clean(s)
 end
 

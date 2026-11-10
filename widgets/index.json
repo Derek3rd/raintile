@@ -52,6 +52,19 @@
       "base": "SteamAchievements",
       "files": ["SteamAchievements.ini", "SteamAchievements.ps1"],
       "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/SteamAchievements"
+    },
+    {
+      "id": "Spotify",
+      "name": "Spotify",
+      "author": "Raintile",
+      "version": "1.0",
+      "minVersion": "1.5.0",
+      "kind": "custom",
+      "category": "General",
+      "description": "The song playing in Spotify: its cover fills the tile, the controls (play, previous, next, the heart, open Spotify) and the times show with the mouse or the pad on it, a bar along the bottom shows the time. Needs Spicetify with its WebNowPlaying extension.",
+      "base": "Spotify",
+      "files": ["Spotify.ini", "Spotify.ps1"],
+      "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/Spotify"
     }
   ]
 }

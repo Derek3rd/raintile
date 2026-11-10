@@ -3299,7 +3299,9 @@ function D.customWidgetText(t, i, w, h)
 	for n in pairs(secret) do opts[n] = '' end
 	local function own(v)
 		v = v:gsub('#[Oo][Pp][Tt][Ii][Oo][Nn]:([%w_]+)#', function(n) return opts[n:lower()] end)
-		for _ = 1, 3 do
+		-- (a variable may use another one, a few levels deep: sizes made from
+		-- sizes; the limit stops one that uses itself)
+		for _ = 1, 8 do
 			local changed = false
 			v = v:gsub('#([%w_]+)#', function(n)
 				local r = vars[n:lower()]

@@ -246,6 +246,82 @@ function T.gallery_audio_control()
 	t.clean(s)
 end
 
+
+-- The meters of widget t written for a tile of w x h (D.customWidgetText):
+-- every one inside the tile (a meter out of it makes the launcher's window
+-- larger), no width or height of 0 or less (a String with no width is as
+-- wide as its text). Returns the first one out, or nil.
+local function widgetOutOfTile(s, t, w, h)
+	local text = s:upvalue('D').customWidgetText(t, t.widget.idx, w, h)
+	local name, o, out = nil, {}, nil
+	local function check()
+		if not name or out or not o.meter then return end
+		local x, y = s:number(o.x or '0', 0), s:number(o.y or '0', 0)
+		local mw, mh = o.w and s:number(o.w, 0), o.h and s:number(o.h, 0)
+		if x < -1 or y < -1 then out = name .. ' at ' .. x .. ',' .. y end
+		if mw and (mw < 1 or (o.align or ''):lower():find('^left') ~= nil and x + mw > w + 1 or not o.align and x + mw > w + 1) then out = name .. ' W=' .. mw end
+		if mh and (mh < 1 or not o.align and y + mh > h + 1) then out = name .. ' H=' .. mh end
+		if x > w + 1 or y > h + 1 then out = name .. ' out at ' .. x .. ',' .. y end
+	end
+	for line in (text .. '\n'):gmatch('([^\n]*)\n') do
+		local sec = line:match('^%[(.+)%]$')
+		if sec then check() name, o = sec, {} end
+		local k, v = line:match('^(%w+)=(.*)$')
+		if k then
+			k = k:lower()
+			if k == 'meter' then o.meter = v
+			elseif k == 'x' or k == 'y' or k == 'w' or k == 'h' then o[k] = v
+			elseif k == 'stringalign' then o.align = v end
+		end
+	end
+	check()
+	return out
+end
+
+-- Spotify (widgets/Spotify): its sizes written out, a square cover centred
+-- at the top, the controls always there and parts of the tile, every meter
+-- inside the tile whatever its shape (a near square one made the launcher's
+-- window larger)
+function T.gallery_spotify()
+	local s = R.new({})
+	host_mkdir(s.data .. 'Widgets')
+	host_copytree(s.repo .. '\\widgets\\Spotify', s.data .. 'Widgets\\Spotify', '')
+	local cat = s.data .. 'Categories\\Dashboard.ini'
+	R.writeFile(cat, R.readFile(cat) .. '\r\n[Spotify]\r\nWidget=custom\r\nParam=Spotify\r\nSize=2x2\r\n')
+	s:start()
+	t.clean(s)
+	local w
+	for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == 'Spotify' then w = x end end
+	t.ok(w, 'the widget tile is missing')
+	local g = grid(s)
+	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
+	for _, v in ipairs({ 'PN', 'PA', 'PF', 'PS', 'PB', 'PC', 'PR', 'PT', 'PTF', 'PTW', 'PH', 'PCmd' }) do
+		own = own or (g:find('#' .. v .. '#', 1, true) and v)
+	end
+	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
+	local p = 'CW' .. w.widget.idx .. '_'
+	t.ok(g:find('Hidden=(1-1)', 1, true), 'the title and the artist are not shown by default')
+	local parts = s:upvalue('M').widgetParts(w)
+	for _, name in ipairs({ 'Cover', 'Shuffle', 'Previous', 'Play', 'Next', 'Repeat', 'Like', 'Seek' }) do
+		t.ok(parts[p .. name], name .. ' is not a part of the tile')
+		local m = s.meters[(p .. name):lower()]
+		t.ok(m and not m.hidden, name .. ' is not always there')
+	end
+	t.ok(g:find('-Port "8974"', 1, true), 'the Port setting does not reach the script')
+	for _, size in ipairs({ { 360, 340 }, { 340, 360 }, { 420, 200 }, { 200, 420 }, { 120, 110 }, { 800, 760 } }) do
+		local bad = widgetOutOfTile(s, w, size[1], size[2])
+		t.ok(not bad, string.format('a meter out of a %dx%d tile: %s', size[1], size[2], tostring(bad)))
+	end
+	-- the cover a square, centred
+	local text = s:upvalue('D').customWidgetText(w, w.widget.idx, 360, 340)
+	local block = text:match('%[' .. p .. 'Cover%]\n(.-)\n\n') or ''
+	local cx, cw = block:match('\nX=([^\n]+)') or block:match('^X=([^\n]+)'), block:match('\nW=([^\n]+)')
+	t.ok(cx and cw, 'no cover')
+	local x, side = s:number(cx, 0), s:number(cw, 0)
+	t.ok(math.abs(x * 2 + side - 360) <= 1, 'the cover is not centred: ' .. x .. ' + ' .. side)
+	t.ok(side < 340 and side > 150, 'the cover leaves no room for the controls, or is too small: ' .. side)
+end
+
 -- Keyboard and pad inside a widget with parts (the rows of its list): from
 -- row to row, out of the tile at the last one, back onto the nearest row
 function T.parts_with_keys()

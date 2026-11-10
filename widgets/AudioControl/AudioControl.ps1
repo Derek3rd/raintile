@@ -247,15 +247,21 @@ namespace RaintileAudio
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int GetFloat(IntPtr self, out float value);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int SetFloat(IntPtr self, float value, ref Guid context);
         [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int SetInt(IntPtr self, int value, ref Guid context);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int GetChannel(IntPtr self, int channel, out float value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)] delegate int SetChannel(IntPtr self, int channel, float value, ref Guid context);
 
         static readonly Guid Control2Id = new Guid("BFB7FF88-7239-4FC9-8FA2-07C950BE9C6D");
         static readonly Guid SimpleVolumeId = new Guid("87CE5498-68D6-44E5-9215-6F071AE88845");
+        static readonly Guid ChannelVolumeId = new Guid("1C158861-B533-4B30-B1CF-E853E51C59B8");
+        static readonly Guid UnknownId = new Guid("00000000-0000-0000-C000-000000000046");
         IntPtr control, volume;
+        bool channels;   // (volume is an IChannelAudioVolume: no mute)
 
         // (the methods' places: IUnknown 0-2; IAudioSessionControl 3 GetState,
         // 4 GetDisplayName ... 11; IAudioSessionControl2 14 GetProcessId,
         // 15 IsSystemSoundsSession; ISimpleAudioVolume 3 SetMasterVolume,
-        // 4 GetMasterVolume, 5 SetMute, 6 GetMute)
+        // 4 GetMasterVolume, 5 SetMute, 6 GetMute; IChannelAudioVolume
+        // 3 GetChannelCount, 4 SetChannelVolume, 5 GetChannelVolume)
         static T Method<T>(IntPtr obj, int slot) where T : class
         {
             IntPtr table = Marshal.ReadIntPtr(obj);
@@ -264,21 +270,45 @@ namespace RaintileAudio
 
         static void Check(int hr) { if (hr < 0) Marshal.ThrowExceptionForHR(hr); }
 
+        static int Ask(IntPtr obj, Guid id, out IntPtr result) { return Marshal.QueryInterface(obj, ref id, out result); }
+
         // From the session the enumerator gave (its reference is taken over);
-        // null with why in 'error' when it does not answer
-        public static RawSession From(IntPtr session, out string error)
+        // null with why in 'error' when it does not answer. Its volume: from
+        // the session, else from its IAudioSessionControl2 or its IUnknown
+        // (one PC answered none of them from the session itself), else its
+        // volume per channel. 'how' says which one answered.
+        public static RawSession From(IntPtr session, out string error, out string how)
         {
             error = null;
+            how = null;
+            var tried = new List<string>();
             try
             {
-                IntPtr c, v;
-                Guid g = Control2Id;
-                int hr = Marshal.QueryInterface(session, ref g, out c);
+                IntPtr c, v, u;
+                int hr = Ask(session, Control2Id, out c);
                 if (hr != 0) { error = "IAudioSessionControl2: 0x" + hr.ToString("X8"); return null; }
-                g = SimpleVolumeId;
-                hr = Marshal.QueryInterface(session, ref g, out v);
-                if (hr != 0) { Marshal.Release(c); error = "ISimpleAudioVolume: 0x" + hr.ToString("X8"); return null; }
-                return new RawSession { control = c, volume = v };
+                var r = new RawSession { control = c };
+                IntPtr[] from = { session, c };
+                string[] names = { "session", "IAudioSessionControl2" };
+                for (int k = 0; k < from.Length; k++)
+                {
+                    hr = Ask(from[k], SimpleVolumeId, out v);
+                    if (hr == 0) { r.volume = v; how = "ISimpleAudioVolume from the " + names[k]; return r; }
+                    tried.Add("ISimpleAudioVolume from the " + names[k] + ": 0x" + hr.ToString("X8"));
+                }
+                if (Ask(c, UnknownId, out u) == 0)
+                {
+                    hr = Ask(u, SimpleVolumeId, out v);
+                    Marshal.Release(u);
+                    if (hr == 0) { r.volume = v; how = "ISimpleAudioVolume from IUnknown"; return r; }
+                    tried.Add("ISimpleAudioVolume from IUnknown: 0x" + hr.ToString("X8"));
+                }
+                hr = Ask(session, ChannelVolumeId, out v);
+                if (hr == 0) { r.volume = v; r.channels = true; how = "IChannelAudioVolume"; return r; }
+                tried.Add("IChannelAudioVolume: 0x" + hr.ToString("X8"));
+                Marshal.Release(c);
+                error = string.Join(", ", tried.ToArray());
+                return null;
             }
             finally { Marshal.Release(session); }
         }
@@ -305,13 +335,27 @@ namespace RaintileAudio
         }
         public float Level
         {
-            get { float v; Check(Method<GetFloat>(volume, 4)(volume, out v)); return v; }
-            set { Guid none = Guid.Empty; Check(Method<SetFloat>(volume, 3)(volume, value, ref none)); }
+            get
+            {
+                float v;
+                if (channels) Check(Method<GetChannel>(volume, 5)(volume, 0, out v));
+                else Check(Method<GetFloat>(volume, 4)(volume, out v));
+                return v;
+            }
+            set
+            {
+                Guid none = Guid.Empty;
+                if (!channels) { Check(Method<SetFloat>(volume, 3)(volume, value, ref none)); return; }
+                int n;
+                Check(Method<GetInt>(volume, 3)(volume, out n));
+                for (int k = 0; k < n; k++) Check(Method<SetChannel>(volume, 4)(volume, k, value, ref none));
+            }
         }
+        public bool CanMute { get { return !channels; } }
         public bool Mute
         {
-            get { int v; Check(Method<GetInt>(volume, 6)(volume, out v)); return v != 0; }
-            set { Guid none = Guid.Empty; Check(Method<SetInt>(volume, 5)(volume, value ? 1 : 0, ref none)); }
+            get { if (channels) return false; int v; Check(Method<GetInt>(volume, 6)(volume, out v)); return v != 0; }
+            set { if (channels) return; Guid none = Guid.Empty; Check(Method<SetInt>(volume, 5)(volume, value ? 1 : 0, ref none)); }
         }
     }
 
@@ -359,10 +403,10 @@ namespace RaintileAudio
 
         static IMMDeviceEnumerator Enumerator() { return (IMMDeviceEnumerator)new MMDeviceEnumeratorCo(); }
 
-        static object Activate(IMMDevice device, Guid id)
+        static object Activate(IMMDevice device, Guid id, int context = All)
         {
             object result;
-            device.Activate(ref id, All, IntPtr.Zero, out result);
+            device.Activate(ref id, context, IntPtr.Zero, out result);
             return result;
         }
 
@@ -468,7 +512,11 @@ namespace RaintileAudio
             var list = new List<Session>();
             IMMDevice device = Default(Enumerator(), Multimedia);
             if (device == null) return list;
-            var manager = (IAudioSessionManager2)Activate(device, SessionManagerId);
+            // (in this process first: through another one, a session may not
+            // give every interface)
+            IAudioSessionManager2 manager;
+            try { manager = (IAudioSessionManager2)Activate(device, SessionManagerId, 1 /* CLSCTX_INPROC_SERVER */); }
+            catch (Exception) { manager = (IAudioSessionManager2)Activate(device, SessionManagerId); }
             IAudioSessionEnumerator sessions;
             manager.GetSessionEnumerator(out sessions);
             int count;
@@ -481,9 +529,10 @@ namespace RaintileAudio
                 {
                     IntPtr session;
                     sessions.GetSession(i, out session);
-                    string why;
-                    raw = RawSession.From(session, out why);
-                    if (raw == null) { Skipped.Add(i + ": " + why); continue; }
+                    string why, how;
+                    raw = RawSession.From(session, out why, out how);
+                    if (raw == null) { Skipped.Add(i + ": left out: " + why); continue; }
+                    Skipped.Add(i + ": volume through " + how);
                     if (raw.State == 2) { raw.Release(); continue; }   // (expired)
                     var s = new Session { Volume = raw, System = raw.IsSystem };
                     if (s.System) { s.Key = "system"; s.Name = "System sounds"; s.Exe = ""; }
@@ -491,7 +540,7 @@ namespace RaintileAudio
                     {
                         int pid = raw.ProcessId;
                         s.Exe = ProcessPath(pid);
-                        if (s.Exe == null) { Skipped.Add(i + ": process " + pid + " not readable"); raw.Release(); continue; }   // (the program is gone)
+                        if (s.Exe == null) { Skipped.Add(i + ": left out: process " + pid + " not readable"); raw.Release(); continue; }   // (the program is gone)
                         s.Key = s.Exe.ToLowerInvariant();
                         string name = raw.DisplayName;
                         // (a name of the program's resources, "@%SystemRoot%\...": its description instead)
@@ -508,7 +557,7 @@ namespace RaintileAudio
                 }
                 catch (Exception e)
                 {
-                    Skipped.Add(i + ": " + e.Message);
+                    Skipped.Add(i + ": left out: " + e.Message);
                     if (raw != null) raw.Release();
                 }
             }
@@ -598,7 +647,8 @@ namespace RaintileAudio
         public static void SetDeviceMute(string id, bool mute) { Mta(() => { SetDeviceMuteNow(id, mute); return 0; }); }
         public static void SetProgram(string key, int percent, bool mute) { Mta(() => { SetProgramNow(key, percent, mute); return 0; }); }
 
-        // What the last Mixer() left out and why (AudioControl.ps1 -Probe)
+        // What the last Mixer() did with each session: left out and why, or
+        // how its volume is reached (AudioControl.ps1 -Probe)
         public static List<string> Skipped = new List<string>();
 
         // Bangs to Rainmeter; false when it is not running
@@ -646,7 +696,7 @@ if ($Probe) {
             foreach ($it in $list) { Write-Output ("  {0} | {1}% | muted {2} | default {3} | {4}" -f $it.Name, $it.Volume, $it.Mute, $it.Active, $it.Exe) }
         } catch { Write-Output "  error: $($_.Exception.Message)" }
     }
-    foreach ($why in [RaintileAudio.Audio]::Skipped) { Write-Output "  left out: $why" }
+    foreach ($why in [RaintileAudio.Audio]::Skipped) { Write-Output "  session $why" }
     exit 0
 }
 

@@ -49,7 +49,7 @@ namespace RaintileOptions
         // controls of the category pages
         ListBox catsList, tilesList;
         Border catCard, tileCard, importedCard, catIcon, bgThumb, logoThumb, preview;
-        TextBlock catIconHint, gridColsHint, gridRowsHint, sizeHint, tileOpacityHint, tileNote, previewLabel, bgPath, logoPath;
+        TextBlock catIconHint, catInfiniteHint, gridColsHint, gridRowsHint, sizeHint, tileOpacityHint, tileNote, previewLabel, bgPath, logoPath;
         Image previewBg, previewLogo;
         Panel frameRow, logoRow;
         NumberField zoomField, logoField;
@@ -58,6 +58,9 @@ namespace RaintileOptions
         NumberField catOpacity, tileOpacity, gridCols, gridRows, sizeCols, sizeRows, catSizeCols, catSizeRows;
         SizeField catLogoSize;
         Button catOpacityReset, tileOpacityReset, gridColsReset, gridRowsReset, catLogoSizeReset, catSizeReset, tileSizeReset;
+        // InfiniteScroll= of the category: empty = the setting's (Tiles page)
+        ComboBox catInfinite;
+        Button catInfiniteReset;
         Button catNew, catOpen, catUp, catDown, catDel, tileNew, tileDel, tileUp, tileDown;
         Button catColorSwatch;
         ComboBox widgetKind;
@@ -1536,6 +1539,9 @@ namespace RaintileOptions
             catSizeRows.Show(Math.Min(8, span[1]).ToString(), 1);
             SetActionVisible(catSizeReset, key("TileSize") != "");
             catLogoSize.Show(key("IconSize"));
+            SelectChoice(catInfinite, InfiniteChoice(key("InfiniteScroll")));
+            SetActionVisible(catInfiniteReset, key("InfiniteScroll") != "");
+            SetFormHelp(catInfiniteHint, "After the last tile the first one comes back, when there are more than fit on screen. Default: the setting of the Tiles page (" + (V("InfiniteScroll") == "0" ? "off" : "on") + ").");
             SetActionVisible(gridColsReset, key("NX") != "");
             SetActionVisible(gridRowsReset, key("NY") != "");
             SetActionVisible(catLogoSizeReset, key("IconSize") != "");
@@ -1562,6 +1568,13 @@ namespace RaintileOptions
                         previewOn.Items.Add(new ComboBoxItem { Content = t.Name, Tag = t });
             previewOn.SelectedItem = previewOn.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag == keepTile) ?? previewOn.Items[0];
             UpdatePlacementHint();
+        }
+
+        // The choice of the category's InfiniteScroll= (1, 0 or empty: the default)
+        static string InfiniteChoice(string v)
+        {
+            v = (v ?? "").Trim();
+            return v == "" ? "" : v == "0" ? "0" : "1";
         }
 
         // Every field of a form is as high as a button (Choose...), so all the rows
@@ -2357,6 +2370,11 @@ namespace RaintileOptions
             var rowsRow = AddTo(af, NewFormRow("Rows", gridRows.Root, "", null, gridRowsReset));
             gridRowsHint = FormHelp(rowsRow);
             AddGridOnlyReason(rowsRow);
+            // infinite scroll of its own: the default (the setting), on or off
+            catInfiniteReset = NewResetIcon("Back to the default (Tiles page)");
+            catInfinite = NewChoiceBox(new[] { new[] { "", "Default" }, new[] { "1", "On" }, new[] { "0", "Off" } }, "", v => setCatKey("InfiniteScroll", v, catInfiniteReset));
+            catInfiniteReset.Click += (s, e) => SelectChoice(catInfinite, "");   // SelectionChanged writes it
+            catInfiniteHint = FormHelp(AddTo(af, NewFormRow("Infinite scroll", catInfinite, "", null, catInfiniteReset)));
             // cells of every tile without a size of its own (TileSize=, as Size= of a tile)
             Action<string> catSizeChanged = x =>
             {

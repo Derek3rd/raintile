@@ -620,6 +620,9 @@ local function loadCategory(file)
 	c.back = { own(catKeys.backlogopos), own(catKeys.backlogoscale), own(catKeys.backinfopos) }
 	-- cells of its tiles (TileSize=, as Size=), when a tile has no Size= of its own
 	c.tileSize = own(catKeys.tilesize)
+	-- InfiniteScroll= of its own (1 or 0); empty: the setting's
+	local inf = own(catKeys.infinitescroll)
+	if inf then c.infinite = inf ~= '0' end
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -1794,11 +1797,18 @@ local function maxOffset()
 	return math.max(0, lineCount() - visibleLines())
 end
 
--- Infinite scroll: after the last row the first one comes back. Only if the
--- tiles don't all fit on screen (otherwise they would show up twice).
+-- Infinite scroll (InfiniteScroll=, or the category's own): after the last
+-- row the first one comes back. Only with more lines than fit on screen: a
+-- tile never shows twice (the extra line of slots, a half line at each side
+-- of the carousel, the places of the wheel), so what follows the selection
+-- (the highlight, the logo growing) is on one tile only.
 local function infinite()
-	-- also with few tiles (they all fit): they repeat, so it still scrolls round
-	return V.InfiniteScroll and #cur().tiles > 1 and lineCount() > 0
+	local c = cur()
+	local on = c.infinite
+	if on == nil then on = V.InfiniteScroll end
+	if not on then return false end
+	if V.Wheel then return #c.tiles > V.WheelVisible end
+	return lineCount() > visibleLines()
 end
 
 -- Carousel (CenterSelection=1): the grid keeps the selected line (column, or

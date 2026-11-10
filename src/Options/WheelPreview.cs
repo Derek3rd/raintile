@@ -211,7 +211,9 @@ namespace RaintileOptions
         string WWord(string key, string def) { string v = V(key).Trim().ToLowerInvariant(); return v == "" ? def : v; }
         double WheelStepMs() { return Math.Max(16, WNum("WheelStepTime", 350)); }
         int WheelVisible() { int v = Math.Max(1, (int)WNum("WheelVisible", 11)); return v % 2 == 0 ? v + 1 : v; }
-        bool WheelInfinite() { return WNum("InfiniteScroll", 1) != 0 && wheelTiles.Count > 1; } // (few tiles repeat)
+        // as infinite() in Raintile.lua: the category's InfiniteScroll= or the setting,
+        // and only with more tiles than places (a tile never shows twice)
+        bool WheelInfinite() { return CatNum("InfiniteScroll", WNum("InfiniteScroll", 1)) != 0 && wheelTiles.Count > WheelVisible(); }
 
         bool WheelVertical()
         {

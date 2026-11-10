@@ -329,6 +329,7 @@ NX=4               ; grid of this category (default: NX/NY from Settings.inc)
 NY=1
 IconSize=12%       ; logo size in this category's tiles (pixels or %)
 TileSize=          ; cells of its tiles without a Size= of their own (e.g. 3x1)
+InfiniteScroll=    ; 1 or 0: infinite scroll in this category (default: InfiniteScroll from Settings.inc)
 Hidden=            ; 1 = not in the menu (the file and its tiles stay)
 Sort=              ; keep the tiles in an order (see Sorting the tiles): name, name-desc, added, recent, played, playtime
 TileColor=         ; colour of its tiles without a Color= of their own
@@ -346,7 +347,7 @@ BackInfoPos=
 Command=steam://rungameid/2344520
 ```
 
-Every section other than `[Category]` is a tile, in file order. Each category can have its own grid: for example Games `NX=4` `NY=1` (large tiles) and Apps `NX=5` `NY=2`. Tiles resize to fill the screen.
+Every section other than `[Category]` is a tile, in file order. Each category can have its own grid: for example Games `NX=4` `NY=1` (large tiles) and Apps `NX=5` `NY=2`. Tiles resize to fill the screen. It can scroll round or stop at the end whatever the setting (`InfiniteScroll=1` or `0`); either way only a category with more tiles than fit scrolls round, so no tile shows twice.
 
 ### Tile keys
 
@@ -430,7 +431,7 @@ The placement is saved in the tile as `LogoPos` (where the centre of the logo go
 
 Logo placement, framing and the place of the [play time](#play-time) line can also be set once for all the tiles of a category, e.g. every logo on the right, every background framed on its top part or the play time at the top right. The page of a category in Options shows its tiles side by side at the top, with **All tiles** first: it holds the settings of the whole category.
 
-- **All tiles**: the large preview shows the category's framing, logo placement and play time line (a sample text) on placeholder images, or on the images of a tile chosen in **Preview on**; drag and zoom them as on a tile. They are saved in `[Category]` with the same keys (`BgFocus`, `BgZoom`, `LogoPos`, `LogoScale`, `InfoPos`, and on the wheel's backdrop `BackLogoPos`, `BackLogoScale`, `BackInfoPos`), and every tile without its own follows them, the tiles added later too. The framing is relative to each image, so on other backgrounds it frames the same relative part. On the right: the grid, the size of the tiles (`TileSize`), the logo size, the tile colour and background of the category.
+- **All tiles**: the large preview shows the category's framing, logo placement and play time line (a sample text) on placeholder images, or on the images of a tile chosen in **Preview on**; drag and zoom them as on a tile. They are saved in `[Category]` with the same keys (`BgFocus`, `BgZoom`, `LogoPos`, `LogoScale`, `InfoPos`, and on the wheel's backdrop `BackLogoPos`, `BackLogoScale`, `BackInfoPos`), and every tile without its own follows them, the tiles added later too. The framing is relative to each image, so on other backgrounds it frames the same relative part. On the right: the grid, infinite scroll (`InfiniteScroll`: the default, on or off), the size of the tiles (`TileSize`), the logo size, the tile colour and background of the category.
 - On a tile, a chip next to **Framing**, **Logo** and **Play time** says **From All tiles** or **Own**; a dot on the small tile in the strip marks the tiles with something of their own instead of the one of All tiles (colour, background opacity, size, framing, logo or play time line). Moving a tile's logo, background or play time line gives it its own; the reset arrow on the row gives it back the one of All tiles. To change every tile at once, use All tiles.
 - **Logos** / **Framing** / **Play time** (All tiles > **Reset every tile**, asked first): every tile of the category back to the centre at the normal size (the play time line to the top left), the category's placement included. **Size**: every tile at the size of All tiles. The row also says the current placement and size and how many tiles have one of their own.
 
@@ -625,7 +626,7 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `NX`, `NY` | `4`, `2` | default visible tiles: columns × rows (per category: `NX`/`NY` in `[Category]`) |
 | `ScrollDir` | `V` | scroll direction: `V` (by rows) or `H` (by columns) |
 | `ScrollStep` | `1` | rows/columns per mouse wheel notch; tiles in the wheel |
-| `InfiniteScroll` | `1` | after the last row the first comes back (with the wheel, after the last tile the first); with fewer tiles than fit they repeat, so it still scrolls round |
+| `InfiniteScroll` | `1` | after the last row the first comes back (with the wheel, after the last tile the first), when there are more than fit on screen: a tile never shows twice. A category can have its own (`InfiniteScroll=` in its `[Category]`, Options > *the category* > All tiles) |
 | `CenterSelection` | `0` | `1` = carousel: the selected column (row with `ScrollDir=V`) stays in the middle of the screen and a notch or a key brings the next tile there; with an even number of columns (rows) a half column shows at each side ([Grid or wheel](#grid-or-wheel)) |
 
 ### Wheel

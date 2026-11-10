@@ -51,6 +51,19 @@ local function testWidget(s)
 	end
 end
 
+-- The wheel: turned until tile w is at most 'near' places from the middle
+-- (its category does not repeat its tiles when they are few: the last one is
+-- not beside the first)
+local function wheelTo(s, w, near)
+	local M = s:upvalue('M')
+	for _ = 1, 40 do
+		local slot = M.slotOfTile(w)
+		if slot and M.wv[slot] and math.abs(M.wv[slot].d) <= near then return end
+		s:call('Scroll(1)')
+		t.clean(s)
+	end
+end
+
 function T.options_defaults()
 	local s = skinWithWidget(nil)
 	t.clean(s)
@@ -117,6 +130,7 @@ function T.list_part_in_the_wheel()
 		end
 	end
 	t.clean(s)
+	wheelTo(s, w, 0.4)
 	local name = 'W' .. w.widget.idx .. 'RowHit1'
 	s:call('HoverPart(\'' .. name .. '\')')
 	t.clean(s)
@@ -421,6 +435,7 @@ function T.custom_widget_under_nearer_tiles()
 		end
 	end
 	t.clean(s)
+	wheelTo(s, w, 1.2)
 	local M = s:upvalue('M')
 	local slot = M.slotOfTile(w)
 	t.ok(slot and M.wv[slot], 'the widget is not on the wheel')

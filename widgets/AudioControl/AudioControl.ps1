@@ -124,6 +124,40 @@ function Format-AudioBang($Items, [string]$Mode, [string]$Prefix, [string]$Group
     return $sb.ToString()
 }
 
+# Programs Windows gives no mute for (their volume only per channel: on some
+# PCs a session does not answer ISimpleAudioVolume) are muted by the widget:
+# their volume at 0, the level before kept in $Saved (key -> level) and in
+# muted.txt. Such a program at 0 shows muted; back above 0 (its volume
+# changed, here or elsewhere) it is no longer. True when $Saved changed.
+function Resolve-SoftMute($Items, $Saved) {
+    $changed = $false
+    foreach ($it in @($Items)) {
+        if ($it.CanMute -or -not $Saved.ContainsKey($it.Key)) { continue }
+        if ($it.Volume -eq 0) { $it.Mute = $true }
+        else { $Saved.Remove($it.Key); $changed = $true }
+    }
+    return $changed
+}
+
+# The level a program muted by the widget goes back to (never 0: the step)
+function Get-UnmuteLevel($Saved, [string]$Key, [int]$Step) {
+    $v = 0
+    if ($Saved.ContainsKey($Key)) { $v = [int]$Saved[$Key] }
+    return [Math]::Max($v, [Math]::Max(1, $Step))
+}
+
+# muted.txt: "<key>|<level>" per line
+function Read-SavedLevels([string]$Path) {
+    $d = @{}
+    if (-not (Test-Path -LiteralPath $Path)) { return $d }
+    foreach ($line in [IO.File]::ReadAllLines($Path)) {
+        $i = $line.LastIndexOf('|')
+        $n = 0
+        if ($i -gt 0 -and [int]::TryParse($line.Substring($i + 1), [ref]$n)) { $d[$line.Substring(0, $i)] = $n }
+    }
+    return $d
+}
+
 # [Cmd] of the command file: @{ Owner; Do } (missing keys: '')
 function Read-CommandFile([string]$Path) {
     $r = @{ Owner = ''; Do = '' }
@@ -380,6 +414,7 @@ namespace RaintileAudio
         public string Key = "", Name = "", Exe = "", Icon = "";
         public int Volume;
         public bool Mute, Active;
+        public bool CanMute = true;   // (false: a program reached only through its channels)
     }
 
     public static class Audio
@@ -585,7 +620,7 @@ namespace RaintileAudio
                 foreach (Session s in sessions)
                 {
                     if (programs.ContainsKey(s.Key)) continue;
-                    programs[s.Key] = new Item { Key = s.Key, Name = s.Name, Exe = s.Exe, Volume = (int)Math.Round(s.Volume.Level * 100), Mute = s.Volume.Mute };
+                    programs[s.Key] = new Item { Key = s.Key, Name = s.Name, Exe = s.Exe, Volume = (int)Math.Round(s.Volume.Level * 100), Mute = s.Volume.Mute, CanMute = s.Volume.CanMute };
                 }
             }
             finally { Free(sessions); }
@@ -728,10 +763,22 @@ function Get-ProgramIcon([string]$Exe) {
     } catch { return '' }   # (a program of the Store, or one not readable: no icon)
 }
 
+# Programs muted by the widget (Resolve-SoftMute), shared by its tiles
+$savedPath = Join-Path $cmdDir 'muted.txt'
+$script:saved = @{}
+try { $script:saved = Read-SavedLevels $savedPath } catch { }
+function Save-Levels {
+    $lines = @($script:saved.Keys | ForEach-Object { $_ + '|' + $script:saved[$_] })
+    $part = "$savedPath.tmp"
+    [IO.File]::WriteAllText($part, (($lines -join "`r`n") + "`r`n"), $utf8)
+    Move-Item -LiteralPath $part -Destination $savedPath -Force
+}
+
 function Read-Items {
     if ($mode -eq 'Mixer') {
         $list = [RaintileAudio.Audio]::Mixer()
         foreach ($it in $list) { $it.Icon = Get-ProgramIcon $it.Exe }
+        if (Resolve-SoftMute $list $script:saved) { Save-Levels }
         return , $list
     }
     return , [RaintileAudio.Audio]::Devices()
@@ -742,6 +789,19 @@ function Invoke-AudioCommand($c) {
     if ($c.Row -ge 1 -and $c.Row -le @($script:items).Count) { $it = @($script:items)[$c.Row - 1] }
     if (-not $it) { return }
     $device = $mode -eq 'Devices'
+    if (-not $device -and -not $it.CanMute -and ($c.Verb -eq 'pick' -or $c.Verb -eq 'mute')) {
+        # (no mute from Windows: the volume to 0 and back)
+        if ($it.Mute) {
+            $v = Get-UnmuteLevel $script:saved $it.Key $stepValue
+            $script:saved.Remove($it.Key)
+        } else {
+            $script:saved[$it.Key] = $it.Volume
+            $v = 0
+        }
+        Save-Levels
+        [RaintileAudio.Audio]::SetProgram($it.Key, $v, $false)
+        return
+    }
     switch ($c.Verb) {
         'pick' {
             if ($device) { [RaintileAudio.Audio]::SetDefault($it.Key) }

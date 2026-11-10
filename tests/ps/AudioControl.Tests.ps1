@@ -2,7 +2,7 @@
 # the widget's meters, and its C# (Core Audio) compiled without running it.
 
 $audioScript = Join-Path $Root 'widgets\AudioControl\AudioControl.ps1'
-foreach ($fn in 'Get-SafeText', 'Get-AudioMode', 'ConvertFrom-AudioCommand', 'Get-SteppedVolume', 'Format-AudioBang', 'Read-CommandFile') {
+foreach ($fn in 'Get-SafeText', 'Get-AudioMode', 'ConvertFrom-AudioCommand', 'Get-SteppedVolume', 'Format-AudioBang', 'Read-CommandFile', 'Resolve-SoftMute', 'Get-UnmuteLevel', 'Read-SavedLevels') {
     Import-ScriptFunction $audioScript $fn
 }
 
@@ -63,6 +63,28 @@ Test 'audio: the command file' {
     $r = Read-CommandFile $path
     Assert-Equal $r.Owner '12' 'owner'
     Assert-Equal $r.Do 'set 1 50' 'command'
+}
+
+Test 'audio: programs without a mute of their own' {
+    $saved = @{ 'c:\chrome.exe' = 60; 'c:\steam.exe' = 40 }
+    $items = @(
+        [pscustomobject]@{ Key = 'c:\chrome.exe'; Volume = 0; Mute = $false; CanMute = $false },
+        [pscustomobject]@{ Key = 'c:\steam.exe'; Volume = 25; Mute = $false; CanMute = $false },
+        [pscustomobject]@{ Key = 'c:\game.exe'; Volume = 0; Mute = $false; CanMute = $false })
+    Assert-True (Resolve-SoftMute $items $saved) 'a program back above 0 changes the saved levels'
+    Assert-True $items[0].Mute 'muted by the widget: at 0 and saved'
+    Assert-True (-not $saved.ContainsKey('c:\steam.exe')) 'raised elsewhere: no longer muted'
+    Assert-True (-not $items[2].Mute) 'at 0 without the widget muting it: not muted'
+    Assert-True (-not (Resolve-SoftMute $items $saved)) 'nothing changed the second time'
+    Assert-Equal (Get-UnmuteLevel $saved 'c:\chrome.exe' 5) 60 'back to the level before'
+    Assert-Equal (Get-UnmuteLevel @{ 'x' = 0 } 'x' 5) 5 'never back to 0'
+    $dir = New-TestFolder
+    $path = Join-Path $dir 'muted.txt'
+    [IO.File]::WriteAllText($path, "c:\a b\x.exe|35`r`nbroken`r`n")
+    $read = Read-SavedLevels $path
+    Assert-Equal $read['c:\a b\x.exe'] 35 'a saved level'
+    Assert-Equal $read.Count 1 'a broken line left out'
+    Assert-Equal (Read-SavedLevels (Join-Path $dir 'none.txt')).Count 0 'no file'
 }
 
 Test 'audio: its C# compiles' {

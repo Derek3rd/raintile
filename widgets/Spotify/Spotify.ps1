@@ -428,6 +428,11 @@ $coverUrl = $null
 $coverPath = ''
 $song = @{ Title = ''; Artist = ''; State = ''; Position = 0; Duration = 0; Liked = $false; Shuffle = $false; Repeat = 'NONE'; Cover = ''; Note = $note }
 $wait = 0
+# Until Spotify connects (a moment after the widget comes back on screen),
+# the tile keeps what it showed last time: the meters still hold it. Only a
+# Spotify that does not connect within WaitMs is said on the tile.
+$started = [Diagnostics.Stopwatch]::StartNew()
+$WaitMs = 4000
 try {
     while ($true) {
         if ($wait -gt 0) { [void]$watcher.WaitForChanged([IO.WatcherChangeTypes]::All, $wait) }
@@ -470,6 +475,7 @@ try {
                 Note = $(if ($link.Connected) { 'Nothing playing in Spotify.' } else { $note })
             }
         }
+        if ($link -and -not $link.Connected -and $last -eq $null -and $started.ElapsedMilliseconds -lt $WaitMs) { continue }
         $bang = Format-SpotifyBang $song $prefix $group $Config $colors
         if ($bang -ne $last) {
             $last = $bang

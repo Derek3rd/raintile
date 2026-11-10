@@ -296,7 +296,7 @@ function T.gallery_now_playing()
 	t.ok(w, 'the widget tile is missing')
 	local g = grid(s)
 	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
-	for _, v in ipairs({ 'SB', 'SR', 'SF', 'SH', 'SCmd', 'SShow', 'SHide' }) do
+	for _, v in ipairs({ 'S', 'IF', 'SB', 'SR', 'SF', 'SH', 'SCmd', 'SShow', 'SHide' }) do
 		own = own or (g:find('#' .. v .. '#', 1, true) and v)
 	end
 	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))

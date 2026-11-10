@@ -52,7 +52,7 @@ namespace RaintileOptions
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "choice", Key = "ScrollMode", Label = "Layout", Help = "Grid: rows and columns. Wheel: one line of square tiles on an arc (the thumbnails), the selected one in the middle and, if you like, as the launcher's backdrop; suggested docked. Each has its page below; the page of the other one is greyed out in the menu.", Choices = new List<string[]> { new[] { "Grid", "Grid" }, new[] { "Wheel", "Wheel" } } },
-                    new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last tile the first one comes back; with few tiles they repeat, so it still scrolls round." },
+                    new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last tile the first one comes back, when there are more than fit on screen (a tile never shows twice). A category can have its own (Categories, the category: Infinite scroll)." },
                     new Item { Kind = "int", Key = "ScrollStep", Label = "Mouse wheel notch", Help = "Rows (or columns) it scrolls in the grid, tiles it turns in the wheel.", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "size", Key = "Gap", Label = "Space", Help = "Under the top row, and between the tiles of the grid.", Axis = "H" },
                 } },
@@ -612,7 +612,7 @@ namespace RaintileOptions
         // The look of a category ([Category] of its file) a profile holds: not its
         // name, icon, place, Hidden or Sort, nor its tiles. tools/check.py checks
         // them against the [Category] keys Raintile.lua reads.
-        public static readonly string[] CATEGORY_LOOK = { "NX", "NY", "IconSize", "TileSize", "TileColor", "TileOpacity", "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos" };
+        public static readonly string[] CATEGORY_LOOK = { "NX", "NY", "InfiniteScroll", "IconSize", "TileSize", "TileColor", "TileOpacity", "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos" };
 
         // the buttons in the order of the dial (PadDial.cs): clockwise from the
         // top, as on the controller (bumpers and triggers at the top, Y B A X on

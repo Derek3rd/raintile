@@ -332,6 +332,7 @@ NX=4               ; grid of this category (default: NX/NY from Settings.inc)
 NY=1
 IconSize=12%       ; logo size in this category's tiles (pixels or %)
 TileSize=          ; cells of its tiles without a Size= of their own (e.g. 3x1)
+InfiniteScroll=    ; 1 or 0: infinite scroll in this category (default: InfiniteScroll from Settings.inc)
 Hidden=            ; 1 = not in the menu (the file and its tiles stay)
 Sort=              ; keep the tiles in an order (see Sorting the tiles): name, name-desc, added, recent, played, playtime
 TileColor=         ; colour of its tiles without a Color= of their own
@@ -349,7 +350,7 @@ BackInfoPos=
 Command=steam://rungameid/2344520
 ```
 
-Every section other than `[Category]` is a tile, in file order. Each category can have its own grid: for example Games `NX=4` `NY=1` (large tiles) and Apps `NX=5` `NY=2`. Tiles resize to fill the screen.
+Every section other than `[Category]` is a tile, in file order. Each category can have its own grid: for example Games `NX=4` `NY=1` (large tiles) and Apps `NX=5` `NY=2`. Tiles resize to fill the screen. It can scroll round or stop at the end whatever the setting (`InfiniteScroll=1` or `0`); either way only a category with more tiles than fit scrolls round, so no tile shows twice.
 
 ### Tile keys
 
@@ -512,7 +513,7 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 - What each setting or field does is written under its name. A setting that only applies with another one (the sizes of the inner wheel with the inner wheel) is greyed out while it does not apply, with what it needs under it, and so is a whole group (General > Window, General > Docked: only in that mode). A part that can be turned off has its switch beside the title of its page (the clock, keyboard navigation, the gamepad) or in the header of its group (the filter bar, labels, Steam updates), and the rest is greyed out while it is off; the page of the layout not in use (Grid or Wheel) is greyed out in the menu.
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default (in the category editor: from All tiles), and restores it. The **x** empties a field (an image or an icon goes to the Recycle Bin, asked first); the bin in the header of a list deletes the entry selected (a tile, a category), asked first.
-- **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon, grid and logo size of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it: in the grid with the proportions of the category's tiles (and its `Size=`), in the wheel as its thumbnail, a square, or, with the logo or the lines on the backdrop and **Place on**: *The backdrop*, as the backdrop under the top row. In the wheel the rows of the grid (Width, Height, Columns, Rows, Tile width, Tile height, Logo size) are greyed out with their reason.
+- **Categories**: create, delete (to the Recycle Bin) and reorder categories, and edit the name, icon and infinite scroll (`InfiniteScroll`: the default, on or off) of the selected one. Categories and tiles can also be reordered by dragging them in their list. Double-click a category (or pick it in the menu) to see its tiles: add, delete, reorder and edit them (name, command with *Browse...* for `.exe`/`.lnk`/`.url`, label, colour, background, logo). Picked images are copied to `Images\<category>\background|logo\<TileName>.<ext>`; renaming a tile renames its images too. The preview shows the tile as the launcher draws it: in the grid with the proportions of the category's tiles (and its `Size=`), in the wheel as its thumbnail, a square, or, with the logo or the lines on the backdrop and **Place on**: *The backdrop*, as the backdrop under the top row. In the wheel the rows of the grid (Width, Height, Columns, Rows, Tile width, Tile height, Logo size) are greyed out with their reason.
   - **Sorting the tiles**: under **All tiles**, **Order** picks an order: *Name A–Z*, *Name Z–A*, *Recently added* (the date the tile was added, `Added=`; tiles without one go last), *Recently played* (the last launch: counted by Raintile, Steam's, or measured), *Most launched* (launches counted by Raintile) or *Most play time* (Steam's play time plus the one measured for the other games). Ties keep the order they had.
     - **Sort now** puts the tiles in that order once; you can still drag them afterwards.
     - **Keep sorted** keeps them in it (`Sort=` in `[Category]`): new and renamed tiles go to their place, and the launcher works the order out again each time it loads and opens, so the orders by play follow what you play. The remembered scroll position follows the tiles: the tile you launched (or had selected) stays in view where it moved. Dragging and the move buttons are off while it is on, except for pinned tiles.
@@ -628,7 +629,7 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `NX`, `NY` | `4`, `2` | default visible tiles: columns × rows (per category: `NX`/`NY` in `[Category]`) |
 | `ScrollDir` | `V` | scroll direction: `V` (by rows) or `H` (by columns) |
 | `ScrollStep` | `1` | rows/columns per mouse wheel notch; tiles in the wheel |
-| `InfiniteScroll` | `1` | after the last row the first comes back (with the wheel, after the last tile the first); with fewer tiles than fit they repeat, so it still scrolls round |
+| `InfiniteScroll` | `1` | after the last row the first comes back (with the wheel, after the last tile the first), when there are more than fit on screen: a tile never shows twice. A category can have its own (`InfiniteScroll=` in its `[Category]`, Options > Categories, the category: *Infinite scroll*) |
 | `CenterSelection` | `0` | `1` = carousel: the selected column (row with `ScrollDir=V`) stays in the middle of the screen and a notch or a key brings the next tile there; with an even number of columns (rows) a half column shows at each side ([Grid or wheel](#grid-or-wheel)) |
 
 ### Wheel

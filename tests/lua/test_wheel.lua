@@ -593,7 +593,9 @@ function T.rounded_corners_each()
 	t.clean(s)
 end
 
--- Infinite scroll with few tiles (fewer than shown): they repeat, and it turns round
+-- Infinite scroll with few tiles (no more than the places shown): they do
+-- not repeat, the wheel stops at the ends; with more, it turns round and
+-- still no tile shows twice
 local function fewest(s)
 	local best, n
 	for i, c in ipairs(s:upvalue('cats')) do
@@ -602,27 +604,89 @@ local function fewest(s)
 	return best, n
 end
 
-function T.few_tiles_repeat()
+-- tiles shown (not faded out) more than once
+local function shownTwice(s)
+	local M, V, seen, twice = s:upvalue('M'), s:upvalue('V'), {}, 0
+	for slot = 1, V.Slots do
+		local e = M.wv[slot]
+		if e and e.a > 0.01 then
+			if seen[e.idx] then twice = twice + 1 end
+			seen[e.idx] = true
+		end
+	end
+	return twice
+end
+
+function T.few_tiles_do_not_repeat()
 	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', InfiniteScroll = 1, WheelVisible = 11 })
 	local i, n = fewest(s)
-	t.ok(n and n < 13, 'no category with few tiles')
+	t.ok(n and n <= 11, 'no category with few tiles')
+	s:call('SetCategory(' .. i .. ')')
+	s:call('Scroll(-1)')
+	t.clean(s)
+	t.eq(s:upvalue('offset'), 0, 'turned back past the first tile with few tiles')
+	t.eq(shownTwice(s), 0, 'a tile shown twice')
+end
+
+function T.enough_tiles_turn_round()
+	local s = wheel({ LauncherMode = 'Dock', DockSide = 'Left', InfiniteScroll = 1, WheelVisible = 3 })
+	local i, n = fewest(s)
+	t.ok(n and n > 3, 'no category with more tiles than the places')
 	s:call('SetCategory(' .. i .. ')')
 	s:call('Scroll(-1)')
 	t.eq(s:upvalue('offset'), -1, 'did not turn back past the first tile')
-	local M, V, seen = s:upvalue('M'), s:upvalue('V'), 0
-	for slot = 1, V.Slots do if M.wv[slot] then seen = seen + 1 end end
-	t.ok(seen > n, 'tiles not repeated: ' .. seen .. ' shown of ' .. n)
+	for _ = 1, 3 do
+		t.clean(s)
+		t.eq(shownTwice(s), 0, 'a tile shown twice')
+		s:call('Scroll(-1)')
+	end
 	t.clean(s)
 end
 
-function T.few_tiles_repeat_in_the_grid()
+-- The grid: no more lines than fit, no infinite scroll (a tile would show
+-- twice); InfiniteScroll= of a category wins over the setting
+function T.few_tiles_in_the_grid()
 	local s = R.new({ settings = { InfiniteScroll = 1, NX = 4, NY = 3 } }):start()
 	s:call('Show()')
-	local i = fewest(s)
+	local i, n = fewest(s)
+	t.ok(n <= 12, 'no category that fits')
 	s:call('SetCategory(' .. i .. ')')
 	s:call('Scroll(1)')
-	t.eq(s:upvalue('offset'), 1, 'the grid with few tiles does not scroll round')
-	s:call('Scroll(-2)')
+	t.eq(s:upvalue('offset'), 0, 'the grid with few tiles scrolled round')
+	t.clean(s)
+end
+
+function T.infinite_scroll_of_a_category()
+	local s = R.new({ settings = { InfiniteScroll = 1, NX = 1, NY = 1 } })
+	local cat = s.data .. 'Categories\\Apps.ini'
+	R.writeFile(cat, R.readFile(cat):gsub('%[Category%]\r?\n', '[Category]\r\nInfiniteScroll=0\r\n', 1))
+	s:start()
+	s:call('Show()')
+	local cats = s:upvalue('cats')
+	for i, c in ipairs(cats) do
+		if c.file == 'Apps.ini' then
+			t.eq(c.infinite, false, 'InfiniteScroll=0 of the category not read')
+			s:call('SetCategory(' .. i .. ')')
+			s:call('Scroll(-1)')
+			t.eq(s:upvalue('offset'), 0, 'the category with InfiniteScroll=0 scrolled round')
+		elseif not c.virtual and #c.tiles > 1 then
+			t.eq(c.infinite, nil, 'a category without the key has one')
+		end
+	end
+	t.clean(s)
+	-- the other way round: the setting off, the category on
+	s = R.new({ settings = { InfiniteScroll = 0, NX = 1, NY = 1 } })
+	cat = s.data .. 'Categories\\Apps.ini'
+	R.writeFile(cat, R.readFile(cat):gsub('%[Category%]\r?\n', '[Category]\r\nInfiniteScroll=1\r\n', 1))
+	s:start()
+	s:call('Show()')
+	for i, c in ipairs(s:upvalue('cats')) do
+		if c.file == 'Apps.ini' then
+			s:call('SetCategory(' .. i .. ')')
+			s:call('Scroll(-1)')
+			t.eq(s:upvalue('offset'), -1, 'the category with InfiniteScroll=1 did not scroll round')
+		end
+	end
 	t.clean(s)
 end
 
@@ -726,20 +790,16 @@ function T.widgets_over_the_tiles()
 	end
 	local text = table.concat(mask, '\n')
 	t.ok(text:find('Exclude'), 'side widgets not cut by the nearer tiles:\n' .. text)
-	-- a widget repeated (few tiles): its data on one copy, the others named
+	-- few tiles: no widget shown twice
 	local M = s:upvalue('M')
-	local copies, named = {}, 0
+	local copies = {}
 	for slot in pairs(M.wv) do
 		local tile = s:upvalue('tileAt')(slot)
 		if tile and tile.widget and not s.meters['tile' .. slot].hidden and num(s.meters['tile' .. slot], 'ImageAlpha') ~= 0 then
 			copies[tile.widget.idx] = (copies[tile.widget.idx] or 0) + 1
-			if not s.meters['tilelabel' .. slot].hidden then named = named + 1 end
+			t.eq(copies[tile.widget.idx], 1, 'a widget shown twice')
 		end
 	end
-	local extra = 0
-	for _, n in pairs(copies) do extra = extra + n - 1 end
-	t.ok(extra > 0, 'no widget repeated in the test')
-	t.ok(named >= extra, 'repeated widgets without their name: ' .. named .. ' of ' .. extra)
 	-- a category without widgets: nothing shown with nothing in it
 	for i, c in ipairs(s:upvalue('cats')) do
 		if c.name ~= 'Dashboard' and not c.virtual and #c.tiles > 0 and not c.widgets then

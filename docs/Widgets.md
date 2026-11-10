@@ -73,8 +73,6 @@ What the widget asks of Raintile:
 [Raintile]
 OnShow=[!CommandMeasure #WIDGET:Read# "Run"]
 OnHide=
-OnFocus=
-OnBlur=
 List=list.txt
 ListY=
 WidgetOptionChoices=
@@ -120,17 +118,6 @@ Hidden=(1-#OPTION:ShowTitle#)
 ### OnShow and OnHide
 
 Bangs run when the widget's category comes on screen (the launcher opens on it, or the menu goes to it) and when it leaves the screen (another category, the launcher hidden). This is where a widget starts its work: reading its data, loading something. Nothing runs while the launcher is hidden.
-
-### OnFocus and OnBlur
-
-Bangs run when the highlight of the keys or the pad comes onto the widget's tile, and when it leaves it (another tile, the mouse moving, another category). `OnFocus` runs before Raintile looks for the tile's [parts](#parts-of-a-tile): a widget can show there what it shows on mouse hover (controls over a picture), and the keys reach its parts:
-
-```ini
-OnFocus=[!ShowMeterGroup "#WIDGET:Cover#Ctl"][!Redraw]
-OnBlur=[!HideMeterGroup "#WIDGET:Cover#Ctl"][!Redraw]
-```
-
-A group of the widget's own takes a name made from one of its sections (`#WIDGET:Cover#Ctl`): two tiles of the same widget then have groups of their own.
 
 ### Lists
 

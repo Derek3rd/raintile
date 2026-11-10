@@ -323,7 +323,7 @@ function T.gallery_spotify()
 end
 
 -- Now Playing (widgets/NowPlaying): its sizes written out, its controls
--- parts of the tile shown by OnFocus, the bar always a part
+-- always there and parts of the tile, every meter inside the tile
 function T.gallery_now_playing()
 	local s = R.new({})
 	host_mkdir(s.data .. 'Widgets')
@@ -351,50 +351,6 @@ function T.gallery_now_playing()
 		local bad = widgetOutOfTile(s, w, size[1], size[2])
 		t.ok(not bad, string.format('a meter out of a %dx%d tile: %s', size[1], size[2], tostring(bad)))
 	end
-end
-
--- OnFocus= / OnBlur=: the highlight of the keys or the pad comes onto the
--- widget's tile (before its parts are looked for: a part hidden until then,
--- shown by OnFocus, is reached), and leaves it with another category
-function T.focus_shows_parts()
-	local s = R.new({})
-	local dir = s.data .. 'Widgets\\FocusW\\'
-	host_mkdir(s.data .. 'Widgets')
-	host_mkdir(dir)
-	R.writeFile(dir .. 'FocusW.ini', table.concat({
-		'[Raintile]',
-		'OnFocus=[!SetVariable Foc on][!ShowMeterGroup FocusBtn]',
-		'OnBlur=[!SetVariable Foc off][!HideMeterGroup FocusBtn]',
-		'[Btn]',
-		'Meter=Shape',
-		'X=10',
-		'Y=10',
-		'Shape=Rectangle 0,0,40,40 | Fill Color 0,0,0,1 | StrokeWidth 0',
-		'Part=1',
-		'Group=FocusBtn',
-		'Hidden=1',
-		'LeftMouseUpAction=[!SetVariable Pressed yes]',
-		'',
-	}, '\r\n'))
-	R.writeFile(s.data .. 'Categories\\Focus.ini', '[Category]\r\nName=Focus\r\n\r\n[Focus widget]\r\nWidget=custom\r\nParam=FocusW\r\n')
-	s:start()
-	t.clean(s)
-	local target
-	for i, c in ipairs(s:upvalue('cats')) do if c.name == 'Focus' then target = i end end
-	t.ok(target, 'no Focus category')
-	s:call('Show()')
-	s:call('SetCategory(' .. target .. ')')
-	t.eq(s.vars['foc'], nil, 'OnFocus before the keys came')
-	s:call('Nav(0, 0)')
-	t.clean(s)
-	t.eq(s.vars['foc'], 'on', 'OnFocus did not run with the highlight of the keys on the tile')
-	local kp = s:upvalue('M').kpart
-	t.ok(kp and kp.name:match('_Btn$'), 'the part shown by OnFocus is not reached: ' .. tostring(kp and kp.name))
-	s:call('Confirm()')
-	t.eq(s.vars['pressed'], 'yes', 'Confirm did not press the part')
-	s:call('SetCategory(' .. (target == 1 and 2 or 1) .. ')')
-	t.eq(s.vars['foc'], 'off', 'OnBlur did not run with another category')
-	t.clean(s)
 end
 
 -- Keyboard and pad inside a widget with parts (the rows of its list): from

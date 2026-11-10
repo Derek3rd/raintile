@@ -305,6 +305,7 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "GamepadDeadZone", Label = "Stick dead zone", Help = "How far the stick moves before it counts.", Min = 0.0, Max = 32767.0, Step = 500.0, Unit = "/ 32767" },
                     new Item { Kind = "int", Key = "GamepadRepeatDelay", Label = "Repeat delay", Help = "Holding a direction: wait before it repeats.", Min = 50.0, Max = 1000.0, Step = 10.0, Unit = "ms" },
                     new Item { Kind = "int", Key = "GamepadRepeatRate", Label = "Repeat interval", Help = "", Min = 30.0, Max = 500.0, Step = 10.0, Unit = "ms" },
+                    new Item { Kind = "bool", Key = "GamepadLegend", Label = "Button legend", Help = "At the bottom of the launcher, what the buttons do (not the moves). It shows after a button of the pad and goes when the mouse or the keyboard is used." },
                 } },
                 new Group { Title = "Buttons", Help = null, Items = new List<Item>
                 {
@@ -476,6 +477,7 @@ namespace RaintileOptions
             { "GamepadDone", "START" },
             { "GamepadDown", "DOWN" },
             { "GamepadLeft", "LEFT" },
+            { "GamepadLegend", "1" },
             { "GamepadNextCategory", "RB" },
             { "GamepadNextChip", "RT" },
             { "GamepadOptions", "RS" },

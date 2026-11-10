@@ -322,6 +322,37 @@ function T.gallery_spotify()
 	t.ok(side < 340 and side > 150, 'the cover leaves no room for the controls, or is too small: ' .. side)
 end
 
+-- Now Playing (widgets/NowPlaying): its sizes written out, its controls
+-- always there and parts of the tile, every meter inside the tile
+function T.gallery_now_playing()
+	local s = R.new({})
+	host_mkdir(s.data .. 'Widgets')
+	host_copytree(s.repo .. '\\widgets\\NowPlaying', s.data .. 'Widgets\\NowPlaying', '')
+	local cat = s.data .. 'Categories\\Dashboard.ini'
+	R.writeFile(cat, R.readFile(cat) .. '\r\n[Now playing]\r\nWidget=custom\r\nParam=NowPlaying\r\nSize=2x2\r\n')
+	s:start()
+	t.clean(s)
+	local w
+	for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == 'NowPlaying' then w = x end end
+	t.ok(w, 'the widget tile is missing')
+	local g = grid(s)
+	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
+	for _, v in ipairs({ 'PN', 'PA', 'PF', 'PS', 'PB', 'PC', 'PR', 'PT', 'PTF', 'PTW', 'PH', 'PCmd' }) do
+		own = own or (g:find('#' .. v .. '#', 1, true) and v)
+	end
+	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
+	local p = 'CW' .. w.widget.idx .. '_'
+	local parts = s:upvalue('M').widgetParts(w)
+	for _, name in ipairs({ 'Shuffle', 'Previous', 'Play', 'Next', 'Repeat', 'Seek' }) do
+		t.ok(parts[p .. name], name .. ' is not a part of the tile')
+	end
+	t.ok(not parts[p .. 'Like'], 'a heart: Windows has none')
+	for _, size in ipairs({ { 360, 340 }, { 340, 360 }, { 420, 200 }, { 200, 420 }, { 120, 110 }, { 800, 760 } }) do
+		local bad = widgetOutOfTile(s, w, size[1], size[2])
+		t.ok(not bad, string.format('a meter out of a %dx%d tile: %s', size[1], size[2], tostring(bad)))
+	end
+end
+
 -- Keyboard and pad inside a widget with parts (the rows of its list): from
 -- row to row, out of the tile at the last one, back onto the nearest row
 function T.parts_with_keys()

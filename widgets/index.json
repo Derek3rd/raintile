@@ -54,6 +54,19 @@
       "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/SteamAchievements"
     },
     {
+      "id": "NowPlaying",
+      "name": "Now Playing",
+      "author": "Raintile",
+      "version": "1.0",
+      "minVersion": "1.5.0",
+      "kind": "custom",
+      "category": "General",
+      "description": "What any player is playing (Spotify, YouTube in a browser, the Media Player...), as Windows shows it over the volume: the cover fills the tile, the controls and the times show with the mouse or the pad on it, a bar along the bottom shows the time. No plugin or extension needed.",
+      "base": "NowPlaying",
+      "files": ["NowPlaying.ini", "NowPlaying.ps1"],
+      "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/NowPlaying"
+    },
+    {
       "id": "Spotify",
       "name": "Spotify",
       "author": "Raintile",

@@ -239,6 +239,8 @@ A small line on the tile (at the top left unless you move it) tells how long you
 
 **Pad shortcuts**: a tile with `PadKey=` (e.g. `LB A`, up to four buttons; Options: the tile's *Pad shortcut*, a field like the buttons of Keybindings > Gamepad) starts with those buttons of the gamepad held together, only while the launcher is open (never in a game), as a hot key does. The buttons of an action of the [gamepad](#gamepad) stay that action's (the Options window marks them in red); a button that is also part of a shortcut acts when it is released (`LB` alone changes category on release when a tile has `LB A`). One tile per combination: the first wins.
 
+While the Options window is open, the shortcuts do nothing: the tiles' hot keys and pad shortcuts, and the key and the buttons that open the launcher (so the keys and buttons you pick there start nothing).
+
 On click the tile expands to full screen (with background and logo at full resolution), stays visible for `LaunchHold` ms, then the launcher hides. The command starts right away, at the beginning of the animation.
 
 | Setting | Default | Effect |

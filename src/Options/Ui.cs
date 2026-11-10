@@ -225,7 +225,13 @@ namespace RaintileOptions
                 if (action == "runas" || action == "remove") return TileAction.Run(action);
                 Core.DeleteOldUpdateFiles();
                 var app = new OptionsApp(page, clock);
-                return app.Run();
+                // while the window is open the launcher's shortcuts do nothing
+                // (Generated\OptionsOpen.txt, read by Raintile.lua at each one):
+                // a hot key or pad buttons being picked here would start a tile
+                string flag = Path.Combine(Core.Generated, "OptionsOpen.txt");
+                try { File.WriteAllText(flag, ((long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds).ToString(), Core.Utf8); } catch { }
+                try { return app.Run(); }
+                finally { try { File.Delete(flag); } catch { } }
             }
             catch (Exception e)
             {

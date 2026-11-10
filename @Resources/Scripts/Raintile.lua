@@ -5251,6 +5251,8 @@ end
 -- Open, or close; a launcher left open without the focus (a window, AutoHide=0,
 -- behind a game) comes back in front with its keys first.
 function Toggle()
+	-- (the open/close key and buttons: shortcuts, off while Options is open)
+	if M.optionsOpen() then return end
 	if visible and not M.focused and not launching then
 		M.zpos(true)
 		SKIN:Bang('!Show')
@@ -6295,8 +6297,21 @@ end
 
 function TileHotKey(i)
 	local entry = tileKeys[i]
-	if not ready or not entry or launching then return end
+	if not ready or not entry or launching or M.optionsOpen() then return end
 	M.startById(entry.id, 'hot key ' .. entry.key)
+end
+
+-- The Options window is open (Generated\OptionsOpen.txt, written by the
+-- program while it runs, with its start time): the shortcuts (tile hot keys,
+-- pad shortcuts, the open/close key and buttons) do nothing, so the keys and
+-- buttons picked in it start nothing. A file older than a day is one left by
+-- a program that did not end (killed): ignored.
+function M.optionsOpen()
+	local f = io.open(resources .. 'Generated\\OptionsOpen.txt', 'rb')
+	if not f then return false end
+	local at = tonumber((f:read('*a') or ''):match('%d+') or '')
+	f:close()
+	return at ~= nil and math.abs(os.time() - at) < 86400
 end
 
 -- The tile with that id (tileId), started as by its hot key
@@ -6361,7 +6376,7 @@ end
 
 function M.padTile(n)
 	local entry = M.padKeys[tonumber(n) or 0]
-	if not ready or not entry or launching then return end
+	if not ready or not entry or launching or M.optionsOpen() then return end
 	M.startById(entry.id, 'pad shortcut ' .. entry.key)
 end
 

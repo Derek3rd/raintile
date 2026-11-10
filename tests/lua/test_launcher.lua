@@ -315,6 +315,19 @@ function T.tile_pad_keys()
 	s:call('Show()')
 	s:call("Pad('PadTile',1)")
 	t.eq(s.vars['padran'], 'one', 'the first tile with the combination is not the one started')
+	-- the Options window open (its flag file): no shortcut acts
+	R.writeFile(s.resources .. 'Generated\\OptionsOpen.txt', tostring(os.time()))
+	s.vars['padran'] = nil
+	s:call('Show()')
+	s:call("Pad('PadTile',1)")
+	t.eq(s.vars['padran'], nil, 'a pad shortcut acted with Options open')
+	s:call('Hide()')
+	s:call('Toggle()')
+	t.ok(not s:upvalue('visible'), 'the open key opened the launcher with Options open')
+	-- one left by a program killed a day ago: ignored
+	R.writeFile(s.resources .. 'Generated\\OptionsOpen.txt', tostring(os.time() - 90000))
+	s:call('Toggle()')
+	t.ok(s:upvalue('visible'), 'an old flag of Options kept the open key off')
 	t.clean(s)
 end
 

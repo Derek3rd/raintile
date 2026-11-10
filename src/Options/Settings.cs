@@ -396,13 +396,15 @@ namespace RaintileOptions
         // held together, taken when they are released (PadDial.cs).
         const int PadMax = 4;
 
-        UIElement NewPadControl(string key)
+        // (alone: the field only, its clear button in ctl[key].Clear for the
+        // action column of a form row, as the tile's hot key)
+        UIElement NewPadControl(string key, bool alone = false)
         {
             var sp = NewPanel(Orientation.Horizontal);
             sp.HorizontalAlignment = HorizontalAlignment.Right;
             var b = NewButton("", "KeyButton");
             var clear = NewClearButton("Clear the buttons");
-            AddTo(sp, b); AddTo(sp, clear);
+            if (!alone) { AddTo(sp, b); AddTo(sp, clear); }
             ctl[key] = new Ctl { Kind = "pad", Button = b, Clear = clear };
             b.Click += (s, e) =>
             {
@@ -411,7 +413,7 @@ namespace RaintileOptions
             };
             clear.Click += (s, e) => SetPadCombo(key, new List<string>());
             ShowPadSlots(key);
-            return sp;
+            return alone ? (UIElement)b : sp;
         }
 
         // The buttons of a pad setting: "BACK START" -> BACK, START (as the

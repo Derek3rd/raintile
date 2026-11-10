@@ -34,6 +34,7 @@ param(
     [string]$Cmd = '',
     [string]$Mode = 'Devices',
     [string]$Title = '',
+    [string]$ShowDevice = '0',
     [string]$Step = '5',
     [int]$Interval = 1000,
     [int]$Rows = 8,
@@ -118,7 +119,7 @@ function Format-AudioBang($Items, [string]$Mode, [string]$Prefix, [string]$Group
     & $set 'IconOn' 'Formula' $(if ($mixer) { '1' } else { '0' })
     if (-not $Title) { $Title = $(if ($mixer) { 'Volume mixer' } else { 'Sound devices' }) }
     & $set 'Title' 'Text' (Get-SafeText $Title)
-    if (-not $Note) { $Note = 'No sound device' }
+    if (-not $Note) { $Note = $(if ($mixer) { 'No program is playing sound' } else { 'No sound device' }) }
     & $set 'Empty' 'Text' (Get-SafeText $Note)
     [void]$sb.Append('[!UpdateMeasureGroup "' + $Group + '" "' + $Config + '"][!UpdateMeterGroup "' + $Group + '" "' + $Config + '"][!Redraw "' + $Config + '"]')
     return $sb.ToString()
@@ -545,8 +546,27 @@ namespace RaintileAudio
         static List<Session> Sessions()
         {
             var list = new List<Session>();
-            IMMDevice device = Default(Enumerator(), Multimedia);
-            if (device == null) return list;
+            Skipped.Clear();
+            IMMDeviceCollection devices;
+            Enumerator().EnumAudioEndpoints(Render, Active, out devices);
+            int n;
+            devices.GetCount(out n);
+            for (int d = 0; d < n; d++)
+            {
+                IMMDevice device;
+                devices.Item(d, out device);
+                string tag = d.ToString();
+                try { tag = DeviceName(device); } catch (COMException) { }
+                try { AddSessions(device, tag, list); }
+                catch (COMException e) { Skipped.Add(tag + ": " + e.Message); }
+            }
+            return list;
+        }
+
+        // The sessions of one device (a program playing on another one than
+        // the default shows too, as in Windows' mixer)
+        static void AddSessions(IMMDevice device, string tag, List<Session> list)
+        {
             // (in this process first: through another one, a session may not
             // give every interface)
             IAudioSessionManager2 manager;
@@ -556,14 +576,14 @@ namespace RaintileAudio
             manager.GetSessionEnumerator(out sessions);
             int count;
             sessions.GetCount(out count);
-            Skipped.Clear();
-            for (int i = 0; i < count; i++)
+            for (int k = 0; k < count; k++)
             {
+                string i = tag + ", session " + k;
                 RawSession raw = null;
                 try
                 {
                     IntPtr session;
-                    sessions.GetSession(i, out session);
+                    sessions.GetSession(k, out session);
                     string why, how;
                     raw = RawSession.From(session, out why, out how);
                     if (raw == null) { Skipped.Add(i + ": left out: " + why); continue; }
@@ -596,23 +616,23 @@ namespace RaintileAudio
                     if (raw != null) raw.Release();
                 }
             }
-            return list;
         }
 
-        // Mixer: the default device first (its volume), then System sounds,
-        // then the programs by name
-        static List<Item> MixerNow()
+        // Mixer: the default device first (its volume; withDevice), then
+        // System sounds, then the programs by name, of every device
+        static List<Item> MixerNow(bool withDevice)
         {
             var list = new List<Item>();
-            var en = Enumerator();
-            IMMDevice def = Default(en, Multimedia);
-            if (def == null) return list;
-            string id;
-            def.GetId(out id);
-            Item master = DeviceItem(def, id);
-            master.Key = "device:" + id;
-            master.Active = false;
-            list.Add(master);
+            IMMDevice def = Default(Enumerator(), Multimedia);
+            if (def != null && withDevice)
+            {
+                string id;
+                def.GetId(out id);
+                Item master = DeviceItem(def, id);
+                master.Key = "device:" + id;
+                master.Active = false;
+                list.Add(master);
+            }
             var programs = new Dictionary<string, Item>();
             var sessions = Sessions();
             try
@@ -676,7 +696,7 @@ namespace RaintileAudio
         }
 
         public static List<Item> Devices() { return Mta(() => DevicesNow()); }
-        public static List<Item> Mixer() { return Mta(() => MixerNow()); }
+        public static List<Item> Mixer(bool withDevice) { return Mta(() => MixerNow(withDevice)); }
         public static void SetDefault(string id) { Mta(() => { SetDefaultNow(id); return 0; }); }
         public static void SetDeviceVolume(string id, int percent) { Mta(() => { SetDeviceVolumeNow(id, percent); return 0; }); }
         public static void SetDeviceMute(string id, bool mute) { Mta(() => { SetDeviceMuteNow(id, mute); return 0; }); }
@@ -727,11 +747,11 @@ if ($Probe) {
     foreach ($m in 'Devices', 'Mixer') {
         Write-Output "$m`:"
         try {
-            $list = $(if ($m -eq 'Mixer') { [RaintileAudio.Audio]::Mixer() } else { [RaintileAudio.Audio]::Devices() })
+            $list = $(if ($m -eq 'Mixer') { [RaintileAudio.Audio]::Mixer($true) } else { [RaintileAudio.Audio]::Devices() })
             foreach ($it in $list) { Write-Output ("  {0} | {1}% | muted {2} | default {3} | {4}" -f $it.Name, $it.Volume, $it.Mute, $it.Active, $it.Exe) }
         } catch { Write-Output "  error: $($_.Exception.Message)" }
     }
-    foreach ($why in [RaintileAudio.Audio]::Skipped) { Write-Output "  session $why" }
+    foreach ($why in [RaintileAudio.Audio]::Skipped) { Write-Output "  $why" }
     exit 0
 }
 
@@ -776,7 +796,7 @@ function Save-Levels {
 
 function Read-Items {
     if ($mode -eq 'Mixer') {
-        $list = [RaintileAudio.Audio]::Mixer()
+        $list = [RaintileAudio.Audio]::Mixer($ShowDevice -eq '1')
         foreach ($it in $list) { $it.Icon = Get-ProgramIcon $it.Exe }
         if (Resolve-SoftMute $list $script:saved) { Save-Levels }
         return , $list

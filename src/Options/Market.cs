@@ -19,6 +19,7 @@ namespace RaintileOptions
     class MarketEntry
     {
         public string Id, Name, Author, Description, Version, Kind, Base, Page, Skin, Package;
+        public string MinVersion;   // the oldest Raintile it works with (minVersion), "" = any
         // where it fits: "General" (anywhere), or the name of a category of
         // Raintile's (Games, Apps, Dashboard...); its tile goes there by default
         public string Category;
@@ -70,6 +71,7 @@ namespace RaintileOptions
                 {
                     Id = Json.Str(d, "id"), Name = Json.Str(d, "name"), Author = Json.Str(d, "author"),
                     Description = Json.Str(d, "description"), Version = Json.Str(d, "version"), Kind = Json.Str(d, "kind"),
+                    MinVersion = Core.GetSafeVersion(Json.Str(d, "minVersion").Trim()),
                     Base = Json.Str(d, "base"), Page = Json.Str(d, "page"), Skin = Json.Str(d, "skin"), Package = Json.Str(d, "package"),
                     Category = Json.Str(d, "category").Trim(),
                 };
@@ -86,6 +88,26 @@ namespace RaintileOptions
                 list.Add(e);
             }
             return list;
+        }
+
+        // Raintile 'installed' runs a widget that needs 'min' (minVersion): a
+        // release from that version on; a nightly build (the last release plus
+        // a build number, 1.4.1.3) also a widget for a later release, as it
+        // carries what that release will bring (the nightly gallery lists the
+        // widgets made on nightly). Versions that cannot be read: no limit.
+        public static bool VersionFits(string installed, string min)
+        {
+            Func<string, int[]> parts = v => Core.GetSafeVersion(v ?? "") == "" ? null : v.Split('.').Select(int.Parse).ToArray();
+            var have = parts(installed);
+            var need = parts(min);
+            if (have == null || need == null) return true;
+            bool nightly = have.Length > 3 && have[3] > 0;
+            for (int i = 0; i < 3; i++)
+            {
+                int h = i < have.Length ? have[i] : 0, n = i < need.Length ? need[i] : 0;
+                if (h != n) return h > n || nightly;
+            }
+            return true;
         }
 
         static string InstalledVersion(MarketEntry e)
@@ -173,6 +195,10 @@ namespace RaintileOptions
             AddTo(texts, title);
             AddTo(texts, NewText(sub, Fs.Help, ResBrush("DimBrush")));
             if (e.Description != "") AddTo(texts, NewHelp(e.Description));
+            // a widget for a newer Raintile: no Install or Update until Raintile is updated
+            string mine = Core.GetInstalledVersion();
+            bool fits = VersionFits(mine, e.MinVersion);
+            if (!fits) AddTo(texts, NewHelp("Needs Raintile " + e.MinVersion + " or newer (this is " + mine + "): update Raintile first (Info).", ResBrush("DangerBrush")));
             row.Children.Add(texts);
             var bar = NewPanel(Orientation.Horizontal);
             bar.VerticalAlignment = VerticalAlignment.Center;
@@ -185,6 +211,7 @@ namespace RaintileOptions
                 {
                     var update = NewButton("Update", "AccentButton");
                     update.Margin = T(Gap.Control, 0, 0, 0);
+                    update.IsEnabled = fits;
                     update.Click += async (s, a) => await InstallWidget(e, false);
                     AddTo(bar, update);
                 }
@@ -228,11 +255,12 @@ namespace RaintileOptions
             {
                 var install = NewButton("Install", "AccentButton");
                 install.Margin = T(Gap.Control, 0, 0, 0);
+                install.IsEnabled = fits;
                 install.Click += async (s, a) =>
                 {
                     install.IsEnabled = false;
                     await InstallWidget(e, true);
-                    install.IsEnabled = true;
+                    install.IsEnabled = fits;
                 };
                 AddTo(bar, install);
             }

@@ -14,6 +14,7 @@ Open a pull request that adds an entry to `index.json` (and, if you want it host
   "name": "Big clock",
   "author": "Raintile",
   "version": "1.0",
+  "minVersion": "1.2.0",
   "kind": "custom",
   "category": "General",
   "description": "The time in big letters, with the day and the date.",
@@ -28,4 +29,5 @@ Open a pull request that adds an entry to `index.json` (and, if you want it host
 - `category`: where the widget fits, and where its tile goes by default (the gallery groups widgets by it): `General` (anywhere: the category open last, or the Dashboard) or the name of one of Raintile's categories, e.g. `Games`, `Apps`, `Dashboard` (the user's category of that file or menu name; `General` when there is none). Missing: `General`.
 - `base` and `files`: the folder the files are downloaded from and their names (no subfolders). Addresses must be `https` on GitHub (`raw.githubusercontent.com`, or `github.com` for release downloads). A `base` that is not an address (e.g. `MyWidget`) is a folder next to `index.json`, on the same branch: Options reads the list of `main`, or of `nightly` with nightly builds (Options > Advanced > Updates), so a widget can be tried there before a release. Only versions after 1.2.2 understand it: widgets meant for older ones keep a full address.
 - `version`: change it when the files change: the gallery offers the update.
+- `minVersion`: the oldest Raintile it works with (`X.Y.Z`, required): older ones show the widget with what it needs and no Install or Update. A widget made from `main` takes the current release (or an older one, if it uses nothing newer); one made on `nightly`, because it needs what is not released yet, the version of the next release. Nightly builds install either.
 - Widgets are Rainmeter code and can run programs: entries are reviewed before they are merged. Prefer a fixed commit or tag in `base` over a branch, so the files cannot change after the review.

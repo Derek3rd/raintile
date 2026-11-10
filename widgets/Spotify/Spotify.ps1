@@ -14,7 +14,7 @@
 # WM_COPYDATA (as "Rainmeter.exe !bang" does, without a process each time).
 # The widget's clicks reach it through -Cmd, an .ini the meters write with
 # !WriteKeyValue ([Cmd] Do=<command>), which it waits on:
-#   playpause, next, previous, like
+#   playpause, next, previous, like, shuffle, repeat
 #   seek <p>      to <p> % of the song (0-100; the bar's $MouseX:%$)
 #   step <s>      <s> seconds on (negative: back)
 #   quit          exits (the widget's OnHide)
@@ -70,7 +70,7 @@ function ConvertFrom-SpotifyCommand([string]$Line) {
     if ($null -eq $Line) { return $null }
     $parts = @($Line.Trim() -split '\s+')
     $verb = $parts[0].ToLowerInvariant()
-    if (@('playpause', 'next', 'previous', 'like', 'quit', 'show') -contains $verb) { return @{ Verb = $verb; Value = 0.0 } }
+    if (@('playpause', 'next', 'previous', 'like', 'shuffle', 'repeat', 'quit', 'show') -contains $verb) { return @{ Verb = $verb; Value = 0.0 } }
     if (($verb -eq 'seek' -or $verb -eq 'step') -and $parts.Count -ge 2) {
         $v = 0.0
         if (-not [double]::TryParse($parts[1], [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$v)) { return $null }
@@ -88,6 +88,8 @@ function Get-SpotifyMessage($Command, [int]$Position, [int]$Duration) {
         'next' { return 'NEXT' }
         'previous' { return 'PREVIOUS' }
         'like' { return 'TOGGLE_THUMBS_UP' }
+        'shuffle' { return 'TOGGLE_SHUFFLE' }
+        'repeat' { return 'TOGGLE_REPEAT' }
         default {
             if ($Duration -le 0) { return $null }
             if ($Command.Verb -eq 'seek') { $f = $Command.Value / 100 }
@@ -99,8 +101,8 @@ function Get-SpotifyMessage($Command, [int]$Position, [int]$Duration) {
     }
 }
 
-# The bangs that show the song ($Song: Title, Artist, State, Position,
-# Duration, Liked, Cover, Note) in the widget's meters (<Prefix><Meter>), then
+# The bangs that show the song ($Song: Title, State, Position, Duration,
+# Liked, Shuffle, Repeat: NONE ALL ONE, Cover, Note) in the widget's meters (<Prefix><Meter>), then
 # the group updated and redrawn
 function Format-SpotifyBang($Song, [string]$Prefix, [string]$Group, [string]$Config, $Colors) {
     $sb = New-Object System.Text.StringBuilder
@@ -111,17 +113,17 @@ function Format-SpotifyBang($Song, [string]$Prefix, [string]$Group, [string]$Con
     $has = $Song.Title -ne ''
     $pos = [int]$Song.Position
     $dur = [int]$Song.Duration
-    & $set 'Title' 'Text' (Get-SafeText $Song.Title)
-    & $set 'Artist' 'Text' (Get-SafeText $Song.Artist)
-    # (beside the square cover, on a tile that is not square)
-    & $set 'InfoTitle' 'Text' (Get-SafeText $Song.Title)
-    & $set 'InfoArtist' 'Text' (Get-SafeText $Song.Artist)
     & $set 'Cover' 'ImageName' (Get-SafeText $Song.Cover)
+    & $set 'Cover' 'ToolTipText' (Get-SafeText ($Song.Title + $(if ($Song.Artist) { ' - ' + $Song.Artist } else { '' })))
     & $set 'NoCover' 'Hidden' $(if ($Song.Cover -ne '') { '1' } else { '0' })
-    # (Segoe MDL2 Assets: Play E768, Pause E769, Heart E006, HeartFill E00B)
+    # (Segoe MDL2 Assets: Play E768, Pause E769, Heart E006, HeartFill E00B,
+    # RepeatAll E8EE, RepeatOne E8ED; shuffle and repeat lit when on)
     & $set 'PlayGlyph' 'Text' $(if ($Song.State -eq 'PLAYING') { [string][char]0xE769 } else { [string][char]0xE768 })
     & $set 'LikeGlyph' 'Text' $(if ($Song.Liked) { [string][char]0xE00B } else { [string][char]0xE006 })
     & $set 'LikeGlyph' 'FontColor' $(if ($Song.Liked) { $Colors.Accent } else { $Colors.Text })
+    & $set 'ShuffleGlyph' 'FontColor' $(if ($Song.Shuffle) { $Colors.Accent } else { $Colors.Text })
+    & $set 'RepeatGlyph' 'Text' $(if ($Song.Repeat -eq 'ONE') { [string][char]0xE8ED } else { [string][char]0xE8EE })
+    & $set 'RepeatGlyph' 'FontColor' $(if ($Song.Repeat -eq 'ALL' -or $Song.Repeat -eq 'ONE') { $Colors.Accent } else { $Colors.Text })
     & $set 'Pos' 'Text' (Format-Time $pos)
     & $set 'Dur' 'Text' (Format-Time $dur)
     & $set 'Progress' 'Formula' $(if ($dur -gt 0) { [string][Math]::Round(100.0 * [Math]::Min($pos, $dur) / $dur, 2).ToString([Globalization.CultureInfo]::InvariantCulture) } else { '0' })
@@ -424,7 +426,7 @@ $seen = -1
 $last = $null
 $coverUrl = $null
 $coverPath = ''
-$song = @{ Title = ''; Artist = ''; State = ''; Position = 0; Duration = 0; Liked = $false; Cover = ''; Note = $note }
+$song = @{ Title = ''; Artist = ''; State = ''; Position = 0; Duration = 0; Liked = $false; Shuffle = $false; Repeat = 'NONE'; Cover = ''; Note = $note }
 $wait = 0
 try {
     while ($true) {
@@ -462,6 +464,8 @@ try {
                 Position = ConvertTo-Seconds (& $get 'POSITION')
                 Duration = ConvertTo-Seconds (& $get 'DURATION')
                 Liked = [int](0 + ((& $get 'RATING') -replace '[^0-9]', '')) -ge 4
+                Shuffle = (& $get 'SHUFFLE') -eq 'true'
+                Repeat = (& $get 'REPEAT').ToUpperInvariant()
                 Cover = $(if ($playing) { $coverPath } else { '' })
                 Note = $(if ($link.Connected) { 'Nothing playing in Spotify.' } else { $note })
             }

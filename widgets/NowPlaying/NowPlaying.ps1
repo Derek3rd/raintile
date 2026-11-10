@@ -14,7 +14,7 @@
 # does, without a process each time). The widget's clicks reach it through
 # -Cmd, an .ini the meters write with !WriteKeyValue ([Cmd] Do=<command>),
 # which it waits on:
-#   playpause, next, previous
+#   playpause, next, previous, shuffle (on / off), repeat (off, all, one)
 #   seek <p>      to <p> % of the song (0-100; the bar's $MouseX:%$)
 #   step <s>      <s> seconds on (negative: back)
 #   quit          exits (the widget's OnHide)
@@ -29,7 +29,9 @@ param(
     [string]$Section = '',
     [string]$Cmd = '',
     [int]$Interval = 500,
-    [string]$Flag = ''
+    [string]$Flag = '',
+    [string]$Text = '240,240,245,255',
+    [string]$Accent = '0,210,180,255'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,7 +68,7 @@ function ConvertFrom-PlayingCommand([string]$Line) {
     if ($null -eq $Line) { return $null }
     $parts = @($Line.Trim() -split '\s+')
     $verb = $parts[0].ToLowerInvariant()
-    if (@('playpause', 'next', 'previous', 'quit', 'show') -contains $verb) { return @{ Verb = $verb; Value = 0.0 } }
+    if (@('playpause', 'next', 'previous', 'shuffle', 'repeat', 'quit', 'show') -contains $verb) { return @{ Verb = $verb; Value = 0.0 } }
     if (($verb -eq 'seek' -or $verb -eq 'step') -and $parts.Count -ge 2) {
         $v = 0.0
         if (-not [double]::TryParse($parts[1], [Globalization.NumberStyles]::Float, [Globalization.CultureInfo]::InvariantCulture, [ref]$v)) { return $null }
@@ -103,9 +105,9 @@ function Format-Time([int]$Seconds) {
 }
 
 # The bangs that show the song ($Song: Title, Artist, App, Playing,
-# Position, Duration, Cover, Note) in the widget's meters (<Prefix><Meter>),
-# then the group updated and redrawn
-function Format-PlayingBang($Song, [string]$Prefix, [string]$Group, [string]$Config) {
+# Position, Duration, Shuffle, Repeat: NONE ALL ONE, Cover, Note) in the
+# widget's meters (<Prefix><Meter>), then the group updated and redrawn
+function Format-PlayingBang($Song, [string]$Prefix, [string]$Group, [string]$Config, $Colors) {
     $sb = New-Object System.Text.StringBuilder
     $set = {
         param($meter, $key, $value)
@@ -114,16 +116,19 @@ function Format-PlayingBang($Song, [string]$Prefix, [string]$Group, [string]$Con
     $has = $Song.Title -ne ''
     $pos = [int]$Song.Position
     $dur = [int]$Song.Duration
-    & $set 'Title' 'Text' (Get-SafeText $Song.Title)
-    & $set 'Artist' 'Text' (Get-SafeText $Song.Artist)
-    # (beside the square cover, on a tile that is not square)
-    & $set 'InfoTitle' 'Text' (Get-SafeText $Song.Title)
-    & $set 'InfoArtist' 'Text' (Get-SafeText $Song.Artist)
-    & $set 'App' 'Text' (Get-SafeText $Song.App)
+    # (the title, the artist and the player: the cover's tooltip)
+    $tip = $Song.Title
+    if ($Song.Artist) { $tip += ' - ' + $Song.Artist }
+    if ($Song.App) { $tip += ' (' + $Song.App + ')' }
     & $set 'Cover' 'ImageName' (Get-SafeText $Song.Cover)
+    & $set 'Cover' 'ToolTipText' (Get-SafeText $tip)
     & $set 'NoCover' 'Hidden' $(if ($Song.Cover -ne '') { '1' } else { '0' })
-    # (Segoe MDL2 Assets: Play E768, Pause E769)
+    # (Segoe MDL2 Assets: Play E768, Pause E769, RepeatAll E8EE, RepeatOne
+    # E8ED; shuffle and repeat lit when on)
     & $set 'PlayGlyph' 'Text' $(if ($Song.Playing) { [string][char]0xE769 } else { [string][char]0xE768 })
+    & $set 'ShuffleGlyph' 'FontColor' $(if ($Song.Shuffle) { $Colors.Accent } else { $Colors.Text })
+    & $set 'RepeatGlyph' 'Text' $(if ($Song.Repeat -eq 'ONE') { [string][char]0xE8ED } else { [string][char]0xE8EE })
+    & $set 'RepeatGlyph' 'FontColor' $(if ($Song.Repeat -eq 'ALL' -or $Song.Repeat -eq 'ONE') { $Colors.Accent } else { $Colors.Text })
     & $set 'Pos' 'Text' $(if ($dur -gt 0) { Format-Time $pos } else { '' })
     & $set 'Dur' 'Text' $(if ($dur -gt 0) { Format-Time $dur } else { '' })
     & $set 'Progress' 'Formula' $(if ($dur -gt 0) { [Math]::Round(100.0 * [Math]::Min($pos, $dur) / $dur, 2).ToString([Globalization.CultureInfo]::InvariantCulture) } else { '0' })
@@ -209,6 +214,7 @@ try {
     Add-Type -AssemblyName System.Runtime.WindowsRuntime
     $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime]
     $null = [Windows.Storage.Streams.IRandomAccessStreamWithContentType,Windows.Storage.Streams,ContentType=WindowsRuntime]
+    $null = [Windows.Media.MediaPlaybackAutoRepeatMode,Windows.Media,ContentType=WindowsRuntime]
     $manager = Wait-WinRT ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
 } catch {
     $note = 'Windows does not give what is playing here (Windows 10 1809 or later).'
@@ -259,7 +265,8 @@ $cmdStamp = (Get-Item -LiteralPath $Cmd).LastWriteTimeUtc
 # The current session and its song; the properties (title, cover) read again
 # every other round, the time at each
 $session = $null
-$song = @{ Title = ''; Artist = ''; App = ''; Playing = $false; Position = 0; Duration = 0; Cover = ''; Note = $note }
+$song = @{ Title = ''; Artist = ''; App = ''; Playing = $false; Position = 0; Duration = 0; Shuffle = $false; Repeat = 'NONE'; Cover = ''; Note = $note }
+$colors = @{ Text = $Text; Accent = $Accent }
 $key = $null
 $cover = ''
 $round = 0
@@ -268,7 +275,7 @@ function Read-Session {
     if (-not $manager) { return }
     $s = $manager.GetCurrentSession()
     if (-not $s) {
-        $script:song = @{ Title = ''; Artist = ''; App = ''; Playing = $false; Position = 0; Duration = 0; Cover = ''; Note = 'Nothing is playing.' }
+        $script:song = @{ Title = ''; Artist = ''; App = ''; Playing = $false; Position = 0; Duration = 0; Shuffle = $false; Repeat = 'NONE'; Cover = ''; Note = 'Nothing is playing.' }
         return
     }
     $script:session = $s
@@ -288,6 +295,9 @@ function Read-Session {
     $script:round++
     $script:song.App = Get-AppName $s.SourceAppUserModelId
     $script:song.Playing = $playing
+    # (players that do not say: off)
+    $script:song.Shuffle = $info.IsShuffleActive -eq $true
+    $script:song.Repeat = $(switch ([string]$info.AutoRepeatMode) { 'List' { 'ALL' } 'Track' { 'ONE' } default { 'NONE' } })
     $script:song.Position = $pos
     $script:song.Duration = $dur
     $script:song.Cover = $(if ($script:song.Title) { $script:cover } else { '' })
@@ -301,6 +311,12 @@ function Invoke-PlayingCommand($c) {
         'playpause' { [void](Wait-WinRT ($s.TryTogglePlayPauseAsync()) ([bool])) }
         'next' { [void](Wait-WinRT ($s.TrySkipNextAsync()) ([bool])) }
         'previous' { [void](Wait-WinRT ($s.TrySkipPreviousAsync()) ([bool])) }
+        'shuffle' { [void](Wait-WinRT ($s.TryChangeShuffleActiveAsync(-not $script:song.Shuffle)) ([bool])) }
+        'repeat' {
+            # off -> all -> one -> off, as the players do
+            $next = $(switch ($script:song.Repeat) { 'NONE' { 'List' } 'ALL' { 'Track' } default { 'None' } })
+            [void](Wait-WinRT ($s.TryChangeAutoRepeatModeAsync([Windows.Media.MediaPlaybackAutoRepeatMode]$next)) ([bool]))
+        }
         default {
             $t = Get-SeekTarget $c $script:song.Position $script:song.Duration
             if ($t -ge 0) {
@@ -336,7 +352,7 @@ while ($true) {
         }
     }
     try { Read-Session } catch { $session = $null }
-    $bang = Format-PlayingBang $song $prefix $group $Config
+    $bang = Format-PlayingBang $song $prefix $group $Config $colors
     if ($bang -ne $last) {
         $last = $bang
         if (-not [RaintileNowPlaying.Rainmeter]::Send($bang)) { exit 0 }

@@ -33,11 +33,14 @@ Test 'now playing: the position goes on between the writes of the player' {
 }
 
 Test 'now playing: the song in the meters' {
-    $song = @{ Title = 'Song'; Artist = 'Someone'; App = 'Chrome'; Playing = $false; Position = 30; Duration = 120; Cover = ''; Note = '' }
-    $bang = Format-PlayingBang $song 'CW5_' 'CW5' 'Raintile'
-    Assert-True ($bang.Contains('[!SetOption "CW5_App" "Text" "Chrome" "Raintile"]')) 'the player'
+    $colors = @{ Text = 'T'; Accent = 'A' }
+    $song = @{ Title = 'Song'; Artist = 'Someone'; App = 'Chrome'; Playing = $false; Position = 30; Duration = 120; Shuffle = $false; Repeat = 'ALL'; Cover = ''; Note = '' }
+    $bang = Format-PlayingBang $song 'CW5_' 'CW5' 'Raintile' $colors
+    Assert-True ($bang.Contains('[!SetOption "CW5_Cover" "ToolTipText" "Song - Someone (Chrome)" "Raintile"]')) 'the song and the player'
+    Assert-True ($bang.Contains('[!SetOption "CW5_ShuffleGlyph" "FontColor" "T" "Raintile"]')) 'shuffle off'
+    Assert-True ($bang.Contains('[!SetOption "CW5_RepeatGlyph" "FontColor" "A" "Raintile"]')) 'repeat on'
     Assert-True ($bang.Contains('[!SetOption "CW5_Progress" "Formula" "25" "Raintile"]')) 'the progress'
     Assert-True ($bang.Contains('[!SetOption "CW5_PlayGlyph" "Text" "' + [char]0xE768 + '" "Raintile"]')) 'play while paused'
-    $live = Format-PlayingBang @{ Title = 'Live'; Artist = ''; App = 'Chrome'; Playing = $true; Position = 0; Duration = 0; Cover = ''; Note = '' } 'CW5_' 'CW5' 'Raintile'
+    $live = Format-PlayingBang @{ Title = 'Live'; Artist = ''; App = 'Chrome'; Playing = $true; Position = 0; Duration = 0; Shuffle = $false; Repeat = 'NONE'; Cover = ''; Note = '' } 'CW5_' 'CW5' 'Raintile' $colors
     Assert-True ($live.Contains('[!SetOption "CW5_Dur" "Text" "" "Raintile"]')) 'no times without a duration (a live stream)'
 }

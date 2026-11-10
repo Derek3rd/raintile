@@ -1466,6 +1466,7 @@ namespace RaintileOptions
             ShowPinned(s);
             string hotKey = s != null ? Core.GetKey(s, "HotKey") : "";
             tileKeyButton.Content = Schema.FormatHotKey(hotKey);
+            ShowPadSlots(TilePadKey);
             SetActionVisible(tileKeyClear, hotKey.Trim() != "");
             // every tile can be a widget
             widgetRow.Visibility = Visibility.Visible;
@@ -2559,6 +2560,10 @@ namespace RaintileOptions
             tileKeyButton = NewButton("None", "KeyButton", "Click, then press a key");
             var keyClear = tileKeyClear = NewClearButton("Clear the key");
             AddTo(f, NewFormRow("Hot key", tileKeyButton, "Starts the tile also while the launcher is hidden, e.g. Ctrl + Alt + 1. Hold the modifiers, then press the key.", null, keyClear));
+            // pad shortcut (PadKey=): the two fields of the Gamepad page, the value the tile's
+            // (the field as wide as the hot key's, its x in the action column)
+            var padKeys = NewPadControl(TilePadKey, true);
+            AddTo(f, NewFormRow("Pad shortcut", padKeys, "Starts the tile while the launcher is open, e.g. LB + A held together. The buttons of an action of Keybindings > Gamepad stay that action's (marked in red).", null, ctl[TilePadKey].Clear));
             tileKeyButton.Click += (s, e) =>
             {
                 if (GetCurrentTile() == null) return;

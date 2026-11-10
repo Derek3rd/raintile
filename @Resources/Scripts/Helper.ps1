@@ -14,6 +14,8 @@
 #   Delete / Done: X / Start      on-screen keyboard: delete / done
 #   PrevChip / NextChip: LT / RT  filter chips of the search results
 #   Options: RS                   the Options window
+#   PadTile <n>: the pad shortcuts of the tiles (PadKey=), one per line of
+#                Generated\PadKeys.txt, read at start; after the actions
 # One button or several held together (see Step). Every action but Toggle goes
 # through the skin's Pad(), which ignores it while the launcher is hidden or
 # does not have the focus.
@@ -655,11 +657,13 @@ public class RaintilePad
 
     readonly string config;
     readonly int deadZone, repeatDelay, repeatRate;
-    readonly int[] masks = new int[Actions.Length];
-    readonly bool[] active = new bool[Actions.Length];   // has buttons, not taken by an action before it
-    readonly bool[] late = new bool[Actions.Length];     // part of a larger combination: acts on release
-    readonly bool[] held = new bool[Actions.Length];
-    readonly bool[] armed = new bool[Actions.Length];    // a late one held, no combination done meanwhile
+    // the actions, then the pad shortcuts of the tiles (SetTiles): each one
+    // after Actions.Length starts a tile
+    int[] masks = new int[Actions.Length];
+    bool[] active = new bool[Actions.Length];   // has buttons, not taken by an action before it
+    bool[] late = new bool[Actions.Length];     // part of a larger combination: acts on release
+    bool[] held = new bool[Actions.Length];
+    bool[] armed = new bool[Actions.Length];    // a late one held, no combination done meanwhile
     readonly long[] nextRepeat = new long[4];
     readonly bool[] stickHeld = new bool[4];
     int[] order = new int[0];                            // larger combinations first
@@ -688,6 +692,23 @@ public class RaintilePad
         Prepare();
     }
 
+    // The pad shortcuts of the tiles, in the order of Generated\PadKeys.txt
+    // (Pad('PadTile', <line>)): after the actions, so an action's buttons stay
+    // the action's
+    public void SetTiles(string[] combos)
+    {
+        int n = Actions.Length + (combos == null ? 0 : combos.Length);
+        var m = new int[n];
+        Array.Copy(masks, m, Actions.Length);
+        for (int i = Actions.Length; i < n; i++) m[i] = ParseButtons(combos[i - Actions.Length]);
+        masks = m;
+        active = new bool[n];
+        late = new bool[n];
+        held = new bool[n];
+        armed = new bool[n];
+        Prepare();
+    }
+
     static int Count(int mask)
     {
         int n = 0;
@@ -698,7 +719,7 @@ public class RaintilePad
     void Prepare()
     {
         var list = new List<int>();
-        for (int i = 0; i < Actions.Length; i++)
+        for (int i = 0; i < masks.Length; i++)
         {
             active[i] = masks[i] != 0 && Array.IndexOf(masks, masks[i]) == i;
             late[i] = false;
@@ -726,6 +747,7 @@ public class RaintilePad
 
     string Command(int action)
     {
+        if (action >= Actions.Length) return PadCall("PadTile", (action - Actions.Length + 1).ToString());
         switch (Actions[action])
         {
             case "Toggle": return Call("Toggle()");
@@ -1718,6 +1740,11 @@ if (-not $owned) { exit }
 
 $pad = New-Object RaintilePad($Config, $DeadZone, $RepeatDelay, $RepeatRate)
 $pad.SetBindings($Bindings)
+# the tiles' pad shortcuts (PadKey=), written by the skin before it starts the helper
+if ($Generated) {
+    $padKeys = Join-Path $Generated 'PadKeys.txt'
+    if (Test-Path -LiteralPath $padKeys) { $pad.SetTiles([string[]]@([IO.File]::ReadAllLines($padKeys) | Where-Object { $_.Trim() -ne '' })) }
+}
 $pad.PadEnabled = [bool]$Gamepad
 $pad.TrackEnabled = [bool]$Track -and $Generated -and $Data
 if ($Generated) {

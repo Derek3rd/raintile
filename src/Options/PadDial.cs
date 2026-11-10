@@ -1,11 +1,12 @@
-// Raintile Options: picking the button of a gamepad setting (NewPadControl).
-// With the mouse or the keys a field opens a dial around it: the buttons of
-// the controller on a ring, where they are on it (Schema.GAMEPAD_BUTTONS);
-// a click, or the arrows and Enter, pick one, Esc or a click elsewhere close
-// it, a button of the pad picks itself. With the pad, A on a field waits for
-// the next button pressed, B and Start too: nothing else of the window acts
-// until the buttons are released. Moving the mouse, a key or 5 s without a
-// button stop waiting.
+// Raintile Options: picking the buttons of a gamepad setting (NewPadControl),
+// held together, up to PadMax. With the mouse or the keys the field opens a
+// dial around it: the buttons of the controller on a ring, where they are on
+// it (Schema.GAMEPAD_BUTTONS), the ones of the combination lit; a click, or
+// the arrows and Enter, put one in or take it out, Esc or a click elsewhere
+// close it, a button of the pad goes in or out by itself. With the pad, A on
+// the field waits for buttons held together (B and Start too), taken when
+// they are all released: nothing else of the window acts meanwhile. Moving
+// the mouse, a key or 5 s without a button stop waiting.
 
 using System;
 using System.Collections.Generic;
@@ -33,16 +34,16 @@ namespace RaintileOptions
 
         int padRaw, padRawPrev;           // buttons as they are (no stick), this read and the one before
         bool padIgnoreHeld;               // a button was picked: the pad does nothing until all are released
-        Button padCaptureField;           // the field waiting for a button of the pad
+        Button padCaptureField;           // the field waiting for buttons of the pad
         string padCaptureKey;
-        int padCaptureSlot;
+        int padCaptureHeld;               // the buttons held so far, together
         long padCaptureUntil;
         bool padCaptureReady;             // A, which started it, was released
 
         Popup padDial;
         Border[] padDialKeys;
         string padDialKey;
-        int padDialSlot, padDialSel, padDialCurrent = -1;
+        int padDialSel;
         Button padDialField;
 
         // The first button of 'buttons' in the order of the dial
@@ -53,18 +54,24 @@ namespace RaintileOptions
 
         // --- Waiting for a button of the pad -----------------------------------------
 
-        void StartPadCapture(string key, int slot)
+        void StartPadCapture(string key)
         {
             EndPadCapture();
             Ctl c;
             if (!ctl.TryGetValue(key, out c)) return;
-            padCaptureField = c.Buttons[slot];
+            padCaptureField = c.Button;
             padCaptureKey = key;
-            padCaptureSlot = slot;
+            padCaptureHeld = 0;
             padCaptureReady = false;
             padCaptureUntil = padClock.ElapsedMilliseconds + PadCaptureMs;
-            padCaptureField.Content = "Press a button";
+            padCaptureField.Content = "Hold the buttons";
             padCaptureField.ToolTip = null;
+        }
+
+        // The buttons of a mask in the order of the dial, at most PadMax
+        static List<string> PadButtonsIn(int buttons)
+        {
+            return Schema.GAMEPAD_BUTTONS.Where(b => (buttons & PadBits[b]) != 0).Take(PadMax).ToList();
         }
 
         // Stops waiting; the field shows its value again
@@ -75,40 +82,48 @@ namespace RaintileOptions
             ShowPadSlots(padCaptureKey);
         }
 
-        // The pad while a field waits (PadTick): the first button pressed after
-        // A was released is the new one
+        // The pad while the field waits (PadTick): after A was released, the
+        // buttons held together, shown while they are; when all of them are
+        // released they are the new combination
         void PadCaptureInput()
         {
-            if (padClock.ElapsedMilliseconds > padCaptureUntil) { EndPadCapture(); return; }
             if (!padCaptureReady)
             {
+                if (padClock.ElapsedMilliseconds > padCaptureUntil) { EndPadCapture(); return; }
                 if (padRaw == 0) padCaptureReady = true;
                 return;
             }
-            string b = PadButtonIn(padRaw & ~padRawPrev);
-            if (b == null) return;
+            if (padRaw != 0)
+            {
+                int before = padCaptureHeld;
+                padCaptureHeld |= padRaw;
+                if (padCaptureHeld != before) padCaptureField.Content = NewPadCombo(PadButtonsIn(padCaptureHeld));
+                return;
+            }
+            if (padCaptureHeld == 0)
+            {
+                if (padClock.ElapsedMilliseconds > padCaptureUntil) EndPadCapture();
+                return;
+            }
             string key = padCaptureKey;
-            int slot = padCaptureSlot;
+            var list = PadButtonsIn(padCaptureHeld);
             padCaptureField = null;
-            padIgnoreHeld = true;
-            SetPadSlot(key, slot, b);
+            SetPadCombo(key, list);
         }
 
         // --- The dial ----------------------------------------------------------------
 
-        void OpenPadDial(string key, int slot)
+        void OpenPadDial(string key)
         {
             Ctl c;
             if (!ctl.TryGetValue(key, out c)) return;
             ClosePadDial();
             if (padDial == null) BuildPadDial();
             padDialKey = key;
-            padDialSlot = slot;
-            padDialField = c.Buttons[slot];
-            var list = PadButtons(V(key));
-            int at = slot < list.Count ? Array.IndexOf(Schema.GAMEPAD_BUTTONS, list[slot]) : -1;
-            padDialSel = at;
-            RenderPadDial(at);
+            padDialField = c.Button;
+            var list = PadButtons(PadValue(key));
+            padDialSel = list.Count > 0 ? Array.IndexOf(Schema.GAMEPAD_BUTTONS, list[0]) : -1;
+            RenderPadDial();
             padDial.PlacementTarget = padDialField;
             padDial.IsOpen = true;
             padDialField.PreviewKeyDown += PadDialKeyDown;
@@ -125,13 +140,13 @@ namespace RaintileOptions
             field.Focus();
         }
 
+        // A button of the dial in or out of the combination; the dial stays
         void PickPadDial(int index)
         {
             if (padDialField == null || index < 0) return;
-            string key = padDialKey;
-            int slot = padDialSlot;
-            ClosePadDial();
-            SetPadSlot(key, slot, Schema.GAMEPAD_BUTTONS[index]);
+            padDialSel = index;
+            TogglePadButton(padDialKey, Schema.GAMEPAD_BUTTONS[index]);
+            RenderPadDial();
         }
 
         // The keys of the field while the dial is open: the arrows turn round it
@@ -162,7 +177,7 @@ namespace RaintileOptions
                 default: return;
             }
             e.Handled = true;
-            RenderPadDial(padDialSel);
+            RenderPadDial();
         }
 
         // The pad while the dial is open (PadTick): a button pressed picks itself
@@ -213,7 +228,7 @@ namespace RaintileOptions
                 k.ToolTip = Schema.PAD_LABELS.TryGetValue(Schema.GAMEPAD_BUTTONS[i], out name) ? name : Schema.GAMEPAD_BUTTONS[i];
                 Canvas.SetLeft(k, size / 2 + radius * Math.Cos(a) - key / 2);
                 Canvas.SetTop(k, size / 2 + radius * Math.Sin(a) - key / 2);
-                k.MouseEnter += (s, e) => { padDialSel = index; RenderPadDial(-2); };
+                k.MouseEnter += (s, e) => { padDialSel = index; RenderPadDial(); };
                 k.MouseLeftButtonUp += (s, e) => { e.Handled = true; PickPadDial(index); };
                 padDialKeys[i] = k;
                 canvas.Children.Add(k);
@@ -226,21 +241,20 @@ namespace RaintileOptions
             padDial.Closed += (s, e) => { if (padDialField != null) ClosePadDial(); };
         }
 
-        // The keys: the one picked now in accent, the one of the field (current,
-        // or -2: as it was) softly; the field shows the one picked now
-        void RenderPadDial(int current)
+        // The keys: the one under the mouse or the arrows in accent, the ones of
+        // the combination softly; the field shows the combination
+        void RenderPadDial()
         {
-            if (current != -2) padDialCurrent = current;
+            var combo = PadButtons(PadValue(padDialKey));
             for (int i = 0; i < padDialKeys.Length; i++)
             {
-                bool sel = i == padDialSel, cur = i == padDialCurrent;
+                bool sel = i == padDialSel, cur = combo.Contains(Schema.GAMEPAD_BUTTONS[i]);
                 var k = padDialKeys[i];
                 k.Background = ResBrush(sel ? "AccentBrush" : cur ? "AccentSoftBrush" : "FieldBg");
                 k.BorderBrush = ResBrush(cur && !sel ? "AccentBrush" : "LineBrush");
                 k.Child = NewPadFace(Schema.GAMEPAD_BUTTONS[i], ResBrush(sel ? "OnAccentBrush" : cur ? "AccentBrush" : "TextBrush"));
             }
-            if (padDialField != null)
-                padDialField.Content = padDialSel < 0 ? (object)"Pick a button" : NewPadFace(Schema.GAMEPAD_BUTTONS[padDialSel]);
+            if (padDialField != null) padDialField.Content = NewPadCombo(combo);
         }
     }
 }

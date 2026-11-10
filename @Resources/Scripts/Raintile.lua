@@ -680,6 +680,7 @@ local function loadCategory(file)
 			t.pinned = trim(k.pinned or '') == '1' or nil
 			if t.pinned then c.anyPinned = true end
 			t.hotkey = trim(k.hotkey or '') -- e.g. CTRL ALT 1
+			t.padkey = M.padCombo(k.padkey or '') -- e.g. LB A (M.padKeys)
 			-- a widget (Widget=): a tile of any category that shows data or a
 			-- skin instead of images; c.widgets: the category has some
 			if trim(k.widget or '') ~= '' then
@@ -1215,6 +1216,7 @@ local function loadCategories(files)
 			end
 		end
 	end
+	M.writePadKeys()
 	-- Widgets, of every category: their meters are numbered in this order
 	widgets = {}
 	for _, c in ipairs(cats) do
@@ -5257,6 +5259,8 @@ end
 -- Open, or close; a launcher left open without the focus (a window, AutoHide=0,
 -- behind a game) comes back in front with its keys first.
 function Toggle()
+	-- (the open/close key and buttons: shortcuts, off while Options is open)
+	if M.optionsOpen() then return end
 	if visible and not M.focused and not launching then
 		M.zpos(true)
 		SKIN:Bang('!Show')
@@ -6305,12 +6309,30 @@ end
 
 function TileHotKey(i)
 	local entry = tileKeys[i]
-	if not ready or not entry or launching then return end
+	if not ready or not entry or launching or M.optionsOpen() then return end
+	M.startById(entry.id, 'hot key ' .. entry.key)
+end
+
+-- The Options window is open (Generated\OptionsOpen.txt, written by the
+-- program while it runs, with its start time): the shortcuts (tile hot keys,
+-- pad shortcuts, the open/close key and buttons) do nothing, so the keys and
+-- buttons picked in it start nothing. A file older than a day is one left by
+-- a program that did not end (killed): ignored.
+function M.optionsOpen()
+	local f = io.open(resources .. 'Generated\\OptionsOpen.txt', 'rb')
+	if not f then return false end
+	local at = tonumber((f:read('*a') or ''):match('%d+') or '')
+	f:close()
+	return at ~= nil and math.abs(os.time() - at) < 86400
+end
+
+-- The tile with that id (tileId), started as by its hot key
+function M.startById(id, why)
 	for _, c in ipairs(cats) do
 		if not c.virtual then
 			for _, t in ipairs(c.tiles) do
-				if tileId(t) == entry.id then
-					dbg('hot key ' .. entry.key .. ': ' .. t.name)
+				if tileId(t) == id then
+					dbg(why .. ': ' .. t.name)
 					if t.missing or not t.command then return end
 					if visible and V.CloseOnLaunch then Hide() end
 					startTile(t)
@@ -6319,6 +6341,55 @@ function TileHotKey(i)
 			end
 		end
 	end
+end
+
+-- Pad shortcuts of the tiles (PadKey= on a tile: buttons held together, e.g.
+-- LB A): the helper (Helper.ps1) reads Generated\PadKeys.txt when it starts
+-- (after Setup, at every refresh), one combination per line, and sends
+-- Pad('PadTile', <line>). Through Pad(), so only while the launcher is open
+-- with the focus: never in a game. One tile per combination (the first); a
+-- combination of an action of Keybindings > Gamepad is that action's.
+M.padKeys = {}
+
+-- "a + lb" -> "A LB": the buttons, known ones only, upper case, sorted (so
+-- the same combination written two ways is one)
+function M.padCombo(text)
+	local known = { A = 1, B = 1, X = 1, Y = 1, LB = 1, RB = 1, LT = 1, RT = 1, BACK = 1, START = 1, LS = 1, RS = 1,
+		UP = 1, DOWN = 1, LEFT = 1, RIGHT = 1 }
+	local list, seen = {}, {}
+	for b in tostring(text):upper():gmatch('[^%s+|,]+') do
+		if known[b] and not seen[b] then seen[b] = true list[#list + 1] = b end
+	end
+	table.sort(list)
+	return table.concat(list, ' ')
+end
+
+function M.writePadKeys()
+	M.padKeys = {}
+	local used, lines = {}, {}
+	for _, c in ipairs(cats) do
+		for _, t in ipairs(c.virtual and {} or c.tiles) do
+			if t.padkey and t.padkey ~= '' and not used[t.padkey] then
+				used[t.padkey] = true
+				M.padKeys[#M.padKeys + 1] = { key = t.padkey, id = tileId(t) }
+				lines[#lines + 1] = t.padkey
+			end
+		end
+	end
+	local text = table.concat(lines, '\r\n') .. (#lines > 0 and '\r\n' or '')
+	local path = resources .. 'Generated\\PadKeys.txt'
+	local f = io.open(path, 'rb')
+	local old = f and f:read('*a')
+	if f then f:close() end
+	if old == text then return end
+	f = io.open(path, 'wb')
+	if f then f:write(text) f:close() end
+end
+
+function M.padTile(n)
+	local entry = M.padKeys[tonumber(n) or 0]
+	if not ready or not entry or launching or M.optionsOpen() then return end
+	M.startById(entry.id, 'pad shortcut ' .. entry.key)
 end
 
 function Launch(slot)
@@ -6914,7 +6985,8 @@ end
 function Pad(name, a, b)
 	if not ready or not visible or not M.focused then return end
 	local f = ({ Nav = Nav, Confirm = Confirm, Escape = Escape, NextCategory = NextCategory,
-		PadSearch = PadSearch, PadStart = PadStart, PadOptions = PadOptions, PadX = PadX, PadChip = PadChip })[name]
+		PadSearch = PadSearch, PadStart = PadStart, PadOptions = PadOptions, PadX = PadX, PadChip = PadChip,
+		PadTile = M.padTile })[name]
 	if not f then return end
 	-- (M.inPad: the functions it calls know the pad, not a key, called them)
 	M.padMode, M.inPad = true, true

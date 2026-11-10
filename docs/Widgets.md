@@ -4,7 +4,7 @@ A widget is a tile that shows something or offers more than one thing to start, 
 
 Raintile itself holds no logic for a particular widget: what a widget needs that Rainmeter alone cannot give, Raintile offers to every widget through the [Raintile section](#the-raintile-section).
 
-Examples in this repository: [`widgets/BigClock`](../widgets/BigClock) (meters only), [`widgets/Modrinth`](../widgets/Modrinth) (a script reading a program's database into a list) and [`widgets/SteamAchievements`](../widgets/SteamAchievements) (a web API with the user's key in its settings, a setting per tile).
+Examples in this repository: [`widgets/BigClock`](../widgets/BigClock) (meters only), [`widgets/Modrinth`](../widgets/Modrinth) (a script reading a program's database into a list) [`widgets/SteamAchievements`](../widgets/SteamAchievements) (a web API with the user's key in its settings, a setting per tile) and [`widgets/AudioControl`](../widgets/AudioControl) (meters of its own set by a script that runs only while the widget is on screen, and clicks sent to it).
 
 ## Contents
 
@@ -214,6 +214,15 @@ FinishAction=[!CommandMeasure MeasureScript "WidgetChanged()"]
 - **Read other programs' data read only.** SQLite databases: the SQLite of Windows (`winsqlite3.dll`, in Windows 10 and 11) opened with `file:<path>?mode=ro`; see [`Modrinth.ps1`](../widgets/Modrinth/Modrinth.ps1).
 - Write into the widget's folder, whole files (`.tmp`, then move).
 - Network: `https` only, and only to the service the widget is about.
+
+### Live data: a script while the widget is shown
+
+A widget whose data changes while it is on screen (a volume, a player) can keep its script running from `OnShow` to `OnHide` instead of starting it again and again; see [`AudioControl`](../widgets/AudioControl):
+
+- **Into the meters**: the script sends `!SetOption` (then `!UpdateMeasureGroup`, `!UpdateMeterGroup` and `!Redraw`) to Rainmeter with `WM_COPYDATA` (the window of class `DummyRainWClass`), as `Rainmeter.exe !bang` does without a process each time, and only when something changed. Give it `#CURRENTCONFIG#` (the bangs' config) and a section's name, `#WIDGET:<Section>#`: the others have the same prefix (`CW11_`), and their group is the prefix without `_` (`CW11`). Colours and fonts of the launcher (`#AccentColor#`) are best passed as arguments, already resolved.
+- **From the meters**: a click writes a command with `!WriteKeyValue` into an `.ini` of the widget's folder (one per tile: `cmd_#WIDGET:Server#.ini`), which the script waits on (`FileSystemWatcher`); `$MouseX:%$` gives where on the meter it was clicked.
+- **Exit**: on the command `OnHide` writes, when Rainmeter is gone, and when a newer copy started for the same tile (after a refresh: it writes its id into the file). Nothing may be left running.
+- Rows that come and go: a fixed number of meters with `DynamicVariables=1` and `Hidden=([Count]<3)`, `[Count]` a Calc measure the script sets; hidden parts are left out by the keys.
 
 ### Keys of the user's
 

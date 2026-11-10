@@ -178,6 +178,42 @@ function T.gallery_titles()
 	end
 end
 
+-- Audio control (widgets/AudioControl): its sizes written out (no variable of
+-- its own left for Rainmeter), its rows, - and + and tabs parts of the tile,
+-- its OnShow starting its script with a command file of its own
+function T.gallery_audio_control()
+	local s = R.new({})
+	host_mkdir(s.data .. 'Widgets')
+	host_copytree(s.repo .. '\\widgets\\AudioControl', s.data .. 'Widgets\\AudioControl', '')
+	local cat = s.data .. 'Categories\\Dashboard.ini'
+	R.writeFile(cat, R.readFile(cat) .. '\r\n[Audio]\r\nWidget=custom\r\nParam=AudioControl\r\nSize=1x2\r\nWidgetOption=Mixer\r\n')
+	s:start()
+	t.clean(s)
+	local w
+	for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == 'AudioControl' then w = x end end
+	t.ok(w, 'the widget tile is missing')
+	local g = grid(s)
+	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
+	for _, v in ipairs({ 'AP', 'AHF', 'ATop', 'AF', 'ANameH', 'AS', 'ABarH', 'ARowH', 'ATabW', 'ACmd' }) do
+		own = own or (g:find('#' .. v .. '#', 1, true) and v)
+	end
+	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
+	local i = w.widget.idx
+	local p = 'CW' .. i .. '_'
+	t.ok(g:find('[' .. p .. 'Hit8]', 1, true) and g:find('MeasureName=' .. p .. 'Vol1', 1, true), 'rows or their measures missing')
+	t.ok(g:find('Hidden=(((' .. '[' .. p .. 'Count]<1)', 1, true), 'the rows are not hidden past [Count]')
+	t.ok(g:find('-TileMode "Mixer"', 1, true), 'the tile\'s widget setting does not reach the script')
+	t.ok(g:find('AudioControl\\cmd_' .. p .. 'Server.ini" -Mode', 1, true), 'the command file is not in the widget\'s folder')
+	local parts = s:upvalue('M').widgetParts(w)
+	for _, name in ipairs({ 'Hit1', 'Minus1', 'Plus1', 'Hit2', 'TabDev', 'TabMix' }) do
+		t.ok(parts[p .. name], name .. ' is not a part of the tile')
+	end
+	t.ok(not parts[p .. 'Track1'] and not parts[p .. 'Bar1'], 'the bar is a part (its click needs the mouse)')
+	local api = s:upvalue('M').widgetInfo(w)
+	t.ok(api.onShow and api.onShow:find('!CommandMeasure ' .. p .. 'Server "Run"', 1, true), 'OnShow does not start the script: ' .. tostring(api.onShow))
+	t.ok(api.onShow:find('cmd_' .. p .. 'Server.ini', 1, true) and api.onHide:find('Do quit', 1, true), 'OnShow/OnHide do not use the command file')
+end
+
 -- Keyboard and pad inside a widget with parts (the rows of its list): from
 -- row to row, out of the tile at the last one, back onto the nearest row
 function T.parts_with_keys()

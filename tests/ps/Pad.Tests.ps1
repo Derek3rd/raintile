@@ -93,3 +93,17 @@ Test 'Pad: no button, and the same buttons on two actions' {
     Assert-Equal (Press $p '') '' 'released'
     Assert-Equal (Press $p 'RS') '' 'RS no longer Options'
 }
+
+Test 'Pad: the pad shortcuts of the tiles, after the actions' {
+    $p = New-Pad
+    # (Generated\PadKeys.txt: one combination per line; the second is Back's)
+    $p.Pad.SetTiles(@('A LB', 'B', 'x+y'))
+    Assert-Equal (Press $p 'LB') '' 'LB, part of a shortcut: waits'
+    Assert-Equal (Press $p 'LB A') 'PadTile(1)' 'LB + A: the first tile'
+    Assert-Equal (Press $p '') '' 'released: no category'
+    Assert-Equal (Press $p 'LB') '' 'LB alone pressed'
+    Assert-Equal (Press $p '') 'NextCategory(-1)' 'LB alone released'
+    Assert-Equal (Press $p 'B') 'Escape()' 'B stays Back'
+    Assert-Equal (Press $p '') '' 'released'
+    Assert-Equal (Press $p 'Y X') 'PadTile(3)' 'X + Y, written another way'
+}

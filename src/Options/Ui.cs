@@ -225,7 +225,13 @@ namespace RaintileOptions
                 if (action == "runas" || action == "remove") return TileAction.Run(action);
                 Core.DeleteOldUpdateFiles();
                 var app = new OptionsApp(page, clock);
-                return app.Run();
+                // while the window is open the launcher's shortcuts do nothing
+                // (Generated\OptionsOpen.txt, read by Raintile.lua at each one):
+                // a hot key or pad buttons being picked here would start a tile
+                string flag = Path.Combine(Core.Generated, "OptionsOpen.txt");
+                try { File.WriteAllText(flag, ((long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds).ToString(), Core.Utf8); } catch { }
+                try { return app.Run(); }
+                finally { try { File.Delete(flag); } catch { } }
             }
             catch (Exception e)
             {
@@ -325,6 +331,25 @@ namespace RaintileOptions
                 var arrow = NewText(Schema.FormatHotKey(button), Fs.Label, brush, true);
                 arrow.Margin = T(Gap.Line, 0, 0, 0);
                 AddTo(sp, arrow);
+            }
+            return sp;
+        }
+
+        // The buttons of a gamepad combination in one field: A + LB (None without any)
+        public FrameworkElement NewPadCombo(IList<string> buttons, Brush brush = null)
+        {
+            if (buttons == null || buttons.Count == 0) return NewPadFace("", brush);
+            var sp = NewPanel(Orientation.Horizontal);
+            sp.HorizontalAlignment = HorizontalAlignment.Center;
+            for (int i = 0; i < buttons.Count; i++)
+            {
+                if (i > 0)
+                {
+                    var plus = NewText("+", Fs.Label, brush, true);
+                    plus.Margin = T(Gap.Line, 0, Gap.Line, 0);
+                    AddTo(sp, plus);
+                }
+                AddTo(sp, NewPadFace(buttons[i], brush));
             }
             return sp;
         }

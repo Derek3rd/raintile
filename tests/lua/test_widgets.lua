@@ -51,6 +51,19 @@ local function testWidget(s)
 	end
 end
 
+-- The wheel: turned until tile w is at most 'near' places from the middle
+-- (its category does not repeat its tiles when they are few: the last one is
+-- not beside the first)
+local function wheelTo(s, w, near)
+	local M = s:upvalue('M')
+	for _ = 1, 40 do
+		local slot = M.slotOfTile(w)
+		if slot and M.wv[slot] and math.abs(M.wv[slot].d) <= near then return end
+		s:call('Scroll(1)')
+		t.clean(s)
+	end
+end
+
 function T.options_defaults()
 	local s = skinWithWidget(nil)
 	t.clean(s)
@@ -117,6 +130,7 @@ function T.list_part_in_the_wheel()
 		end
 	end
 	t.clean(s)
+	wheelTo(s, w, 0.4)
 	local name = 'W' .. w.widget.idx .. 'RowHit1'
 	s:call('HoverPart(\'' .. name .. '\')')
 	t.clean(s)
@@ -246,8 +260,117 @@ function T.gallery_audio_control()
 	t.clean(s)
 end
 
--- Keyboard and pad inside a widget with parts (the rows of its list): from
--- row to row, out of the tile at the last one, back onto the nearest row
+
+-- The meters of widget t written for a tile of w x h (D.customWidgetText):
+-- every one inside the tile (a meter out of it makes the launcher's window
+-- larger), no width or height of 0 or less (a String with no width is as
+-- wide as its text). Returns the first one out, or nil.
+local function widgetOutOfTile(s, t, w, h)
+	local text = s:upvalue('D').customWidgetText(t, t.widget.idx, w, h)
+	local name, o, out = nil, {}, nil
+	local function check()
+		if not name or out or not o.meter then return end
+		local x, y = s:number(o.x or '0', 0), s:number(o.y or '0', 0)
+		local mw, mh = o.w and s:number(o.w, 0), o.h and s:number(o.h, 0)
+		if x < -1 or y < -1 then out = name .. ' at ' .. x .. ',' .. y end
+		if mw and (mw < 1 or (o.align or ''):lower():find('^left') ~= nil and x + mw > w + 1 or not o.align and x + mw > w + 1) then out = name .. ' W=' .. mw end
+		if mh and (mh < 1 or not o.align and y + mh > h + 1) then out = name .. ' H=' .. mh end
+		if x > w + 1 or y > h + 1 then out = name .. ' out at ' .. x .. ',' .. y end
+	end
+	for line in (text .. '\n'):gmatch('([^\n]*)\n') do
+		local sec = line:match('^%[(.+)%]$')
+		if sec then check() name, o = sec, {} end
+		local k, v = line:match('^(%w+)=(.*)$')
+		if k then
+			k = k:lower()
+			if k == 'meter' then o.meter = v
+			elseif k == 'x' or k == 'y' or k == 'w' or k == 'h' then o[k] = v
+			elseif k == 'stringalign' then o.align = v end
+		end
+	end
+	check()
+	return out
+end
+
+-- Spotify (widgets/Spotify): its sizes written out, a square cover centred
+-- at the top, the controls always there and parts of the tile, every meter
+-- inside the tile whatever its shape (a near square one made the launcher's
+-- window larger)
+function T.gallery_spotify()
+	local s = R.new({})
+	host_mkdir(s.data .. 'Widgets')
+	host_copytree(s.repo .. '\\widgets\\Spotify', s.data .. 'Widgets\\Spotify', '')
+	local cat = s.data .. 'Categories\\Dashboard.ini'
+	R.writeFile(cat, R.readFile(cat) .. '\r\n[Spotify]\r\nWidget=custom\r\nParam=Spotify\r\nSize=2x2\r\n')
+	s:start()
+	t.clean(s)
+	local w
+	for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == 'Spotify' then w = x end end
+	t.ok(w, 'the widget tile is missing')
+	local g = grid(s)
+	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
+	for _, v in ipairs({ 'PN', 'PA', 'PF', 'PS', 'PB', 'PC', 'PR', 'PT', 'PTF', 'PTW', 'PH', 'PCmd' }) do
+		own = own or (g:find('#' .. v .. '#', 1, true) and v)
+	end
+	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
+	local p = 'CW' .. w.widget.idx .. '_'
+	t.ok(g:find('Hidden=(1-1)', 1, true), 'the title and the artist are not shown by default')
+	local parts = s:upvalue('M').widgetParts(w)
+	for _, name in ipairs({ 'Cover', 'Shuffle', 'Previous', 'Play', 'Next', 'Repeat', 'Like', 'Seek' }) do
+		t.ok(parts[p .. name], name .. ' is not a part of the tile')
+		local m = s.meters[(p .. name):lower()]
+		t.ok(m and not m.hidden, name .. ' is not always there')
+	end
+	t.ok(g:find('-Port "8974"', 1, true), 'the Port setting does not reach the script')
+	for _, size in ipairs({ { 360, 340 }, { 340, 360 }, { 420, 200 }, { 200, 420 }, { 120, 110 }, { 800, 760 } }) do
+		local bad = widgetOutOfTile(s, w, size[1], size[2])
+		t.ok(not bad, string.format('a meter out of a %dx%d tile: %s', size[1], size[2], tostring(bad)))
+	end
+	-- the cover a square, centred
+	local text = s:upvalue('D').customWidgetText(w, w.widget.idx, 360, 340)
+	local block = text:match('%[' .. p .. 'Cover%]\n(.-)\n\n') or ''
+	local cx, cw = block:match('\nX=([^\n]+)') or block:match('^X=([^\n]+)'), block:match('\nW=([^\n]+)')
+	t.ok(cx and cw, 'no cover')
+	local x, side = s:number(cx, 0), s:number(cw, 0)
+	t.ok(math.abs(x * 2 + side - 360) <= 1, 'the cover is not centred: ' .. x .. ' + ' .. side)
+	t.ok(side < 340 and side > 150, 'the cover leaves no room for the controls, or is too small: ' .. side)
+end
+
+-- Now Playing (widgets/NowPlaying): its sizes written out, its controls
+-- always there and parts of the tile, every meter inside the tile
+function T.gallery_now_playing()
+	local s = R.new({})
+	host_mkdir(s.data .. 'Widgets')
+	host_copytree(s.repo .. '\\widgets\\NowPlaying', s.data .. 'Widgets\\NowPlaying', '')
+	local cat = s.data .. 'Categories\\Dashboard.ini'
+	R.writeFile(cat, R.readFile(cat) .. '\r\n[Now playing]\r\nWidget=custom\r\nParam=NowPlaying\r\nSize=2x2\r\n')
+	s:start()
+	t.clean(s)
+	local w
+	for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == 'NowPlaying' then w = x end end
+	t.ok(w, 'the widget tile is missing')
+	local g = grid(s)
+	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
+	for _, v in ipairs({ 'PN', 'PA', 'PF', 'PS', 'PB', 'PC', 'PR', 'PT', 'PTF', 'PTW', 'PH', 'PCmd' }) do
+		own = own or (g:find('#' .. v .. '#', 1, true) and v)
+	end
+	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
+	local p = 'CW' .. w.widget.idx .. '_'
+	local parts = s:upvalue('M').widgetParts(w)
+	for _, name in ipairs({ 'Shuffle', 'Previous', 'Play', 'Next', 'Repeat', 'Seek' }) do
+		t.ok(parts[p .. name], name .. ' is not a part of the tile')
+	end
+	t.ok(not parts[p .. 'Like'], 'a heart: Windows has none')
+	for _, size in ipairs({ { 360, 340 }, { 340, 360 }, { 420, 200 }, { 200, 420 }, { 120, 110 }, { 800, 760 } }) do
+		local bad = widgetOutOfTile(s, w, size[1], size[2])
+		t.ok(not bad, string.format('a meter out of a %dx%d tile: %s', size[1], size[2], tostring(bad)))
+	end
+end
+
+-- Keyboard and pad and a widget with parts (the rows of its list): the
+-- whole tile highlighted, Confirm enters it onto its first row, the arrows
+-- go from row to row and stay in it at its edges, Back leaves it (the whole
+-- tile again, the launcher still open), the arrows then go on to the tiles
 function T.parts_with_keys()
 	local s = skinWithWidget('Rows=7\r\n')
 	local w = testWidget(s)
@@ -261,25 +384,41 @@ function T.parts_with_keys()
 	local i = w.widget.idx
 	local row1, row2 = 'W' .. i .. 'RowHit1', 'W' .. i .. 'RowHit2'
 	t.ok(w.widget.partsAt[row1] and w.widget.partsAt[row2], 'the test widget has no two rows')
-	s:call("HoverPart('" .. row1 .. "')")
-	t.eq(M.kpart and M.kpart.name, row1, 'the mouse on a row: the keys go on from it')
+	-- the keys onto the widget's tile: the whole tile, not a row
+	local tiles = s:upvalue('cur')().tiles
+	local idx
+	for k, x in ipairs(tiles) do if x == w then idx = k end end
+	for _ = 1, 40 do
+		if hover.on and hover.idx == idx then break end
+		s:call('Nav(1, 0)')
+		if not (hover.on and hover.idx == idx) then s:call('Nav(0, 1)') end
+	end
+	t.eq(hover.idx, idx, 'the keys did not reach the widget\'s tile')
+	t.eq(M.kpart, nil, 'the keys went into the widget without Confirm')
+	-- Confirm: into it, onto its first row, nothing launched
+	s:call('Confirm()')
+	t.clean(s)
+	t.ok(not s:upvalue('launching'), 'Confirm on the widget launched the tile')
+	t.eq(M.kpart and M.kpart.name, row1, 'Confirm did not go into the widget onto its first row')
 	s:call('Nav(0, 1)')
 	t.clean(s)
 	t.eq(M.kpart and M.kpart.name, row2, 'down from the first row')
 	t.eq(hover.toy, w.widget.partsAt[row2][2], 'the highlight on the second row')
 	s:call('Nav(0, -1)')
 	t.eq(M.kpart and M.kpart.name, row1, 'up from the second row')
-	-- up from the first row: out of the tile (onto the one above, if any)
-	local idx = hover.idx
+	-- up from the first row: still in it
 	s:call('Nav(0, -1)')
+	t.eq(M.kpart and M.kpart.name, row1, 'out of the widget past its first row')
+	-- Back: out of it, the whole tile, the launcher open
+	s:call('Escape()')
 	t.clean(s)
-	t.ok(M.kpart == nil or M.kpart.t ~= w, 'still in the widget past its first row')
-	if hover.idx ~= idx then
-		-- and down again: onto its first row, not the whole tile
-		s:call('Nav(0, 1)')
-		t.clean(s)
-		t.eq(M.kpart and M.kpart.name, row1, 'back down into the widget')
-	end
+	t.eq(M.kpart, nil, 'Back did not leave the widget')
+	t.ok(s:upvalue('visible'), 'Back in the widget closed the launcher')
+	t.eq(hover.idx, idx, 'Back left the widget\'s tile')
+	t.eq(hover.toy, 0, 'the whole tile is not highlighted again')
+	-- the mouse on a row: inside, the keys go on from it
+	s:call("HoverPart('" .. row2 .. "')")
+	t.eq(M.kpart and M.kpart.name, row2, 'the mouse on a row: the keys go on from it')
 	-- Confirm on a row: the row, not the tile (no launch animation)
 	s:call('Confirm()')
 	t.ok(not s:upvalue('launching'), 'Confirm on a row launched the tile')
@@ -296,6 +435,7 @@ function T.custom_widget_under_nearer_tiles()
 		end
 	end
 	t.clean(s)
+	wheelTo(s, w, 1.2)
 	local M = s:upvalue('M')
 	local slot = M.slotOfTile(w)
 	t.ok(slot and M.wv[slot], 'the widget is not on the wheel')

@@ -6,6 +6,7 @@
       "name": "Audio control",
       "author": "Raintile",
       "version": "1.0",
+      "minVersion": "1.4.1",
       "kind": "custom",
       "category": "General",
       "description": "The sound devices of the PC with their volume (a click makes one the default), or the volume of each program as in Windows' volume mixer: the tile's widget setting says which, so two tiles can show one each. Give the tile more cells for more rows.",
@@ -18,6 +19,7 @@
       "name": "Big clock",
       "author": "Raintile",
       "version": "1.0",
+      "minVersion": "1.2.0",
       "kind": "custom",
       "category": "General",
       "description": "The time in big letters, with the day and the date. It fills the tile.",
@@ -30,6 +32,7 @@
       "name": "Modrinth instances",
       "author": "Raintile",
       "version": "1.1",
+      "minVersion": "1.4.0",
       "kind": "custom",
       "category": "Games",
       "description": "Your Modrinth App instances with their icons, the last played first: click one to start it. Give the tile more cells for more rows.",
@@ -42,12 +45,39 @@
       "name": "Steam achievements",
       "author": "Raintile",
       "version": "1.1",
+      "minVersion": "1.4.0",
       "kind": "custom",
       "category": "Games",
       "description": "The achievements of the Steam game played last, or of the game you choose (the tile's widget setting: its app id): how many are unlocked, the last ones, the easiest locked ones. Needs your Steam Web API key (Options > Widgets > Steam achievements).",
       "base": "SteamAchievements",
       "files": ["SteamAchievements.ini", "SteamAchievements.ps1"],
       "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/SteamAchievements"
+    },
+    {
+      "id": "NowPlaying",
+      "name": "Now Playing",
+      "author": "Raintile",
+      "version": "1.0",
+      "minVersion": "1.5.0",
+      "kind": "custom",
+      "category": "General",
+      "description": "What any player is playing (Spotify, YouTube in a browser, the Media Player...), as Windows shows it over the volume: the cover fills the tile, the controls and the times show with the mouse or the pad on it, a bar along the bottom shows the time. No plugin or extension needed.",
+      "base": "NowPlaying",
+      "files": ["NowPlaying.ini", "NowPlaying.ps1"],
+      "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/NowPlaying"
+    },
+    {
+      "id": "Spotify",
+      "name": "Spotify",
+      "author": "Raintile",
+      "version": "1.0",
+      "minVersion": "1.5.0",
+      "kind": "custom",
+      "category": "General",
+      "description": "The song playing in Spotify: its cover fills the tile, the controls (play, previous, next, the heart, open Spotify) and the times show with the mouse or the pad on it, a bar along the bottom shows the time. Needs Spicetify with its WebNowPlaying extension.",
+      "base": "Spotify",
+      "files": ["Spotify.ini", "Spotify.ps1"],
+      "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/Spotify"
     }
   ]
 }

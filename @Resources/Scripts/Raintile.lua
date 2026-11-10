@@ -620,6 +620,9 @@ local function loadCategory(file)
 	c.back = { own(catKeys.backlogopos), own(catKeys.backlogoscale), own(catKeys.backinfopos) }
 	-- cells of its tiles (TileSize=, as Size=), when a tile has no Size= of its own
 	c.tileSize = own(catKeys.tilesize)
+	-- InfiniteScroll= of its own (1 or 0); empty: the setting's
+	local inf = own(catKeys.infinitescroll)
+	if inf then c.infinite = inf ~= '0' end
 	local iconValue = catKeys.icon
 	categoryGeometry(c, tonumber(catKeys.nx or ''), tonumber(catKeys.ny or ''),
 		size(catKeys.iconsize, 'H'))
@@ -680,6 +683,7 @@ local function loadCategory(file)
 			t.pinned = trim(k.pinned or '') == '1' or nil
 			if t.pinned then c.anyPinned = true end
 			t.hotkey = trim(k.hotkey or '') -- e.g. CTRL ALT 1
+			t.padkey = M.padCombo(k.padkey or '') -- e.g. LB A (M.padKeys)
 			-- a widget (Widget=): a tile of any category that shows data or a
 			-- skin instead of images; c.widgets: the category has some
 			if trim(k.widget or '') ~= '' then
@@ -1215,6 +1219,7 @@ local function loadCategories(files)
 			end
 		end
 	end
+	M.writePadKeys()
 	-- Widgets, of every category: their meters are numbered in this order
 	widgets = {}
 	for _, c in ipairs(cats) do
@@ -1792,11 +1797,18 @@ local function maxOffset()
 	return math.max(0, lineCount() - visibleLines())
 end
 
--- Infinite scroll: after the last row the first one comes back. Only if the
--- tiles don't all fit on screen (otherwise they would show up twice).
+-- Infinite scroll (InfiniteScroll=, or the category's own): after the last
+-- row the first one comes back. Only with more lines than fit on screen: a
+-- tile never shows twice (the extra line of slots, a half line at each side
+-- of the carousel, the places of the wheel), so what follows the selection
+-- (the highlight, the logo growing) is on one tile only.
 local function infinite()
-	-- also with few tiles (they all fit): they repeat, so it still scrolls round
-	return V.InfiniteScroll and #cur().tiles > 1 and lineCount() > 0
+	local c = cur()
+	local on = c.infinite
+	if on == nil then on = V.InfiniteScroll end
+	if not on then return false end
+	if V.Wheel then return #c.tiles > V.WheelVisible end
+	return lineCount() > visibleLines()
 end
 
 -- Carousel (CenterSelection=1): the grid keeps the selected line (column, or
@@ -3297,7 +3309,9 @@ function D.customWidgetText(t, i, w, h)
 	for n in pairs(secret) do opts[n] = '' end
 	local function own(v)
 		v = v:gsub('#[Oo][Pp][Tt][Ii][Oo][Nn]:([%w_]+)#', function(n) return opts[n:lower()] end)
-		for _ = 1, 3 do
+		-- (a variable may use another one, a few levels deep: sizes made from
+		-- sizes; the limit stops one that uses itself)
+		for _ = 1, 8 do
 			local changed = false
 			v = v:gsub('#([%w_]+)#', function(n)
 				local r = vars[n:lower()]
@@ -4231,6 +4245,7 @@ local function render(menu)
 		SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	end
 	frame()
+	if M.padMode then M.renderLegend() end
 end
 
 -- Click on a chip: All clears the filter, the others turn on and off. The
@@ -4739,6 +4754,13 @@ function Initialize()
 	V.TileKeysConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\TileKeys'
 	-- tile hot keys: always (Always), or only while the launcher is open (Open)
 	V.TileKeysOpen = SKIN:GetVariable('TileKeysWhen', 'Always'):lower() == 'open'
+	-- the gamepad's legend (M.renderLegend) and the buttons it shows
+	V.PadLegend = num('Gamepad', 1) ~= 0 and num('GamepadLegend', 1) ~= 0
+	V.PadKeys = {}
+	for _, a in ipairs({ 'Confirm', 'Back', 'PrevCategory', 'NextCategory', 'Search', 'Delete', 'Done', 'PrevChip', 'NextChip', 'Options' }) do
+		V.PadKeys[a] = SKIN:GetVariable('Gamepad' .. a, '')
+	end
+	M.legendKey = nil
 	V.TypingConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Typing'
 	V.FilterBar = num('FilterBar', 1) ~= 0
 	V.FilterStores = num('FilterStores', 1) ~= 0
@@ -5222,6 +5244,7 @@ function Hide()
 	stopClock()
 	closePower()
 	M.closeMore()
+	M.closeTileMenu()
 	updateDashState()
 	-- the downloads are followed only while it is open
 	os.remove(resources .. 'Generated\\DownloadOn.txt')
@@ -5249,6 +5272,8 @@ end
 -- Open, or close; a launcher left open without the focus (a window, AutoHide=0,
 -- behind a game) comes back in front with its keys first.
 function Toggle()
+	-- (the open/close key and buttons: shortcuts, off while Options is open)
+	if M.optionsOpen() then return end
 	if visible and not M.focused and not launching then
 		M.zpos(true)
 		SKIN:Bang('!Show')
@@ -5481,30 +5506,35 @@ end
 -- Context menu entries for tile t, in the order shown (Rainmeter stops at the
 -- first empty one, so only those that apply are listed)
 local TILE_MENU_SLOTS = 6
+-- { label, kind, glyph } (the glyph for the pad's menu, M.tmenu)
+function M.tileMenuItems(t)
+	local items = {}
+	if not t then return items end
+	items[#items + 1] = { 'Edit ' .. t.name .. '...', 'edit', '[\\xE70F]' }
+	if V.ShowFavorites and t.file and t.file ~= '' and not t.widget then
+		items[#items + 1] = { favorites.set[tileId(t)] and 'Remove from Favorites' or 'Add to Favorites', 'favorite', '[\\xE734]' }
+	end
+	local home = t.file and t.file ~= '' and M.catOf(t)
+	if home then
+		items[#items + 1] = { t.pinned and 'Unpin' or 'Pin to the start', 'pin', '[\\xE718]' }
+	end
+	local path, args = commandTarget(t.command)
+	if path and path:match('^%a:[\\/]') and fileExists(path) then items[#items + 1] = { 'Open file location', 'folder', '[\\xE838]' } end
+	if path and isProgram(path, args) then items[#items + 1] = { 'Run as administrator', 'admin', '[\\xE7EF]' } end
+	if t.file and t.file ~= '' then
+		items[#items + 1] = { 'Remove from ' .. (t.catLabel or '') .. '...', 'remove', '[\\xE74D]' }
+	end
+	return items
+end
+
 local function setPointed(t)
 	if pointed == t then return end
 	pointed = t
-	local items = {}
-	if t then
-		-- & would underline the next letter in a menu
-		items[#items + 1] = { 'Edit ' .. t.name:gsub('&', '&&') .. '...', 'edit' }
-		if V.ShowFavorites and t.file and t.file ~= '' and not t.widget then
-			items[#items + 1] = { favorites.set[tileId(t)] and 'Remove from Favorites' or 'Add to Favorites', 'favorite' }
-		end
-		local home = t.file and t.file ~= '' and M.catOf(t)
-		if home then
-			items[#items + 1] = { t.pinned and 'Unpin' or 'Pin to the start', 'pin' }
-		end
-		local path, args = commandTarget(t.command)
-		if path and path:match('^%a:[\\/]') and fileExists(path) then items[#items + 1] = { 'Open file location', 'folder' } end
-		if path and isProgram(path, args) then items[#items + 1] = { 'Run as administrator', 'admin' } end
-		if t.file and t.file ~= '' then
-			items[#items + 1] = { 'Remove from ' .. (t.catLabel or ''):gsub('&', '&&') .. '...', 'remove' }
-		end
-	end
+	local items = M.tileMenuItems(t)
 	for i = 1, TILE_MENU_SLOTS do
 		local it = items[i]
-		SKIN:Bang('!SetVariable', 'TileMenuTitle' .. i, it and it[1] or '')
+		-- & would underline the next letter in a menu
+		SKIN:Bang('!SetVariable', 'TileMenuTitle' .. i, it and (it[1]:gsub('&', '&&')) or '')
 		SKIN:Bang('!SetVariable', 'TileMenuAction' .. i, it and ('[!CommandMeasure MeasureScript "TileMenu(\'' .. it[2] .. '\')"]') or '')
 	end
 end
@@ -5620,7 +5650,10 @@ end
 function TileMenu(kind)
 	local t = pointed
 	setPointed(nil)
-	if not t then return end
+	if t then M.runTileMenu(t, kind) end
+end
+
+function M.runTileMenu(t, kind)
 	if kind == 'edit' then
 		if writeTileFile('EditTile.txt', t) then SKIN:Bang(SKIN:GetVariable('OptionsTileAction')) end
 	elseif kind == 'favorite' then
@@ -5642,6 +5675,99 @@ end
 -- Older name of the "Edit" entry
 function EditTile()
 	TileMenu('edit')
+end
+
+-- The tile's menu for the pad (GamepadDone, Start, outside the on-screen
+-- keyboard): the entries of the right-click menu, which the pad cannot
+-- reach, drawn over the highlighted tile (MeterTileMenuItem1-6). Up and down
+-- move in it, Confirm picks, Back or Start again close it; the mouse works
+-- on it too. Any other button closes it and acts.
+M.tmenu = { open = false, sel = 1, items = {}, t = nil }
+
+function M.renderTileMenu()
+	local tm = M.tmenu
+	local x, y, h = 0, 0, 0
+	if tm.open then
+		local gx, gy = gridToPx(hover.tx, hover.ty)
+		x, y = math.floor(V.PadX + gx + 12), math.floor(V.GridY + gy + 12)
+	end
+	-- shown before being measured (a hidden meter measures 0)
+	local heights = {}
+	for i = 1, TILE_MENU_SLOTS do
+		local m, it = 'MeterTileMenuItem' .. i, tm.open and tm.items[i]
+		show(m, it and true or false)
+		if it then
+			set(m, 'Text', it[3] .. '   ' .. D.text(it[1]))
+			set(m, 'SolidColor', tm.sel == i and '44,44,54,245' or '24,24,30,240')
+			set(m, 'FontColor', tm.sel == i and V.AccentColor or V.TextColor)
+			SKIN:Bang('!UpdateMeter', m)
+			local mt = SKIN:GetMeter(m)
+			heights[i] = math.max(1, mt and mt:GetH() or 40)
+			h = h + heights[i] + 2
+		end
+	end
+	if tm.open then
+		-- inside the screen: up from the bottom, left from the right edge
+		local mt = SKIN:GetMeter('MeterTileMenuItem1')
+		local w = mt and mt:GetW() or 260
+		x = math.max(0, math.min(x, V.ScreenW - w - 8))
+		y = math.max(0, math.min(y, V.ScreenH - h - 8))
+		for i = 1, #tm.items do
+			if i > TILE_MENU_SLOTS then break end
+			local m = 'MeterTileMenuItem' .. i
+			set(m, 'X', tostring(x))
+			set(m, 'Y', tostring(y))
+			SKIN:Bang('!UpdateMeter', m)
+			y = y + heights[i] + 2
+		end
+	end
+	SKIN:Bang('!Redraw')
+end
+
+-- Opens it on the highlighted tile (nothing highlighted: nothing)
+function M.openTileMenu()
+	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
+	if not t then return false end
+	local items = M.tileMenuItems(t)
+	if #items == 0 then return false end
+	closePower()
+	M.closeMore()
+	local tm = M.tmenu
+	tm.open, tm.sel, tm.items, tm.t = true, 1, items, t
+	M.renderTileMenu()
+	return true
+end
+
+function M.closeTileMenu()
+	local tm = M.tmenu
+	if not tm.open then return false end
+	tm.open, tm.items, tm.t = false, {}, nil
+	M.renderTileMenu()
+	return true
+end
+
+function M.tileMenuMove(dy)
+	local tm = M.tmenu
+	local n = math.min(#tm.items, TILE_MENU_SLOTS)
+	if dy == 0 or n == 0 then return end
+	tm.sel = (tm.sel - 1 + (dy > 0 and 1 or -1)) % n + 1
+	M.renderTileMenu()
+end
+
+function TileMenuHover(i)
+	local tm = M.tmenu
+	if not tm.open or not tm.items[i] then return end
+	tm.sel = i
+	M.renderTileMenu()
+end
+
+function TileMenuPick(i)
+	local tm = M.tmenu
+	local it, t = tm.open and tm.items[i], tm.t
+	if not it then return end
+	M.picked = os.time()
+	M.closeTileMenu()
+	M.runTileMenu(t, it[2])
 end
 
 -- Update check on every load (CheckUpdates=1); Update.ps1 asks GitHub at
@@ -5820,14 +5946,18 @@ end
 -- an entry was picked (M.picked, until the mouse moves onto a tile), the
 -- tiles leave the click alone.
 function M.menuOverGrid()
-	if M.more.open or power.open then return true end
+	if M.more.open or power.open or M.tmenu.open then return true end
 	return M.picked ~= nil and os.time() - M.picked <= 1
 end
 
 function HoverTile(slot, mx, my)
 	M.picked = nil
+	-- (the mouse moved: the pad's legend goes; a tile coming under a still
+	-- mouse, the grid scrolled by the pad, keeps it)
+	local last = M.mouse
 	M.mouse = { tonumber(mx), tonumber(my) }
-	if M.more.open or power.open then return end
+	if last and (last[1] ~= M.mouse[1] or last[2] ~= M.mouse[2]) then M.keyInput() end
+	if M.more.open or power.open or M.tmenu.open then return end
 	local t = ready and not launching and tileAt(slot)
 	if not t then return end
 	setPointed(t)
@@ -5866,7 +5996,7 @@ end
 -- as between tiles. The meters of a widget are placed in its container, at
 -- the tile: their X, Y are from its top left corner.
 function HoverPart(name)
-	if not ready or launching or M.more.open or power.open then return end
+	if not ready or launching or M.more.open or power.open or M.tmenu.open then return end
 	local n = tonumber(name:match('^CW(%d+)_') or name:match('^W(%d+)RowHit%d+$') or '')
 	local t = n and widgets[n]
 	local m = t and SKIN:GetMeter(name)
@@ -5894,10 +6024,13 @@ function M.slotOfTile(t)
 end
 
 -- Keyboard and pad inside a widget with parts (its meters with Part=1, the
--- rows of its list): the highlight goes from part to part as from tile to
--- tile. Coming onto the tile it lands on the part nearest the side it comes
--- from; with no part further that way it leaves the tile; Confirm presses the
--- part. M.kpart: the part highlighted, { t = tile, name = meter }.
+-- rows of its list): the arrows treat its tile as any other (the whole tile
+-- highlighted, the arrows on to the next one); Confirm enters it, onto its
+-- first part; inside, the arrows go from part to part (a part that takes a
+-- direction itself, KeyLeftAction= ..., does it: a volume) and stay in the
+-- tile at its edges; Confirm presses the part; Back leaves it, the whole
+-- tile highlighted again. The mouse on a part is inside too. M.kpart: the
+-- part highlighted, { t = tile, name = meter }.
 M.kpart = nil
 
 -- The parts of tile t as rectangles in the tile: { name, x, y, w, h }
@@ -5953,44 +6086,63 @@ function M.partStep(dx, dy)
 	if not (t and t.widget and next(M.widgetParts(t))) then M.kpart = nil return false end
 	local slot = M.slotOfTile(t)
 	if not slot then return false end
-	local kp, name = M.kpart, nil
-	if kp and kp.t == t then
-		if dx == 0 and dy == 0 then return true end
-		-- a part that takes that direction itself (KeyLeftAction= on its
-		-- meter, e.g. a volume): its action, the highlight stays
-		local m = SKIN:GetMeter(kp.name)
-		local key = dx < 0 and 'KeyLeftAction' or dx > 0 and 'KeyRightAction' or dy < 0 and 'KeyUpAction' or 'KeyDownAction'
-		local action = m and m:GetOption(key, '') or ''
-		if action ~= '' then SKIN:Bang(action) return true end
-		name = M.partNext(t, kp.name, dx, dy)
-		if not name then M.kpart = nil return false end   -- out of the tile
-	else
-		-- the whole tile highlighted (its parts placed only now): into it
-		name = M.partEnter(t, dx, dy)
-		if not name then return false end
-	end
+	-- the whole tile highlighted: the arrows go on to the other tiles
+	local kp = M.kpart
+	if not (kp and kp.t == t) then return false end
+	if dx == 0 and dy == 0 then return true end
+	-- a part that takes that direction itself (KeyLeftAction= on its meter,
+	-- e.g. a volume): its action, the highlight stays
+	local m = SKIN:GetMeter(kp.name)
+	local key = dx < 0 and 'KeyLeftAction' or dx > 0 and 'KeyRightAction' or dy < 0 and 'KeyUpAction' or 'KeyDownAction'
+	local action = m and m:GetOption(key, '') or ''
+	if action ~= '' then SKIN:Bang(action) return true end
+	-- no part further that way: the highlight stays (Back leaves the tile)
+	local name = M.partNext(t, kp.name, dx, dy)
+	if not name then return true end
 	M.kpart = { t = t, name = name }
 	hover.part = nil
 	M.focusPart(t, slot, name)
 	return true
 end
 
--- After Nav moved onto a widget with parts: onto its part nearest that side
+-- After Nav moved onto another tile: outside of any widget (its whole tile
+-- highlighted, Confirm enters it)
 function M.partArrive(dx, dy)
-	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
 	M.kpart = nil
-	if not (t and t.widget and next(M.widgetParts(t))) then return end
-	local slot, name = M.slotOfTile(t), M.partEnter(t, dx, dy)
-	if not (slot and name) then return end
+end
+
+-- Confirm on the whole tile of a widget with parts: into it, onto its first
+-- part (the top left one)
+function M.partIn(t)
+	if not (t and t.widget and next(M.widgetParts(t))) then return false end
+	local slot, name = M.slotOfTile(t), M.partEnter(t, 0, 0)
+	if not (slot and name) then return false end
 	M.kpart = { t = t, name = name }
+	hover.part = nil
 	M.focusPart(t, slot, name)
+	return true
+end
+
+-- Back inside a widget: out of it, its whole tile highlighted again
+function M.partOut()
+	local kp = M.kpart
+	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
+	if not (kp and kp.t == t) then return false end
+	M.kpart = nil
+	hover.part = nil
+	local slot = M.slotOfTile(t)
+	if slot then
+		local tx, ty = slotToGrid(slot)
+		focus(t, indexAt(slot), tx, ty)
+	end
+	return true
 end
 
 -- Confirm on a part: what a click on it does
 function M.partPress()
 	local kp = M.kpart
 	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
-	if not (kp and kp.t == t) then return false end
+	if not (kp and kp.t == t) then return M.partIn(t) end
 	local i, k = kp.name:match('^W(%d+)RowHit(%d+)$')
 	if i then WidgetRowClick(tonumber(i), tonumber(k)) return true end
 	local m = SKIN:GetMeter(kp.name)
@@ -6131,6 +6283,7 @@ end
 
 function Scroll(delta)
 	if not ready or launching then return end
+	M.closeTileMenu() -- (its tile moves away)
 	if M.carousel() then
 		-- one tile per notch, whatever ScrollStep, as the keys (not from part
 		-- to part of a widget: the notch moves the carousel)
@@ -6293,12 +6446,30 @@ end
 
 function TileHotKey(i)
 	local entry = tileKeys[i]
-	if not ready or not entry or launching then return end
+	if not ready or not entry or launching or M.optionsOpen() then return end
+	M.startById(entry.id, 'hot key ' .. entry.key)
+end
+
+-- The Options window is open (Generated\OptionsOpen.txt, written by the
+-- program while it runs, with its start time): the shortcuts (tile hot keys,
+-- pad shortcuts, the open/close key and buttons) do nothing, so the keys and
+-- buttons picked in it start nothing. A file older than a day is one left by
+-- a program that did not end (killed): ignored.
+function M.optionsOpen()
+	local f = io.open(resources .. 'Generated\\OptionsOpen.txt', 'rb')
+	if not f then return false end
+	local at = tonumber((f:read('*a') or ''):match('%d+') or '')
+	f:close()
+	return at ~= nil and math.abs(os.time() - at) < 86400
+end
+
+-- The tile with that id (tileId), started as by its hot key
+function M.startById(id, why)
 	for _, c in ipairs(cats) do
 		if not c.virtual then
 			for _, t in ipairs(c.tiles) do
-				if tileId(t) == entry.id then
-					dbg('hot key ' .. entry.key .. ': ' .. t.name)
+				if tileId(t) == id then
+					dbg(why .. ': ' .. t.name)
 					if t.missing or not t.command then return end
 					if visible and V.CloseOnLaunch then Hide() end
 					startTile(t)
@@ -6307,6 +6478,55 @@ function TileHotKey(i)
 			end
 		end
 	end
+end
+
+-- Pad shortcuts of the tiles (PadKey= on a tile: buttons held together, e.g.
+-- LB A): the helper (Helper.ps1) reads Generated\PadKeys.txt when it starts
+-- (after Setup, at every refresh), one combination per line, and sends
+-- Pad('PadTile', <line>). Through Pad(), so only while the launcher is open
+-- with the focus: never in a game. One tile per combination (the first); a
+-- combination of an action of Keybindings > Gamepad is that action's.
+M.padKeys = {}
+
+-- "a + lb" -> "A LB": the buttons, known ones only, upper case, sorted (so
+-- the same combination written two ways is one)
+function M.padCombo(text)
+	local known = { A = 1, B = 1, X = 1, Y = 1, LB = 1, RB = 1, LT = 1, RT = 1, BACK = 1, START = 1, LS = 1, RS = 1,
+		UP = 1, DOWN = 1, LEFT = 1, RIGHT = 1 }
+	local list, seen = {}, {}
+	for b in tostring(text):upper():gmatch('[^%s+|,]+') do
+		if known[b] and not seen[b] then seen[b] = true list[#list + 1] = b end
+	end
+	table.sort(list)
+	return table.concat(list, ' ')
+end
+
+function M.writePadKeys()
+	M.padKeys = {}
+	local used, lines = {}, {}
+	for _, c in ipairs(cats) do
+		for _, t in ipairs(c.virtual and {} or c.tiles) do
+			if t.padkey and t.padkey ~= '' and not used[t.padkey] then
+				used[t.padkey] = true
+				M.padKeys[#M.padKeys + 1] = { key = t.padkey, id = tileId(t) }
+				lines[#lines + 1] = t.padkey
+			end
+		end
+	end
+	local text = table.concat(lines, '\r\n') .. (#lines > 0 and '\r\n' or '')
+	local path = resources .. 'Generated\\PadKeys.txt'
+	local f = io.open(path, 'rb')
+	local old = f and f:read('*a')
+	if f then f:close() end
+	if old == text then return end
+	f = io.open(path, 'wb')
+	if f then f:write(text) f:close() end
+end
+
+function M.padTile(n)
+	local entry = M.padKeys[tonumber(n) or 0]
+	if not ready or not entry or launching or M.optionsOpen() then return end
+	M.startById(entry.id, 'pad shortcut ' .. entry.key)
 end
 
 function Launch(slot)
@@ -6440,8 +6660,10 @@ end
 -- Moves the highlight by dx columns and dy rows, scrolling the grid just
 -- enough to keep it visible.
 function Nav(dx, dy)
+	M.keyInput()
 	if not ready or launching or not visible then return end
 	if osk.open then oskMove(dx, dy) return end
+	if M.tmenu.open then M.tileMenuMove(dy) return end
 	if #cur().tiles == 0 then return end
 	-- inside a widget with parts: from part to part first
 	if M.partStep(dx, dy) then return end
@@ -6503,10 +6725,12 @@ end
 
 -- Launches the highlighted tile (or, if there is none, highlights the first).
 function Confirm()
+	M.keyInput()
 	dbg(string.format('Confirm: ready=%s launching=%s visible=%s hover=%d on=%s', tostring(ready),
 		tostring(launching ~= nil), tostring(visible), hover.idx, tostring(hover.on)))
 	if not ready or launching or not visible then return end
 	if osk.open then OskPress(osk.sel) return end
+	if M.tmenu.open then TileMenuPick(M.tmenu.sel) return end
 	if hover.idx == 0 or not hover.on then
 		Nav(0, 0)
 		return
@@ -6518,6 +6742,7 @@ end
 
 -- Previous (-1) or next (+1) category, wrapping around.
 function NextCategory(delta)
+	M.keyInput()
 	if not ready or launching or not visible then return end
 	if M.ringOn() then
 		local list = M.ringCats()
@@ -6672,6 +6897,7 @@ local function runSearch(text)
 end
 
 function SearchOpen()
+	M.keyInput()
 	if not ready or launching or not visible or typing then return end
 	-- the keys arrive only with the focus, the gamepad's through Pad(): here
 	-- without it, this is a click on the bar, which gives the launcher the
@@ -6700,6 +6926,7 @@ end
 
 -- A key from the Typing mini-skin: a character, or BACK, ENTER, ESC
 function TypeKey(key)
+	M.keyInput()
 	if not ready or not visible or not typing then return end
 	if key == 'ENTER' then
 		stopTyping()
@@ -6732,14 +6959,19 @@ end
 -- Done key keeps the results, GamepadBack (B) closes the search. The buttons
 -- are the helper's (Helper.ps1). The mouse can click its keys.
 
-renderOsk = function()
+-- Where the keyboard is: its key size, gap, padding and box (also the
+-- legend's place, above it: M.renderLegend)
+function M.oskBox()
 	local k = math.floor(V.MenuH * 1.15)
 	local gap = 6
 	local pad = 14
 	local w = 10 * k + 9 * gap + 2 * pad
 	local h = 5 * k + 4 * gap + 2 * pad
-	local x0 = math.floor((V.ScreenW - w) / 2)
-	local y0 = math.floor(V.ScreenH - V.PadY - h - 12)
+	return k, gap, pad, math.floor((V.ScreenW - w) / 2), math.floor(V.ScreenH - V.PadY - h - 12), w, h
+end
+
+renderOsk = function()
+	local k, gap, pad, x0, y0, w, h = M.oskBox()
 	set('OskBg', 'X', tostring(x0))
 	set('OskBg', 'Y', tostring(y0))
 	set('OskBg', 'Shape', string.format('Rectangle 0,0,%d,%d,14 | Fill Color 18,18,24,235 | StrokeWidth 1 | Stroke Color %s',
@@ -6794,9 +7026,14 @@ function OskPress(i)
 	if osk.open then renderOsk() end
 end
 
--- Start or Done: the search stays, the keyboard closes
+-- Start or Done: the search stays, the keyboard closes; without the
+-- keyboard, the menu of the highlighted tile (again: closes it)
 function PadStart()
-	if not osk.open then return end
+	if not osk.open then
+		if launching then return end
+		if not M.closeTileMenu() then M.openTileMenu() end
+		return
+	end
 	closeOsk()
 	if typing then TypeKey('ENTER') end
 end
@@ -6892,13 +7129,158 @@ end
 function Pad(name, a, b)
 	if not ready or not visible or not M.focused then return end
 	local f = ({ Nav = Nav, Confirm = Confirm, Escape = Escape, NextCategory = NextCategory,
-		PadSearch = PadSearch, PadStart = PadStart, PadOptions = PadOptions, PadX = PadX, PadChip = PadChip })[name]
-	if f then f(a, b) end
+		PadSearch = PadSearch, PadStart = PadStart, PadOptions = PadOptions, PadX = PadX, PadChip = PadChip,
+		PadTile = M.padTile })[name]
+	if not f then return end
+	-- the tile's menu takes the moves, Confirm, Back and Start; any other
+	-- button closes it and does what it does
+	if M.tmenu.open and name ~= 'Nav' and name ~= 'Confirm' and name ~= 'Escape' and name ~= 'PadStart' then M.closeTileMenu() end
+	-- (M.inPad: the functions it calls know the pad, not a key, called them)
+	M.padMode, M.inPad = true, true
+	f(a, b)
+	M.inPad = false
+	M.renderLegend()
+end
+
+-- Gamepad legend (GamepadLegend=1) -----------------------------------------------
+-- At the bottom of the launcher (over the on-screen keyboard while it is
+-- open), what the pad's buttons do now, with the buttons of the settings; the
+-- moves are left out (the stick and the D-pad are plain). It shows from a
+-- button of the pad (Pad()) until the mouse moves onto a tile or a key of the
+-- keyboard acts (M.keyInput); PadLegend* meters of Raintile.ini.
+M.LEGEND_ITEMS = 6
+M.padMode = false
+
+-- "BACK START" -> "Back+Start", "a" -> "A"
+function M.padLabel(text)
+	local names = { BACK = 'Back', START = 'Start', UP = 'Up', DOWN = 'Down', LEFT = 'Left', RIGHT = 'Right' }
+	local parts = {}
+	for b in text:upper():gmatch('[^%s+|,]+') do parts[#parts + 1] = names[b] or b end
+	return table.concat(parts, '+')
+end
+
+-- What the buttons do in the launcher as it is: { key, label } (a button
+-- without buttons in the settings is left out)
+function M.legendItems()
+	local list = {}
+	local function add(actions, label)
+		local keys = {}
+		for _, a in ipairs(actions) do
+			local b = trim(V.PadKeys[a] or '')
+			if b ~= '' then keys[#keys + 1] = M.padLabel(b) end
+		end
+		if #keys > 0 then list[#list + 1] = { key = table.concat(keys, ' / '), label = label } end
+	end
+	if M.tmenu.open then
+		add({ 'Confirm' }, 'Choose')
+		add({ 'Back' }, 'Close')
+	elseif power.open or M.more.open then
+		add({ 'Back' }, 'Close')
+	elseif osk.open then
+		add({ 'Confirm' }, 'Type')
+		add({ 'Delete' }, 'Delete')
+		add({ 'Done' }, 'Done')
+		add({ 'Back' }, 'Close')
+	elseif searchCat then
+		add({ 'Confirm' }, 'Launch')
+		add({ 'Search' }, 'Keyboard')
+		if #filter.chips > 0 then add({ 'PrevChip', 'NextChip' }, 'Filter') end
+		add({ 'Back' }, 'Close the search')
+	else
+		add({ 'Confirm' }, 'Launch')
+		if hover.on and hover.idx ~= 0 then add({ 'Done' }, 'Menu') end
+		add({ 'Search' }, 'Search')
+		add({ 'PrevCategory', 'NextCategory' }, 'Category')
+		add({ 'Options' }, 'Options')
+		add({ 'Back' }, 'Close')
+	end
+	while #list > M.LEGEND_ITEMS do table.remove(list) end
+	return list
+end
+
+-- A key or the mouse acted: the legend goes (until the next button of the pad)
+function M.keyInput()
+	if M.inPad or not M.padMode then return end
+	M.padMode = false
+	M.renderLegend()
+end
+
+-- Places and shows the legend, or hides it; only when what it shows changed
+function M.renderLegend()
+	local on = V.PadLegend and M.padMode and visible and ready
+	local items = on and M.legendItems() or {}
+	local sig = {}
+	for _, it in ipairs(items) do sig[#sig + 1] = it.key .. '=' .. it.label end
+	local key = table.concat(sig, '|') .. (osk.open and '|osk' or '') .. '|' .. V.ScreenW .. 'x' .. V.ScreenH
+	if key == M.legendKey then return end
+	M.legendKey = key
+	local padX, padY, gap, chipPad = 12, 6, 18, 7
+	local x, h = padX, 0
+	local placed = {}
+	for i = 1, M.LEGEND_ITEMS do
+		local it = items[i]
+		local chip, keyM, text = 'PadLegendChip' .. i, 'PadLegendKey' .. i, 'PadLegendText' .. i
+		if it then
+			set(keyM, 'Text', it.key)
+			set(text, 'Text', it.label)
+			local kw, kh = M.lineSize(keyM, it.key)
+			local lw, lh = M.lineSize(text, it.label)
+			local cw = kw + 2 * chipPad
+			placed[i] = { x = x, cw = cw, kh = kh }
+			x = x + cw + 6 + lw + gap
+			h = math.max(h, kh + 4, lh)
+		else
+			show(chip, false) show(keyM, false) show(text, false)
+		end
+	end
+	if #items == 0 then
+		show('PadLegendBg', false)
+		SKIN:Bang('!UpdateMeter', 'PadLegendBg')
+		SKIN:Bang('!Redraw')
+		return
+	end
+	local w = x - gap + padX
+	local bh = h + 2 * padY
+	local x0 = math.floor((V.ScreenW - w) / 2)
+	local y0 = math.floor(V.ScreenH - V.PadY - bh - 12)
+	if osk.open then
+		local _, _, _, _, oy = M.oskBox()
+		y0 = oy - bh - 8
+	end
+	local mid = y0 + math.floor(bh / 2)
+	set('PadLegendBg', 'X', tostring(x0))
+	set('PadLegendBg', 'Y', tostring(y0))
+	set('PadLegendBg', 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 18,18,24,220 | StrokeWidth 1 | Stroke Color %s',
+		w, bh, math.floor(bh / 2), V.HoverCategoryColor))
+	show('PadLegendBg', true)
+	for i, p in pairs(placed) do
+		local chip, keyM, text = 'PadLegendChip' .. i, 'PadLegendKey' .. i, 'PadLegendText' .. i
+		local ch = p.kh + 4
+		set(chip, 'X', tostring(x0 + p.x))
+		set(chip, 'Y', tostring(mid - math.floor(ch / 2)))
+		set(chip, 'Shape', string.format('Rectangle 0,0,%d,%d,%d | Fill Color 255,255,255,30 | StrokeWidth 0', p.cw, ch, math.floor(ch / 2)))
+		set(keyM, 'X', tostring(x0 + p.x + math.floor(p.cw / 2)))
+		set(keyM, 'Y', tostring(mid))
+		set(text, 'X', tostring(x0 + p.x + p.cw + 6))
+		set(text, 'Y', tostring(mid))
+		show(chip, true) show(keyM, true) show(text, true)
+	end
+	for _, m in ipairs({ 'PadLegendBg' }) do SKIN:Bang('!UpdateMeter', m) end
+	for i = 1, M.LEGEND_ITEMS do
+		SKIN:Bang('!UpdateMeter', 'PadLegendChip' .. i)
+		SKIN:Bang('!UpdateMeter', 'PadLegendKey' .. i)
+		SKIN:Bang('!UpdateMeter', 'PadLegendText' .. i)
+	end
+	SKIN:Bang('!Redraw')
 end
 
 -- Esc: closes the search if open, otherwise hides the launcher.
 function Escape()
+	M.keyInput()
 	if not ready then return end
+	if M.closeTileMenu() then return end
+	-- inside a widget (its parts): out of it, nothing closes
+	if not launching and M.partOut() then return end
 	if closePower() then return end
 	if M.closeMore() then return end
 	if typing then

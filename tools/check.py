@@ -177,6 +177,9 @@ def check_widgets():
         for key in ('name', 'kind', 'category', 'base', 'files'):
             if not w.get(key):
                 fail('widget %s has no %s' % (wid, key))
+        # the oldest Raintile it works with (CLAUDE.md, Widgets)
+        if not re.match(r'^\d+\.\d+\.\d+$', w.get('minVersion', '')):
+            fail('widget %s: no minVersion X.Y.Z (the oldest Raintile it works with)' % wid)
         base = w.get('base', '')
         files = w.get('files') or []
         for name in files:

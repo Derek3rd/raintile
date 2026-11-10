@@ -52,7 +52,7 @@ namespace RaintileOptions
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "choice", Key = "ScrollMode", Label = "Layout", Help = "Grid: rows and columns. Wheel: one line of square tiles on an arc (the thumbnails), the selected one in the middle and, if you like, as the launcher's backdrop; suggested docked. Each has its page below; the page of the other one is greyed out in the menu.", Choices = new List<string[]> { new[] { "Grid", "Grid" }, new[] { "Wheel", "Wheel" } } },
-                    new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last tile the first one comes back; with few tiles they repeat, so it still scrolls round." },
+                    new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last tile the first one comes back, when there are more than fit on screen (a tile never shows twice). A category can have its own (Categories, the category: Infinite scroll)." },
                     new Item { Kind = "int", Key = "ScrollStep", Label = "Mouse wheel notch", Help = "Rows (or columns) it scrolls in the grid, tiles it turns in the wheel.", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "size", Key = "Gap", Label = "Space", Help = "Under the top row, and between the tiles of the grid.", Axis = "H" },
                 } },
@@ -296,7 +296,7 @@ namespace RaintileOptions
                     new Item { Kind = "key", Key = "NavSearch", Label = "Search", Help = "" },
                 } },
             } },
-            new Page { Id = "gamepad", Switch = "Gamepad", Title = "Gamepad", Icon = 0xE7FC, Desc = "Xbox and compatible (XInput) controllers, read by a small background helper. Click a button and pick the new one on the dial, or press A on it and then the new button on the pad. With a second button, both are held together.", Groups = new List<Group>
+            new Page { Id = "gamepad", Switch = "Gamepad", Title = "Gamepad", Icon = 0xE7FC, Desc = "Xbox and compatible (XInput) controllers, read by a small background helper. Click a field and pick its buttons on the dial (each click puts one in or takes it out), or press A on it and hold the new buttons together on the pad. With more buttons (up to 4), all are held together.", Groups = new List<Group>
             {
                 new Group { Title = "Controller", Help = null, Items = new List<Item>
                 {
@@ -305,6 +305,7 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "GamepadDeadZone", Label = "Stick dead zone", Help = "How far the stick moves before it counts.", Min = 0.0, Max = 32767.0, Step = 500.0, Unit = "/ 32767" },
                     new Item { Kind = "int", Key = "GamepadRepeatDelay", Label = "Repeat delay", Help = "Holding a direction: wait before it repeats.", Min = 50.0, Max = 1000.0, Step = 10.0, Unit = "ms" },
                     new Item { Kind = "int", Key = "GamepadRepeatRate", Label = "Repeat interval", Help = "", Min = 30.0, Max = 500.0, Step = 10.0, Unit = "ms" },
+                    new Item { Kind = "bool", Key = "GamepadLegend", Label = "Button legend", Help = "At the bottom of the launcher, what the buttons do (not the moves). It shows after a button of the pad and goes when the mouse or the keyboard is used." },
                 } },
                 new Group { Title = "Buttons", Help = null, Items = new List<Item>
                 {
@@ -318,7 +319,7 @@ namespace RaintileOptions
                     new Item { Kind = "pad", Key = "GamepadNextCategory", Label = "Next category", Help = "" },
                     new Item { Kind = "pad", Key = "GamepadSearch", Label = "Search with the on-screen keyboard", Help = "The moves move on it, Launch types, Close closes the search." },
                     new Item { Kind = "pad", Key = "GamepadDelete", Label = "Delete", Help = "On the on-screen keyboard: the last letter." },
-                    new Item { Kind = "pad", Key = "GamepadDone", Label = "Done", Help = "On the on-screen keyboard: closes it and keeps the results." },
+                    new Item { Kind = "pad", Key = "GamepadDone", Label = "Done / tile menu", Help = "On the on-screen keyboard: closes it and keeps the results. Elsewhere: the menu of the highlighted tile, as a right click (up and down move in it, Launch picks, Close closes it)." },
                     new Item { Kind = "pad", Key = "GamepadPrevChip", Label = "Previous filter chip", Help = "Of the search results." },
                     new Item { Kind = "pad", Key = "GamepadNextChip", Label = "Next filter chip", Help = "" },
                     new Item { Kind = "pad", Key = "GamepadOptions", Label = "Open these options", Help = "As the gear." },
@@ -476,6 +477,7 @@ namespace RaintileOptions
             { "GamepadDone", "START" },
             { "GamepadDown", "DOWN" },
             { "GamepadLeft", "LEFT" },
+            { "GamepadLegend", "1" },
             { "GamepadNextCategory", "RB" },
             { "GamepadNextChip", "RT" },
             { "GamepadOptions", "RS" },
@@ -610,7 +612,7 @@ namespace RaintileOptions
         // The look of a category ([Category] of its file) a profile holds: not its
         // name, icon, place, Hidden or Sort, nor its tiles. tools/check.py checks
         // them against the [Category] keys Raintile.lua reads.
-        public static readonly string[] CATEGORY_LOOK = { "NX", "NY", "IconSize", "TileSize", "TileColor", "TileOpacity", "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos" };
+        public static readonly string[] CATEGORY_LOOK = { "NX", "NY", "InfiniteScroll", "IconSize", "TileSize", "TileColor", "TileOpacity", "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos" };
 
         // the buttons in the order of the dial (PadDial.cs): clockwise from the
         // top, as on the controller (bumpers and triggers at the top, Y B A X on

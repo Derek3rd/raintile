@@ -36,9 +36,9 @@ NY=2
 ScrollDir=V
 ; Mouse wheel notch: rows/columns scrolled in the grid, tiles turned in the wheel
 ScrollStep=1
-; 1 = infinite scroll: after the last row the first comes back; with fewer
-; tiles than fit on screen they repeat, so it still scrolls round; 0 = stop at
-; the end
+; 1 = infinite scroll: after the last row the first comes back, when there
+; are more tiles than fit on screen (a tile never shows twice); 0 = stop at
+; the end. A category can have its own (InfiniteScroll= in its [Category])
 InfiniteScroll=1
 ; 1 = carousel: the selected column (row with ScrollDir=V) stays in the
 ; middle of the screen, and a mouse wheel notch, the keys and the gamepad
@@ -318,6 +318,10 @@ GamepadToggle=BACK START
 GamepadDeadZone=12000
 GamepadRepeatDelay=350
 GamepadRepeatRate=110
+; 1 = a legend at the bottom of the launcher with what the buttons do (Launch,
+; Search, Category, Close...; not the moves), from a button of the pad until
+; the mouse or the keyboard is used again; 0 = none
+GamepadLegend=1
 ; Move the highlight (repeats while held); the left stick always moves too
 GamepadUp=UP
 GamepadDown=DOWN
@@ -333,7 +337,9 @@ GamepadNextCategory=RB
 ; Open the search with the on-screen keyboard: the moves move on it, Launch
 ; types, Delete deletes, Done keeps the results, Back closes
 GamepadSearch=Y
-; On the on-screen keyboard: delete the last letter / keep the results
+; On the on-screen keyboard: delete the last letter / keep the results; Done,
+; elsewhere: the menu of the highlighted tile (the entries of the right-click
+; menu: up / down, Launch picks, Back closes)
 GamepadDelete=X
 GamepadDone=START
 ; Previous / next filter chip of the search results

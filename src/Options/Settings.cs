@@ -24,7 +24,6 @@ namespace RaintileOptions
         public List<CheckBox> Boxes;   // stores: one switch per store
         public TextBox Text;
         public Button Swatch, Button, Clear;
-        public Button[] Buttons, Clears;   // pad: the two fields and their clear buttons
         public Control Input;   // text, font, category, secret, choice
         public ComboBox Area, Monitor;
         public NumberField Num;
@@ -389,71 +388,93 @@ namespace RaintileOptions
             return rows;
         }
 
-        // Gamepad buttons (GamepadToggle, GamepadConfirm...): two fields as the
-        // keys of the Keyboard page, the button's glyph in each; the second one,
-        // when set, is held together with the first. Clicked (mouse, keys) a
-        // field opens the dial of the buttons around it, pressed with the pad it
-        // waits for the next button of the pad (PadDial.cs).
-        UIElement NewPadControl(string key)
+        // Gamepad buttons (GamepadToggle, GamepadConfirm...): one field as the
+        // keys of the Keyboard page, the glyphs of its buttons in it (A + LB),
+        // all held together, up to PadMax. Clicked (mouse, keys) it opens the
+        // dial of the buttons around it, where each one picked goes in or out
+        // of the combination; pressed with the pad it waits for the buttons
+        // held together, taken when they are released (PadDial.cs).
+        const int PadMax = 4;
+
+        // (alone: the field only, its clear button in ctl[key].Clear for the
+        // action column of a form row, as the tile's hot key)
+        UIElement NewPadControl(string key, bool alone = false)
         {
-            var kp = NewPanel(Orientation.Horizontal);
-            kp.HorizontalAlignment = HorizontalAlignment.Right;
-            var c = new Ctl { Kind = "pad", Buttons = new Button[2], Clears = new Button[2] };
-            ctl[key] = c;
-            for (int i = 0; i < 2; i++)
+            var sp = NewPanel(Orientation.Horizontal);
+            sp.HorizontalAlignment = HorizontalAlignment.Right;
+            var b = NewButton("", "KeyButton");
+            var clear = NewClearButton("Clear the buttons");
+            if (!alone) { AddTo(sp, b); AddTo(sp, clear); }
+            ctl[key] = new Ctl { Kind = "pad", Button = b, Clear = clear };
+            b.Click += (s, e) =>
             {
-                int slot = i;
-                var sp = NewPanel(Orientation.Horizontal);
-                sp.Margin = T(Gap.Control, 0, 0, 0);
-                var b = NewButton("", "KeyButton");
-                var clear = NewClearButton("Clear the button");
-                AddTo(sp, b); AddTo(sp, clear);
-                AddTo(kp, sp);
-                c.Buttons[i] = b;
-                c.Clears[i] = clear;
-                b.Click += (s, e) =>
-                {
-                    if (padMode) StartPadCapture(key, slot);
-                    else OpenPadDial(key, slot);
-                };
-                clear.Click += (s, e) => SetPadSlot(key, slot, "");
-            }
+                if (padMode) StartPadCapture(key);
+                else OpenPadDial(key);
+            };
+            clear.Click += (s, e) => SetPadCombo(key, new List<string>());
             ShowPadSlots(key);
-            return kp;
+            return alone ? (UIElement)b : sp;
         }
 
         // The buttons of a pad setting: "BACK START" -> BACK, START (as the
-        // helper reads them; more than two stay, after the two fields)
+        // helper reads them; more than PadMax written by hand stay)
         static List<string> PadButtons(string value)
         {
             return Regex.Split((value ?? "").ToUpperInvariant(), @"[\s+|,]+").Where(x => x != "").Distinct().ToList();
         }
 
-        // The button of one field: the other keeps its own (an empty first field
-        // takes the second one's)
-        void SetPadSlot(string key, int slot, string button)
+        // "A + Left bumper" (the names of the buttons), "None" without any
+        static string PadNames(List<string> list)
         {
-            var list = PadButtons(V(key));
-            while (list.Count < 2) list.Add("");
-            list[slot] = button;
-            if (button != "" && list[1 - slot] == button) list[1 - slot] = "";
-            SetValue(key, string.Join(" ", list.Where(x => x != "")));
+            string name;
+            return list.Count == 0 ? "None" : string.Join(" + ", list.Select(x => Schema.PAD_LABELS.TryGetValue(x, out name) ? name : x));
+        }
+
+        // The value of a pad field: a setting, or the pad shortcut of the tile
+        // being edited (TilePadKey: PadKey= of the tile, Categories.cs)
+        const string TilePadKey = "@TilePadKey";
+
+        string PadValue(string key)
+        {
+            if (key != TilePadKey) return V(key);
+            var t = GetCurrentTile();
+            return t != null ? Core.GetKey(t, "PadKey") : "";
+        }
+
+        void SetPadValue(string key, string value)
+        {
+            if (key != TilePadKey) { SetValue(key, value); return; }
+            var t = GetCurrentTile();
+            if (t == null || loading) return;
+            Core.SetKey(t, "PadKey", value);
+            SetChanged(currentFile);
+        }
+
+        void SetPadCombo(string key, List<string> buttons)
+        {
+            SetPadValue(key, string.Join(" ", buttons));
             ShowPadSlots(key);
+        }
+
+        // A button picked on the dial: in the combination, or out of it (no
+        // more than PadMax)
+        void TogglePadButton(string key, string button)
+        {
+            var list = PadButtons(PadValue(key));
+            if (list.Contains(button)) list.Remove(button);
+            else if (list.Count < PadMax) list.Add(button);
+            else return;
+            SetPadCombo(key, list);
         }
 
         void ShowPadSlots(string key)
         {
             Ctl c;
             if (!ctl.TryGetValue(key, out c) || c.Kind != "pad") return;
-            var list = PadButtons(V(key));
-            for (int i = 0; i < 2; i++)
-            {
-                string b = i < list.Count ? list[i] : "";
-                c.Buttons[i].Content = NewPadFace(b);
-                string name;
-                AutomationProperties.SetName(c.Buttons[i], b == "" ? "None" : Schema.PAD_LABELS.TryGetValue(b, out name) ? name : b);
-                SetActionVisible(c.Clears[i], b != "");
-            }
+            var list = PadButtons(PadValue(key));
+            c.Button.Content = NewPadCombo(list);
+            AutomationProperties.SetName(c.Button, PadNames(list));
+            SetActionVisible(c.Clear, list.Count > 0);
             UpdatePadConflicts();
         }
 
@@ -462,29 +483,26 @@ namespace RaintileOptions
         // from UpdateControl: a reset, a profile)
         void UpdatePadConflicts()
         {
-            var pads = ctl.Where(kv => kv.Value.Kind == "pad" && kv.Value.Buttons != null).ToList();
-            Func<string, string> combo = k => string.Join(" ", PadButtons(V(k)).OrderBy(x => x, StringComparer.Ordinal));
+            var pads = ctl.Where(kv => kv.Value.Kind == "pad" && kv.Value.Button != null).ToList();
+            Func<string, string> combo = k => string.Join(" ", PadButtons(PadValue(k)).OrderBy(x => x, StringComparer.Ordinal));
             foreach (var kv in pads)
             {
                 string mine = combo(kv.Key);
                 var others = mine == "" ? new List<string>() : pads.Where(o => o.Key != kv.Key && combo(o.Key) == mine)
-                    .Select(o => { Page pg; var it = Schema.ItemOf(o.Key, out pg); return it != null ? it.Label : o.Key; }).ToList();
-                var list = PadButtons(V(kv.Key));
-                for (int i = 0; i < 2; i++)
+                    .Select(o => { if (o.Key == TilePadKey) return "the pad shortcut of the tile being edited"; Page pg; var it = Schema.ItemOf(o.Key, out pg); return it != null ? it.Label : o.Key; }).ToList();
+                var list = PadButtons(PadValue(kv.Key));
+                var b = kv.Value.Button;
+                if (b == padCaptureField) continue;
+                string tip = list.Count > 0 ? PadNames(list) + ". " : "";
+                if (others.Count > 0)
                 {
-                    var b = kv.Value.Buttons[i];
-                    if (b == padCaptureField) continue;
-                    string name, tip = i < list.Count && Schema.PAD_LABELS.TryGetValue(list[i], out name) ? name + ". " : "";
-                    if (others.Count > 0 && i < list.Count)
-                    {
-                        b.BorderBrush = ResBrush("DangerBrush");
-                        b.ToolTip = tip + "Also used by: " + string.Join(", ", others) + " (only the first one acts)";
-                    }
-                    else
-                    {
-                        b.ClearValue(Control.BorderBrushProperty);
-                        b.ToolTip = tip + "Click to pick the button, or press A on the pad and then the button";
-                    }
+                    b.BorderBrush = ResBrush("DangerBrush");
+                    b.ToolTip = tip + "Also used by: " + string.Join(", ", others) + " (only the first one acts)";
+                }
+                else
+                {
+                    b.ClearValue(Control.BorderBrushProperty);
+                    b.ToolTip = tip + "Click to pick the buttons, or press A on the pad and then hold the buttons together";
                 }
             }
         }

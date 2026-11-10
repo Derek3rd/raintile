@@ -195,8 +195,8 @@ LeftMouseUpAction=["steam://rungameid/570"]
 - The part is the meter's rectangle: write `X=` and `Y=` as numbers or formulas from the tile's top left corner (not `r`/`R`, relative to the meter before).
 - A tile with parts is never highlighted whole: between two parts the highlight stays on the last one.
 - The meter's own `MouseOverAction` / `MouseLeaveAction` still run.
-- The keyboard and the gamepad go from part to part too: coming onto the tile the highlight lands on the part nearest the side it comes from, the arrows (D-pad) move to the next part in that direction, and past the last one onto the next tile; `Enter` / `A` does what a click on the part does (its `LeftMouseUpAction`; a row of a list: its command). With the mouse on a part, the keys go on from it.
-- A part can take a direction itself: `KeyLeftAction=`, `KeyRightAction=`, `KeyUpAction=`, `KeyDownAction=` on its meter run when that arrow (D-pad) is pressed on it, and the highlight stays (e.g. left and right change a volume, [`AudioControl`](../widgets/AudioControl)). Up and down still go to the other parts and out of the tile, so take only left and right in a widget of one column.
+- The keyboard and the gamepad treat the tile as any other at first: the arrows (D-pad) highlight it whole and go on to the next tile. `Enter` / `A` enters it, onto its first part; inside, the arrows move to the next part in that direction and stay in the tile at its edges, `Enter` / `A` does what a click on the part does (its `LeftMouseUpAction`; a row of a list: its command), and `Esc` / `B` leaves it, the whole tile highlighted again (a second one closes the launcher, as always). With the mouse on a part, the keys are inside and go on from it.
+- A part can take a direction itself: `KeyLeftAction=`, `KeyRightAction=`, `KeyUpAction=`, `KeyDownAction=` on its meter run when that arrow (D-pad) is pressed on it, inside the tile, and the highlight stays (e.g. left and right change a volume, [`AudioControl`](../widgets/AudioControl)). The other directions still go to the other parts, so take only left and right in a widget of one column.
 
 ## Getting data: scripts
 
@@ -223,6 +223,7 @@ FinishAction=[!CommandMeasure MeasureScript "WidgetChanged()"]
 
 A widget whose data changes while it is on screen (a volume, a player) can keep its script running from `OnShow` to `OnHide` instead of starting it again and again; see [`AudioControl`](../widgets/AudioControl):
 
+- **A server**: [`Spotify`](../widgets/Spotify) is a small WebSocket server on `127.0.0.1` (a TCP listener with the handshake and the frames in C#), for a program that sends its data out (Spicetify's WebNowPlaying extension); only while the widget is shown, so the program connects again when it comes back.
 - **Into the meters**: the script sends `!SetOption` (then `!UpdateMeasureGroup`, `!UpdateMeterGroup` and `!Redraw`) to Rainmeter with `WM_COPYDATA` (the window of class `DummyRainWClass`), as `Rainmeter.exe !bang` does without a process each time, and only when something changed. Give it `#CURRENTCONFIG#` (the bangs' config) and a section's name, `#WIDGET:<Section>#`: the others have the same prefix (`CW11_`), and their group is the prefix without `_` (`CW11`). Colours and fonts of the launcher (`#AccentColor#`) are best passed as arguments, already resolved.
 - **From the meters**: a click writes a command with `!WriteKeyValue` into an `.ini` of the widget's folder (one per tile: `cmd_#WIDGET:Server#.ini`), which the script waits on (`FileSystemWatcher`); `$MouseX:%$` gives where on the meter it was clicked.
 - **Exit**: on the command `OnHide` writes, when Rainmeter is gone, and when a newer copy started for the same tile (after a refresh: it writes its id into the file). Nothing may be left running.
@@ -259,4 +260,4 @@ Use a key only for the service it is for, never write it to a file or a log, and
 
 ## Publishing in the gallery
 
-Add an entry to [`widgets/index.json`](../widgets/index.json), and the folder to `widgets/<Id>/` if it is hosted here: see [widgets/README.md](../widgets/README.md). With nightly builds the gallery reads the list of the `nightly` branch, so a widget can be tried there before a release.
+Add an entry to [`widgets/index.json`](../widgets/index.json), with `minVersion`, the oldest Raintile it works with (the gallery of older ones does not install it), and the folder to `widgets/<Id>/` if it is hosted here: see [widgets/README.md](../widgets/README.md). With nightly builds the gallery reads the list of the `nightly` branch, so a widget can be tried there before a release.

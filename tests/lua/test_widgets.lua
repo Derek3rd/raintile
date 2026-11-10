@@ -276,6 +276,35 @@ function T.gallery_spotify()
 	t.ok(g:find('-Port "8974"', 1, true), 'the Port setting does not reach the script')
 end
 
+-- Now Playing (widgets/NowPlaying): its sizes written out, its controls
+-- parts of the tile shown by OnFocus, the bar always a part
+function T.gallery_now_playing()
+	local s = R.new({})
+	host_mkdir(s.data .. 'Widgets')
+	host_copytree(s.repo .. '\\widgets\\NowPlaying', s.data .. 'Widgets\\NowPlaying', '')
+	local cat = s.data .. 'Categories\\Dashboard.ini'
+	R.writeFile(cat, R.readFile(cat) .. '\r\n[Now playing]\r\nWidget=custom\r\nParam=NowPlaying\r\nSize=2x2\r\n')
+	s:start()
+	t.clean(s)
+	local w
+	for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == 'NowPlaying' then w = x end end
+	t.ok(w, 'the widget tile is missing')
+	local g = grid(s)
+	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
+	for _, v in ipairs({ 'SB', 'SR', 'SF', 'SH', 'SCmd', 'SShow', 'SHide' }) do
+		own = own or (g:find('#' .. v .. '#', 1, true) and v)
+	end
+	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
+	local p = 'CW' .. w.widget.idx .. '_'
+	local api = s:upvalue('M').widgetInfo(w)
+	t.ok(api.onFocus and api.onFocus:find('!ShowMeterGroup "' .. p .. 'CoverCtl"', 1, true), 'OnFocus does not show the controls')
+	local parts = s:upvalue('M').widgetParts(w)
+	for _, name in ipairs({ 'Previous', 'Play', 'Next', 'Seek' }) do
+		t.ok(parts[p .. name], name .. ' is not a part of the tile')
+	end
+	t.ok(not parts[p .. 'Like'], 'a heart: Windows has none')
+end
+
 -- OnFocus= / OnBlur=: the highlight of the keys or the pad comes onto the
 -- widget's tile (before its parts are looked for: a part hidden until then,
 -- shown by OnFocus, is reached), and leaves it with another category

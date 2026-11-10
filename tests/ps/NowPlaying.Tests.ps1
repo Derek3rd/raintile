@@ -33,12 +33,20 @@ Test 'now playing: the position goes on between the writes of the player' {
 }
 
 Test 'now playing: the song in the meters' {
-    $colors = @{ Text = 'T'; Accent = 'A' }
+    $colors = @{ Text = 'T'; Dim = 'D'; Accent = 'A' }
     $song = @{ Title = 'Song'; Artist = 'Someone'; App = 'Chrome'; Playing = $false; Position = 30; Duration = 120; Shuffle = $false; Repeat = 'ALL'; Cover = ''; Note = '' }
     $bang = Format-PlayingBang $song 'CW5_' 'CW5' 'Raintile' $colors
     Assert-True ($bang.Contains('[!SetOption "CW5_Cover" "ToolTipText" "Song - Someone (Chrome)" "Raintile"]')) 'the song and the player'
     Assert-True ($bang.Contains('[!SetOption "CW5_ShuffleGlyph" "FontColor" "T" "Raintile"]')) 'shuffle off'
     Assert-True ($bang.Contains('[!SetOption "CW5_RepeatGlyph" "FontColor" "A" "Raintile"]')) 'repeat on'
+    Assert-True ($bang.Contains('[!SetOption "CW5_Shuffle" "Hidden" "0" "Raintile"]')) 'without what the player takes: every control'
+    # a player without shuffle, repeat or next (YouTube in a browser)
+    $song.Can = @{ Play = $true; Previous = $true; Next = $false; Shuffle = $false; Repeat = $false; Seek = $true }
+    $tube = Format-PlayingBang $song 'CW5_' 'CW5' 'Raintile' $colors
+    Assert-True ($tube.Contains('[!SetOption "CW5_Shuffle" "Hidden" "1" "Raintile"]')) 'shuffle not a part'
+    Assert-True ($tube.Contains('[!SetOption "CW5_RepeatGlyph" "FontColor" "D" "Raintile"]')) 'repeat dimmed, though on'
+    Assert-True ($tube.Contains('[!SetOption "CW5_NextGlyph" "FontColor" "D" "Raintile"]')) 'next dimmed'
+    Assert-True ($tube.Contains('[!SetOption "CW5_Play" "Hidden" "0" "Raintile"]')) 'play stays'
     Assert-True ($bang.Contains('[!SetOption "CW5_Progress" "Formula" "25" "Raintile"]')) 'the progress'
     Assert-True ($bang.Contains('[!SetOption "CW5_PlayGlyph" "Text" "' + [char]0xE768 + '" "Raintile"]')) 'play while paused'
     $live = Format-PlayingBang @{ Title = 'Live'; Artist = ''; App = 'Chrome'; Playing = $true; Position = 0; Duration = 0; Shuffle = $false; Repeat = 'NONE'; Cover = ''; Note = '' } 'CW5_' 'CW5' 'Raintile' $colors

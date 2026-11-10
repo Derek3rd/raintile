@@ -31,6 +31,7 @@ param(
     [int]$Interval = 500,
     [string]$Flag = '',
     [string]$Text = '240,240,245,255',
+    [string]$Dim = '150,150,160,255',
     [string]$Accent = '0,210,180,255'
 )
 
@@ -105,8 +106,11 @@ function Format-Time([int]$Seconds) {
 }
 
 # The bangs that show the song ($Song: Title, Artist, App, Playing,
-# Position, Duration, Shuffle, Repeat: NONE ALL ONE, Cover, Note) in the
-# widget's meters (<Prefix><Meter>), then the group updated and redrawn
+# Position, Duration, Shuffle, Repeat: NONE ALL ONE, Cover, Note, and Can:
+# what the player takes, Play Previous Next Shuffle Repeat Seek) in the
+# widget's meters (<Prefix><Meter>), then the group updated and redrawn. A
+# control the player does not take is dimmed, and its part hidden: no click,
+# and the keys and the pad pass it by.
 function Format-PlayingBang($Song, [string]$Prefix, [string]$Group, [string]$Config, $Colors) {
     $sb = New-Object System.Text.StringBuilder
     $set = {
@@ -128,10 +132,19 @@ function Format-PlayingBang($Song, [string]$Prefix, [string]$Group, [string]$Con
     & $set 'NoCover' 'Hidden' $(if ($Song.Cover -ne '') { '1' } else { '0' })
     # (Segoe MDL2 Assets: Play E768, Pause E769, RepeatAll E8EE, RepeatOne
     # E8ED; shuffle and repeat lit when on)
+    $can = $Song.Can
+    if (-not $can) { $can = @{ Play = $true; Previous = $true; Next = $true; Shuffle = $true; Repeat = $true; Seek = $true } }
+    foreach ($c in 'Play', 'Previous', 'Next', 'Shuffle', 'Repeat', 'Seek') {
+        & $set $c 'Hidden' $(if ($can[$c]) { '0' } else { '1' })
+    }
     & $set 'PlayGlyph' 'Text' $(if ($Song.Playing) { [string][char]0xE769 } else { [string][char]0xE768 })
-    & $set 'ShuffleGlyph' 'FontColor' $(if ($Song.Shuffle) { $Colors.Accent } else { $Colors.Text })
+    # (black on the white disc; without the disc, dimmed)
+    & $set 'PlayGlyph' 'FontColor' $(if ($can.Play) { '0,0,0,255' } else { $Colors.Dim })
+    & $set 'PreviousGlyph' 'FontColor' $(if ($can.Previous) { $Colors.Text } else { $Colors.Dim })
+    & $set 'NextGlyph' 'FontColor' $(if ($can.Next) { $Colors.Text } else { $Colors.Dim })
+    & $set 'ShuffleGlyph' 'FontColor' $(if (-not $can.Shuffle) { $Colors.Dim } elseif ($Song.Shuffle) { $Colors.Accent } else { $Colors.Text })
     & $set 'RepeatGlyph' 'Text' $(if ($Song.Repeat -eq 'ONE') { [string][char]0xE8ED } else { [string][char]0xE8EE })
-    & $set 'RepeatGlyph' 'FontColor' $(if ($Song.Repeat -eq 'ALL' -or $Song.Repeat -eq 'ONE') { $Colors.Accent } else { $Colors.Text })
+    & $set 'RepeatGlyph' 'FontColor' $(if (-not $can.Repeat) { $Colors.Dim } elseif ($Song.Repeat -eq 'ALL' -or $Song.Repeat -eq 'ONE') { $Colors.Accent } else { $Colors.Text })
     & $set 'Pos' 'Text' $(if ($dur -gt 0) { Format-Time $pos } else { '' })
     & $set 'Dur' 'Text' $(if ($dur -gt 0) { Format-Time $dur } else { '' })
     & $set 'Progress' 'Formula' $(if ($dur -gt 0) { [Math]::Round(100.0 * [Math]::Min($pos, $dur) / $dur, 2).ToString([Globalization.CultureInfo]::InvariantCulture) } else { '0' })
@@ -269,7 +282,7 @@ $cmdStamp = (Get-Item -LiteralPath $Cmd).LastWriteTimeUtc
 # every other round, the time at each
 $session = $null
 $song = @{ Title = ''; Artist = ''; App = ''; Playing = $false; Position = 0; Duration = 0; Shuffle = $false; Repeat = 'NONE'; Cover = ''; Note = $note }
-$colors = @{ Text = $Text; Accent = $Accent }
+$colors = @{ Text = $Text; Dim = $Dim; Accent = $Accent }
 $key = $null
 $cover = ''
 $round = 0
@@ -303,6 +316,15 @@ function Read-Session {
     # (players that do not say: off)
     $script:song.Shuffle = $info.IsShuffleActive -eq $true
     $script:song.Repeat = $(switch ([string]$info.AutoRepeatMode) { 'List' { 'ALL' } 'Track' { 'ONE' } default { 'NONE' } })
+    # what the player takes (YouTube in a browser: no shuffle, no repeat)
+    $ctl = $info.Controls
+    if ($ctl) {
+        $script:song.Can = @{
+            Play = $ctl.IsPlayPauseToggleEnabled -or $ctl.IsPlayEnabled -or $ctl.IsPauseEnabled
+            Previous = $ctl.IsPreviousEnabled; Next = $ctl.IsNextEnabled
+            Shuffle = $ctl.IsShuffleEnabled; Repeat = $ctl.IsRepeatEnabled; Seek = $ctl.IsPlaybackPositionEnabled
+        }
+    } else { $script:song.Can = $null }
     $script:song.Position = $pos
     $script:song.Duration = $dur
     $script:song.Cover = $(if ($script:song.Title) { $script:cover } else { '' })

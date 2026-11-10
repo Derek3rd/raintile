@@ -143,13 +143,10 @@ namespace RaintileOptions
         public TextBox Box;
         public FrameworkElement Root;
         public bool Sync;
-        // only odd numbers while it says so (Item.Odd, NewNumberField)
-        public Func<bool> Odd;
-        public Action<bool> MarkEven;
 
         // 'fallback' places the slider when the text is empty or not a number; the
         // text being typed is left alone. A value put in (a reset, another tile) is
-        // valid again, unless it is even where only odd ones go.
+        // valid again.
         public void Show(string value, double fallback)
         {
             Sync = true;
@@ -161,10 +158,8 @@ namespace RaintileOptions
                     Box.ClearValue(Control.BorderBrushProperty);
                 }
                 double n;
-                bool number = Core.TryNumber(value, out n);
-                if (!number) n = fallback;
+                if (!Core.TryNumber(value, out n)) n = fallback;
                 Slider.Value = Math.Min(Slider.Maximum, Math.Max(Slider.Minimum, n));
-                if (MarkEven != null) MarkEven(number && Odd != null && Odd() && OptionsApp.IsEven(n));
             }
             finally { Sync = false; }
         }
@@ -502,11 +497,9 @@ namespace RaintileOptions
         // fills the row, the box (always FieldWidth.S) ends it with the unit written
         // inside it, on the right. 'changed' gets the text (empty allowed: the caller
         // says what it means); text that is not a number gets the red border and is
-        // not reported. slider false: the box only (a port). odd: while it returns
-        // true only odd numbers (Item.Odd): the slider steps over the even ones, an
-        // even number typed or shown gets the red border and is not reported.
+        // not reported. slider false: the box only (a port).
         public NumberField NewNumberField(double min, double max, double step, string unit, Action<string> changed,
-            bool slider = true, double smallChange = 0, Func<bool> odd = null)
+            bool slider = true, double smallChange = 0)
         {
             var f = new NumberField();
             var g = NewGrid(slider ? "*" : "Auto", "Auto");
@@ -522,18 +515,10 @@ namespace RaintileOptions
             if (!string.IsNullOrEmpty(unit)) tb.Tag = unit;
             NumericOnly(tb, min < 0, step != Math.Floor(step));
             f.Slider = sl; f.Box = tb; f.Root = g;
-            f.Odd = odd;
-            if (odd != null) f.MarkEven = bad => MarkInvalid(tb, bad);
             sl.ValueChanged += (s, e) =>
             {
                 if (f.Sync) return;
                 double v = sl.Value;
-                if (odd != null && odd())
-                {
-                    // to the odd number that way
-                    double o = OddNumber(v, min, max, v < e.OldValue);
-                    if (o != v) { f.Sync = true; sl.Value = o; f.Sync = false; v = o; }
-                }
                 string t = Core.FormatNumber(v, step);
                 f.Sync = true;
                 tb.Text = t;
@@ -547,7 +532,6 @@ namespace RaintileOptions
                 string t = tb.Text.Trim();
                 double n;
                 bool bad = t != "" && !Core.TryNumber(t, out n);
-                if (!bad && t != "" && odd != null && odd() && Core.TryNumber(t, out n) && IsEven(n)) bad = true;
                 MarkInvalid(tb, bad);
                 if (bad) return;
                 if (Core.TryNumber(t, out n))
@@ -701,21 +685,6 @@ namespace RaintileOptions
                 if (text == null || !IsPartialNumber(chars, after(text.Trim()))) e.CancelCommand();
             });
         }
-
-        // Only odd numbers (Item.Odd: the carousel centres a column, so it needs an
-        // odd number of them): n when odd, otherwise the odd one next to it, below
-        // when 'down' (a slider moved down), always within min..max
-        public static double OddNumber(double n, double min, double max, bool down = false)
-        {
-            n = Math.Round(n);
-            if (!IsEven(n)) return n;
-            n += down ? -1 : 1;
-            if (n > max) n -= 2;
-            if (n < min) n += 2;
-            return n;
-        }
-
-        public static bool IsEven(double n) { return Math.Round(n) % 2 == 0; }
 
         // Buttons of the same width filling a row, 8 apart (docs/OptionsUI.md, 4)
         public static Grid NewEqualButtons(params FrameworkElement[] items)

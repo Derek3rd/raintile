@@ -138,29 +138,12 @@ namespace RaintileOptions
         {
             if (updating) return;
             values[key] = value;
-            FixOdd();
             UpdateDirty();
             UpdateResets();
             if (keyButtons.ContainsKey(key)) UpdateKeyConflicts();
             UpdateWhenRows();
             // the wheel's preview follows every setting (sizes, mode, colours)
             if (wheelCanvas != null) DrawWheel();
-        }
-
-        // Item.Odd: a setting that holds only odd numbers from now on (the carousel
-        // turned on, the scroll direction changed) and is even goes to the next odd
-        // one, so the launcher never gets a value it cannot centre
-        void FixOdd()
-        {
-            foreach (var page in Schema.Pages)
-                foreach (var g in page.Groups)
-                    foreach (var it in g.Items)
-                    {
-                        double n;
-                        if (it.Odd == null || !WhenHolds(it.Odd) || !Core.TryNumber(V(it.Key), out n) || !IsEven(n)) continue;
-                        values[it.Key] = Core.FormatNumber(OddNumber(n, it.Min, it.Max), it.Step);
-                        UpdateControl(it.Key);
-                    }
         }
 
         // Rows that apply only with other settings (Item.When): disabled, with
@@ -224,39 +207,6 @@ namespace RaintileOptions
                 SetRowApplies(w.Row, card && own, w.Why, card && !own);
             }
             UpdateNavApplies();
-            UpdateCarouselNote();
-        }
-
-        // Under Carousel, while it is on: the categories it does not apply to,
-        // which the launcher shows as a plain grid (their columns, or rows when
-        // scrolling vertically, or the size of tiles along the scroll are even:
-        // values from before the carousel, which FixOdd does not touch)
-        TextBlock carouselNote;
-        void UpdateCarouselNote()
-        {
-            if (carouselNote == null) return;
-            var list = new List<string>();
-            if (V("CenterSelection") == "1" && V("ScrollMode").Equals("grid", StringComparison.OrdinalIgnoreCase))
-            {
-                bool h = V("ScrollDir").Trim().StartsWith("h", StringComparison.OrdinalIgnoreCase);
-                string key = h ? "NX" : "NY";
-                foreach (var file in Core.GetCategoryFiles())
-                {
-                    var model = GetModel(file.Name);
-                    var c = Core.GetCategorySection(model);
-                    var why = new List<string>();
-                    double n;
-                    if (!Core.TryNumber(Core.GetKey(c, key), out n) && !Core.TryNumber(V(key), out n)) n = 1;
-                    if (Core.GetKey(c, key).Trim() != "" && IsEven(n)) why.Add(Core.FormatNumber(n, 1) + (h ? " columns" : " rows"));
-                    // (a tile is at most as large as the grid, as in the launcher)
-                    int even = Core.GetTiles(model).Count(t => IsEven(Math.Min(n, Core.GetSpan(c, t)[h ? 0 : 1])));
-                    if (even > 0) why.Add(even + (even == 1 ? " tile " : " tiles ") + (h ? "of an even width" : "of an even height"));
-                    if (why.Count > 0) list.Add(GetCategoryName(file.Name) + " (" + string.Join(", ", why) + ")");
-                }
-            }
-            carouselNote.Text = list.Count == 0 ? "" : "Not in " + string.Join(", ", list) +
-                ": they stay a plain grid. Change them in Categories, on All tiles (Columns, Tile width, Reset every tile > Size) or on the tiles.";
-            carouselNote.Visibility = list.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // Shows the current value of 'key' in its controls (after a reset)
@@ -321,8 +271,7 @@ namespace RaintileOptions
         {
             string key = item.Key;
             // an identifier or a huge range (a port): no slider
-            var f = NewNumberField(item.Min, item.Max, item.Step, item.Unit, t => SetValue(key, t), !item.NoSlider, 0,
-                item.Odd != null ? () => WhenHolds(item.Odd) : (Func<bool>)null);
+            var f = NewNumberField(item.Min, item.Max, item.Step, item.Unit, t => SetValue(key, t), !item.NoSlider);
             f.Show(V(key), item.Min);
             ctl[key] = new Ctl { Kind = item.Kind, Num = f, Text = f.Box };
             return f.Root;
@@ -919,7 +868,6 @@ namespace RaintileOptions
                         if (row != null) { CardPanel(card).Children.Add(row); rows++; }
                         var b = row as Border;
                         // the categories the carousel cannot centre (UpdateCarouselNote)
-                        if (b != null && item.Key == "CenterSelection") carouselNote = AddRowNote(b, "");
                         if (b != null && !string.IsNullOrEmpty(item.When))
                             whenRows.Add(new WhenRow { When = item.When, GroupWhen = groupWhen, Row = b, Why = AddRowReason(b, WhenReason(item.When, page)) });
                     }

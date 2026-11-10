@@ -134,7 +134,7 @@ namespace RaintileOptions
             return m;
         }
 
-        void SetChanged(string file) { changedFiles[file] = true; UpdateDirty(); PreviewChanged(file); UpdateCarouselNote(); }
+        void SetChanged(string file) { changedFiles[file] = true; UpdateDirty(); PreviewChanged(file); }
 
         // Square thumbnail: image (or colour) in a rounded box
         Border NewThumb(double size)
@@ -710,15 +710,6 @@ namespace RaintileOptions
         }
 
         bool IsWheelLayout() { return V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase); }
-
-        // The carousel: only odd columns (key NX) or rows (NY) along the scroll, as
-        // on Tiles > Grid (their Item.Odd); for the grid of a category and Size=
-        bool OddOf(string key)
-        {
-            Page page;
-            var item = Schema.ItemOf(key, out page);
-            return item != null && item.Odd != null && WhenHolds(item.Odd);
-        }
 
         // Where the logo and the lines of a tile are placed, as the launcher draws
         // them: width, height and logo box (before LogoScale=), in pixels.
@@ -2328,8 +2319,8 @@ namespace RaintileOptions
             gridColsReset = NewResetIcon("Back to the default (Tiles > Grid)");
             gridRowsReset = NewResetIcon("Back to the default (Tiles > Grid)");
             catLogoSizeReset = NewResetIcon("Back to the default (Tiles > Grid)");
-            gridCols = NewNumberField(1, 12, 1, "", t => setCatKey("NX", t, gridColsReset), true, 0, () => OddOf("NX"));
-            gridRows = NewNumberField(1, 8, 1, "", t => setCatKey("NY", t, gridRowsReset), true, 0, () => OddOf("NY"));
+            gridCols = NewNumberField(1, 12, 1, "", t => setCatKey("NX", t, gridColsReset));
+            gridRows = NewNumberField(1, 8, 1, "", t => setCatKey("NY", t, gridRowsReset));
             catLogoSize = NewSizeField("H", v => setCatKey("IconSize", v, catLogoSizeReset));
             var colsRow = AddTo(af, NewFormRow("Columns", gridCols.Root, "", null, gridColsReset));
             gridColsHint = FormHelp(colsRow);
@@ -2348,8 +2339,8 @@ namespace RaintileOptions
                 UpdatePlacementHint();
             };
             catSizeReset = NewResetIcon("Back to one cell");
-            catSizeCols = NewNumberField(1, 8, 1, "columns", catSizeChanged, true, 0, () => OddOf("NX"));
-            catSizeRows = NewNumberField(1, 8, 1, "rows", catSizeChanged, true, 0, () => OddOf("NY"));
+            catSizeCols = NewNumberField(1, 8, 1, "columns", catSizeChanged);
+            catSizeRows = NewNumberField(1, 8, 1, "rows", catSizeChanged);
             catSizeReset.Click += (s, e) => { setCatKey("TileSize", "", catSizeReset); ShowAllTiles(); };
             AddGridOnlyReason(AddTo(af, NewFormRow("Tile width", catSizeCols.Root, "Cells every tile takes in the grid (at most the grid of the category), unless it has a size of its own (its Width and Height; Reset every tile > Size gives them this one).", null, catSizeReset)));
             AddGridOnlyReason(AddTo(af, NewFormRow("Tile height", catSizeRows.Root)));
@@ -2513,8 +2504,8 @@ namespace RaintileOptions
                 UpdateTileDots();
                 UpdateTilePreview();
             };
-            sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged, true, 0, () => OddOf("NX"));
-            sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged, true, 0, () => OddOf("NY"));
+            sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged);
+            sizeRows = NewNumberField(1, 8, 1, "rows", sizeChanged);
             tileSizeReset = NewResetIcon("Back to the size of All tiles");
             tileSizeReset.Click += (s, e) =>
             {

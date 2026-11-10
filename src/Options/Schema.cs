@@ -25,9 +25,6 @@ namespace RaintileOptions
         // the settings this one applies with, "Key=value" (values separated by
         // |, conditions by ;): otherwise disabled, with the reason under it
         public string When;
-        // int: while these settings hold (as When) only odd numbers (the
-        // carousel centres a line: an odd number of them on screen)
-        public string Odd;
     }
 
     public class Group

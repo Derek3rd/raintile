@@ -41,11 +41,12 @@ ScrollStep=1
 ; the end
 InfiniteScroll=1
 ; 1 = carousel: the selected column (row with ScrollDir=V) stays in the
-; middle of the grid, and a mouse wheel notch, the keys and the gamepad bring
-; the previous or next tile there (one at a time, whatever ScrollStep). Needs
-; an odd number of columns (rows) and tiles of an odd number of them (Size=);
-; without InfiniteScroll the first and last tiles come to the middle too, with
-; empty room beside them. The mouse highlights and launches as in the grid.
+; middle of the screen, and a mouse wheel notch, the keys and the gamepad
+; bring the previous or next tile there (one at a time, whatever ScrollStep).
+; With an even number of columns (rows), or a tile of an even size, the grid
+; is half a column off: a half column shows at each side. Without
+; InfiniteScroll the first and last tiles come to the middle too, with empty
+; room beside them. The mouse highlights and launches as in the grid.
 CenterSelection=0
 
 ; --- Wheel ----------------------------------------------------------------------

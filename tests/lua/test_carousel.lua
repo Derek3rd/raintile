@@ -159,7 +159,7 @@ function T.tile_size_of_the_category()
 	local c = s:upvalue('cats')[s:upvalue('active')]
 	t.eq(c.tiles[1].cols, 3, 'tile without its own size')
 	t.eq(c.tiles[2].cols, 1, 'tile with its own size')
-	t.ok(s:upvalue('M').carousel(), 'carousel off with odd sizes')
+	t.ok(s:upvalue('M').carousel(), 'carousel off')
 	-- T1 takes the columns 0-2, T2 the 3rd: one notch centres T2
 	expect(s, 1, -1, 'opened on the wide tile')
 	s:call('Scroll(1)')
@@ -169,17 +169,49 @@ function T.tile_size_of_the_category()
 	t.clean(s)
 end
 
--- Values the carousel cannot centre (written by hand: Options refuses them):
--- a plain grid
-function T.even_is_a_plain_grid()
+-- An even number of columns: the selected tile still in the middle of the
+-- screen, the grid half a column off, a half column at each side
+function T.even_columns()
 	local s = carousel({ NX = 4 }, 9)
-	t.ok(not s:upvalue('M').carousel(), 'carousel with 4 columns')
-	t.eq(s:upvalue('offset'), 0, 'offset of the plain grid')
+	t.ok(s:upvalue('M').carousel(), 'no carousel with 4 columns')
+	-- the middle is between the 2nd and the 3rd column: 1.5 lines before it
+	expect(s, 1, -1.5, 'opened')
 	s:call('Scroll(1)')
-	t.eq(s:upvalue('offset'), 1, 'a notch of the plain grid')
-	s = carousel({}, 9, { [2] = '2x1' })
-	t.ok(not s:upvalue('M').carousel(), 'carousel with a tile two columns wide')
-	t.eq(s:upvalue('offset'), 0, 'offset with the even tile')
+	expect(s, 2, -0.5, 'a notch')
+	s:call('Nav(1, 0)')
+	expect(s, 3, 0.5, 'right')
+	-- the tile in the middle of the grid area
+	local V, M = s:upvalue('V'), s:upvalue('M')
+	local hover = s:upvalue('hover')
+	local x = s:upvalue('gridToPx')(hover.tx, hover.ty)
+	local mid = x + V.TileW / 2
+	t.ok(math.abs(mid - (V.ClipW or V.AreaW) / 2) <= V.Gap, string.format('the tile in the middle at %d, the area %d wide', mid, V.ClipW or V.AreaW))
+	-- the half columns at the sides are drawn: a tile cut by each edge
+	local cutLeft, cutRight
+	for slot = 1, V.Slots do
+		local m = s.meters['tile' .. slot]
+		if m and not m.hidden then
+			local mx = tonumber(m:opt('X', '0'))
+			if mx < 0 then cutLeft = true end
+			if mx + V.TileW > (V.ClipW or V.AreaW) then cutRight = true end
+		end
+	end
+	t.ok(cutLeft and cutRight, 'no half column at the sides')
+	t.clean(s)
+end
+
+-- A tile of an even width: its middle (between two columns) in the middle
+function T.even_tile_centred()
+	local s = carousel({}, 9, { [2] = '2x1' })
+	t.ok(s:upvalue('M').carousel(), 'no carousel with a tile two columns wide')
+	expect(s, 1, -2, 'opened')
+	-- T2 takes the columns 1 and 2: its middle, 1.5, in the middle (2 lines in)
+	s:call('Scroll(1)')
+	expect(s, 2, -0.5, 'the wide tile')
+	s:call('Scroll(1)')
+	expect(s, 3, 1, 'the next one')
+	s:call('Scroll(-1)')
+	expect(s, 2, -0.5, 'back to the wide tile')
 	t.clean(s)
 end
 

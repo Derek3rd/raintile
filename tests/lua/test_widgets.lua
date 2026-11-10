@@ -205,18 +205,24 @@ function T.gallery_audio_control()
 	t.ok(g:find('-Mode "Mixer"', 1, true), 'the tile\'s widget setting does not reach the script')
 	t.ok(g:find('AudioControl\\cmd_' .. p .. 'Server.ini" -Mode', 1, true), 'the command file is not in the widget\'s folder')
 	local parts = s:upvalue('M').widgetParts(w)
-	for _, name in ipairs({ 'Hit1', 'Hit2', 'Hit8', 'Track1', 'Track2' }) do
+	for _, name in ipairs({ 'Hit1', 'Hit2', 'Hit8' }) do
 		t.ok(parts[p .. name], name .. ' is not a part of the tile')
 	end
-	for _, name in ipairs({ 'Minus1', 'Plus1', 'Bar1' }) do
-		t.ok(not parts[p .. name], name .. ' is a part (the mouse\'s only)')
+	for _, name in ipairs({ 'Minus1', 'Plus1', 'Track1', 'Bar1' }) do
+		t.ok(not parts[p .. name], name .. ' is a part (the keys go from row to row only)')
 	end
+	t.ok(g:find('KeyRightAction=[!WriteKeyValue Cmd Do "up 1"', 1, true), 'right on a row does not turn its volume up')
+	-- the highlight of a row takes its bar too
+	local hit
+	for _, r in ipairs(s:upvalue('M').partRects(w)) do if r[1] == p .. 'Hit1' then hit = r end end
+	local track = s.meters[(p .. 'Track1'):lower()]
+	local ty = s:number(track:opt('Y', '0'), 0)
+	t.ok(hit and hit[3] + hit[5] >= ty + track:GetH(), 'the row\'s part ends above its bar')
 	local api = s:upvalue('M').widgetInfo(w)
 	t.ok(api.onShow and api.onShow:find('!CommandMeasure ' .. p .. 'Server "Run"', 1, true), 'OnShow does not start the script: ' .. tostring(api.onShow))
 	t.ok(api.onShow:find('cmd_' .. p .. 'Server.ini', 1, true) and api.onHide:find('Do quit', 1, true), 'OnShow/OnHide do not use the command file')
-	-- the keys: from a row's name right to its bar, where left and right
-	-- change its volume (KeyLeftAction= / KeyRightAction=) and the highlight
-	-- stays; down to the next bar; left from a name: out of the tile
+	-- the keys on a row (KeyLeftAction= / KeyRightAction=): its volume, the
+	-- highlight stays on it; up and down: the next row
 	for k, c in ipairs(s:upvalue('cats')) do
 		for _, tile in ipairs(c.tiles) do
 			if tile == w then s:call('Show()') s:call('SetCategory(' .. k .. ')') end
@@ -230,22 +236,13 @@ function T.gallery_audio_control()
 		local x = list[#list]
 		return x and (x[2] .. '=' .. x[3]) or ''
 	end
-	local before = #(skin.writes or {})
 	s:call('Nav(1, 0)')
-	t.eq(M.kpart and M.kpart.name, p .. 'Track1', 'right from the name is not its bar')
-	t.eq(#(skin.writes or {}), before, 'right from the name changed the volume')
-	s:call('Nav(1, 0)')
-	t.eq(last(), 'Do=up 1', 'right on the bar')
-	t.eq(M.kpart and M.kpart.name, p .. 'Track1', 'right moved the highlight off the bar')
+	t.eq(last(), 'Do=up 1', 'right on the first row')
+	t.eq(M.kpart and M.kpart.name, p .. 'Hit1', 'right moved the highlight off the row')
 	s:call('Nav(-1, 0)')
-	t.eq(last(), 'Do=down 1', 'left on the bar')
+	t.eq(last(), 'Do=down 1', 'left on the first row')
 	s:call('Nav(0, 1)')
-	t.eq(M.kpart and M.kpart.name, p .. 'Track2', 'down from the bar is not the next bar')
-	s:call("HoverPart('" .. p .. "Hit1')")
-	s:call('Nav(0, 1)')
-	t.eq(M.kpart and M.kpart.name, p .. 'Hit2', 'down from the name is not the next name')
-	-- left from a name: no part further left, so out of the tile
-	t.eq(M.partNext(w, p .. 'Hit2', -1, 0), nil, 'left from a name goes to another part of the widget')
+	t.eq(M.kpart and M.kpart.name, p .. 'Hit2', 'down from the first row')
 	t.clean(s)
 end
 
@@ -356,8 +353,10 @@ function T.gallery_now_playing()
 	end
 end
 
--- Keyboard and pad inside a widget with parts (the rows of its list): from
--- row to row, out of the tile at the last one, back onto the nearest row
+-- Keyboard and pad and a widget with parts (the rows of its list): the
+-- whole tile highlighted, Confirm enters it onto its first row, the arrows
+-- go from row to row and stay in it at its edges, Back leaves it (the whole
+-- tile again, the launcher still open), the arrows then go on to the tiles
 function T.parts_with_keys()
 	local s = skinWithWidget('Rows=7\r\n')
 	local w = testWidget(s)
@@ -371,25 +370,41 @@ function T.parts_with_keys()
 	local i = w.widget.idx
 	local row1, row2 = 'W' .. i .. 'RowHit1', 'W' .. i .. 'RowHit2'
 	t.ok(w.widget.partsAt[row1] and w.widget.partsAt[row2], 'the test widget has no two rows')
-	s:call("HoverPart('" .. row1 .. "')")
-	t.eq(M.kpart and M.kpart.name, row1, 'the mouse on a row: the keys go on from it')
+	-- the keys onto the widget's tile: the whole tile, not a row
+	local tiles = s:upvalue('cur')().tiles
+	local idx
+	for k, x in ipairs(tiles) do if x == w then idx = k end end
+	for _ = 1, 40 do
+		if hover.on and hover.idx == idx then break end
+		s:call('Nav(1, 0)')
+		if not (hover.on and hover.idx == idx) then s:call('Nav(0, 1)') end
+	end
+	t.eq(hover.idx, idx, 'the keys did not reach the widget\'s tile')
+	t.eq(M.kpart, nil, 'the keys went into the widget without Confirm')
+	-- Confirm: into it, onto its first row, nothing launched
+	s:call('Confirm()')
+	t.clean(s)
+	t.ok(not s:upvalue('launching'), 'Confirm on the widget launched the tile')
+	t.eq(M.kpart and M.kpart.name, row1, 'Confirm did not go into the widget onto its first row')
 	s:call('Nav(0, 1)')
 	t.clean(s)
 	t.eq(M.kpart and M.kpart.name, row2, 'down from the first row')
 	t.eq(hover.toy, w.widget.partsAt[row2][2], 'the highlight on the second row')
 	s:call('Nav(0, -1)')
 	t.eq(M.kpart and M.kpart.name, row1, 'up from the second row')
-	-- up from the first row: out of the tile (onto the one above, if any)
-	local idx = hover.idx
+	-- up from the first row: still in it
 	s:call('Nav(0, -1)')
+	t.eq(M.kpart and M.kpart.name, row1, 'out of the widget past its first row')
+	-- Back: out of it, the whole tile, the launcher open
+	s:call('Escape()')
 	t.clean(s)
-	t.ok(M.kpart == nil or M.kpart.t ~= w, 'still in the widget past its first row')
-	if hover.idx ~= idx then
-		-- and down again: onto its first row, not the whole tile
-		s:call('Nav(0, 1)')
-		t.clean(s)
-		t.eq(M.kpart and M.kpart.name, row1, 'back down into the widget')
-	end
+	t.eq(M.kpart, nil, 'Back did not leave the widget')
+	t.ok(s:upvalue('visible'), 'Back in the widget closed the launcher')
+	t.eq(hover.idx, idx, 'Back left the widget\'s tile')
+	t.eq(hover.toy, 0, 'the whole tile is not highlighted again')
+	-- the mouse on a row: inside, the keys go on from it
+	s:call("HoverPart('" .. row2 .. "')")
+	t.eq(M.kpart and M.kpart.name, row2, 'the mouse on a row: the keys go on from it')
 	-- Confirm on a row: the row, not the tile (no launch animation)
 	s:call('Confirm()')
 	t.ok(not s:upvalue('launching'), 'Confirm on a row launched the tile')

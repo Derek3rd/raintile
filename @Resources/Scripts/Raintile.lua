@@ -5912,10 +5912,13 @@ function M.slotOfTile(t)
 end
 
 -- Keyboard and pad inside a widget with parts (its meters with Part=1, the
--- rows of its list): the highlight goes from part to part as from tile to
--- tile. Coming onto the tile it lands on the part nearest the side it comes
--- from; with no part further that way it leaves the tile; Confirm presses the
--- part. M.kpart: the part highlighted, { t = tile, name = meter }.
+-- rows of its list): the arrows treat its tile as any other (the whole tile
+-- highlighted, the arrows on to the next one); Confirm enters it, onto its
+-- first part; inside, the arrows go from part to part (a part that takes a
+-- direction itself, KeyLeftAction= ..., does it: a volume) and stay in the
+-- tile at its edges; Confirm presses the part; Back leaves it, the whole
+-- tile highlighted again. The mouse on a part is inside too. M.kpart: the
+-- part highlighted, { t = tile, name = meter }.
 M.kpart = nil
 
 -- The parts of tile t as rectangles in the tile: { name, x, y, w, h }
@@ -5971,44 +5974,63 @@ function M.partStep(dx, dy)
 	if not (t and t.widget and next(M.widgetParts(t))) then M.kpart = nil return false end
 	local slot = M.slotOfTile(t)
 	if not slot then return false end
-	local kp, name = M.kpart, nil
-	if kp and kp.t == t then
-		if dx == 0 and dy == 0 then return true end
-		-- a part that takes that direction itself (KeyLeftAction= on its
-		-- meter, e.g. a volume): its action, the highlight stays
-		local m = SKIN:GetMeter(kp.name)
-		local key = dx < 0 and 'KeyLeftAction' or dx > 0 and 'KeyRightAction' or dy < 0 and 'KeyUpAction' or 'KeyDownAction'
-		local action = m and m:GetOption(key, '') or ''
-		if action ~= '' then SKIN:Bang(action) return true end
-		name = M.partNext(t, kp.name, dx, dy)
-		if not name then M.kpart = nil return false end   -- out of the tile
-	else
-		-- the whole tile highlighted (its parts placed only now): into it
-		name = M.partEnter(t, dx, dy)
-		if not name then return false end
-	end
+	-- the whole tile highlighted: the arrows go on to the other tiles
+	local kp = M.kpart
+	if not (kp and kp.t == t) then return false end
+	if dx == 0 and dy == 0 then return true end
+	-- a part that takes that direction itself (KeyLeftAction= on its meter,
+	-- e.g. a volume): its action, the highlight stays
+	local m = SKIN:GetMeter(kp.name)
+	local key = dx < 0 and 'KeyLeftAction' or dx > 0 and 'KeyRightAction' or dy < 0 and 'KeyUpAction' or 'KeyDownAction'
+	local action = m and m:GetOption(key, '') or ''
+	if action ~= '' then SKIN:Bang(action) return true end
+	-- no part further that way: the highlight stays (Back leaves the tile)
+	local name = M.partNext(t, kp.name, dx, dy)
+	if not name then return true end
 	M.kpart = { t = t, name = name }
 	hover.part = nil
 	M.focusPart(t, slot, name)
 	return true
 end
 
--- After Nav moved onto a widget with parts: onto its part nearest that side
+-- After Nav moved onto another tile: outside of any widget (its whole tile
+-- highlighted, Confirm enters it)
 function M.partArrive(dx, dy)
-	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
 	M.kpart = nil
-	if not (t and t.widget and next(M.widgetParts(t))) then return end
-	local slot, name = M.slotOfTile(t), M.partEnter(t, dx, dy)
-	if not (slot and name) then return end
+end
+
+-- Confirm on the whole tile of a widget with parts: into it, onto its first
+-- part (the top left one)
+function M.partIn(t)
+	if not (t and t.widget and next(M.widgetParts(t))) then return false end
+	local slot, name = M.slotOfTile(t), M.partEnter(t, 0, 0)
+	if not (slot and name) then return false end
 	M.kpart = { t = t, name = name }
+	hover.part = nil
 	M.focusPart(t, slot, name)
+	return true
+end
+
+-- Back inside a widget: out of it, its whole tile highlighted again
+function M.partOut()
+	local kp = M.kpart
+	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
+	if not (kp and kp.t == t) then return false end
+	M.kpart = nil
+	hover.part = nil
+	local slot = M.slotOfTile(t)
+	if slot then
+		local tx, ty = slotToGrid(slot)
+		focus(t, indexAt(slot), tx, ty)
+	end
+	return true
 end
 
 -- Confirm on a part: what a click on it does
 function M.partPress()
 	local kp = M.kpart
 	local t = hover.on and hover.idx ~= 0 and cur().tiles[hover.idx]
-	if not (kp and kp.t == t) then return false end
+	if not (kp and kp.t == t) then return M.partIn(t) end
 	local i, k = kp.name:match('^W(%d+)RowHit(%d+)$')
 	if i then WidgetRowClick(tonumber(i), tonumber(k)) return true end
 	local m = SKIN:GetMeter(kp.name)
@@ -7129,6 +7151,8 @@ end
 function Escape()
 	M.keyInput()
 	if not ready then return end
+	-- inside a widget (its parts): out of it, nothing closes
+	if not launching and M.partOut() then return end
 	if closePower() then return end
 	if M.closeMore() then return end
 	if typing then

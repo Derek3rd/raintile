@@ -158,4 +158,73 @@ function T.keys_to_the_rainside()
 	t.clean(s)
 end
 
+-- Under a full-screen program (RainsideFullscreen): hidden, widgets off,
+-- back after; its screen for the helper, written again on every load
+function T.covered()
+	local s = rainside({ RainsideCategory = 'Dashboard' })
+	local screen = R.readFile(s.resources .. 'Generated\\RainsideScreen.txt') or ''
+	t.eq(screen, '0|0|1920|1040', 'not its screen for the helper')
+	t.ok(R.readFile(s.resources .. 'Generated\\RainsideDashOn.txt'), 'its widgets are not on with it on screen')
+	t.eq(R.readFile(s.resources .. 'Generated\\DashOn.txt'), nil, 'the Rainside used the launcher\'s widget flag')
+	s:call('RainsideCovered(1)')
+	t.ok(logged(s, '!Hide'), 'not hidden under a full-screen program')
+	t.eq(R.readFile(s.resources .. 'Generated\\RainsideDashOn.txt'), nil, 'its widgets still on while covered')
+	s:call('RainsideCovered(0)')
+	t.ok(R.readFile(s.resources .. 'Generated\\RainsideDashOn.txt'), 'its widgets not back')
+	t.clean(s)
+	s = rainside({ RainsideFullscreen = 0 })
+	t.eq(R.readFile(s.resources .. 'Generated\\RainsideScreen.txt'), nil, 'its screen given with RainsideFullscreen=0')
+	t.clean(s)
+end
+
+-- Its room kept free (RainsideReserve, Fixed only): the file for the helper
+function T.reserve()
+	local s = rainside({ RainsideReserve = 1, RainsideSide = 'Left', RainsideSize = '150' })
+	t.eq(R.readFile(s.resources .. 'Generated\\RainsideReserve.txt'), 'left|0|0|150|1040', 'not its room for the helper')
+	t.clean(s)
+	s = rainside({ RainsideReserve = 1, RainsideMode = 'Edge' })
+	t.eq(R.readFile(s.resources .. 'Generated\\RainsideReserve.txt'), nil, 'room kept for a Rainside out of its edge')
+	t.clean(s)
+end
+
+-- The widgets' scripts watch the Rainside's flag, not the launcher's
+function T.widget_flag()
+	local s = rainside()
+	local M = s:upvalue('M')
+	t.eq(M.sideFlag('-Flag "#@#Generated\\DashOn.txt" -Text x'), '-Flag "#@#Generated\\RainsideDashOn.txt" -Text x', 'the flag not turned into the Rainside\'s')
+	t.eq(M.sideFlag('-Cmd x'), '-Cmd x', 'a value without the flag changed')
+	t.clean(s)
+end
+
+-- The launcher docked on the Rainside's side: beside it (Inside), or at
+-- the edge with the Rainside sliding aside (Outside)
+function T.launcher_on_the_same_side()
+	local base = { Rainside = 1, RainsideSide = 'Left', RainsideSize = '150', LauncherMode = 'Dock', DockSide = 'Left', DockSize = '600' }
+	local s = R.new({ settings = base }):start()
+	t.eq(s:upvalue('V').ScreenX, 150, 'the launcher is not beside the Rainside (Inside)')
+	t.clean(s)
+	base.RainsideOrder = 'Outside'
+	s = R.new({ settings = base }):start()
+	t.eq(s:upvalue('V').ScreenX, 0, 'the launcher is not at the edge (Outside)')
+	s:call('Hide()')
+	s:call('Show()')
+	t.ok(logged(s, 'RainsideShift(600) Raintile\\Rainside'), 'the Rainside not pushed aside')
+	s:call('Hide()')
+	t.ok(logged(s, 'RainsideShift(0) Raintile\\Rainside'), 'the Rainside not back at its edge')
+	t.clean(s)
+	-- the Rainside slides there and back
+	local r = rainside({ RainsideSide = 'Left', RainsideSize = '150' })
+	r:call('RainsideShift(600)')
+	t.ok(logged(r, '!Move 600 0'), 'the Rainside did not slide aside')
+	r:call('RainsideShift(0)')
+	t.ok(logged(r, '!Move 0 0'), 'the Rainside did not slide back')
+	t.atRest(r)
+	t.clean(r)
+	-- another side, or out of its edge: as before
+	base.RainsideOrder, base.RainsideSide = 'Inside', 'Right'
+	s = R.new({ settings = base }):start()
+	t.eq(s:upvalue('V').ScreenX, 0, 'the launcher moved for a Rainside on the other side')
+	t.clean(s)
+end
+
 return T

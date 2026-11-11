@@ -48,6 +48,15 @@ RainsideSize=10%
 RainsideHotKey=
 ; Edge: it goes back in after starting a tile
 RainsideCloseOnLaunch=1
+; 1 = hidden while a program covers its screen (a game, a video), back after
+RainsideFullscreen=1
+; Fixed: 1 = its room is kept free, as the taskbar's (maximised windows stop
+; beside it); 0 = it is over the windows
+RainsideReserve=0
+; The launcher docked on the same side (Fixed): Inside = it opens beside the
+; Rainside (edge, Rainside, launcher); Outside = it opens at the edge and the
+; Rainside slides aside (edge, launcher, Rainside)
+RainsideOrder=Inside
 
 ; --- Grid -----------------------------------------------------------------------
 ; Default visible tiles: NX columns x NY rows. Each category can have its own

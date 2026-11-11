@@ -113,6 +113,30 @@ function M.gen(name)
 	return resources .. 'Generated\\' .. (V.Instance or '') .. name
 end
 
+-- A small file for the helper: written when its text changes, removed
+-- with nil
+function M.keepFile(path, text)
+	if not text then
+		os.remove(path)
+		return
+	end
+	local f = io.open(path, 'rb')
+	local old = f and f:read('*a')
+	if f then f:close() end
+	if old == text then return end
+	f = io.open(path, 'wb')
+	if f then f:write(text) f:close() end
+end
+
+-- A value of a custom widget with the launcher's widget flag in it
+-- (#@#Generated\DashOn.txt, the file a widget's script watches to stop):
+-- the Rainside's own instead
+function M.sideFlag(v)
+	local i, j = v:lower():find('#@#generated\\dashon.txt', 1, true)
+	if not i then return v end
+	return v:sub(1, i - 1) .. '#@#Generated\\' .. V.Instance .. 'DashOn.txt' .. v:sub(j + 1)
+end
+
 -- Diagnostic messages in the Rainmeter log (DebugLog=1 in Settings.inc).
 local function dbg(msg)
 	if V.DebugLog then print('Raintile: ' .. msg) end
@@ -3421,6 +3445,10 @@ function D.customWidgetText(t, i, w, h)
 					:gsub('#WIDGETOPTION#', ((t.widget.option or ''):gsub('%%', '%%%%')))
 				-- #WIDGET:<Section>#: that section's name in the launcher
 				v = v:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end)
+				-- the Rainside's widgets are on screen while its own flag is
+				-- there (RainsideDashOn.txt): a script told the launcher's
+				-- watches that one
+				if V.Side then v = M.sideFlag(v) end
 				-- [Section] and [Section:...] references
 				v = v:gsub('%[([^%]%[:]+)(:?[^%]%[]*)%]', function(n, rest) return '[' .. ref(n) .. rest .. ']' end)
 				if key:match('^measurename%d*$') then v = ref(trim(v)) end
@@ -3736,7 +3764,7 @@ end
 -- The active category has widgets and is on screen: the helper is asked
 -- for the data (Generated\DashOn.txt: "<interval>|<processes>|<sensors>")
 function D.dashActive()
-	return ready and visible and not searchCat and cats[active] ~= nil and cats[active].widgets == true
+	return ready and visible and not M.covered and not searchCat and cats[active] ~= nil and cats[active].widgets == true
 end
 
 -- The widgets on screen, from dash.data
@@ -4409,6 +4437,14 @@ end
 local function advance()
 	local busy, moving = false, false
 
+	-- the Rainside sliding aside for the launcher (RainsideShift)
+	if V.Side and M.shift.at ~= M.shift.to then
+		local more
+		M.shift.at, more = approach(M.shift.at, M.shift.to, 0.5, 0.3)
+		M.shiftPlace()
+		if more then busy = true end
+	end
+
 	if M.dock.dir ~= 0 then
 		M.dock.p = math.min(1, math.max(0, M.dock.p + M.dock.dir * M.animScale / M.DOCK_FRAMES))
 		M.animFast = true
@@ -4551,6 +4587,8 @@ function M.sideSettings()
 	V.SideEdge = SKIN:GetVariable('RainsideMode', 'Fixed'):lower() == 'edge'
 	V.StartHidden, V.AutoHide = V.SideEdge, V.SideEdge
 	V.CloseOnLaunch = V.SideEdge and num('RainsideCloseOnLaunch', 1) ~= 0
+	V.SideFullscreen = num('RainsideFullscreen', 1) ~= 0
+	V.SideReserve = not V.SideEdge and num('RainsideReserve', 0) ~= 0
 	V.CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'
 	V.Wheel, V.CenterSelection = false, false
 	V.ShowClock, V.ShowDate, V.ShowPower = false, false, false
@@ -4567,6 +4605,27 @@ end
 function M.sideSide()
 	local side = SKIN:GetVariable('RainsideSide', 'Right'):lower()
 	return (side == 'left' or side == 'top' or side == 'bottom') and side or 'right'
+end
+
+-- The settings as the Rainside sees them (get: the settings' values): the
+-- launcher docked on its side, its own size
+function M.sideGet(get)
+	local side = trim(get('rainsideside') or ''):lower()
+	if side ~= 'left' and side ~= 'top' and side ~= 'bottom' then side = 'right' end
+	local own = { launchermode = 'Dock', dockside = side, docksize = get('rainsidesize') or '10%', _docklimit = '48' }
+	return function(key)
+		if own[key] then return own[key] end
+		return get(key)
+	end
+end
+
+-- (the launcher) a Rainside always there (Fixed) on the side it is docked on
+function M.sideAlong(get)
+	if trim(get('rainside') or '') ~= '1' or trim(get('rainsidecategory') or '') == '' then return false end
+	if (get('rainsidemode') or ''):lower() == 'edge' then return false end
+	local side = trim(get('rainsideside') or ''):lower()
+	if side ~= 'left' and side ~= 'top' and side ~= 'bottom' then side = 'right' end
+	return side == trim(get('dockside') or 'left'):lower()
 end
 
 -- Meters of the top row, which the Rainside never shows
@@ -4641,16 +4700,18 @@ local function writeSizes()
 		if values[key] ~= nil then return values[key] end
 		return defaults[key]
 	end
-	if V.Side then
-		-- the Rainside: docked on its side, its own size
-		local own = { launchermode = 'Dock', dockside = M.sideSide(), docksize = get('rainsidesize') or '10%', _docklimit = '48' }
-		local plain = get
-		get = function(key)
-			if own[key] then return own[key] end
-			return plain(key)
-		end
+	if V.Side then get = M.sideGet(get) end
+	local mode, rect, mon = M.launcherRect(get)
+	-- the launcher docked where the Rainside always is (RainsideOrder=Inside):
+	-- beside it
+	if not V.Side and mode == 'dock' and M.sideAlong(get) and (get('rainsideorder') or ''):lower() ~= 'outside' then
+		local _, r = M.launcherRect(M.sideGet(get))
+		local side = trim(get('dockside') or ''):lower()
+		if side == 'left' then rect[1] = rect[1] + r[3]
+		elseif side == 'right' then rect[1] = rect[1] - r[3]
+		elseif side == 'top' then rect[2] = rect[2] + r[4]
+		else rect[2] = rect[2] - r[4] end
 	end
-	local _, rect, mon = M.launcherRect(get)
 	V.MonW, V.MonH = mon[3], mon[4] -- for the percentages below
 	local names = {}
 	for name in pairs(SIZE_AXIS) do names[#names + 1] = name end
@@ -4750,6 +4811,11 @@ function Initialize()
 	V.SideConfig = V.MainConfig .. '\\Rainside'
 	-- (the name of its file, without .ini; empty with Rainside=0)
 	V.SideCategory = num('Rainside', 0) ~= 0 and trim(SKIN:GetVariable('RainsideCategory', '')):gsub('%.[iI][nN][iI]$', '') or ''
+	-- (the launcher, docked where the Rainside always is) RainsideOrder:
+	-- Outside = the Rainside slides aside while it is open (RainsideShift)
+	V.SideOutside = not V.Side and V.SideCategory ~= '' and SKIN:GetVariable('RainsideOrder', 'Inside'):lower() == 'outside'
+		and SKIN:GetVariable('LauncherMode', ''):lower() == 'dock' and SKIN:GetVariable('RainsideMode', 'Fixed'):lower() ~= 'edge'
+		and SKIN:GetVariable('RainsideSide', 'Right'):lower() == SKIN:GetVariable('DockSide', 'Left'):lower()
 	-- widgets left on screen by the previous load: the helper stops until shown
 	os.remove(M.gen('DashOn.txt'))
 	-- and the Steam downloads, followed only while it is open
@@ -5274,6 +5340,15 @@ function Show(how)
 	dbg('Show: visible=' .. tostring(visible) .. ' how=' .. tostring(how))
 	if not ready then return end
 	M.sideRelease()
+	-- (the Rainside opened with its keys over a full-screen program: shown)
+	if M.covered then
+		M.covered = false
+		if visible then
+			M.zpos(true)
+			SKIN:Bang('!Show')
+			updateDashState()
+		end
+	end
 	if visible then
 		-- a refresh while hidden (e.g. saving in the Options window) leaves
 		-- the window hidden although the script starts as visible: show it
@@ -5343,6 +5418,8 @@ function Hide()
 		M.setFocus(false)
 		return
 	end
+	-- (RainsideOrder=Outside) the Rainside back to its edge
+	if V.SideOutside and M.sideCat then M.sideShift(false) end
 	visible = false
 	stopTyping()
 	stopTicker()
@@ -5395,6 +5472,11 @@ function Toggle()
 		M.zpos(true)
 		SKIN:Bang('!Show')
 		M.setFocus(true)
+		-- (the Rainside, over a full-screen program: shown all the same)
+		if M.covered then
+			M.covered = false
+			updateDashState()
+		end
 		return
 	end
 	if visible then Hide() else Show() end
@@ -5441,11 +5523,67 @@ function M.toSide(code)
 end
 
 -- (the launcher) opening: the Rainside gives the keys back (and, coming
--- out of its edge, goes back in)
+-- out of its edge, goes back in); with RainsideOrder=Outside it slides
+-- aside, as far as the launcher is wide (tall)
 function M.sideRelease()
-	if V.Side or not M.sideFocused then return end
+	if V.Side then return end
+	if V.SideOutside and M.sideCat then M.sideShift(true) end
+	if not M.sideFocused then return end
 	M.sideFocused = false
 	SKIN:Bang('!CommandMeasure', 'MeasureScript', 'FocusLost()', V.SideConfig)
+end
+
+-- (the launcher, RainsideOrder=Outside) the Rainside aside while it is open
+function M.sideShift(open)
+	local px = 0
+	if open then px = (V.DockSide == 'left' or V.DockSide == 'right') and V.ScreenW or V.ScreenH end
+	SKIN:Bang('!CommandMeasure', 'MeasureScript', 'RainsideShift(' .. math.floor(px) .. ')', V.SideConfig)
+end
+
+-- (the Rainside) the launcher opening beside the edge pushes it aside, by
+-- px, and back (0) when it closes: it slides there (M.shift, in advance())
+M.shift = { at = 0, to = 0 }
+function RainsideShift(px)
+	if not V.Side or not ready then return end
+	M.shift.to = tonumber(px) or 0
+	if M.shift.at ~= M.shift.to then startTicker() end
+end
+
+function M.shiftPlace()
+	local d = math.floor(M.shift.at + 0.5)
+	local dx, dy = 0, 0
+	if V.DockSide == 'left' then dx = d elseif V.DockSide == 'right' then dx = -d
+	elseif V.DockSide == 'top' then dy = d else dy = -d end
+	SKIN:Bang('!Move', tostring(V.ScreenX + dx), tostring(V.ScreenY + dy))
+end
+
+-- (the Rainside, RainsideReserve=1) Windows put its room beside the
+-- taskbar, on the same side: there, from the helper
+function RainsideAt(x, y)
+	if not V.Side or not ready then return end
+	V.ScreenX, V.ScreenY = tonumber(x) or V.ScreenX, tonumber(y) or V.ScreenY
+	SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
+end
+
+-- (the Rainside, RainsideFullscreen=1) a program covering its screen (a
+-- game, a video) came to the front (1) or went (0), from the helper: it
+-- hides while covered, its widgets stop, and comes back
+M.covered = false
+function RainsideCovered(on)
+	if not V.Side or not ready then return end
+	local covered = on == 1
+	if covered == M.covered then return end
+	M.covered = covered
+	if not visible then return end
+	if covered then
+		M.closeTileMenu()
+		M.setFocus(false)
+		SKIN:Bang('!Hide')
+	else
+		M.zpos(true)
+		SKIN:Bang('!Show')
+	end
+	updateDashState()
 end
 
 -- (the launcher) GamepadRainside, from the helper: the Rainside's Toggle()
@@ -5538,6 +5676,19 @@ function PlaceWindow()
 	if oldSize ~= sizeLine then
 		sf = io.open(M.gen('LauncherSize.txt'), 'wb')
 		if sf then sf:write(sizeLine) sf:close() end
+	end
+	-- the Rainside: its screen, for the helper to tell when a program covers
+	-- it (RainsideFullscreen, RainsideCovered), and the room it keeps free
+	-- (RainsideReserve)
+	if V.Side then
+		local monitor = table.concat({ math.floor(num('MonitorX', V.ScreenX)), math.floor(num('MonitorY', V.ScreenY)),
+			math.floor(V.MonW or V.ScreenW), math.floor(V.MonH or V.ScreenH) }, '|')
+		-- (written again on every load: the helper tells this new Rainside
+		-- whether it is covered)
+		os.remove(M.gen('Screen.txt'))
+		M.keepFile(M.gen('Screen.txt'), V.SideFullscreen and monitor or nil)
+		M.keepFile(M.gen('Reserve.txt'), V.SideReserve and table.concat({ V.DockSide, math.floor(V.ScreenX), math.floor(V.ScreenY),
+			math.floor(V.ScreenW), math.floor(V.ScreenH) }, '|') or nil)
 	end
 	if V.Mode == 'window' then
 		SKIN:Bang('!Draggable', '1')

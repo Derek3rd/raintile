@@ -1091,6 +1091,108 @@ public class RaintilePad
         sideMouse = down;
     }
 
+    // --- The Rainside under a full-screen program (RainsideFullscreen) ---------
+    // While it keeps Generated\RainsideScreen.txt ("<x>|<y>|<w>|<h>": its
+    // monitor), a program covering that monitor in front (a game, a video)
+    // sends it RainsideCovered(1), and (0) when it goes; the file written
+    // again (the Rainside loaded again) tells it again.
+    public string SideScreenFile;
+    long nextScreenCheck, nextCovered;
+    bool screenOn, covered;
+    int screenX, screenY, screenW, screenH;
+    DateTime screenStamp = DateTime.MinValue;
+
+    void CoveredStep(IntPtr window, long now)
+    {
+        if (now >= nextScreenCheck)
+        {
+            nextScreenCheck = now + 2000;
+            bool on = false;
+            try
+            {
+                if (System.IO.File.Exists(SideScreenFile))
+                {
+                    DateTime stamp = System.IO.File.GetLastWriteTimeUtc(SideScreenFile);
+                    if (stamp != screenStamp || !screenOn)
+                    {
+                        string[] p = System.IO.File.ReadAllText(SideScreenFile).Trim().Split('|');
+                        on = p.Length >= 4 && int.TryParse(p[0], out screenX) && int.TryParse(p[1], out screenY)
+                            && int.TryParse(p[2], out screenW) && int.TryParse(p[3], out screenH) && screenW > 0 && screenH > 0;
+                        // (a new Rainside starts uncovered: told again)
+                        if (stamp != screenStamp) covered = false;
+                        screenStamp = stamp;
+                    }
+                    else on = true;
+                }
+            }
+            catch { on = false; }
+            screenOn = on;
+        }
+        if (!screenOn || now < nextCovered) return;
+        nextCovered = now + 500;
+        bool c = FullScreenInFront(window, screenX, screenY, screenW, screenH);
+        if (c == covered) return;
+        covered = c;
+        Send(window, CallTo(SideConfig, "RainsideCovered(" + (c ? "1" : "0") + ")"));
+    }
+
+    // --- The Rainside's room kept free (RainsideReserve) ----------------------
+    // While it keeps Generated\RainsideReserve.txt ("<side>|<x>|<y>|<w>|<h>"),
+    // its window is an app bar, as the taskbar: Windows keeps that room
+    // free of maximised windows. Let go when the file goes, the window
+    // changes or the helper quits.
+    [StructLayout(LayoutKind.Sequential)]
+    struct AppBarData { public int Size; public IntPtr Window; public uint Callback; public uint Edge; public Rect Area; public IntPtr Param; }
+
+    [DllImport("shell32.dll")]
+    static extern UIntPtr SHAppBarMessage(uint message, ref AppBarData data);
+
+    const uint ABM_NEW = 0, ABM_REMOVE = 1, ABM_QUERYPOS = 2, ABM_SETPOS = 3;
+    public string SideReserveFile;
+    IntPtr barWindow = IntPtr.Zero;
+    string barLine;
+    long nextBarCheck;
+
+    void ReserveStep(IntPtr rainmeterWindow, long now)
+    {
+        if (now < nextBarCheck) return;
+        nextBarCheck = now + 2000;
+        string line = null;
+        try { if (System.IO.File.Exists(SideReserveFile)) line = System.IO.File.ReadAllText(SideReserveFile).Trim(); }
+        catch { line = null; }
+        IntPtr w = line != null ? SizedWindow(ProcessOf(rainmeterWindow), SideSizeFile) : IntPtr.Zero;
+        if (barWindow != IntPtr.Zero && (w != barWindow || line != barLine)) ReleaseBar();
+        if (w == IntPtr.Zero || barWindow != IntPtr.Zero) return;
+        string[] p = line.Split('|');
+        int x, y, bw, bh;
+        if (p.Length < 5 || !int.TryParse(p[1], out x) || !int.TryParse(p[2], out y) || !int.TryParse(p[3], out bw)
+            || !int.TryParse(p[4], out bh)) return;
+        uint edge = p[0] == "left" ? 0u : p[0] == "top" ? 1u : p[0] == "bottom" ? 3u : 2u;
+        var d = new AppBarData { Size = Marshal.SizeOf(typeof(AppBarData)), Window = w };
+        if (SHAppBarMessage(ABM_NEW, ref d) == UIntPtr.Zero) return;
+        d.Edge = edge;
+        d.Area = new Rect { Left = x, Top = y, Right = x + bw, Bottom = y + bh };
+        SHAppBarMessage(ABM_QUERYPOS, ref d);
+        // (moved off the taskbar, if it is on that side too: as thick as it is)
+        if (edge == 0) d.Area.Right = d.Area.Left + bw;
+        else if (edge == 2) d.Area.Left = d.Area.Right - bw;
+        else if (edge == 1) d.Area.Bottom = d.Area.Top + bh;
+        else d.Area.Top = d.Area.Bottom - bh;
+        SHAppBarMessage(ABM_SETPOS, ref d);
+        barWindow = w;
+        barLine = line;
+        if (d.Area.Left != x || d.Area.Top != y)
+            Send(rainmeterWindow, CallTo(SideConfig, "RainsideAt(" + d.Area.Left + "," + d.Area.Top + ")"));
+    }
+
+    public void ReleaseBar()
+    {
+        if (barWindow == IntPtr.Zero) return;
+        var d = new AppBarData { Size = Marshal.SizeOf(typeof(AppBarData)), Window = barWindow };
+        SHAppBarMessage(ABM_REMOVE, ref d);
+        barWindow = IntPtr.Zero;
+    }
+
     // --- Play time -----------------------------------------------------------
 
     [DllImport("kernel32.dll")]
@@ -1431,12 +1533,16 @@ public class RaintilePad
         if (now >= nextDashCheck)
         {
             nextDashCheck = now + 100;
-            bool on = System.IO.File.Exists(DashFlag);
+            // the launcher's and the Rainside's widgets (RainsideDashOn.txt):
+            // the data for both, DashTick() to those that show some
+            dashMain = System.IO.File.Exists(DashFlag);
+            dashSide = SideDashFlag != null && System.IO.File.Exists(SideDashFlag);
+            bool on = dashMain || dashSide;
             if (on && !dashOn)
             {
                 try
                 {
-                    string[] p = System.IO.File.ReadAllText(DashFlag).Trim().Split('|');
+                    string[] p = System.IO.File.ReadAllText(dashMain ? DashFlag : SideDashFlag).Trim().Split('|');
                     int ms;
                     if (p.Length > 0 && int.TryParse(p[0], out ms)) dashInterval = Math.Max(250, ms);
                     dashProcs = p.Length < 2 || p[1] != "0";
@@ -1460,7 +1566,7 @@ public class RaintilePad
         var d = dash;
         d.LhmPort = dashPort;
         bool procs = dashProcs, sensors = dashSensors;
-        string bang = Call("DashTick()");
+        string bang = (dashMain ? Call("DashTick()") : "") + (dashSide ? CallTo(SideConfig, "DashTick()") : "");
         collecting = true;
         ThreadPool.QueueUserWorkItem(delegate
         {
@@ -1478,7 +1584,8 @@ public class RaintilePad
             finally { collecting = false; }
         });
     }
-    bool dashFirst;
+    bool dashFirst, dashMain, dashSide;
+    public string SideDashFlag;
     int dashPort = 8085;
 
     static void Send(IntPtr window, string bang)
@@ -1784,6 +1891,8 @@ public class RaintilePad
             if (DashFlag != null && window != IntPtr.Zero) { try { DashStep(window, now); } catch { } }
             if (window != IntPtr.Zero) { try { EdgesStep(window, now); } catch { } }
             if (SideKeysFile != null && window != IntPtr.Zero) { try { SideKeysStep(window, now); } catch { } }
+            if (SideScreenFile != null && window != IntPtr.Zero) { try { CoveredStep(window, now); } catch { } }
+            if (SideReserveFile != null && window != IntPtr.Zero) { try { ReserveStep(window, now); } catch { } }
             if (DownloadFlag != null && window != IntPtr.Zero) { try { DownloadStep(window, now); } catch { } }
             if (!PadEnabled) continue;
 
@@ -1837,11 +1946,14 @@ $pad.PadEnabled = [bool]$Gamepad
 $pad.TrackEnabled = [bool]$Track -and $Generated -and $Data
 if ($Generated) {
     $pad.DashFlag = Join-Path $Generated 'DashOn.txt'
+    $pad.SideDashFlag = Join-Path $Generated 'RainsideDashOn.txt'
     $pad.DashFile = Join-Path $Generated 'DashData.txt'
     $pad.EdgeFile = Join-Path $Generated 'DockEdge.txt'
     $pad.SideEdgeFile = Join-Path $Generated 'RainsideDockEdge.txt'
     $pad.SideKeysFile = Join-Path $Generated 'RainsideKeys.txt'
     $pad.SideSizeFile = Join-Path $Generated 'RainsideLauncherSize.txt'
+    $pad.SideScreenFile = Join-Path $Generated 'RainsideScreen.txt'
+    $pad.SideReserveFile = Join-Path $Generated 'RainsideReserve.txt'
     if ($Dash) { $pad.PrepareDash() }
     $pad.SizeFile = Join-Path $Generated 'LauncherSize.txt'
     $pad.DownloadFlag = Join-Path $Generated 'DownloadOn.txt'
@@ -1852,4 +1964,4 @@ if ($pad.TrackEnabled) {
     $pad.PlayedFile = Join-Path $Data 'TimePlayed.txt'
     $pad.ExeFile = Join-Path $Data 'GameExe.txt'
 }
-try { $pad.Run($quit) } finally { $mutex.ReleaseMutex() }
+try { $pad.Run($quit) } finally { $pad.ReleaseBar(); $mutex.ReleaseMutex() }

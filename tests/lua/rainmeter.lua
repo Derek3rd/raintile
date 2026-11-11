@@ -229,11 +229,19 @@ local RECORDED = {
 --   settings = { Key = value }  written to the user's Settings.inc
 --   screen = { x, y, w, h }      the screen (#SCREENAREA...#)
 --   work = { x, y, w, h }        its work area (#WORKAREA...#), the screen if not given
+--   skin = 'Rainside'            the Rainside (Rainside\Rainside.ini, config
+--                                Raintile\Rainside) instead of the launcher
 function R.new(opts)
 	opts = opts or {}
 	local self = setmetatable({}, Skin)
 	self.repo = opts.repo or REPO
 	self.tmp = host_mkdtemp()
+	self.side = opts.skin == 'Rainside'
+	-- the skin's own files, where Rainmeter has them (the Rainside includes
+	-- Raintile.ini from there)
+	host_copytree(self.repo .. '\\Raintile.ini', self.tmp .. '\\Skins\\Raintile\\Raintile.ini', '')
+	host_copytree(self.repo .. '\\Instance.inc', self.tmp .. '\\Skins\\Raintile\\Instance.inc', '')
+	host_copytree(self.repo .. '\\Rainside', self.tmp .. '\\Skins\\Raintile\\Rainside', '')
 	self.resources = self.tmp .. '\\Skins\\Raintile\\@Resources\\'
 	self.settingsPath = self.tmp .. '\\Settings\\'
 	self.data = self.settingsPath .. 'Raintile\\'
@@ -258,9 +266,10 @@ function R.new(opts)
 		['@'] = self.resources,
 		settingspath = self.settingsPath,
 		skinspath = self.tmp .. '\\Skins\\',
-		currentpath = self.tmp .. '\\Skins\\Raintile\\',
+		currentpath = self.tmp .. '\\Skins\\Raintile\\' .. (self.side and 'Rainside\\' or ''),
 		rootconfigpath = self.tmp .. '\\Skins\\Raintile\\',
-		currentconfig = 'Raintile', rootconfig = 'Raintile', currentfile = 'Raintile.ini',
+		currentconfig = self.side and 'Raintile\\Rainside' or 'Raintile', rootconfig = 'Raintile',
+		currentfile = self.side and 'Rainside.ini' or 'Raintile.ini',
 		programpath = 'C:\\Program Files\\Rainmeter\\',
 		screenareax = tostring(sc[1]), screenareay = tostring(sc[2]),
 		screenareawidth = tostring(sc[3]), screenareaheight = tostring(sc[4]),
@@ -304,7 +313,12 @@ end
 function Skin:parseFile(path, current, depth)
 	if depth > 10 then return current end
 	local text = readFile(path)
-	if not text then return current end
+	-- (Rainmeter logs "Unable to read file": kept for the tests)
+	if not text then
+		self.unread = self.unread or {}
+		self.unread[#self.unread + 1] = path
+		return current
+	end
 	text = text:gsub('^\239\187\191', '')
 	for line in text:gmatch('[^\r\n]+') do
 		local t = trim(line)
@@ -556,7 +570,7 @@ function Measure:Disable() end
 
 function Skin:build()
 	self.sections, self.byName, self.vars = {}, {}, {}
-	self:parseFile(self.repo .. '\\Raintile.ini', nil, 0)
+	self:parseFile(self.side and (self.tmp .. '\\Skins\\Raintile\\Rainside\\Rainside.ini') or (self.repo .. '\\Raintile.ini'), nil, 0)
 	self.meters, self.meterList, self.measures, self.groups = {}, {}, {}, {}
 	for _, s in ipairs(self.sections) do
 		if s.keys.meter then
@@ -688,12 +702,14 @@ local function group(self, name)
 end
 
 -- a bang aimed at another skin (the config is the last argument)
+local OWN = 'raintile' -- the config of the skin running the bang
 local function elsewhere(t, n)
 	local config = t[n]
-	return config ~= nil and config ~= '' and config:lower() ~= 'raintile' and config ~= '#CURRENTCONFIG#'
+	return config ~= nil and config ~= '' and config:lower() ~= OWN and config ~= '#CURRENTCONFIG#'
 end
 
 function Skin:bang(t)
+	OWN = self.builtins.currentconfig:lower()
 	local name = (t[1] or ''):lower()
 	self.log[#self.log + 1] = table.concat(t, ' ')
 	for k = 2, #t do

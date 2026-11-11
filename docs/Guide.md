@@ -951,9 +951,9 @@ The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your da
 - **Your categories are gone after an update**: they are copied from `Skins\@Backup\Raintile\@Resources\` the first time the new version loads; if the backup option was turned off in the installer, copy `Categories\` and `Images\` from your old copy into the data folder by hand.
 - **The update check fails**: Options > Info shows the error (no connection, GitHub not reachable). It is retried on the next load after a day, or with *Check now*.
 - **Added games are missing images**: only Steam has local images; for the other stores set `SteamGridDBKey` before adding them. With `DebugLog=1` the search writes what it found per store to the log (`Raintile: scan:` lines).
-- **A tile is greyed out but the game is installed**: it was reported as [no longer installed](#games-no-longer-installed). Check that its store is ticked in Import > *Where to look* and press *Search again*, or press **Keep** in Import.
+- **A tile is greyed out but the game is installed**: it was reported as [no longer installed](#games-no-longer-installed). Check that its store is ticked in Import > *Where to look* and search again with the refresh button of Import > *Found*, or press **Keep** in Import.
 - **No play time on a Steam tile**: its command must be `steam://rungameid/<id>` (or the tile must have `Source=Steam:<id>`), and Steam must have recorded time for the account you play with; with `TileInfo=Hover` it only shows on the highlighted tile.
-- **A game or app is not in the list**: check that its source is ticked in Import > *Where to look*, then *Search again*. Anything else can always be added by hand with its `.lnk` shortcut.
+- **A game or app is not in the list**: check that its source is ticked in Import > *Where to look*, then search again with the refresh button of Import > *Found*. Anything else can always be added by hand with its `.lnk` shortcut.
 - **Thumbnails are not created**: they are made by PowerShell in the background; errors are listed in the log. Deleting `Generated\Thumbs\` forces a rebuild.
 - **Slow or choppy animations on very large screens**: every animation step redraws the whole full-screen window. Turn off the heaviest ones (`AnimScroll`, `BgStyle=Crop`), lower `AnimAppearFrames`/`LaunchAnimFrames` or raise the `Anim*Smooth` values.
 

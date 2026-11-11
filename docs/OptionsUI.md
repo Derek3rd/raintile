@@ -176,6 +176,7 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 | `0xE74D` | `Glyph.Delete` | **An entry of a list** goes away (a tile, a category): in the list's header, always asked | "Delete ..." |
 | `0xE710` | `Glyph.Add` | A new entry of a list | "New ..." |
 | `0xE74A` `0xE74B` `0xE72B` `0xE72A` | `Glyph.Up` `Down` `Left` `Right` | Move an entry in a list | "Move up", ... |
+| `0xE72C` | `Glyph.Refresh` | **A list** is read again from where it comes from (Import > Found: the search runs again): at the right end of the list's filter row, disabled while it runs | "Search again" |
 
 In short: the arrow and the x act on a field, in the action column of its row (or,
 for a field with two values such as a pair of keys, right after each value); the bin
@@ -270,6 +271,27 @@ Widths: number and size boxes `FieldWidth.S` (120), the px / % combo after a siz
 - A row of buttons is either all `Auto` and aligned to the start, or all the same
   width filling the row (`UniformGrid`): never mixed.
 
+### Sizes taken from the layout
+
+A size computed from the window's own layout (in `ScrollChanged` or `SizeChanged`,
+or a binding to `ActualWidth` / `ActualHeight`) must not change what decides that
+layout. Otherwise, at some window sizes, WPF lays the page out again and again and
+the window stalls for a second or more. This has happened several times. The category
+preview followed its column: the scrollbar showed, the preview shrank, the bar hid,
+the preview grew. Every settings page whose height was close to the window's stalled
+when its help text wrapped across that point. The Found list filling the page stalled
+when a filter row wrapped. Each time, a scrollbar that took width from the content
+made it wrap differently, which showed or hid the bar again.
+
+- Scrollers of pages and panes use the `PageScroller` style (`NewPageScroller`,
+  `KeepScrollBarRoom`). The bar is drawn over the room kept for it on the right
+  (`Gap.ScrollBar`), so the content's width is the same with or without it. A new
+  scroller of a page or pane uses it too.
+- Take widths from the scroller, never from the content inside it (`UpdateFraming`).
+- Check with `tools\options-resize.ps1 -Base origin/nightly -Page <entry>`. It narrows
+  and widens the window step by step on the page and fails when a step takes more
+  than 200 ms (on nightly, every page stays under about 20 ms).
+
 ## 5. Type sizes (`Fs`)
 
 | Use | Size |
@@ -350,6 +372,11 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 - An empty list says so in its place, in `Fs.Help`, with what to do ("No tiles yet:
   add one with the + button.").
 - Long names are cut with `SetTrimmed`.
+- A list that is the main content of its page (Import > Found) fills the height left
+  on the page (`FillPageHeight`), with a minimum under which the page scrolls.
+- A list filtered as you type keeps its entries once built and only shows them again
+  (Import > Found: `foundEntries`). Building every entry and reading every image from
+  disk at each letter froze the window for half a second.
 
 ## 10. When changes are written
 
@@ -388,6 +415,8 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
       field opens the right keyboard. These were found only by trying with the pad:
       say in the hand-over which of them were not tried.
 - [ ] Fits the narrowest window (960 px): nothing cut without its tooltip.
+- [ ] A size taken from the layout ("Sizes taken from the layout"):
+      `tools\options-resize.ps1 -Base origin/nightly -Page <entry>` passes.
 - [ ] `tools\options-shots.ps1 -Base origin/nightly` (with `-Page <entry>` when only
       that page's own code changed): only the pages you meant to change are
       different.

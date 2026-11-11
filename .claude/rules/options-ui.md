@@ -28,3 +28,7 @@ paths:
   report names it (several: `-Page General,Tiles`). A step that cannot show in the
   shots (a control hidden with the frozen data): no shots, and say so in the
   hand-over.
+- A size taken from the layout (`ScrollChanged`, `SizeChanged`, a binding to
+  `ActualWidth`/`ActualHeight`): follow "Sizes taken from the layout" in
+  `docs/OptionsUI.md` and run `tools\options-resize.ps1 -Base origin/nightly -Page <entry>`.
+  Shots cannot show a window that stalls while it is resized.

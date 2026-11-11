@@ -1,5 +1,6 @@
-# Helper.ps1: the gamepad buttons (RaintilePad.Step), compiled from the
-# helper's C# without running it.
+# Helper.ps1: the gamepad buttons (RaintilePad.Step), the launcher's window
+# among the skins and the wait of the main loop, compiled from the helper's
+# C# without running it.
 
 $helperScript = Join-Path $Root '@Resources\Scripts\Helper.ps1'
 
@@ -117,4 +118,29 @@ Test 'Pad: the Rainside has no button by default; its own open it, also hidden' 
     $p = New-Pad 'Rainside=LS'
     Assert-Equal (Press $p 'LS') 'RainsideToggle()' 'LS'
     Assert-Equal (Press $p '') '' 'released'
+}
+
+# The launcher's window among Rainmeter's skins ("w, h, visible 1/0" each)
+function Pick([object[]]$Skins, [int]$W, [int]$H) {
+    $list = New-Object 'System.Collections.Generic.List[int[]]'
+    foreach ($s in $Skins) { $list.Add([int[]]$s) }
+    return [RaintilePad]::PickLauncher($list.ToArray(), $W, $H)
+}
+
+Test 'Helper: the launcher hidden is never another skin' {
+    # (a bigger skin on the desktop: its focus was followed in the launcher's place)
+    Assert-Equal (Pick @(@(2560, 1440, 1), @(1792, 974, 0), @(300, 200, 1)) 1792 974) 1 'hidden, among visible skins'
+    Assert-Equal (Pick @(@(2560, 1440, 1), @(1792, 974, 1)) 1792 974) 1 'shown, next to a bigger skin'
+    Assert-Equal (Pick @(@(1792, 974, 0), @(1793, 973, 1)) 1792 974) 1 'the visible one of its size first (a pixel off)'
+    Assert-Equal (Pick @(@(300, 200, 1), @(2560, 1440, 1), @(900, 900, 0)) 1792 974) 1 'no window of its size: the largest visible'
+    Assert-Equal (Pick @(@(300, 200, 1), @(2560, 1440, 1), @(4000, 4000, 0)) 0 0) 1 'no size: the largest visible'
+    Assert-Equal (Pick @(, @(300, 200, 0)) 0 0) -1 'nothing visible, no size'
+    Assert-Equal (Pick @() 1792 974) -1 'no skin'
+}
+
+Test 'Helper: the loop waits longer at rest, not with a controller' {
+    $pad = New-Object RaintilePad('Raintile', 12000, 350, 110)
+    Assert-Equal ($pad.Wait($false, 0)) ([RaintilePad]::IDLE_WAIT) 'at rest'
+    Assert-Equal ($pad.Wait($true, 0)) ([RaintilePad]::ACTIVE_WAIT) 'a controller connected'
+    Assert-True ([RaintilePad]::IDLE_WAIT -ge 50 -and [RaintilePad]::ACTIVE_WAIT -le 16) 'the two waits'
 }

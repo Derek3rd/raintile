@@ -1039,7 +1039,7 @@ public class RaintilePad
     bool sideKeys, sideSent, sideMouse;
     IntPtr sideForeground, sideWindow;
 
-    IntPtr SizedWindow(uint rainmeter, string file)
+    IntPtr SizedWindow(uint rainmeter, string file, bool hidden = false)
     {
         int w, h;
         try
@@ -1052,7 +1052,7 @@ public class RaintilePad
         while ((window = FindWindowEx(IntPtr.Zero, window, "RainmeterMeterWindow", null)) != IntPtr.Zero)
         {
             Rect r;
-            if (ProcessOf(window) != rainmeter || !IsWindowVisible(window) || !GetWindowRect(window, out r)) continue;
+            if (ProcessOf(window) != rainmeter || (!hidden && !IsWindowVisible(window)) || !GetWindowRect(window, out r)) continue;
             if (Math.Abs(r.Right - r.Left - w) <= 1 && Math.Abs(r.Bottom - r.Top - h) <= 1) return window;
         }
         return IntPtr.Zero;
@@ -1140,7 +1140,10 @@ public class RaintilePad
     // While it keeps Generated\RainsideReserve.txt ("<side>|<x>|<y>|<w>|<h>"),
     // its window is an app bar, as the taskbar: Windows keeps that room
     // free of maximised windows. Let go when the file goes, the window
-    // changes or the helper quits.
+    // changes or the helper quits. A copy of the helper stopped without
+    // quitting (Rainmeter ends it on a refresh of the launcher) cannot let
+    // go: the next one does, without the file (also with the Rainside
+    // hidden), and before taking the window again.
     [StructLayout(LayoutKind.Sequential)]
     struct AppBarData { public int Size; public IntPtr Window; public uint Callback; public uint Edge; public Rect Area; public IntPtr Param; }
 
@@ -1149,7 +1152,7 @@ public class RaintilePad
 
     const uint ABM_NEW = 0, ABM_REMOVE = 1, ABM_QUERYPOS = 2, ABM_SETPOS = 3;
     public string SideReserveFile;
-    IntPtr barWindow = IntPtr.Zero;
+    IntPtr barWindow = IntPtr.Zero, freedWindow = IntPtr.Zero;
     string barLine;
     long nextBarCheck;
 
@@ -1160,14 +1163,24 @@ public class RaintilePad
         string line = null;
         try { if (System.IO.File.Exists(SideReserveFile)) line = System.IO.File.ReadAllText(SideReserveFile).Trim(); }
         catch { line = null; }
-        IntPtr w = line != null ? SizedWindow(ProcessOf(rainmeterWindow), SideSizeFile) : IntPtr.Zero;
-        if (barWindow != IntPtr.Zero && (w != barWindow || line != barLine)) ReleaseBar();
+        IntPtr w = SizedWindow(ProcessOf(rainmeterWindow), SideSizeFile, line == null);
+        if (barWindow != IntPtr.Zero && (line == null || w != barWindow || line != barLine)) ReleaseBar();
+        if (line == null)
+        {
+            // (once per window: a window that is not an app bar is left as it is)
+            if (w != IntPtr.Zero && w != freedWindow) FreeBar(w);
+            freedWindow = w;
+            return;
+        }
+        freedWindow = IntPtr.Zero;
         if (w == IntPtr.Zero || barWindow != IntPtr.Zero) return;
         string[] p = line.Split('|');
         int x, y, bw, bh;
         if (p.Length < 5 || !int.TryParse(p[1], out x) || !int.TryParse(p[2], out y) || !int.TryParse(p[3], out bw)
             || !int.TryParse(p[4], out bh)) return;
         uint edge = p[0] == "left" ? 0u : p[0] == "top" ? 1u : p[0] == "bottom" ? 3u : 2u;
+        // (an app bar left by a stopped copy: anew, with this room)
+        FreeBar(w);
         var d = new AppBarData { Size = Marshal.SizeOf(typeof(AppBarData)), Window = w };
         if (SHAppBarMessage(ABM_NEW, ref d) == UIntPtr.Zero) return;
         d.Edge = edge;
@@ -1188,9 +1201,14 @@ public class RaintilePad
     public void ReleaseBar()
     {
         if (barWindow == IntPtr.Zero) return;
-        var d = new AppBarData { Size = Marshal.SizeOf(typeof(AppBarData)), Window = barWindow };
-        SHAppBarMessage(ABM_REMOVE, ref d);
+        FreeBar(barWindow);
         barWindow = IntPtr.Zero;
+    }
+
+    static void FreeBar(IntPtr window)
+    {
+        var d = new AppBarData { Size = Marshal.SizeOf(typeof(AppBarData)), Window = window };
+        SHAppBarMessage(ABM_REMOVE, ref d);
     }
 
     // --- Play time -----------------------------------------------------------

@@ -152,6 +152,16 @@ Test 'Options: a reset pressed with the pad hides itself, the pad goes to the fi
     Assert-True ($null -eq (Invoke-Options 'PadRowOf' @($grid.Parent.Parent))) 'a row outside a card'
 }
 
+Test 'Options: the controllers are read at every frame only with one connected or the ring shown' {
+    $idle = Invoke-Options 'PadTickMs' @($false, $false)
+    Assert-True ($idle -ge 250) "no controller, no ring: read every $idle ms"
+    # a controller plugged in is looked for every 2 s: the slow read must not be slower
+    Assert-True ($idle -le 1000) "no controller: read only every $idle ms"
+    Assert-Equal (Invoke-Options 'PadTickMs' @($true, $false)) 16 'a controller connected'
+    Assert-Equal (Invoke-Options 'PadTickMs' @($false, $true)) 16 'the ring shown, the controller unplugged'
+    Assert-Equal (Invoke-Options 'PadTickMs' @($true, $true)) 16 'a controller in use'
+}
+
 # Profiles (General > Profiles): their files and what loading one changes
 $optionsTypes = $optionsApp.Assembly
 function New-StringMap([hashtable]$Values = @{}) {

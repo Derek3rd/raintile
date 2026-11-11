@@ -2872,6 +2872,9 @@ end
 local function setGridArea(withFilter)
 	local fs = withFilter and filterSpace() or 0
 	V.GridY = V.GridTop + fs
+	-- (the Rainside's margins are its own, not the #PadX# of the skin)
+	set('GridClip', 'X', tostring(math.floor(V.PadX)))
+	set('HoverClip', 'X', tostring(math.floor(V.PadX)))
 	set('GridClip', 'Y', tostring(math.floor(V.GridY)))
 	-- visible part of the grid (also the edge of the fades)
 	V.ClipW, V.ClipH = math.floor(V.AreaW), math.floor(V.AreaH - fs)
@@ -4427,6 +4430,11 @@ function M.dockPlace(p)
 	local dx, dy = 0, 0
 	if V.DockSide == 'left' then dx = -d elseif V.DockSide == 'right' then dx = d
 	elseif V.DockSide == 'top' then dy = -d else dy = d end
+	-- (the Rainside aside for the launcher: from there)
+	if V.Side then
+		local sx, sy = M.shiftOffset()
+		dx, dy = dx + sx, dy + sy
+	end
 	SKIN:Bang('!Move', tostring(V.ScreenX + dx), tostring(V.ScreenY + dy))
 	SKIN:Bang('!SetTransparency', tostring(math.floor(255 * e + 0.5)))
 end
@@ -4621,10 +4629,9 @@ function M.sideGet(get)
 	end
 end
 
--- (the launcher) a Rainside always there (Fixed) on the side it is docked on
+-- (the launcher) a Rainside on the side it is docked on
 function M.sideAlong(get)
 	if trim(get('rainside') or '') ~= '1' or trim(get('rainsidecategory') or '') == '' then return false end
-	if (get('rainsidemode') or ''):lower() == 'edge' then return false end
 	local side = trim(get('rainsideside') or ''):lower()
 	if side ~= 'left' and side ~= 'top' and side ~= 'bottom' then side = 'right' end
 	return side == trim(get('dockside') or 'left'):lower()
@@ -4813,11 +4820,13 @@ function Initialize()
 	V.SideConfig = V.MainConfig .. '\\Rainside'
 	-- (the name of its file, without .ini; empty with Rainside=0)
 	V.SideCategory = num('Rainside', 0) ~= 0 and trim(SKIN:GetVariable('RainsideCategory', '')):gsub('%.[iI][nN][iI]$', '') or ''
-	-- (the launcher, docked where the Rainside always is) RainsideOrder:
-	-- Outside = the Rainside slides aside while it is open (RainsideShift)
-	V.SideOutside = not V.Side and V.SideCategory ~= '' and SKIN:GetVariable('RainsideOrder', 'Inside'):lower() == 'outside'
-		and SKIN:GetVariable('LauncherMode', ''):lower() == 'dock' and SKIN:GetVariable('RainsideMode', 'Fixed'):lower() ~= 'edge'
+	-- (the launcher, docked on the Rainside's side) RainsideOrder: Outside =
+	-- the Rainside slides aside while it is open (RainsideShift); Inside =
+	-- it opens beside the Rainside, which stays out meanwhile (RainsideHold)
+	local along = not V.Side and V.SideCategory ~= '' and SKIN:GetVariable('LauncherMode', ''):lower() == 'dock'
 		and SKIN:GetVariable('RainsideSide', 'Right'):lower() == SKIN:GetVariable('DockSide', 'Left'):lower()
+	V.SideOutside = along and SKIN:GetVariable('RainsideOrder', 'Inside'):lower() == 'outside'
+	V.SideInside = along and not V.SideOutside
 	-- widgets left on screen by the previous load: the helper stops until shown
 	os.remove(M.gen('DashOn.txt'))
 	-- and the Steam downloads, followed only while it is open
@@ -5099,6 +5108,9 @@ function Update()
 		if showNow then os.remove(flag) end
 		local startHidden = V.StartHidden and not showNow
 		if V.AnimOpen and not startHidden then appear = 0 end
+		-- the Rainside: the grid's container on its own margins (the skin's
+		-- formulas have the launcher's)
+		if V.Side then setGridArea(false) end
 		updateEmptyHint()
 		render(true)
 		M.checkHwAccel()
@@ -5421,8 +5433,9 @@ function Hide()
 		M.setFocus(false)
 		return
 	end
-	-- (RainsideOrder=Outside) the Rainside back to its edge
+	-- (RainsideOrder) the Rainside back to its edge, or in
 	if V.SideOutside and M.sideCat then M.sideShift(false) end
+	if V.SideInside and M.sideCat then M.sideHold(false) end
 	visible = false
 	stopTyping()
 	stopTicker()
@@ -5531,14 +5544,23 @@ function M.toSide(code)
 end
 
 -- (the launcher) opening: the Rainside gives the keys back (and, coming
--- out of its edge, goes back in); with RainsideOrder=Outside it slides
--- aside, as far as the launcher is wide (tall)
+-- out of its edge, goes back in); docked on its side, with
+-- RainsideOrder=Outside it slides aside, as far as the launcher is wide
+-- (tall), with Inside it comes out beside it
 function M.sideRelease()
 	if V.Side then return end
+	if M.sideFocused then
+		M.sideFocused = false
+		SKIN:Bang('!CommandMeasure', 'MeasureScript', 'FocusLost()', V.SideConfig)
+	end
 	if V.SideOutside and M.sideCat then M.sideShift(true) end
-	if not M.sideFocused then return end
-	M.sideFocused = false
-	SKIN:Bang('!CommandMeasure', 'MeasureScript', 'FocusLost()', V.SideConfig)
+	if V.SideInside and M.sideCat then M.sideHold(true) end
+end
+
+-- (the launcher, RainsideOrder=Inside) the Rainside out of its edge, beside
+-- it, while it is open
+function M.sideHold(open)
+	SKIN:Bang('!CommandMeasure', 'MeasureScript', 'RainsideHold(' .. (open and 1 or 0) .. ')', V.SideConfig)
 end
 
 -- (the launcher, RainsideOrder=Outside) the Rainside aside while it is open
@@ -5557,11 +5579,18 @@ function RainsideShift(px)
 	if M.shift.at ~= M.shift.to then startTicker() end
 end
 
+-- (the Rainside) how far aside it is, x and y
+function M.shiftOffset()
+	local d = math.floor((M.shift and M.shift.at or 0) + 0.5)
+	if V.DockSide == 'left' then return d, 0 elseif V.DockSide == 'right' then return -d, 0
+	elseif V.DockSide == 'top' then return 0, d end
+	return 0, -d
+end
+
 function M.shiftPlace()
-	local d = math.floor(M.shift.at + 0.5)
-	local dx, dy = 0, 0
-	if V.DockSide == 'left' then dx = d elseif V.DockSide == 'right' then dx = -d
-	elseif V.DockSide == 'top' then dy = d else dy = -d end
+	-- (out of its edge, still sliding in: its slide places it)
+	if M.dock.dir ~= 0 then return end
+	local dx, dy = M.shiftOffset()
 	SKIN:Bang('!Move', tostring(V.ScreenX + dx), tostring(V.ScreenY + dy))
 end
 
@@ -5911,8 +5940,21 @@ end
 -- (the Rainside, RainsideMode=Edge) the mouse has been out of it for a
 -- moment (MeasureRainsideLeave): back in, unless its keys opened it
 function RainsideLeave()
-	if not V.Side or not V.SideEdge or not visible or M.focused or inSkin or launching then return end
+	if not V.Side or not V.SideEdge or not visible or M.focused or inSkin or launching or M.held then return end
 	Hide()
+end
+
+-- (the Rainside, RainsideMode=Edge) the launcher opening beside it
+-- (RainsideOrder=Inside) brings it out, without the keys, and keeps it out
+-- until it closes; then back in, unless the mouse is on it or it has the keys
+function RainsideHold(on)
+	if not V.Side or not ready or not V.SideEdge then return end
+	M.held = on == 1
+	if M.held then
+		if not visible then Show('edge') end
+	elseif visible and not M.focused and not inSkin and not launching then
+		Hide()
+	end
 end
 
 -- Pinned=1 written into (or taken out of) the tile's section of its category
@@ -7479,7 +7521,8 @@ function FocusLost()
 	if not ready or not visible then return end
 	M.setFocus(false)
 	M.zpos(false)
-	if launching or V.Mode == 'window' or not V.AutoHide then return end
+	-- (the Rainside kept out beside the open launcher: it stays)
+	if launching or V.Mode == 'window' or not V.AutoHide or M.held then return end
 	Hide()
 end
 

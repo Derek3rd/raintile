@@ -45,6 +45,11 @@ function T.its_category_on_its_side()
 	end
 	-- the tiles are there
 	t.ok(not s.meters['tile1'].hidden, 'no tile shown')
+	-- the grid's container on its margins, where its tiles and widgets are
+	-- placed (not on the launcher's)
+	t.eq(tonumber(s.meters['gridclip']:opt('X', '')), V.PadX, 'the tiles\' container not at the Rainside\'s margin')
+	t.eq(tonumber(s.meters['gridclip']:opt('Y', '')), V.GridY, 'the tiles\' container not at the Rainside\'s top')
+	t.eq(tonumber(s.meters['hoverclip']:opt('X', '')), V.PadX, 'the highlight\'s container not at the Rainside\'s margin')
 	-- it does none of the launcher's jobs
 	t.ok(not logged(s, 'MeasureSetup Run'), 'the Rainside ran the setup')
 	t.ok(not logged(s, 'MeasureHelper Run'), 'the Rainside started the helper')
@@ -220,10 +225,46 @@ function T.launcher_on_the_same_side()
 	t.ok(logged(r, '!Move 0 0'), 'the Rainside did not slide back')
 	t.atRest(r)
 	t.clean(r)
-	-- another side, or out of its edge: as before
+	-- another side: as before
 	base.RainsideOrder, base.RainsideSide = 'Inside', 'Right'
 	s = R.new({ settings = base }):start()
 	t.eq(s:upvalue('V').ScreenX, 0, 'the launcher moved for a Rainside on the other side')
+	t.clean(s)
+end
+
+-- Out of its edge, the launcher docked on its side: beside it (Inside), the
+-- Rainside coming out with it and staying out until it closes; at the edge
+-- (Outside), the Rainside sliding aside
+function T.launcher_with_the_edge_rainside()
+	local base = { Rainside = 1, RainsideMode = 'Edge', RainsideSide = 'Left', RainsideSize = '150',
+		LauncherMode = 'Dock', DockSide = 'Left', DockSize = '600' }
+	local s = R.new({ settings = base }):start()
+	t.eq(s:upvalue('V').ScreenX, 150, 'the launcher is not beside an edge Rainside (Inside)')
+	s:call('Hide()')
+	s:call('Show()')
+	t.ok(logged(s, 'RainsideHold(1) Raintile\\Rainside'), 'the Rainside not brought out with the launcher')
+	s:call('Hide()')
+	t.ok(logged(s, 'RainsideHold(0) Raintile\\Rainside'), 'the Rainside not let go when the launcher closed')
+	t.clean(s)
+	-- the Rainside: out while held, the mouse leaving does not take it in;
+	-- let go, back in
+	local r = rainside({ RainsideMode = 'Edge', RainsideSide = 'Left', RainsideSize = '150' })
+	r:call('RainsideHold(1)')
+	t.ok(r:upvalue('visible'), 'not out with the launcher')
+	t.ok(not r:upvalue('M').focused, 'took the keys with the launcher open')
+	r:call('MouseInSkin(1)')
+	r:call('MouseInSkin(0)')
+	r:call('FocusLost()')
+	t.ok(r:upvalue('visible'), 'back in while the launcher is open')
+	r:call('RainsideHold(0)')
+	t.ok(not r:upvalue('visible'), 'still out after the launcher closed')
+	t.clean(r)
+	base.RainsideOrder = 'Outside'
+	s = R.new({ settings = base }):start()
+	t.eq(s:upvalue('V').ScreenX, 0, 'the launcher is not at the edge (Outside)')
+	s:call('Hide()')
+	s:call('Show()')
+	t.ok(logged(s, 'RainsideShift(600) Raintile\\Rainside'), 'an edge Rainside not pushed aside')
 	t.clean(s)
 end
 

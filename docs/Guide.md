@@ -82,7 +82,7 @@ One category can live on a side of the screen, apart from the launcher: the **Ra
 - **Always there** (`RainsideMode=Fixed`): on screen beside the windows. Its shortcut (`RainsideHotKey`, and `GamepadRainside` on the pad) gives it the arrows, `Enter`, `Esc` and the gamepad (a second press, `Esc`, `B`, a click elsewhere or another program in front take them back); with the mouse it always works. `RainsideReserve=1` keeps its room free as the taskbar's: maximised windows stop beside it instead of going under it.
 - **Out of its edge** (`RainsideMode=Edge`): hidden until the mouse rests on its edge of the screen (`DockEdgeDelay`, not with a full-screen program in front), or its shortcut opens it (with the keys); it goes back in a moment after the mouse leaves it (opened with the shortcut: with `Esc`, `B`, the shortcut again or a click elsewhere) and, with `RainsideCloseOnLaunch=1`, after starting a tile.
 - **Full-screen programs** (`RainsideFullscreen=1`): while a game or a video covers its screen it hides, its widgets stop, and it comes back afterwards. Its shortcut shows it anyway.
-- **The launcher on the same side**: docked where the Rainside always is, the launcher opens beside it (`RainsideOrder=Inside`: edge, Rainside, launcher) or at the edge, the Rainside sliding aside while it is open (`Outside`: edge, launcher, Rainside). Opening the launcher takes the keys back from the Rainside.
+- **The launcher on the same side**: docked on the Rainside's side, the launcher opens beside it (`RainsideOrder=Inside`: edge, Rainside, launcher; a Rainside out of its edge comes out too and stays out while the launcher is open) or at the edge, the Rainside sliding aside while it is open (`Outside`: edge, launcher, Rainside). Opening the launcher takes the keys back from the Rainside.
 
 Right click on a tile of the Rainside, or `Start` on the pad, opens its [tile menu](#tile-menu) as in the launcher.
 
@@ -650,7 +650,7 @@ See [Rainside](#rainside).
 | `RainsideCloseOnLaunch` | `1` | `Edge`: back in after starting a tile |
 | `RainsideFullscreen` | `1` | hidden while a program covers its screen (a game, a video), back afterwards |
 | `RainsideReserve` | `0` | `Fixed`: its room kept free, as the taskbar's (an app bar) |
-| `RainsideOrder` | `Inside` | the launcher docked on the same side, `Fixed`: `Inside` beside the Rainside, `Outside` at the edge with the Rainside sliding aside |
+| `RainsideOrder` | `Inside` | the launcher docked on the same side: `Inside` beside the Rainside (out of its edge, it comes out too while the launcher is open), `Outside` at the edge with the Rainside sliding aside |
 
 ### Grid
 

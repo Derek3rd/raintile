@@ -53,8 +53,9 @@ RainsideFullscreen=1
 ; Fixed: 1 = its room is kept free, as the taskbar's (maximised windows stop
 ; beside it); 0 = it is over the windows
 RainsideReserve=0
-; The launcher docked on the same side (Fixed): Inside = it opens beside the
-; Rainside (edge, Rainside, launcher); Outside = it opens at the edge and the
+; The launcher docked on the same side: Inside = it opens beside the
+; Rainside (edge, Rainside, launcher; out of its edge, the Rainside comes out
+; too while the launcher is open); Outside = it opens at the edge and the
 ; Rainside slides aside (edge, launcher, Rainside)
 RainsideOrder=Inside
 

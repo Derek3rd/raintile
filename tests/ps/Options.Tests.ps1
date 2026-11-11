@@ -294,3 +294,57 @@ Test 'Options: a gallery widget needs the Raintile of its minVersion' {
     Assert-True (Invoke-Options 'VersionFits' @('1.4.1', '')) 'no minVersion'
     Assert-True (Invoke-Options 'VersionFits' @('0', '1.4.0')) 'an unknown version of Raintile'
 }
+
+# --- Images (GetBitmap) -----------------------------------------------------
+
+# A picture of W x H pixels in a file
+function New-TestImage([string]$Path, [int]$W, [int]$H) {
+    $pixels = New-Object byte[] ($W * $H * 4)
+    $bmp = [System.Windows.Media.Imaging.BitmapSource]::Create($W, $H, 96, 96, [System.Windows.Media.PixelFormats]::Bgra32, $null, $pixels, $W * 4)
+    $enc = New-Object System.Windows.Media.Imaging.PngBitmapEncoder
+    $enc.Frames.Add([System.Windows.Media.Imaging.BitmapFrame]::Create($bmp))
+    $file = [IO.File]::Create($Path)
+    try { $enc.Save($file) } finally { $file.Dispose() }
+}
+
+Test 'Options: an image is decoded once for a file and a width, and again when the file changes' {
+    $file = Join-Path (New-TestFolder) 'a.png'
+    New-TestImage $file 40 20
+    $first = Invoke-Options 'GetBitmap' @($file, 0)
+    Assert-Equal $first.PixelWidth 40 'width of the picture'
+    Assert-True ([object]::ReferenceEquals($first, (Invoke-Options 'GetBitmap' @($file, 0)))) 'the same file decoded again'
+    $small = Invoke-Options 'GetBitmap' @($file, 20)
+    Assert-Equal $small.PixelWidth 20 'width asked for'
+    Assert-True ([object]::ReferenceEquals($small, (Invoke-Options 'GetBitmap' @($file, 20)))) 'the same width decoded again'
+    Assert-True ([object]::ReferenceEquals($first, (Invoke-Options 'GetBitmap' @($file, 0)))) 'the full picture lost to the small one'
+    # another picture in its place (an image chosen again in the tile editor)
+    New-TestImage $file 60 30
+    (Get-Item -LiteralPath $file).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(1)
+    $next = Invoke-Options 'GetBitmap' @($file, 0)
+    Assert-Equal $next.PixelWidth 60 'the picture written again'
+    Assert-Equal (Invoke-Options 'GetBitmap' @($file, 20)).PixelHeight 10 'the small copy of the picture written again'
+    Remove-Item -LiteralPath $file
+    Assert-True ($null -eq (Invoke-Options 'GetBitmap' @($file, 0))) 'a picture whose file is gone'
+    Assert-True ($null -eq (Invoke-Options 'GetBitmap' @('', 0))) 'no path'
+}
+
+Test 'Options: the images kept stay under their limit, the last used first' {
+    $limit = $optionsApp.GetField('bitmapCacheMax', [System.Reflection.BindingFlags]'NonPublic, Static')
+    $was = $limit.GetValue($null)
+    $folder = New-TestFolder
+    try {
+        # room for four pictures of 50 x 50 (10000 bytes of pixels each)
+        $limit.SetValue($null, [long]40000)
+        $files = 1..6 | ForEach-Object { $f = Join-Path $folder "$_.png"; New-TestImage $f 50 50; $f }
+        $shown = $files | ForEach-Object { Invoke-Options 'GetBitmap' @($_, 0) }
+        Assert-True ([object]::ReferenceEquals($shown[5], (Invoke-Options 'GetBitmap' @($files[5], 0)))) 'the last picture not kept'
+        Assert-True ([object]::ReferenceEquals($shown[2], (Invoke-Options 'GetBitmap' @($files[2], 0)))) 'a picture within the limit not kept'
+        Assert-True (-not [object]::ReferenceEquals($shown[0], (Invoke-Options 'GetBitmap' @($files[0], 0)))) 'the oldest picture kept over the limit'
+        # (kept now, the last used first: 1, 3, 6, 5.) The one used again stays
+        # when another comes in, the one not used since goes
+        [void](Invoke-Options 'GetBitmap' @($files[4], 0))
+        [void](Invoke-Options 'GetBitmap' @($files[0], 20))
+        Assert-True ([object]::ReferenceEquals($shown[4], (Invoke-Options 'GetBitmap' @($files[4], 0)))) 'a picture just used dropped'
+        Assert-True (-not [object]::ReferenceEquals($shown[5], (Invoke-Options 'GetBitmap' @($files[5], 0)))) 'the picture not used since kept over the limit'
+    } finally { $limit.SetValue($null, $was) }
+}

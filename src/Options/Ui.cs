@@ -764,13 +764,44 @@ namespace RaintileOptions
 
         static int Clamp255(int v) { return Math.Max(0, Math.Min(255, v)); }
 
+        // The images decoded, by file and width: the same ones are asked for at
+        // every change (the strip of a category, the tile editor, the preview
+        // window draws the whole category again), and decoding them each time
+        // made every letter typed wait. A file written again has another time
+        // or size and is read again. The least recently used go when they hold
+        // more than bitmapCacheMax bytes of pixels (what is still shown stays
+        // alive with its control).
+        class CachedBitmap { public BitmapImage Image; public long Stamp, Length, Bytes; public LinkedListNode<string> Node; }
+        static readonly Dictionary<string, CachedBitmap> bitmapCache = new Dictionary<string, CachedBitmap>(StringComparer.OrdinalIgnoreCase);
+        static readonly LinkedList<string> bitmapOrder = new LinkedList<string>();   // the last used first
+        static long bitmapBytes, bitmapCacheMax = 256L * 1024 * 1024;
+
         // Image without locking the file; decoded small for thumbnails
         public static BitmapImage GetBitmap(string path, int width = 0)
         {
             if (string.IsNullOrEmpty(path)) return null;
+            string key = path + "|" + width;
+            long stamp = 0, length = -1;
+            // (not a file of this PC, or one that cannot be asked about: decoded as before)
+            try { var f = new FileInfo(path); if (f.Exists) { stamp = f.LastWriteTimeUtc.Ticks; length = f.Length; } } catch { }
+            lock (bitmapCache)
+            {
+                CachedBitmap have;
+                if (bitmapCache.TryGetValue(key, out have))
+                {
+                    if (length >= 0 && have.Stamp == stamp && have.Length == length)
+                    {
+                        bitmapOrder.Remove(have.Node);
+                        bitmapOrder.AddFirst(have.Node);
+                        return have.Image;
+                    }
+                    DropBitmap(key, have);
+                }
+            }
+            BitmapImage b;
             try
             {
-                var b = new BitmapImage();
+                b = new BitmapImage();
                 b.BeginInit();
                 b.CacheOption = BitmapCacheOption.OnLoad;
                 b.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
@@ -778,9 +809,31 @@ namespace RaintileOptions
                 if (width > 0) b.DecodePixelWidth = width;
                 b.EndInit();
                 b.Freeze();
-                return b;
             }
             catch { return null; }
+            long bytes = (long)b.PixelWidth * b.PixelHeight * 4;
+            // (an image that would take most of the room alone is not kept)
+            if (length < 0 || bytes > bitmapCacheMax / 4) return b;
+            lock (bitmapCache)
+            {
+                CachedBitmap old;
+                if (bitmapCache.TryGetValue(key, out old)) DropBitmap(key, old);
+                bitmapCache[key] = new CachedBitmap { Image = b, Stamp = stamp, Length = length, Bytes = bytes, Node = bitmapOrder.AddFirst(key) };
+                bitmapBytes += bytes;
+                while (bitmapBytes > bitmapCacheMax && bitmapOrder.Count > 1)
+                {
+                    string last = bitmapOrder.Last.Value;
+                    DropBitmap(last, bitmapCache[last]);
+                }
+            }
+            return b;
+        }
+
+        static void DropBitmap(string key, CachedBitmap entry)
+        {
+            bitmapOrder.Remove(entry.Node);
+            bitmapCache.Remove(key);
+            bitmapBytes -= entry.Bytes;
         }
 
         public string SelectFile(string filter)

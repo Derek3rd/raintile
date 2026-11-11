@@ -4596,6 +4596,8 @@ function M.sideSettings()
 	V.FilterBar, V.CheckUpdates, V.ScanOnStart = false, false, false
 	V.Thumbnails, V.LaunchAnimation, V.TileKeysOpen = false, false, false
 	V.PadLegend = false
+	-- above the windows (it is meant to be seen)
+	V.ShowZPos = '1'
 	V.MenuH = 0
 	V.PadX, V.PadY = V.Gap, V.Gap
 	V.GridY = V.PadY
@@ -5113,6 +5115,7 @@ function Update()
 			SKIN:Bang('!Hide')
 			hotKey(false)
 		else
+			if V.Side then M.zpos(true) end
 			-- shown on load: ready for the keys and the gamepad, as when opened
 			-- (the Rainside: only its keys give it them)
 			M.focused = not V.Side
@@ -5511,6 +5514,11 @@ end
 function RainsideFocus(on)
 	if V.Side then return end
 	M.sideFocused = on == 1
+	-- (its shortcut with the launcher open: the keys are the Rainside's)
+	if M.sideFocused and visible and ready then
+		Hide()
+		return
+	end
 	hotKey(visible)
 end
 

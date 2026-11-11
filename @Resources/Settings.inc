@@ -54,9 +54,9 @@ RainsideFullscreen=1
 ; it); with Edge while it is out; 0 = it is over the windows
 RainsideReserve=0
 ; The launcher docked on the same side: Inside = it opens beside the
-; Rainside (edge, Rainside, launcher; out of its edge, the Rainside comes out
-; too while the launcher is open); Outside = it opens at the edge and the
-; Rainside slides aside (edge, launcher, Rainside)
+; Rainside (edge, Rainside, launcher; with Edge, if it is out, otherwise at
+; the edge); Outside = it opens at the edge and the Rainside slides aside
+; (edge, launcher, Rainside). Each opens with its own shortcut
 RainsideOrder=Inside
 
 ; --- Grid -----------------------------------------------------------------------

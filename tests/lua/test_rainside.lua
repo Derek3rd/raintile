@@ -243,32 +243,36 @@ function T.launcher_on_the_same_side()
 	t.clean(s)
 end
 
--- Out of its edge, the launcher docked on its side: beside it (Inside), the
--- Rainside coming out with it and staying out until it closes; at the edge
--- (Outside), the Rainside sliding aside
+-- Out of its edge, the launcher docked on its side: each opens with its
+-- own keys; beside the Rainside if it is out (Inside), at the edge if not;
+-- at the edge with the Rainside sliding aside (Outside)
 function T.launcher_with_the_edge_rainside()
 	local base = { Rainside = 1, RainsideMode = 'Edge', RainsideSide = 'Left', RainsideSize = '150',
-		LauncherMode = 'Dock', DockSide = 'Left', DockSize = '600' }
+		LauncherMode = 'Dock', DockSide = 'Left', DockSize = '600', AnimOpen = 0 }
 	local s = R.new({ settings = base }):start()
-	t.eq(s:upvalue('V').ScreenX, 150, 'the launcher is not beside an edge Rainside (Inside)')
+	t.eq(s:upvalue('V').ScreenX, 0, 'the launcher not at the edge with the Rainside in')
 	s:call('Hide()')
 	s:call('Show()')
-	t.ok(logged(s, 'RainsideHold(1) Raintile\\Rainside'), 'the Rainside not brought out with the launcher')
+	t.ok(not logged(s, "Show('edge') Raintile\\Rainside") and not logged(s, 'RainsideHold'), 'opening the launcher opened the Rainside')
+	t.eq(s:upvalue('V').ScreenX, 0, 'the launcher moved with the Rainside in')
+	-- the Rainside out: beside it
 	s:call('Hide()')
-	t.ok(logged(s, 'RainsideHold(0) Raintile\\Rainside'), 'the Rainside not let go when the launcher closed')
+	s:call('RainsideOut(150)')
+	s:call('Show()')
+	t.eq(s:upvalue('V').ScreenX, 150, 'the launcher not beside the Rainside out of its edge')
+	t.ok(logged(s, '!Move 150 0'), 'the launcher not moved beside it')
+	-- back in: at the edge again
+	s:call('Hide()')
+	s:call('RainsideOut(0)')
+	s:call('Show()')
+	t.eq(s:upvalue('V').ScreenX, 0, 'the launcher not back at the edge')
 	t.clean(s)
-	-- the Rainside: out while held, the mouse leaving does not take it in;
-	-- let go, back in
+	-- the Rainside tells the launcher when it is out and in
 	local r = rainside({ RainsideMode = 'Edge', RainsideSide = 'Left', RainsideSize = '150' })
-	r:call('RainsideHold(1)')
-	t.ok(r:upvalue('visible'), 'not out with the launcher')
-	t.ok(not r:upvalue('M').focused, 'took the keys with the launcher open')
-	r:call('MouseInSkin(1)')
-	r:call('MouseInSkin(0)')
-	r:call('FocusLost()')
-	t.ok(r:upvalue('visible'), 'back in while the launcher is open')
-	r:call('RainsideHold(0)')
-	t.ok(not r:upvalue('visible'), 'still out after the launcher closed')
+	r:call("Show('edge')")
+	t.ok(logged(r, 'RainsideOut(150) Raintile'), 'the launcher not told the Rainside is out')
+	r:call('Hide()')
+	t.ok(logged(r, 'RainsideOut(0) Raintile'), 'the launcher not told the Rainside is in')
 	t.clean(r)
 	base.RainsideOrder = 'Outside'
 	s = R.new({ settings = base }):start()

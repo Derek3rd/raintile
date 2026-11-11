@@ -4714,7 +4714,9 @@ local function writeSizes()
 	local mode, rect, mon = M.launcherRect(get)
 	-- the launcher docked where the Rainside always is (RainsideOrder=Inside):
 	-- beside it
-	if not V.Side and mode == 'dock' and M.sideAlong(get) and (get('rainsideorder') or ''):lower() ~= 'outside' then
+	-- (out of its edge: only while it is out, M.besideSide)
+	if not V.Side and mode == 'dock' and M.sideAlong(get) and (get('rainsideorder') or ''):lower() ~= 'outside'
+			and (get('rainsidemode') or ''):lower() ~= 'edge' then
 		local _, r = M.launcherRect(M.sideGet(get))
 		local side = trim(get('dockside') or ''):lower()
 		if side == 'left' then rect[1] = rect[1] + r[3]
@@ -4823,11 +4825,12 @@ function Initialize()
 	V.SideCategory = num('Rainside', 0) ~= 0 and trim(SKIN:GetVariable('RainsideCategory', '')):gsub('%.[iI][nN][iI]$', '') or ''
 	-- (the launcher, docked on the Rainside's side) RainsideOrder: Outside =
 	-- the Rainside slides aside while it is open (RainsideShift); Inside =
-	-- it opens beside the Rainside, which stays out meanwhile (RainsideHold)
+	-- it opens beside the Rainside (always there: Sizes.inc; out of its
+	-- edge: if it is out, M.besideSide)
 	local along = not V.Side and V.SideCategory ~= '' and SKIN:GetVariable('LauncherMode', ''):lower() == 'dock'
 		and SKIN:GetVariable('RainsideSide', 'Right'):lower() == SKIN:GetVariable('DockSide', 'Left'):lower()
 	V.SideOutside = along and SKIN:GetVariable('RainsideOrder', 'Inside'):lower() == 'outside'
-	V.SideInside = along and not V.SideOutside
+	V.SideEdgeInside = along and not V.SideOutside and SKIN:GetVariable('RainsideMode', 'Fixed'):lower() == 'edge'
 	-- widgets left on screen by the previous load: the helper stops until shown
 	os.remove(M.gen('DashOn.txt'))
 	-- and the Steam downloads, followed only while it is open
@@ -5376,6 +5379,7 @@ function Show(how)
 	visible = true
 	-- (the Rainside coming out: the windows make room for it)
 	M.sideReserve(true)
+	M.tellOut(true)
 	-- start clean: no hover, zoom or launch left over from last time
 	launching = nil
 	typing = false
@@ -5437,12 +5441,12 @@ function Hide()
 		M.setFocus(false)
 		return
 	end
-	-- (RainsideOrder) the Rainside back to its edge, or in
+	-- (RainsideOrder=Outside) the Rainside back to its edge
 	if V.SideOutside and M.sideCat then M.sideShift(false) end
-	if V.SideInside and M.sideCat then M.sideHold(false) end
 	visible = false
 	-- (the Rainside going back in: its room for the windows again)
 	M.sideReserve(false)
+	M.tellOut(false)
 	stopTyping()
 	stopTicker()
 	-- the tile with the focus, for a sorted category (its remembered position
@@ -5553,7 +5557,7 @@ end
 -- (the launcher) opening: the Rainside gives the keys back (and, coming
 -- out of its edge, goes back in); docked on its side, with
 -- RainsideOrder=Outside it slides aside, as far as the launcher is wide
--- (tall), with Inside it comes out beside it
+-- (tall), with Inside the launcher opens beside it (M.besideSide)
 function M.sideRelease()
 	if V.Side then return end
 	if M.sideFocused then
@@ -5561,13 +5565,38 @@ function M.sideRelease()
 		SKIN:Bang('!CommandMeasure', 'MeasureScript', 'FocusLost()', V.SideConfig)
 	end
 	if V.SideOutside and M.sideCat then M.sideShift(true) end
-	if V.SideInside and M.sideCat then M.sideHold(true) end
+	M.besideSide()
 end
 
--- (the launcher, RainsideOrder=Inside) the Rainside out of its edge, beside
--- it, while it is open
-function M.sideHold(open)
-	SKIN:Bang('!CommandMeasure', 'MeasureScript', 'RainsideHold(' .. (open and 1 or 0) .. ')', V.SideConfig)
+-- (the launcher, RainsideOrder=Inside, the Rainside out of its edge) it
+-- opens beside the Rainside if it is out, at the edge if not; each opens
+-- with its own keys. M.sideOut: how wide (tall) the Rainside is while it is
+-- out, 0 while in (RainsideOut, from the Rainside)
+M.sideOut = 0
+function RainsideOut(px)
+	if V.Side then return end
+	M.sideOut = tonumber(px) or 0
+end
+
+function M.besideSide()
+	if not V.SideEdgeInside or not M.sideCat then return end
+	V.BaseX, V.BaseY = V.BaseX or V.ScreenX, V.BaseY or V.ScreenY
+	local d = M.sideOut
+	V.ScreenX, V.ScreenY = V.BaseX, V.BaseY
+	if V.DockSide == 'left' then V.ScreenX = V.BaseX + d
+	elseif V.DockSide == 'right' then V.ScreenX = V.BaseX - d
+	elseif V.DockSide == 'top' then V.ScreenY = V.BaseY + d
+	else V.ScreenY = V.BaseY - d end
+	-- (sliding in, M.dockPlace takes it from there)
+	if not M.dockAnimated() then SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY)) end
+end
+
+-- (the Rainside, out of its edge) tells the launcher it is out (its width
+-- or height) or in (0)
+function M.tellOut(out)
+	if not V.Side or not V.SideEdge then return end
+	local px = out and ((V.DockSide == 'left' or V.DockSide == 'right') and V.ScreenW or V.ScreenH) or 0
+	SKIN:Bang('!CommandMeasure', 'MeasureScript', 'RainsideOut(' .. math.floor(px) .. ')', V.MainConfig)
 end
 
 -- (the launcher, RainsideOrder=Outside) the Rainside aside while it is open
@@ -5957,21 +5986,8 @@ end
 -- (the Rainside, RainsideMode=Edge) the mouse has been out of it for a
 -- moment (MeasureRainsideLeave): back in, unless its keys opened it
 function RainsideLeave()
-	if not V.Side or not V.SideEdge or not visible or M.focused or inSkin or launching or M.held then return end
+	if not V.Side or not V.SideEdge or not visible or M.focused or inSkin or launching then return end
 	Hide()
-end
-
--- (the Rainside, RainsideMode=Edge) the launcher opening beside it
--- (RainsideOrder=Inside) brings it out, without the keys, and keeps it out
--- until it closes; then back in, unless the mouse is on it or it has the keys
-function RainsideHold(on)
-	if not V.Side or not ready or not V.SideEdge then return end
-	M.held = on == 1
-	if M.held then
-		if not visible then Show('edge') end
-	elseif visible and not M.focused and not inSkin and not launching then
-		Hide()
-	end
 end
 
 -- Pinned=1 written into (or taken out of) the tile's section of its category
@@ -7538,8 +7554,7 @@ function FocusLost()
 	if not ready or not visible then return end
 	M.setFocus(false)
 	M.zpos(false)
-	-- (the Rainside kept out beside the open launcher: it stays)
-	if launching or V.Mode == 'window' or not V.AutoHide or M.held then return end
+	if launching or V.Mode == 'window' or not V.AutoHide then return end
 	Hide()
 end
 

@@ -896,6 +896,7 @@ Hotkey/Hotkey.ini            Esc mini-skin (activated by the launcher while it h
 Navigation/Navigation.ini    navigation keys mini-skin (activated by the launcher while it has the focus)
 Typing/Typing.ini            keys typed in the search bar (activated while typing)
 TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated while the launcher is open, with the focus)
+Instance.inc                 read by Raintile.ini as the launcher: its generated files
 Rainside/Rainside.ini        the Rainside (loaded by the launcher): Raintile.ini included and run as a bar
 Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its name and generated files
 @Resources/

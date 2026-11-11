@@ -371,10 +371,9 @@ namespace RaintileOptions
         // A list that is the main content of its page: as tall as the room left in
         // the page's scroller, never under min (the page scrolls then); set again
         // when the window or what is above the list changes size. Its own Height
-        // is the base, so one pass settles it. While the list is taller than min the
-        // page never scrolls, so its scrollbar stays hidden: a filter row that wraps
-        // makes the page taller for one pass, and a scrollbar shown then would narrow
-        // the page, wrap or unwrap the row again and stall the window for a second.
+        // is the base, so one pass settles it. (A filter row that wraps makes the
+        // page taller for one pass: the page's bar may show, but it is drawn over
+        // its own room (PageScroller) and changes no width, so nothing loops.)
         public void FillPageHeight(ScrollViewer sv, FrameworkElement grow, double min)
         {
             grow.Height = min;
@@ -383,8 +382,6 @@ namespace RaintileOptions
                 if (e.ExtentHeightChange == 0 && e.ViewportHeightChange == 0) return;
                 double h = Math.Max(min, Math.Floor(grow.Height + sv.ViewportHeight - sv.ExtentHeight));
                 if (Math.Abs(h - grow.Height) >= 1) grow.Height = h;
-                var bar = h > min ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Auto;
-                if (sv.VerticalScrollBarVisibility != bar) sv.VerticalScrollBarVisibility = bar;
             };
         }
 

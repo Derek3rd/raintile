@@ -28,7 +28,7 @@ namespace RaintileOptions
     {
         class WheelTile
         {
-            public string Name, Label, LogoPath; public ImageSource Bg, Logo, BgFull; public Brush Color, LogoColor; public int Cols = 1, Rows = 1;
+            public string Name, Label, LogoPath, BgPath; public ImageSource Bg, Logo; public Brush Color, LogoColor; public int Cols = 1, Rows = 1;
             // LogoPos= (centre, 0-1), LogoScale=, InfoPos= (0-1), of the tile or its category
             public double LogoX = 0.5, LogoY = 0.5, LogoScale = 1, InfoX, InfoY;
             // BgFocus= (0-1) and BgZoom=: the framing of the background on the tile
@@ -98,7 +98,8 @@ namespace RaintileOptions
                 Name = t.Name,
                 Label = Core.GetKey(t, "Label") != "" ? Core.GetKey(t, "Label") : t.Name,
                 Bg = GetBitmap(Core.GetTileImage(b, t, "Background"), 320),
-                BgFull = GetBitmap(Core.GetTileImage(b, t, "Background"), 960),
+                // (the large copy for the backdrop: read for the selected tile only, DrawWheel)
+                BgPath = Core.GetTileImage(b, t, "Background"),
                 Logo = GetBitmap(Core.GetTileImage(b, t, "Logo"), 160),
                 LogoPath = Core.GetTileImage(b, t, "Logo"),
                 Color = NewColorBrush(Core.GetKey(t, "Color")) ?? NewColorBrush(Core.GetKey(Core.GetCategorySection(model), "TileColor"))
@@ -304,7 +305,7 @@ namespace RaintileOptions
             {
                 int L = wheelTiles.Count;
                 var sel = wheelTiles[(((int)Math.Round(wheelTarget)) % L + L) % L];
-                var full = sel.BgFull as BitmapSource;
+                var full = GetBitmap(sel.BgPath, 960);
                 if (full != null && full.PixelWidth > 0)
                 {
                     // filling the launcher, cut from the centre of the image

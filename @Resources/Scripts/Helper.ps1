@@ -924,12 +924,11 @@ public class RaintilePad
         return id;
     }
 
-    // The launcher window: the largest of Rainmeter's visible skins (the
-    // launcher covers the screen).
-    // The launcher's window: the visible Rainmeter window of the size the skin
-    // wrote to Generated\LauncherSize.txt ("<w>|<h>"); without it, the
-    // largest one (right when it covers the screen, not when it is a window
-    // or docked on a side next to bigger skins)
+    // The launcher's window: the Rainmeter window of the size the skin wrote
+    // to Generated\LauncherSize.txt ("<w>|<h>"), shown or hidden (it keeps
+    // its size while hidden and while it slides in and out of its side);
+    // without it, the largest visible one (right when it covers the screen,
+    // not when it is a window or docked on a side next to bigger skins)
     public string SizeFile;
     int launcherW, launcherH;
     DateTime sizeStamp = DateTime.MinValue;
@@ -948,21 +947,46 @@ public class RaintilePad
         catch { launcherW = launcherH = 0; }
     }
 
+    // The launcher among Rainmeter's skin windows (each one "w, h, visible
+    // 1/0"), -1 for none: the visible one of its size; with none, the hidden
+    // one of its size (the launcher is hidden: never another skin, whose
+    // focus would be followed in its place); with no window of its size at
+    // all, or without the size, the largest visible one.
+    public static int PickLauncher(int[][] skins, int launcherW, int launcherH)
+    {
+        int best = -1, hidden = -1;
+        long bestArea = 0;
+        for (int i = 0; i < skins.Length; i++)
+        {
+            int w = skins[i][0], h = skins[i][1];
+            bool sized = launcherW > 0 && Math.Abs(w - launcherW) <= 1 && Math.Abs(h - launcherH) <= 1;
+            if (skins[i][2] == 0)
+            {
+                if (sized && hidden < 0) hidden = i;
+                continue;
+            }
+            if (sized) return i;
+            long area = (long)w * h;
+            if (area > bestArea) { bestArea = area; best = i; }
+        }
+        return hidden >= 0 ? hidden : best;
+    }
+
     IntPtr LauncherWindow(uint rainmeter)
     {
         ReadLauncherSize();
-        IntPtr best = IntPtr.Zero, window = IntPtr.Zero;
-        long bestArea = 0;
+        var windows = new List<IntPtr>();
+        var skins = new List<int[]>();
+        IntPtr window = IntPtr.Zero;
         while ((window = FindWindowEx(IntPtr.Zero, window, "RainmeterMeterWindow", null)) != IntPtr.Zero)
         {
             Rect r;
-            if (ProcessOf(window) != rainmeter || !IsWindowVisible(window) || !GetWindowRect(window, out r)) continue;
-            int w = r.Right - r.Left, h = r.Bottom - r.Top;
-            if (launcherW > 0 && Math.Abs(w - launcherW) <= 1 && Math.Abs(h - launcherH) <= 1) return window;
-            long area = (long)w * h;
-            if (area > bestArea) { bestArea = area; best = window; }
+            if (ProcessOf(window) != rainmeter || !GetWindowRect(window, out r)) continue;
+            windows.Add(window);
+            skins.Add(new[] { r.Right - r.Left, r.Bottom - r.Top, IsWindowVisible(window) ? 1 : 0 });
         }
-        return best;
+        int i = PickLauncher(skins.ToArray(), launcherW, launcherH);
+        return i < 0 ? IntPtr.Zero : windows[i];
     }
 
     static bool MouseDown()
@@ -996,17 +1020,18 @@ public class RaintilePad
     // While the launcher is visible: -1 if a click elsewhere or another
     // program in the foreground took its focus away, +1 if a click on it
     // gave it back (the skin turns its keys off and on), 0 otherwise.
-    int FocusStep(IntPtr rainmeterWindow, long now)
+    int FocusStep(IntPtr rainmeterWindow, long now, bool down)
     {
         uint rainmeter = ProcessOf(rainmeterWindow);
-        // the launcher window is looked up every half second, not on every loop
-        if (now >= nextLauncherScan || (launcher != IntPtr.Zero && !IsWindowVisible(launcher)))
+        // the launcher window is looked up every half second, not on every
+        // loop, and when it has just been hidden; while hidden, its window
+        // (LauncherWindow) tells on the next loop that it is shown again
+        if (now >= nextLauncherScan || (launcherShown && !IsWindowVisible(launcher)))
         {
             launcher = LauncherWindow(rainmeter);
             nextLauncherScan = now + 500;
         }
         bool shown = launcher != IntPtr.Zero && IsWindowVisible(launcher);
-        bool down = MouseDown();
         int change = 0;
         if (shown && !launcherShown)
         {
@@ -1058,7 +1083,7 @@ public class RaintilePad
         return IntPtr.Zero;
     }
 
-    void SideKeysStep(IntPtr rainmeterWindow, long now)
+    void SideKeysStep(IntPtr rainmeterWindow, long now, bool down)
     {
         uint rainmeter = ProcessOf(rainmeterWindow);
         if (now >= nextSideCheck)
@@ -1074,7 +1099,6 @@ public class RaintilePad
             }
             sideKeys = on;
         }
-        bool down = MouseDown();
         if (sideKeys && !sideSent)
         {
             bool lost = false;
@@ -1475,7 +1499,7 @@ public class RaintilePad
         return r.Left <= x && r.Top <= y && r.Right >= x + w && r.Bottom >= y + h;
     }
 
-    void EdgeStep(Edge e, IntPtr window, long now)
+    void EdgeStep(Edge e, IntPtr window, long now, bool down)
     {
         if (now >= e.NextCheck)
         {
@@ -1503,7 +1527,7 @@ public class RaintilePad
         else if (e.Side == "top") at = at && p.Y >= e.Y;
         else if (e.Side == "bottom") at = at && p.Y < e.Y + e.H;
         else at = at && p.X >= e.X;
-        if (!at || !along || MouseDown())
+        if (!at || !along || down)
         {
             e.Since = -1;
             if (!at || !along) e.Armed = true;
@@ -1520,12 +1544,12 @@ public class RaintilePad
         Send(window, CallTo(e.Skin, "Show('edge')"));
     }
 
-    void EdgesStep(IntPtr window, long now)
+    void EdgesStep(IntPtr window, long now, bool down)
     {
         if (edge == null && EdgeFile != null) edge = new Edge { File = EdgeFile, Skin = config };
         if (sideEdge == null && SideEdgeFile != null) sideEdge = new Edge { File = SideEdgeFile, Skin = SideConfig };
-        if (edge != null) EdgeStep(edge, window, now);
-        if (sideEdge != null) EdgeStep(sideEdge, window, now);
+        if (edge != null) EdgeStep(edge, window, now, down);
+        if (sideEdge != null) EdgeStep(sideEdge, window, now, down);
     }
 
     // --- Dashboard ---------------------------------------------------------------
@@ -1891,6 +1915,25 @@ public class RaintilePad
         Send(window, Call("OnDownloads()"));
     }
 
+    // How long the loop waits before its next turn (ms). 16 while something
+    // is followed closely: a controller connected (its buttons), the
+    // launcher shown or the Rainside with the keys (a click elsewhere is
+    // seen only while the button is down), the mouse resting on an edge that
+    // opens (its delay). At rest there are only files to look at and the
+    // edges to watch: 100, so the steps with a time of their own (250 ms to
+    // 2 s) and the mouse reaching an edge are seen up to 100 ms later. The
+    // Dashboard's data (the Rainside's widgets, always shown) is collected
+    // when it is due.
+    public const int ACTIVE_WAIT = 16, IDLE_WAIT = 100;
+
+    public int Wait(bool pad, long now)
+    {
+        if (pad || launcherShown || (sideKeys && !sideSent)) return ACTIVE_WAIT;
+        if ((edge != null && edge.Since >= 0) || (sideEdge != null && sideEdge.Since >= 0)) return ACTIVE_WAIT;
+        if (dashOn && nextDash - now < IDLE_WAIT) return (int)Math.Max(ACTIVE_WAIT, nextDash - now);
+        return IDLE_WAIT;
+    }
+
     // Main loop: ends when 'quit' is signalled (a new copy started) or when
     // Rainmeter is gone.
     public void Run(WaitHandle quit)
@@ -1898,23 +1941,25 @@ public class RaintilePad
         var connected = new bool[4];
         var clock = Stopwatch.StartNew(); // does not wrap after 25 days like TickCount
         long nextScan = 0, lastRainmeter = 0;
-        while (!quit.WaitOne(16))
+        while (!quit.WaitOne(Wait(PadEnabled && Array.IndexOf(connected, true) >= 0, clock.ElapsedMilliseconds)))
         {
             long now = clock.ElapsedMilliseconds;
             IntPtr window = RainmeterWindow();
             if (window != IntPtr.Zero) lastRainmeter = now;
             else if (now - lastRainmeter > 10000) return;
+            // (the mouse buttons: read once, for all the steps)
+            bool down = window != IntPtr.Zero && MouseDown();
 
             if (window != IntPtr.Zero)
             {
-                int focus = FocusStep(window, now);
+                int focus = FocusStep(window, now, down);
                 if (focus < 0) Send(window, Call("FocusLost()"));
                 else if (focus > 0) Send(window, Call("FocusGained()"));
             }
             if (TrackEnabled) { try { TrackStep(now); } catch { } }
             if (DashFlag != null && window != IntPtr.Zero) { try { DashStep(window, now); } catch { } }
-            if (window != IntPtr.Zero) { try { EdgesStep(window, now); } catch { } }
-            if (SideKeysFile != null && window != IntPtr.Zero) { try { SideKeysStep(window, now); } catch { } }
+            if (window != IntPtr.Zero) { try { EdgesStep(window, now, down); } catch { } }
+            if (SideKeysFile != null && window != IntPtr.Zero) { try { SideKeysStep(window, now, down); } catch { } }
             if (SideScreenFile != null && window != IntPtr.Zero) { try { CoveredStep(window, now); } catch { } }
             if (SideReserveFile != null && window != IntPtr.Zero) { try { ReserveStep(window, now); } catch { } }
             if (DownloadFlag != null && window != IntPtr.Zero) { try { DownloadStep(window, now); } catch { } }

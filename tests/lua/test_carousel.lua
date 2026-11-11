@@ -242,4 +242,34 @@ function T.saved_place()
 	t.clean(s)
 end
 
+-- Fewer lines than fit on screen: the scrollbar's thumb stays inside its
+-- track and still moves from the first tile to the last
+local function scrollbar(settings, n)
+	local s = carousel(settings, n)
+	local horizontal = s:upvalue('V').Horizontal
+	local function thumb(what)
+		local m = s.meters['meterscrollbar']
+		t.ok(m and not m.hidden, what .. ': no scrollbar')
+		local w, h = m:opt('Shape', ''):match('^Rectangle 0,0,(%d+),(%d+)')
+		local tx, ty, tw, th = m:opt('Shape2', ''):match('^Rectangle (%-?%d+),(%-?%d+),(%-?%d+),(%-?%d+)')
+		local len, at, size = tonumber(h), tonumber(ty), tonumber(th)
+		if horizontal then len, at, size = tonumber(w), tonumber(tx), tonumber(tw) end
+		t.ok(at >= 0 and at + size <= len and size < len,
+			string.format('%s: thumb at %d, %d long, on a track %d long', what, at, size, len))
+		return at
+	end
+	local first = thumb('opened')
+	s:call('Scroll(1)')
+	local next = thumb('a notch')
+	for _ = 1, n do s:call('Scroll(1)') end
+	local last = thumb('the last tile')
+	t.ok(first < next and next <= last, string.format('the thumb does not move: %d, %d, %d', first, next, last))
+	t.clean(s)
+end
+
+function T.scrollbar_inside_the_track()
+	scrollbar({}, 3)
+	scrollbar({ ScrollDir = 'V', NX = 1, NY = 5 }, 3)
+end
+
 return T

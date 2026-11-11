@@ -2988,19 +2988,26 @@ local function renderScrollBar()
 		at = infinite() and (pos % total) / maxOff or pos / maxOff
 	end
 	at = math.min(1, math.max(0, at))
+	-- the thumb: the share of the lines on screen. The carousel without
+	-- infinite scroll counts the empty room before the first line and after
+	-- the last (half a screen at each end): with fewer lines than fit on
+	-- screen the thumb would be wider than the track.
+	local span = total
+	if half > 0 and not infinite() then span = total + 2 * half end
+	local share = math.min(1, visibleLines() / span)
 	local size = V.ScrollBarSize
 	local x, y, w, h, tx, ty, tw, th
 	if V.Horizontal then
 		x = V.PadX
 		y = V.GridY + V.GridH + math.floor((V.PadY - size) / 2)
 		w, h = V.GridW, size
-		tw, th = math.floor(w * V.NX / total), h
+		tw, th = math.floor(w * share), h
 		tx, ty = math.floor((w - tw) * at), 0
 	else
 		x = V.PadX + V.GridW + math.floor((V.PadX - size) / 2)
 		y = V.GridY
 		w, h = size, V.GridH
-		tw, th = w, math.floor(h * V.NY / total)
+		tw, th = w, math.floor(h * share)
 		tx, ty = 0, math.floor((h - th) * at)
 	end
 

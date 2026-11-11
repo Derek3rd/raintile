@@ -61,29 +61,19 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $Out) { $Out = Join-Path $repo 'build\options-shots' }
+$cache = Join-Path $Out 'cache'
+$inputs = Join-Path $Out 'inputs'
+. (Join-Path $PSScriptRoot 'options-ui-common.ps1')
 $windowFiles = @('src/Options', '@Resources/Scripts/Options.xaml')
 # Part of every key: raised when this script shoots the same content otherwise (other
 # entries reached, a page shown another way), so that shots cached before are not
 # compared with the new ones. 2: the entries out of the menu's view reached too.
 $shotsVersion = 2
 
-# An entry's name as the report writes it, lower case: what -Page is matched with
-function Get-PageName([string]$s) {
-    $s = $s.Trim() -replace '\.png$', '' -replace '^\d+-', '' -replace '(-tile)?(-\d+)?$', ''
-    return ($s -replace '[^A-Za-z0-9]', '').ToLowerInvariant()
-}
 # a list given through -File arrives as one string: General,Tiles
 $pageNames = @($Page | ForEach-Object { $_ -split ',' } | ForEach-Object { Get-PageName $_ } | Where-Object { $_ } | Select-Object -Unique)
 [Array]::Sort($pageNames, [StringComparer]::Ordinal)
 if ($Page.Count -gt 0 -and $pageNames.Count -eq 0) { throw ('-Page: no name of an entry in "' + ($Page -join ',') + '"') }
-
-function Invoke-Git {
-    # git writes progress to stderr: in PowerShell 5.1 with 'Stop' that would be an error
-    $ErrorActionPreference = 'Continue'
-    $o = @(& git -C $repo @args 2>&1 | ForEach-Object { "$_" })
-    if ($LASTEXITCODE -ne 0) { throw ('git ' + ($args -join ' ') + ': ' + ($o -join ' ')) }
-    return $o
-}
 
 if ($Base) {
     [void](Invoke-Git rev-parse --verify --quiet ($Base + '^{commit}'))
@@ -96,14 +86,13 @@ if ($Base) {
     }
 }
 
-Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
+Add-Type -AssemblyName System.Drawing
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @"
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 public static class ShotsWin32 {
-    [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int hh, bool repaint);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
     [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
@@ -156,30 +145,6 @@ public static class ShotsDiff {
     }
 }
 "@
-$UA = [System.Windows.Automation.AutomationElement]
-$Scope = [System.Windows.Automation.TreeScope]
-
-function New-Condition($property, $value) { return New-Object System.Windows.Automation.PropertyCondition($property, $value) }
-
-$cache = Join-Path $Out 'cache'
-$inputs = Join-Path $Out 'inputs'
-
-# The frozen inputs (data folder, Generated): copied once; returns their id, part of
-# every key. id.txt is written last: a copy that was stopped is made again.
-function Initialize-Inputs {
-    $idFile = Join-Path $inputs 'id.txt'
-    if (-not $NewInputs -and (Test-Path -LiteralPath $idFile)) { return ([System.IO.File]::ReadAllText($idFile)).Trim() }
-    if (Test-Path -LiteralPath $inputs) { Remove-Item -LiteralPath $inputs -Recurse -Force }
-    New-Item -ItemType Directory -Force $inputs | Out-Null
-    $src = Join-Path $env:APPDATA 'Rainmeter\Raintile'
-    # without a data folder the window uses the skin's defaults
-    if (Test-Path -LiteralPath (Join-Path $src 'Settings.inc')) { Copy-Item -LiteralPath $src -Destination (Join-Path $inputs 'data') -Recurse }
-    $gen = Join-Path $repo '@Resources\Generated'
-    if (Test-Path -LiteralPath $gen) { Copy-Item -LiteralPath $gen -Destination (Join-Path $inputs 'Generated') -Recurse }
-    $id = [guid]::NewGuid().ToString('N')
-    [System.IO.File]::WriteAllText($idFile, $id)
-    return $id
-}
 
 # The key of a content of the window's sources: the blobs of its files, at a ref or
 # in the working tree (hash-object normalises line ends as 'git add' would), with
@@ -212,21 +177,6 @@ function Get-Key([string]$ref, [string]$inputsId) {
     return ((($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 16))
 }
 
-# The skin as the window sees it: Raintile.ini and @Resources of the tree, with the
-# Generated of the inputs; always at the same place
-function New-Stage([string]$tree) {
-    $stage = Join-Path $Out 'stage'
-    if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
-    $res = Join-Path $stage '@Resources'
-    New-Item -ItemType Directory -Force $res | Out-Null
-    Copy-Item -LiteralPath (Join-Path $tree 'Raintile.ini') -Destination $stage
-    Get-ChildItem -LiteralPath (Join-Path $tree '@Resources') | Where-Object { $_.Name -ne 'Generated' -and $_.Name -ne 'Bin' } |
-        Copy-Item -Destination $res -Recurse
-    $gen = Join-Path $inputs 'Generated'
-    if (Test-Path -LiteralPath $gen) { Copy-Item -LiteralPath $gen -Destination $res -Recurse }
-    return $res
-}
-
 function Save-Shot([IntPtr]$hwnd, [string]$file) {
     $r = New-Object ShotsWin32+RECT
     [void][ShotsWin32]::GetClientRect($hwnd, [ref]$r)
@@ -240,76 +190,6 @@ function Save-Shot([IntPtr]$hwnd, [string]$file) {
     $g.Dispose()
     $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
-}
-
-function Get-ListItems($win) {
-    return @($win.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::ListItem))))
-}
-
-function Select-Item($item) {
-    $item.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
-    Start-Sleep -Milliseconds 1500
-}
-
-# The menu: the lists left of the pages, in their order (Info, at the bottom, is a
-# list of its own and comes first). They are virtualized: an entry scrolled out of
-# the menu may not be in the tree at all, so the entries are walked with
-# ItemContainerPattern, not looked for among the descendants.
-function Find-MenuEntry($win, [int]$n) {
-    $lists = @($win.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::List))) |
-        Where-Object { $_.Current.BoundingRectangle.X -lt 200 })
-    foreach ($list in $lists) {
-        $ic = $list.GetCurrentPattern([System.Windows.Automation.ItemContainerPattern]::Pattern)
-        $item = $ic.FindItemByProperty($null, $null, $null)
-        while ($item -and $n -gt 0) { $n--; $item = $ic.FindItemByProperty($item, $null, $null) }
-        if ($item) { return $item }
-    }
-    return $null
-}
-
-function Test-Offscreen($item) {
-    # a virtualized entry has no state to read until it is realized
-    try { return $item.Current.IsOffscreen } catch { return $true }
-}
-
-# Entry n of the menu (from 0), scrolled into view first when it is out of it, as a
-# click on it would need; $null after the last one
-function Get-MenuEntry($win, [int]$n) {
-    $item = Find-MenuEntry $win $n
-    if (-not $item -or -not (Test-Offscreen $item)) { return $item }
-    $p = $null
-    if ($item.TryGetCurrentPattern([System.Windows.Automation.VirtualizedItemPattern]::Pattern, [ref]$p)) { $p.Realize() }
-    elseif ($item.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$p)) { $p.ScrollIntoView() }
-    else { throw "menu entry ${n}: out of view, and it cannot be scrolled into it" }
-    Start-Sleep -Milliseconds 400
-    $item = Find-MenuEntry $win $n
-    if (-not $item -or (Test-Offscreen $item)) { throw "menu entry ${n}: still out of view after scrolling to it" }
-    return $item
-}
-
-function Get-PageTitle($win) {
-    $t = $win.FindFirst($Scope::Descendants, (New-Condition $UA::AutomationIdProperty 'PageTitle'))
-    if ($t) { return $t.Current.Name }
-    return '(no title found)'
-}
-
-# Selects entry n of the menu and waits for its page: the title over the page is the
-# name of the entry (pages, categories and widgets alike). A selection may not take
-# while the window is busy, and the shots of the page left on screen would be cached
-# as this entry's: it is selected again, and a page that never shows stops the run.
-function Show-MenuEntry($win, [int]$n, [string]$label) {
-    $want = $label -replace '[^A-Za-z0-9]', ''
-    $title = ''
-    for ($try = 0; $try -lt 3; $try++) {
-        # found again: building a page may rebuild the menu
-        Select-Item (Get-MenuEntry $win $n)
-        for ($w = 0; $w -lt 10; $w++) {
-            $title = Get-PageTitle $win
-            if (($title -replace '[^A-Za-z0-9]', '') -ceq $want) { return }
-            Start-Sleep -Milliseconds 500
-        }
-    }
-    throw ('menu entry {0} ({1}): the page on screen is still "{2}" after 3 tries' -f $n, $label, $title)
 }
 
 # The tiles of the category page on screen (the strip right of the menu)
@@ -354,36 +234,17 @@ function Save-Page($win, [IntPtr]$hwnd, [string]$dir, [string]$name) {
 # that cannot be selected
 function Save-Window([string]$exe, [string]$resources, [string]$dir) {
     New-Item -ItemType Directory -Force $dir | Out-Null
-    $a = @('-Resources', ('"' + $resources + '"'), '-Config', 'RaintileShots')
-    # a fresh copy of the frozen data for every window: a page may mark things as seen
-    $data = Join-Path $Out 'data'
-    if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
-    $frozen = Join-Path $inputs 'data'
-    if (Test-Path -LiteralPath $frozen) {
-        Copy-Item -LiteralPath $frozen -Destination $data -Recurse
-        $a += @('-Data', ('"' + $data + '"'))
-    }
-    $p = Start-Process $exe -ArgumentList $a -PassThru
+    $o = Start-OptionsWindow $exe $resources $Width $Height
     try {
-        $win = $null
-        for ($i = 0; $i -lt 120 -and -not $win; $i++) {
-            Start-Sleep -Milliseconds 500
-            if ($p.HasExited) { throw "the window closed at once: see $resources\Generated\Options.log" }
-            $w = $UA::RootElement.FindFirst($Scope::Children, (New-Condition $UA::ProcessIdProperty $p.Id))
-            if ($w -and $w.Current.Name -and $w.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window) { $win = $w }
-        }
-        if (-not $win) { throw 'no window after 60 s' }
-        $hwnd = [IntPtr]$win.Current.NativeWindowHandle
-        [void][ShotsWin32]::MoveWindow($hwnd, 0, 0, $Width, $Height, $true)
-        Start-Sleep -Milliseconds 2500   # the first page is built after the window shows
+        $win = $o.Win
+        $hwnd = $o.Hwnd
         $entries = New-Object System.Collections.Generic.List[string]
         for ($i = 0; ; $i++) {
             if ($i -ge 200) { throw 'more than 200 entries in the menu: the walk does not end' }
             # the entries are found again: building a page may rebuild the menu
             $item = Get-MenuEntry $win $i
             if (-not $item) { break }
-            $label = @($item.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::Text))) |
-                ForEach-Object { $_.Current.Name } | Where-Object { $_ -match '[A-Za-z]' }) | Select-Object -Last 1
+            $label = Get-MenuLabel $item
             $name = '{0:00}-{1}' -f $i, ($label -replace '[^A-Za-z0-9]', '')
             # a page of a mode not in use (Page.When) is greyed out: it cannot be selected
             $enabled = $item.Current.IsEnabled
@@ -401,15 +262,7 @@ function Save-Window([string]$exe, [string]$resources, [string]$dir) {
         [System.IO.File]::WriteAllLines((Join-Path $dir 'menu.txt'), $entries)
         Write-Output ('  {0}: {1} shots' -f $dir.Substring($Out.Length + 1), @(Get-ChildItem $dir -Filter *.png).Count)
     }
-    finally { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
-}
-
-
-# The program of a source tree: built from its src\Options into 'bin'
-function Build-Program([string]$tree, [string]$bin) {
-    $o = & dotnet build (Join-Path $tree 'src\Options\RaintileOptions.csproj') -c Release -o $bin -nologo -v q 2>&1
-    if ($LASTEXITCODE -ne 0) { throw ("build failed in ${tree}:`n" + ($o -join "`n")) }
-    return (Join-Path $bin 'RaintileOptions.exe')
+    finally { Stop-Process -Id $o.Process.Id -Force -ErrorAction SilentlyContinue }
 }
 
 # The shots of one content by the page they show, as the comparison pairs them: the
@@ -500,18 +353,9 @@ if ($Base) {
     $baseKey = Get-Key $Base $inputsId
     if (Test-Cached $baseKey) { Save-Tree 'base' '' $baseKey }
     else {
-        $tree = Join-Path $Out 'base-src'
-        # left by a run that was stopped
-        if (Test-Path -LiteralPath $tree) {
-            try { [void](Invoke-Git worktree remove --force $tree) } catch { Remove-Item -LiteralPath $tree -Recurse -Force }
-            [void](Invoke-Git worktree prune)
-        }
-        # no hooks: a post-checkout hook could build or write into the new tree
-        $noHooks = Join-Path $Out 'no-hooks'
-        New-Item -ItemType Directory -Force $noHooks | Out-Null
-        [void](Invoke-Git -c "core.hooksPath=$noHooks" worktree add --detach $tree $Base)
+        $tree = New-BaseTree $Base
         try { Save-Tree 'base' $tree $baseKey }
-        finally { [void](Invoke-Git worktree remove --force $tree) }
+        finally { Remove-BaseTree $tree }
     }
     # a page only in one of them (added or removed) is compared as such
     if ($pageNames.Count -gt 0) { Assert-Pages @($curKey, $baseKey) }

@@ -283,4 +283,17 @@ function T.launcher_with_the_edge_rainside()
 	t.clean(s)
 end
 
+-- Each skin reads the Instance.inc of its folder (one missing: an error in
+-- Rainmeter's log on every load)
+function T.instance_files()
+	for _, skin in ipairs({ 'Raintile', 'Rainside' }) do
+		local s = R.new({ skin = skin, settings = { Rainside = 1 } }):start()
+		for _, path in ipairs(s.unread or {}) do
+			t.ok(not path:lower():find('instance.inc', 1, true), skin .. ' cannot read ' .. path)
+		end
+		t.eq(s.vars.gridfile, skin == 'Rainside' and 'RainsideGrid.inc' or 'Grid.inc', skin .. ': not its own Grid.inc')
+		t.clean(s)
+	end
+end
+
 return T

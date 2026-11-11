@@ -240,6 +240,7 @@ function R.new(opts)
 	-- the skin's own files, where Rainmeter has them (the Rainside includes
 	-- Raintile.ini from there)
 	host_copytree(self.repo .. '\\Raintile.ini', self.tmp .. '\\Skins\\Raintile\\Raintile.ini', '')
+	host_copytree(self.repo .. '\\Instance.inc', self.tmp .. '\\Skins\\Raintile\\Instance.inc', '')
 	host_copytree(self.repo .. '\\Rainside', self.tmp .. '\\Skins\\Raintile\\Rainside', '')
 	self.resources = self.tmp .. '\\Skins\\Raintile\\@Resources\\'
 	self.settingsPath = self.tmp .. '\\Settings\\'
@@ -312,7 +313,12 @@ end
 function Skin:parseFile(path, current, depth)
 	if depth > 10 then return current end
 	local text = readFile(path)
-	if not text then return current end
+	-- (Rainmeter logs "Unable to read file": kept for the tests)
+	if not text then
+		self.unread = self.unread or {}
+		self.unread[#self.unread + 1] = path
+		return current
+	end
 	text = text:gsub('^\239\187\191', '')
 	for line in text:gmatch('[^\r\n]+') do
 		local t = trim(line)

@@ -790,19 +790,14 @@ namespace RaintileOptions
 
         ScrollViewer NewPageScroller(out StackPanel sp)
         {
-            var sv = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+            var sv = new ScrollViewer { Style = ResStyle("PageScroller") };
             sp = NewPanel();
-            // as wide as the window: the rows stretch and their help text wraps less
-            sp.Margin = Gap.Page;
+            // as wide as the window: the rows stretch and their help text wraps less.
+            // The scrollbar is drawn over the room kept for it on the right, so the
+            // cards and their columns are in the same place on every page, with or
+            // without a bar.
+            sp.Margin = new Thickness(Gap.Page.Left, Gap.Page.Top, Gap.Page.Right + Gap.ScrollBar, Gap.Page.Bottom);
             sv.Content = sp;
-            // the room of the scrollbar is kept also when there is none, so the cards
-            // and their columns are in the same place on every page
-            var panel = sp;
-            sv.ScrollChanged += (s, e) =>
-            {
-                double right = Gap.Page.Right + (sv.ComputedVerticalScrollBarVisibility == Visibility.Visible ? 0 : Gap.ScrollBar);
-                if (panel.Margin.Right != right) panel.Margin = new Thickness(Gap.Page.Left, Gap.Page.Top, right, Gap.Page.Bottom);
-            };
             return sv;
         }
 
@@ -842,6 +837,7 @@ namespace RaintileOptions
                     // and apps found (cards of their own)
                     AddTo(sp, NewMissingCard());
                     AddTo(sp, NewFoundCard());
+                    FillPageHeight(sv, foundFrame, 320);
                     continue;
                 }
                 if (group.Dash) { AddTo(sp, NewDashCard()); continue; }

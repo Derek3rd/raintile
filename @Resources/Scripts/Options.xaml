@@ -500,6 +500,28 @@
     </Setter>
   </Style>
 
+  <!-- Scrollers of the pages and panes: the vertical bar is drawn over the room kept
+       for it on the right of the content (Gap.ScrollBar), so showing or hiding it never
+       changes the content's width. A bar that took that width made the page wrap
+       otherwise, which could show or hide the bar again, and the window stalled
+       (docs/OptionsUI.md, "Sizes taken from the layout"). -->
+  <Style x:Key="PageScroller" TargetType="ScrollViewer">
+    <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ScrollViewer">
+          <Grid Background="{TemplateBinding Background}">
+            <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" CanContentScroll="{TemplateBinding CanContentScroll}"/>
+            <ScrollBar x:Name="PART_VerticalScrollBar" Orientation="Vertical" HorizontalAlignment="Right"
+                       Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}"
+                       Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
+                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- Thin scrollbars -->
   <Style x:Key="ScrollThumb" TargetType="Thumb">
     <Setter Property="OverridesDefaultStyle" Value="True"/>

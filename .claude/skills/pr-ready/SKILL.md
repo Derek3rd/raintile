@@ -21,7 +21,10 @@ passed, what failed and what was not verified.
    Shared code (`Ui.cs`, `Settings.cs`, `Nav.cs`, `Schema*.cs`, `Options.xaml`) shoots every
    page; code of one page only (`Profiles.cs` on General, `Dashboard.cs` and `Market.cs` on
    Widgets) adds `-Page <that entry>`; a step that cannot show in the shots (a control
-   hidden with the frozen data) is not shot, and the hand-over says so.
+   hidden with the frozen data) is not shot, and the hand-over says so. A size taken from
+   the layout (`ScrollChanged`, `SizeChanged`, a binding to `ActualWidth`/`ActualHeight`):
+   also `tools\options-resize.ps1 -Base origin/nightly -Page <entry>`, which fails when
+   resizing the window stalls it.
 
 ## 2. Docs in sync
 - A new or changed setting: its comment in `@Resources/Settings.inc` and the "Settings

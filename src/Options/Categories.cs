@@ -1793,19 +1793,16 @@ namespace RaintileOptions
         }
 
         // The scroll viewer inside a control's template (the strip scrolls with the wheel)
-        // The room of the vertical scrollbar kept also when there is none, so the
-        // content's width never changes with it. The preview follows the width of
-        // its column and with it its height: without this, at some window sizes
-        // the bar showed (narrower: the preview shorter, everything fits), hid
-        // (wider: taller, it no longer fits) and showed again, over and over.
-        static void KeepScrollBarRoom(ScrollViewer sv, FrameworkElement content)
+        // The room of the vertical scrollbar kept also when there is none, the bar
+        // drawn over it (PageScroller), so the content's width never changes with it.
+        // The preview follows the width of its column and with it its height: without
+        // this, at some window sizes the bar showed (narrower: the preview shorter,
+        // everything fits), hid (wider: taller, it no longer fits) and showed again,
+        // over and over.
+        void KeepScrollBarRoom(ScrollViewer sv, FrameworkElement content)
         {
+            sv.Style = ResStyle("PageScroller");
             content.Margin = T(content.Margin.Left, content.Margin.Top, Gap.ScrollBar, content.Margin.Bottom);
-            sv.ScrollChanged += (s, e) =>
-            {
-                double right = sv.ComputedVerticalScrollBarVisibility == Visibility.Visible ? 0 : Gap.ScrollBar;
-                if (content.Margin.Right != right) content.Margin = T(content.Margin.Left, content.Margin.Top, right, content.Margin.Bottom);
-            };
         }
 
         static ScrollViewer FindScrollViewer(DependencyObject d)

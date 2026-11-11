@@ -1,9 +1,10 @@
 // Raintile Options: the window driven by a gamepad (XInput, Xbox and
 // compatible controllers, as the launcher's helper). The controllers are read
 // every 16 ms only while a window of this program is active and Gamepad
-// support is on. A ring marks the control the pad is on; it goes away when the
-// mouse moves or a key is pressed, and the first pad input brings it back
-// without acting. In the menu there is no ring: up and down select the entry
+// support is on; with no controller connected twice a second, enough to find
+// one that is plugged in (PadTickMs). A ring marks the control the pad is on;
+// it goes away when the mouse moves or a key is pressed, and the first pad
+// input brings it back without acting. In the menu there is no ring: up and down select the entry
 // (its page shows at once, its background marks it), round the end of the menu;
 // right goes to the first control of the page. While the pad is in use the
 // buttons a pad button presses show its glyph (Start on Save and refresh, B on
@@ -141,9 +142,29 @@ namespace RaintileOptions
             return t;
         }
 
+        // How often the controllers are read, in ms: at every frame while there is
+        // one, or while the ring is shown (it follows the mouse and the page: a
+        // controller unplugged leaves it there). With neither nothing can come
+        // from the pad: the read only looks for a controller plugged in (ReadPad,
+        // every PadScanMs) and for the window left or Gamepad support turned off.
+        const int PadReadMs = 16, PadIdleMs = 500, PadScanMs = 2000;
+
+        public static int PadTickMs(bool connected, bool padMode)
+        {
+            return connected || padMode ? PadReadMs : PadIdleMs;
+        }
+
+        // The timer at that pace. Only when it changes: a new interval starts
+        // the wait again.
+        void PadPace()
+        {
+            var pace = TimeSpan.FromMilliseconds(PadTickMs(Array.IndexOf(padConnected, true) >= 0, padMode));
+            if (padTimer.Interval != pace) padTimer.Interval = pace;
+        }
+
         void InitGamepad()
         {
-            padTimer = NewLoopTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Input, PadTick);
+            padTimer = NewLoopTimer(TimeSpan.FromMilliseconds(PadReadMs), DispatcherPriority.Input, PadTick);
             // only while this program is in the foreground (its dialogs too)
             app.Activated += (s, e) => StartPad();
             win.Activated += (s, e) => StartPad();
@@ -204,6 +225,7 @@ namespace RaintileOptions
             padNextScan = 0;
             int rx, ry;
             padPrev = ReadPad(out rx, out ry);
+            PadPace();
             padRepeatDir = 0;
             padRepeatX = false;
             padStartAlone = false;
@@ -246,8 +268,10 @@ namespace RaintileOptions
         int ReadPad(out int rx, out int ry)
         {
             long now = padClock.ElapsedMilliseconds;
-            bool scan = now >= padNextScan;
-            if (scan) padNextScan = now + 2000;
+            // (the read nearest to the 2 s: a slow one a moment early would
+            // leave it to the next, half a second later)
+            bool scan = now + (long)padTimer.Interval.TotalMilliseconds / 2 >= padNextScan;
+            if (scan) padNextScan = now + PadScanMs;
             int buttons = 0, lx = 0, ly = 0, lt = 0, rt = 0;
             rx = 0; ry = 0;
             for (uint i = 0; i < 4; i++)
@@ -301,6 +325,7 @@ namespace RaintileOptions
             if (V("Gamepad") == "0") { StopPad(); return; }
             int rx, ry;
             int buttons = ReadPad(out rx, out ry);
+            PadPace();
             int prev = padPrev;
             padPrev = buttons;
             long now = padClock.ElapsedMilliseconds;

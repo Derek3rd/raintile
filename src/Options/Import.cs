@@ -49,6 +49,7 @@ namespace RaintileOptions
         Button foundScanButton, foundAddButton;
         TextBlock foundStatus, foundEmpty;
         ListBox foundList;
+        Border foundFrame;   // the list's frame: as tall as the page allows (FillPageHeight)
         ComboBox foundTarget;
 
         void InitFound()
@@ -313,7 +314,7 @@ namespace RaintileOptions
                 }
                 foundEmpty.Visibility = foundList.Items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
                 foundEmpty.Text = scanProcess != null && !scanProcess.HasExited ? "Searching..."
-                    : foundItems.Count == 0 ? "Nothing found yet: press Search again."
+                    : foundItems.Count == 0 ? "Nothing found yet: search again with the button at the top right."
                     : "Nothing to show: everything is already in the launcher, or hidden by the filters.";
             }
             finally { foundBuilding = false; }
@@ -522,20 +523,21 @@ namespace RaintileOptions
                 AddTo(f, note);
             }
 
-            // search again + status
-            var head = NewGrid("Auto", "*");
-            head.Margin = T(0, 0, 0, Gap.Text);
-            foundScanButton = NewButton("Search again");
-            head.Children.Add(foundScanButton);
+            // status
             foundStatus = NewHelp("");
-            foundStatus.VerticalAlignment = VerticalAlignment.Center;
-            foundStatus.Margin = T(Gap.Group, 0, 0, 0);
-            SetCol(foundStatus, 1);
-            head.Children.Add(foundStatus);
-            AddTo(f, head);
+            foundStatus.Margin = T(0, 0, 0, Gap.Text);
+            AddTo(f, foundStatus);
 
-            // filters: type, text, already added, covers
-            var filters = new WrapPanel { Margin = T(0, 0, 0, Gap.Text) };
+            // filters: type, text, already added, covers; search again at the right
+            var filterRow = NewGrid("*", "Auto");
+            filterRow.Margin = T(0, 0, 0, Gap.Text);
+            var filters = new WrapPanel();
+            filterRow.Children.Add(filters);
+            foundScanButton = NewIconButton(Glyph.Refresh, "Search again");
+            foundScanButton.Margin = T(Gap.Icon, 0, 0, 0);
+            foundScanButton.VerticalAlignment = VerticalAlignment.Top;
+            SetCol(foundScanButton, 1);
+            filterRow.Children.Add(foundScanButton);
             // the kind (a list: there can be more kinds than games and apps)
             var kinds = new[] { new[] { "all", "All types" } }.Concat(Schema.IMPORT_KINDS.Select(k => new[] { k.Id, k.Plural }));
             var kindBox = NewChoiceBox(kinds, foundKind, v => { foundKind = v ?? "all"; RefreshFoundList(); });
@@ -543,6 +545,8 @@ namespace RaintileOptions
             kindBox.Margin = T(0, 0, Gap.Control, 0);
             kindBox.VerticalAlignment = VerticalAlignment.Center;
             filters.Children.Add(kindBox);
+            // the refresh glyph centred on the first line of filters (the switches may wrap below)
+            foundScanButton.SetBinding(FrameworkElement.HeightProperty, new Binding("ActualHeight") { Source = kindBox });
             var search = new TextBox { Width = FieldWidth.M, Margin = T(0, 0, Gap.Control, 0), VerticalAlignment = VerticalAlignment.Center };
             search.TextChanged += (s, e) => { foundFilter = search.Text; RefreshFoundList(); };
             filters.Children.Add(search);
@@ -563,10 +567,11 @@ namespace RaintileOptions
             var covers = new CheckBox { Content = "Covers", Margin = T(0, 0, Gap.Group, 0), VerticalAlignment = VerticalAlignment.Center, IsChecked = foundCovers };
             covers.Click += (s, e) => { foundCovers = covers.IsChecked == true; RefreshFoundList(); };
             filters.Children.Add(covers);
-            AddTo(f, filters);
+            AddTo(f, filterRow);
 
             // the list
-            var frame = new Border { BorderBrush = ResBrush("LineBrush"), BorderThickness = T(1), CornerRadius = new CornerRadius(8), Padding = T(Gap.Line), Height = 440 };
+            var frame = new Border { BorderBrush = ResBrush("LineBrush"), BorderThickness = T(1), CornerRadius = new CornerRadius(8), Padding = T(Gap.Line) };
+            foundFrame = frame;
             var grid = new Grid();
             frame.Child = grid;
             foundList = new ListBox { SelectionMode = SelectionMode.Multiple };

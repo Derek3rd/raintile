@@ -44,6 +44,7 @@ namespace RaintileOptions
         public const int Edit = 0xE70F;     // a row of a list shown read-only: edit it in place (Done again)
         public const int Up = 0xE74A, Down = 0xE74B, Left = 0xE72B, Right = 0xE72A;   // move an entry
         public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
+        public const int Refresh = 0xE72C;  // a list read again from where it comes from (Import > Found)
         public const int Pin = 0xE718;      // marks a pinned tile (not a button)
         // the pad button that presses a button, before its text while the pad is in use
         // (AddPadHint), and on the keys and the hint line of the on-screen keyboard
@@ -365,6 +366,21 @@ namespace RaintileOptions
         public Button NewIconButton(int glyph, string tip)
         {
             return NewButton(((char)glyph).ToString(), "IconButton", tip);
+        }
+
+        // A list that is the main content of its page: as tall as the room left in
+        // the page's scroller, never under min (the page scrolls then); set again
+        // when the window or what is above the list changes size. Its own Height
+        // is the base, so one pass settles it.
+        public void FillPageHeight(ScrollViewer sv, FrameworkElement grow, double min)
+        {
+            grow.Height = min;
+            sv.ScrollChanged += (s, e) =>
+            {
+                if (e.ExtentHeightChange == 0 && e.ViewportHeightChange == 0) return;
+                double h = Math.Max(min, Math.Floor(grow.Height + sv.ViewportHeight - sv.ExtentHeight));
+                if (Math.Abs(h - grow.Height) >= 1) grow.Height = h;
+            };
         }
 
         // One width of the control column for every page: half the room inside a card

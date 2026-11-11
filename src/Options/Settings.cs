@@ -842,6 +842,7 @@ namespace RaintileOptions
                     // and apps found (cards of their own)
                     AddTo(sp, NewMissingCard());
                     AddTo(sp, NewFoundCard());
+                    FillPageHeight(sv, foundFrame, 320);
                     continue;
                 }
                 if (group.Dash) { AddTo(sp, NewDashCard()); continue; }

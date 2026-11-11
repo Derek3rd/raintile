@@ -176,6 +176,7 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 | `0xE74D` | `Glyph.Delete` | **An entry of a list** goes away (a tile, a category): in the list's header, always asked | "Delete ..." |
 | `0xE710` | `Glyph.Add` | A new entry of a list | "New ..." |
 | `0xE74A` `0xE74B` `0xE72B` `0xE72A` | `Glyph.Up` `Down` `Left` `Right` | Move an entry in a list | "Move up", ... |
+| `0xE72C` | `Glyph.Refresh` | **A list** is read again from where it comes from (Import > Found: the search runs again): at the right end of the list's filter row, disabled while it runs | "Search again" |
 
 In short: the arrow and the x act on a field, in the action column of its row (or,
 for a field with two values such as a pair of keys, right after each value); the bin
@@ -350,6 +351,8 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 - An empty list says so in its place, in `Fs.Help`, with what to do ("No tiles yet:
   add one with the + button.").
 - Long names are cut with `SetTrimmed`.
+- A list that is the main content of its page (Import > Found) fills the height left
+  on the page (`FillPageHeight`), with a minimum under which the page scrolls.
 
 ## 10. When changes are written
 

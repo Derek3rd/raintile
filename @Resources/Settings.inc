@@ -26,6 +26,39 @@ DockSize=30%
 DockEdge=1
 DockEdgeDelay=300
 
+; --- Rainside -------------------------------------------------------------------
+; One category on a side of the screen, apart from the launcher (a skin of its
+; own, Raintile\Rainside): always there, or coming out of its edge. The
+; category is not in the launcher's menu, search still finds its tiles.
+; 1 = on, 0 = off
+Rainside=0
+; The category: the name of its file, without .ini
+RainsideCategory=Apps
+; Fixed = always on screen; Edge = it comes out when the mouse rests on its
+; edge (DockEdgeDelay) or with its keys, and goes back when the mouse leaves
+; it
+RainsideMode=Fixed
+; Left, Right, Top or Bottom
+RainsideSide=Right
+; Its width (its height at the top or the bottom), pixels or % of the area
+RainsideSize=10%
+; Key combination (HotKey plugin, as OpenHotKey): with Edge it shows and hides
+; it; with Fixed it gives it the arrows and the gamepad (again: takes them
+; back). Empty = none
+RainsideHotKey=
+; Edge: it goes back in after starting a tile
+RainsideCloseOnLaunch=1
+; 1 = hidden while a program covers its screen (a game, a video), back after
+RainsideFullscreen=1
+; 1 = its room is kept free, as the taskbar's (maximised windows stop beside
+; it); with Edge while it is out; 0 = it is over the windows
+RainsideReserve=0
+; The launcher docked on the same side: Inside = it opens beside the
+; Rainside (edge, Rainside, launcher; with Edge, if it is out, otherwise at
+; the edge); Outside = it opens at the edge and the Rainside slides aside
+; (edge, launcher, Rainside). Each opens with its own shortcut
+RainsideOrder=Inside
+
 ; --- Grid -----------------------------------------------------------------------
 ; Default visible tiles: NX columns x NY rows. Each category can have its own
 ; grid (NX=, NY= in the [Category] section of its file). Tiles resize
@@ -347,6 +380,8 @@ GamepadPrevChip=LT
 GamepadNextChip=RT
 ; Open the Options window, as the gear
 GamepadOptions=RS
+; The Rainside (RainsideCategory): as RainsideHotKey; empty = none
+GamepadRainside=
 
 ; --- Search ---------------------------------------------------------------------
 ; Bar at the top left, after the clock and the Favorites / Recent buttons (or

@@ -7,6 +7,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Opening and closing](#opening-and-closing)
   - [Full screen, window or docked](#full-screen-window-or-docked)
   - [Grid or wheel](#grid-or-wheel)
+  - [Rainside](#rainside)
 - [Controls](#controls)
   - [Mouse](#mouse)
   - [Keyboard](#keyboard)
@@ -73,6 +74,17 @@ Without the HotKey plugin you can toggle it from a Windows shortcut: create a sh
 Sizes in percent (margins, menu, fonts) are of the area, not of the window, so they stay the same in every mode.
 
 **Compact menu**: when the categories do not all fit in the menu (a narrow window, a launcher docked left or right, or just many categories) the clock, Favorites/Recent/Not played yet, the search, the power button and the gear move into a list opened by the **☰** button at the top left (with the time and date at its top). The categories stay in a strip between it and the X: scroll it with the wheel; its edges fade where more categories are hidden, and it follows the active one. *Search* in that list opens the search bar in the place of the categories.
+
+### Rainside
+
+One category can live on a side of the screen, apart from the launcher: the **Rainside** (Options > **Rainside**, `Rainside=1` and `RainsideCategory`, the name of its file without `.ini`). It is a skin of its own (`Raintile\Rainside`, loaded and refreshed by the launcher, unloaded when you turn it off) with that category's tiles and widgets in a bar `RainsideSize` wide (or tall) on `RainsideSide`, without the top row; the category is no longer in the launcher's menu, but search still finds its tiles. Without a grid of its own (`NX`, `NY` of the category) its tiles are one line along the bar, about square; a vertical bar scrolls up and down, a horizontal one sideways.
+
+- **Always there** (`RainsideMode=Fixed`): on screen beside the windows. Its shortcut (`RainsideHotKey`, and `GamepadRainside` on the pad) gives it the arrows, `Enter`, `Esc` and the gamepad (a second press, `Esc`, `B`, a click elsewhere or another program in front take them back); with the mouse it always works. `RainsideReserve=1` keeps its room free as the taskbar's: maximised windows stop beside it instead of going under it.
+- **Out of its edge** (`RainsideMode=Edge`): hidden until the mouse rests on its edge of the screen (`DockEdgeDelay`, not with a full-screen program in front), or its shortcut opens it (with the keys); it goes back in a moment after the mouse leaves it (opened with the shortcut: with `Esc`, `B`, the shortcut again or a click elsewhere) and, with `RainsideCloseOnLaunch=1`, after starting a tile. With `RainsideReserve=1` the maximised windows make room for it while it is out.
+- **Full-screen programs** (`RainsideFullscreen=1`): while a game or a video covers its screen it hides, its widgets stop, and it comes back afterwards. Its shortcut shows it anyway.
+- **The launcher on the same side**: docked on the Rainside's side, the launcher opens beside it (`RainsideOrder=Inside`: edge, Rainside, launcher; with a Rainside out of its edge, beside it if it is out, at the edge if not: each opens with its own shortcut) or at the edge, the Rainside sliding aside while it is open (`Outside`: edge, launcher, Rainside). Opening the launcher takes the keys back from the Rainside.
+
+Right click on a tile of the Rainside, or `Start` on the pad, opens its [tile menu](#tile-menu) as in the launcher.
 
 ### Grid or wheel
 
@@ -148,6 +160,7 @@ Xbox and compatible controllers (XInput). Every action has its buttons, set in O
 | `X` / `Start` (`GamepadDelete`, `GamepadDone`) | on the on-screen keyboard: delete / done |
 | `LT` / `RT` (`GamepadPrevChip`, `GamepadNextChip`) | with search results: the previous / next filter chip |
 | `RS`, the right stick click (`GamepadOptions`) | open the [Options window](#options-window), as the gear |
+| (none: `GamepadRainside`) | the [Rainside](#rainside): open it, or give it the keys and the pad (also while the launcher is hidden) |
 
 **On-screen keyboard**: `GamepadSearch` opens the search with a keyboard at the bottom of the screen (letters, digits, `-` and `.`, Delete, Space, Done). The moves move on it, `GamepadConfirm` (`A`) types the key, `GamepadDelete` (`X`) deletes, `GamepadDone` (`Start`, or the *Done* key) closes it and keeps the results (the first one highlighted, `A` launches it), `GamepadBack` (`B`) closes the search. The keys can be clicked with the mouse too.
 
@@ -620,7 +633,24 @@ All settings live in `Settings.inc` in [your data folder](#your-data-and-updates
 | `DockSide` | `Left` | side it is docked on: `Left`, `Right`, `Top`, `Bottom` |
 | `DockSize` | `30%` | width when docked left or right, height when docked at the top or bottom (pixels or % of the area) |
 | `DockEdge` | `1` | docked: it also opens when the mouse rests on that edge of the screen |
-| `DockEdgeDelay` | `300` | ms the mouse rests on the edge before it opens |
+| `DockEdgeDelay` | `300` | ms the mouse rests on the edge before it opens (the Rainside's edge too) |
+
+### Rainside
+
+See [Rainside](#rainside).
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `Rainside` | `0` | `1` = the category `RainsideCategory` on a side of the screen, apart from the launcher |
+| `RainsideCategory` | `Apps` | the category: the name of its file, without `.ini`; not in the launcher's menu, in its search |
+| `RainsideMode` | `Fixed` | `Fixed`: always on screen; `Edge`: out of its edge when the mouse rests on it, back in when it leaves |
+| `RainsideSide` | `Right` | `Left`, `Right`, `Top`, `Bottom` |
+| `RainsideSize` | `10%` | its width (left, right) or height (top, bottom), pixels or % of the area |
+| `RainsideHotKey` | (none) | combination (HotKey plugin): `Edge` shows and hides it; `Fixed` gives it the keys and the gamepad, again takes them back |
+| `RainsideCloseOnLaunch` | `1` | `Edge`: back in after starting a tile |
+| `RainsideFullscreen` | `1` | hidden while a program covers its screen (a game, a video), back afterwards |
+| `RainsideReserve` | `0` | its room kept free, as the taskbar's (an app bar); with `Edge` while it is out |
+| `RainsideOrder` | `Inside` | the launcher docked on the same side: `Inside` beside the Rainside (out of its edge: if it is out, at the edge if not), `Outside` at the edge with the Rainside sliding aside |
 
 ### Grid
 
@@ -765,7 +795,7 @@ Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Contai
 
 ### Gamepad
 
-See [Gamepad](#gamepad): `Gamepad`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms), `GamepadLegend` (1 = the legend of the buttons while the pad is in use), and the buttons of the actions (one, or several held together; empty = none): `GamepadToggle` (`BACK START`), `GamepadUp` / `GamepadDown` / `GamepadLeft` / `GamepadRight` (the D-pad), `GamepadConfirm` (`A`), `GamepadBack` (`B`), `GamepadPrevCategory` / `GamepadNextCategory` (`LB` / `RB`), `GamepadSearch` (`Y`), `GamepadDelete` (`X`), `GamepadDone` (`START`: done on the on-screen keyboard, the [tile menu](#tile-menu) elsewhere), `GamepadPrevChip` / `GamepadNextChip` (`LT` / `RT`), `GamepadOptions` (`RS`).
+See [Gamepad](#gamepad): `Gamepad`, `GamepadDeadZone` (0-32767), `GamepadRepeatDelay`, `GamepadRepeatRate` (ms), `GamepadLegend` (1 = the legend of the buttons while the pad is in use), and the buttons of the actions (one, or several held together; empty = none): `GamepadToggle` (`BACK START`), `GamepadUp` / `GamepadDown` / `GamepadLeft` / `GamepadRight` (the D-pad), `GamepadConfirm` (`A`), `GamepadBack` (`B`), `GamepadPrevCategory` / `GamepadNextCategory` (`LB` / `RB`), `GamepadSearch` (`Y`), `GamepadDelete` (`X`), `GamepadDone` (`START`: done on the on-screen keyboard, the [tile menu](#tile-menu) elsewhere), `GamepadPrevChip` / `GamepadNextChip` (`LT` / `RT`), `GamepadOptions` (`RS`), `GamepadRainside` (none: the [Rainside](#rainside), also while the launcher is hidden).
 
 ### Search
 
@@ -866,6 +896,8 @@ Hotkey/Hotkey.ini            Esc mini-skin (activated by the launcher while it h
 Navigation/Navigation.ini    navigation keys mini-skin (activated by the launcher while it has the focus)
 Typing/Typing.ini            keys typed in the search bar (activated while typing)
 TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated while the launcher is open, with the focus)
+Rainside/Rainside.ini        the Rainside (loaded by the launcher): Raintile.ini included and run as a bar
+Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its name and generated files
 @Resources/
   Settings.inc               default settings (yours are in the data folder)
   State.inc                  default positions
@@ -899,6 +931,9 @@ TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated whi
   Generated/DashData.txt     the data of the widgets (written by the helper)
   Generated/DockEdge.txt     docked with DockEdge=1: the edge the helper watches to open it
   Generated/LauncherSize.txt size of the launcher, for the helper to find its window
+  Generated/Rainside*        the same files of the Rainside (RainsideGrid.inc, RainsideSizes.inc, RainsideDashOn.txt,
+                             RainsideDockEdge.txt, RainsideLauncherSize.txt), and RainsideKeys.txt (while it has the keys),
+                             RainsideScreen.txt (its screen, RainsideFullscreen), RainsideReserve.txt (RainsideReserve)
   Generated/TileKeys.inc     the measures of the TileKeys mini-skin
 ```
 

@@ -14,6 +14,7 @@
 #   Delete / Done: X / Start      on-screen keyboard: delete / done
 #   PrevChip / NextChip: LT / RT  filter chips of the search results
 #   Options: RS                   the Options window
+#   Rainside: (none)              the Rainside's Toggle(), also while hidden
 #   PadTile <n>: the pad shortcuts of the tiles (PadKey=), one per line of
 #                Generated\PadKeys.txt, read at start; after the actions
 # One button or several held together (see Step). Every action but Toggle goes
@@ -650,9 +651,9 @@ public class RaintilePad
     // buttons they have by default. Each one is one button or several held
     // together; a combination used by two actions acts for the first only.
     public static readonly string[] Actions = { "Toggle", "Up", "Down", "Left", "Right", "Confirm", "Back",
-        "PrevCategory", "NextCategory", "Search", "Delete", "Done", "PrevChip", "NextChip", "Options" };
+        "PrevCategory", "NextCategory", "Search", "Delete", "Done", "PrevChip", "NextChip", "Options", "Rainside" };
     static readonly string[] DefaultButtons = { "BACK START", "UP", "DOWN", "LEFT", "RIGHT", "A", "B",
-        "LB", "RB", "Y", "X", "START", "LT", "RT", "RS" };
+        "LB", "RB", "Y", "X", "START", "LT", "RT", "RS", "" };
     const int MOVES = 1;   // Up, Down, Left, Right: they repeat, the left stick does them too
 
     readonly string config;
@@ -735,8 +736,16 @@ public class RaintilePad
 
     string Call(string function)
     {
-        return "[!CommandMeasure MeasureScript \"" + function + "\" \"" + config + "\"]";
+        return CallTo(config, function);
     }
+
+    static string CallTo(string skin, string function)
+    {
+        return "[!CommandMeasure MeasureScript \"" + function + "\" \"" + skin + "\"]";
+    }
+
+    // The Rainside's config (Rainside\Rainside.ini, run by the same script)
+    string SideConfig { get { return config + "\\Rainside"; } }
 
     // A button for the launcher: through Pad(), which drops it while the
     // launcher is hidden or does not have the focus
@@ -764,6 +773,8 @@ public class RaintilePad
             case "Done": return PadCall("PadStart", "");
             case "PrevChip": return PadCall("PadChip", "-1");
             case "NextChip": return PadCall("PadChip", "1");
+            // (through the launcher, which knows whether there is a Rainside)
+            case "Rainside": return Call("RainsideToggle()");
             default: return PadCall("PadOptions", "");
         }
     }
@@ -969,13 +980,13 @@ public class RaintilePad
     // The window a click lands on: +1 the launcher, 0 a window of Rainmeter
     // that is not a skin (its menus and dialogs), -1 anything else (another
     // program, also when it is over the launcher, another skin, the desktop)
-    int ClickedOn(uint rainmeter)
+    int ClickedOn(uint rainmeter, IntPtr skin)
     {
         Point p;
         if (!GetCursorPos(out p)) return 0;
         IntPtr root = GetAncestor(WindowFromPoint(p), GA_ROOT);
         if (root == IntPtr.Zero) return 0;
-        if (root == launcher) return 1;
+        if (root == skin) return 1;
         if (ProcessOf(root) != rainmeter) return -1;
         var name = new System.Text.StringBuilder(64);
         GetClassName(root, name, name.Capacity);
@@ -1009,13 +1020,201 @@ public class RaintilePad
             foreground = fg;
             if (down && !mouseWasDown)
             {
-                int click = ClickedOn(rainmeter);
+                int click = ClickedOn(rainmeter, launcher);
                 if (click != 0) change = click;
             }
         }
         launcherShown = shown;
         mouseWasDown = down;
         return change;
+    }
+
+    // --- The Rainside's keys ---------------------------------------------------
+    // While the Rainside has the keys (its own opened it or gave it them: it
+    // keeps Generated\RainsideKeys.txt), a click outside it or another
+    // program in front sends it FocusLost(), as the launcher's FocusStep.
+    // Its window: the one of the size in RainsideLauncherSize.txt.
+    public string SideKeysFile, SideSizeFile;
+    long nextSideCheck;
+    bool sideKeys, sideSent, sideMouse;
+    IntPtr sideForeground, sideWindow;
+
+    IntPtr SizedWindow(uint rainmeter, string file, bool hidden = false)
+    {
+        int w, h;
+        try
+        {
+            string[] p = System.IO.File.ReadAllText(file).Trim().Split('|');
+            if (p.Length < 2 || !int.TryParse(p[0], out w) || !int.TryParse(p[1], out h)) return IntPtr.Zero;
+        }
+        catch { return IntPtr.Zero; }
+        IntPtr window = IntPtr.Zero;
+        while ((window = FindWindowEx(IntPtr.Zero, window, "RainmeterMeterWindow", null)) != IntPtr.Zero)
+        {
+            Rect r;
+            if (ProcessOf(window) != rainmeter || (!hidden && !IsWindowVisible(window)) || !GetWindowRect(window, out r)) continue;
+            if (Math.Abs(r.Right - r.Left - w) <= 1 && Math.Abs(r.Bottom - r.Top - h) <= 1) return window;
+        }
+        return IntPtr.Zero;
+    }
+
+    void SideKeysStep(IntPtr rainmeterWindow, long now)
+    {
+        uint rainmeter = ProcessOf(rainmeterWindow);
+        if (now >= nextSideCheck)
+        {
+            nextSideCheck = now + 250;
+            bool on = System.IO.File.Exists(SideKeysFile);
+            if (on && !sideKeys)
+            {
+                // just given them: only what changes from now on counts
+                sideForeground = GetForegroundWindow();
+                sideWindow = SizedWindow(rainmeter, SideSizeFile);
+                sideSent = false;
+            }
+            sideKeys = on;
+        }
+        bool down = MouseDown();
+        if (sideKeys && !sideSent)
+        {
+            bool lost = false;
+            IntPtr fg = GetForegroundWindow();
+            if (fg != sideForeground && fg != IntPtr.Zero && ProcessOf(fg) != rainmeter) lost = true;
+            sideForeground = fg;
+            if (down && !sideMouse && ClickedOn(rainmeter, sideWindow) < 0) lost = true;
+            if (lost)
+            {
+                sideSent = true;
+                Send(rainmeterWindow, CallTo(SideConfig, "FocusLost()"));
+            }
+        }
+        sideMouse = down;
+    }
+
+    // --- The Rainside under a full-screen program (RainsideFullscreen) ---------
+    // While it keeps Generated\RainsideScreen.txt ("<x>|<y>|<w>|<h>": its
+    // monitor), a program covering that monitor in front (a game, a video)
+    // sends it RainsideCovered(1), and (0) when it goes; the file written
+    // again (the Rainside loaded again) tells it again.
+    public string SideScreenFile;
+    long nextScreenCheck, nextCovered;
+    bool screenOn, covered;
+    int screenX, screenY, screenW, screenH;
+    DateTime screenStamp = DateTime.MinValue;
+
+    void CoveredStep(IntPtr window, long now)
+    {
+        if (now >= nextScreenCheck)
+        {
+            nextScreenCheck = now + 2000;
+            bool on = false;
+            try
+            {
+                if (System.IO.File.Exists(SideScreenFile))
+                {
+                    DateTime stamp = System.IO.File.GetLastWriteTimeUtc(SideScreenFile);
+                    if (stamp != screenStamp || !screenOn)
+                    {
+                        string[] p = System.IO.File.ReadAllText(SideScreenFile).Trim().Split('|');
+                        on = p.Length >= 4 && int.TryParse(p[0], out screenX) && int.TryParse(p[1], out screenY)
+                            && int.TryParse(p[2], out screenW) && int.TryParse(p[3], out screenH) && screenW > 0 && screenH > 0;
+                        // (a new Rainside starts uncovered: told again)
+                        if (stamp != screenStamp) covered = false;
+                        screenStamp = stamp;
+                    }
+                    else on = true;
+                }
+            }
+            catch { on = false; }
+            screenOn = on;
+        }
+        if (!screenOn || now < nextCovered) return;
+        nextCovered = now + 500;
+        bool c = FullScreenInFront(window, screenX, screenY, screenW, screenH);
+        if (c == covered) return;
+        covered = c;
+        Send(window, CallTo(SideConfig, "RainsideCovered(" + (c ? "1" : "0") + ")"));
+    }
+
+    // --- The Rainside's room kept free (RainsideReserve) ----------------------
+    // While it keeps Generated\RainsideReserve.txt ("<side>|<x>|<y>|<w>|<h>":
+    // always there, or while it is out of its edge), its window is an app
+    // bar, as the taskbar: Windows keeps that room free of maximised windows. Let go when the file goes, the window
+    // changes or the helper quits. A copy of the helper stopped without
+    // quitting (Rainmeter ends it on a refresh of the launcher) cannot let
+    // go: the next one does, without the file (also with the Rainside
+    // hidden), and before taking the window again.
+    [StructLayout(LayoutKind.Sequential)]
+    struct AppBarData { public int Size; public IntPtr Window; public uint Callback; public uint Edge; public Rect Area; public IntPtr Param; }
+
+    [DllImport("shell32.dll")]
+    static extern UIntPtr SHAppBarMessage(uint message, ref AppBarData data);
+
+    const uint ABM_NEW = 0, ABM_REMOVE = 1, ABM_QUERYPOS = 2, ABM_SETPOS = 3;
+    public string SideReserveFile;
+    IntPtr barWindow = IntPtr.Zero, freedWindow = IntPtr.Zero;
+    string barLine;
+    long nextBarCheck, nextFree;
+
+    void ReserveStep(IntPtr rainmeterWindow, long now)
+    {
+        // (often: out of its edge, the Rainside writes the file as it comes
+        // out and removes it as it goes in, and the windows make room then)
+        if (now < nextBarCheck) return;
+        nextBarCheck = now + 250;
+        string line = null;
+        try { if (System.IO.File.Exists(SideReserveFile)) line = System.IO.File.ReadAllText(SideReserveFile).Trim(); }
+        catch { line = null; }
+        // nothing changed: an app bar still shown, or none to free
+        if (line != null && line == barLine && barWindow != IntPtr.Zero && IsWindowVisible(barWindow)) return;
+        if (line == null && barWindow == IntPtr.Zero && now < nextFree) return;
+        nextFree = now + 5000;
+        IntPtr w = SizedWindow(ProcessOf(rainmeterWindow), SideSizeFile, line == null);
+        if (barWindow != IntPtr.Zero && (line == null || w != barWindow || line != barLine)) ReleaseBar();
+        if (line == null)
+        {
+            // (once per window: a window that is not an app bar is left as it is)
+            if (w != IntPtr.Zero && w != freedWindow) FreeBar(w);
+            freedWindow = w;
+            return;
+        }
+        freedWindow = IntPtr.Zero;
+        if (w == IntPtr.Zero || barWindow != IntPtr.Zero) return;
+        string[] p = line.Split('|');
+        int x, y, bw, bh;
+        if (p.Length < 5 || !int.TryParse(p[1], out x) || !int.TryParse(p[2], out y) || !int.TryParse(p[3], out bw)
+            || !int.TryParse(p[4], out bh)) return;
+        uint edge = p[0] == "left" ? 0u : p[0] == "top" ? 1u : p[0] == "bottom" ? 3u : 2u;
+        // (an app bar left by a stopped copy: anew, with this room)
+        FreeBar(w);
+        var d = new AppBarData { Size = Marshal.SizeOf(typeof(AppBarData)), Window = w };
+        if (SHAppBarMessage(ABM_NEW, ref d) == UIntPtr.Zero) return;
+        d.Edge = edge;
+        d.Area = new Rect { Left = x, Top = y, Right = x + bw, Bottom = y + bh };
+        SHAppBarMessage(ABM_QUERYPOS, ref d);
+        // (moved off the taskbar, if it is on that side too: as thick as it is)
+        if (edge == 0) d.Area.Right = d.Area.Left + bw;
+        else if (edge == 2) d.Area.Left = d.Area.Right - bw;
+        else if (edge == 1) d.Area.Bottom = d.Area.Top + bh;
+        else d.Area.Top = d.Area.Bottom - bh;
+        SHAppBarMessage(ABM_SETPOS, ref d);
+        barWindow = w;
+        barLine = line;
+        if (d.Area.Left != x || d.Area.Top != y)
+            Send(rainmeterWindow, CallTo(SideConfig, "RainsideAt(" + d.Area.Left + "," + d.Area.Top + ")"));
+    }
+
+    public void ReleaseBar()
+    {
+        if (barWindow == IntPtr.Zero) return;
+        FreeBar(barWindow);
+        barWindow = IntPtr.Zero;
+    }
+
+    static void FreeBar(IntPtr window)
+    {
+        var d = new AppBarData { Size = Marshal.SizeOf(typeof(AppBarData)), Window = window };
+        SHAppBarMessage(ABM_REMOVE, ref d);
     }
 
     // --- Play time -----------------------------------------------------------
@@ -1228,36 +1427,42 @@ public class RaintilePad
     // --- Docked launcher: open from the edge of the screen --------------------
     // While the skin is docked with DockEdge=1 it keeps Generated\DockEdge.txt
     // ("<side>|<x>|<y>|<w>|<h>|<delay ms>": the side and the area it is
-    // docked in). When the mouse rests on that edge for the delay, with no
-    // button down and no full-screen program in front, Show() opens it; the
-    // mouse must leave the edge before it can open it again.
-    public string EdgeFile;
-    long nextEdgeCheck, edgeSince = -1;
-    bool edgeOn, edgeArmed = true;
-    string edgeSide = "left";
-    int edgeX, edgeY, edgeW, edgeH, edgeDelay = 300;
-    DateTime edgeStamp = DateTime.MinValue;
+    // docked in), the Rainside with RainsideMode=Edge its own
+    // (RainsideDockEdge.txt). When the mouse rests on that edge for the delay,
+    // with no button down and no full-screen program in front, Show() opens
+    // it; the mouse must leave the edge before it can open it again.
+    public string EdgeFile, SideEdgeFile;
+    class Edge
+    {
+        public string File, Skin;
+        public long NextCheck, Since = -1;
+        public bool On, Armed = true;
+        public string Side = "left";
+        public int X, Y, W, H, Delay = 300;
+        public DateTime Stamp = DateTime.MinValue;
+    }
+    Edge edge, sideEdge;
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     static extern int GetClassName(IntPtr window, System.Text.StringBuilder name, int size);
 
-    void ReadEdge()
+    static void ReadEdge(Edge e)
     {
-        edgeOn = false;
-        if (!System.IO.File.Exists(EdgeFile)) return;
-        DateTime stamp = System.IO.File.GetLastWriteTimeUtc(EdgeFile);
-        string[] p = System.IO.File.ReadAllText(EdgeFile).Trim().Split('|');
+        e.On = false;
+        if (!System.IO.File.Exists(e.File)) return;
+        DateTime stamp = System.IO.File.GetLastWriteTimeUtc(e.File);
+        string[] p = System.IO.File.ReadAllText(e.File).Trim().Split('|');
         if (p.Length < 6) return;
-        edgeSide = p[0].ToLowerInvariant();
-        if (!int.TryParse(p[1], out edgeX) || !int.TryParse(p[2], out edgeY) || !int.TryParse(p[3], out edgeW)
-            || !int.TryParse(p[4], out edgeH) || !int.TryParse(p[5], out edgeDelay)) return;
-        edgeStamp = stamp;
-        edgeOn = edgeW > 0 && edgeH > 0;
+        e.Side = p[0].ToLowerInvariant();
+        if (!int.TryParse(p[1], out e.X) || !int.TryParse(p[2], out e.Y) || !int.TryParse(p[3], out e.W)
+            || !int.TryParse(p[4], out e.H) || !int.TryParse(p[5], out e.Delay)) return;
+        e.Stamp = stamp;
+        e.On = e.W > 0 && e.H > 0;
     }
 
     // A program covering the whole area in front (a game, a video): not the
     // desktop, not Rainmeter
-    bool FullScreenInFront(IntPtr rainmeterWindow)
+    bool FullScreenInFront(IntPtr rainmeterWindow, int x, int y, int w, int h)
     {
         IntPtr fg = GetForegroundWindow();
         if (fg == IntPtr.Zero || ProcessOf(fg) == ProcessOf(rainmeterWindow)) return false;
@@ -1267,52 +1472,60 @@ public class RaintilePad
         if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd") return false;
         Rect r;
         if (!GetWindowRect(fg, out r)) return false;
-        return r.Left <= edgeX && r.Top <= edgeY && r.Right >= edgeX + edgeW && r.Bottom >= edgeY + edgeH;
+        return r.Left <= x && r.Top <= y && r.Right >= x + w && r.Bottom >= y + h;
     }
 
-    void EdgeStep(IntPtr window, long now)
+    void EdgeStep(Edge e, IntPtr window, long now)
     {
-        if (now >= nextEdgeCheck)
+        if (now >= e.NextCheck)
         {
-            nextEdgeCheck = now + 1000;
+            e.NextCheck = now + 1000;
             try
             {
-                if (!System.IO.File.Exists(EdgeFile)) edgeOn = false;
-                else if (System.IO.File.GetLastWriteTimeUtc(EdgeFile) != edgeStamp || !edgeOn) ReadEdge();
+                if (!System.IO.File.Exists(e.File)) e.On = false;
+                else if (System.IO.File.GetLastWriteTimeUtc(e.File) != e.Stamp || !e.On) ReadEdge(e);
             }
-            catch { edgeOn = false; }
+            catch { e.On = false; }
         }
-        if (!edgeOn) return;
+        if (!e.On) return;
         Point p;
         if (!GetCursorPos(out p)) return;
-        bool along = edgeSide == "top" || edgeSide == "bottom"
-            ? p.X >= edgeX && p.X < edgeX + edgeW
-            : p.Y >= edgeY && p.Y < edgeY + edgeH;
+        bool along = e.Side == "top" || e.Side == "bottom"
+            ? p.X >= e.X && p.X < e.X + e.W
+            : p.Y >= e.Y && p.Y < e.Y + e.H;
         bool at;
-        if (edgeSide == "right") at = p.X >= edgeX + edgeW - 1;
-        else if (edgeSide == "top") at = p.Y <= edgeY;
-        else if (edgeSide == "bottom") at = p.Y >= edgeY + edgeH - 1;
-        else at = p.X <= edgeX;
+        if (e.Side == "right") at = p.X >= e.X + e.W - 1;
+        else if (e.Side == "top") at = p.Y <= e.Y;
+        else if (e.Side == "bottom") at = p.Y >= e.Y + e.H - 1;
+        else at = p.X <= e.X;
         // (a cursor past the edge, on the next monitor, is not on it)
-        if (edgeSide == "right") at = at && p.X < edgeX + edgeW;
-        else if (edgeSide == "top") at = at && p.Y >= edgeY;
-        else if (edgeSide == "bottom") at = at && p.Y < edgeY + edgeH;
-        else at = at && p.X >= edgeX;
+        if (e.Side == "right") at = at && p.X < e.X + e.W;
+        else if (e.Side == "top") at = at && p.Y >= e.Y;
+        else if (e.Side == "bottom") at = at && p.Y < e.Y + e.H;
+        else at = at && p.X >= e.X;
         if (!at || !along || MouseDown())
         {
-            edgeSince = -1;
-            if (!at || !along) edgeArmed = true;
+            e.Since = -1;
+            if (!at || !along) e.Armed = true;
             return;
         }
-        if (!edgeArmed) return;
-        if (edgeSince < 0) { edgeSince = now; return; }
-        if (now - edgeSince < edgeDelay) return;
-        edgeArmed = false;
-        edgeSince = -1;
-        if (FullScreenInFront(window)) return;
+        if (!e.Armed) return;
+        if (e.Since < 0) { e.Since = now; return; }
+        if (now - e.Since < e.Delay) return;
+        e.Armed = false;
+        e.Since = -1;
+        if (FullScreenInFront(window, e.X, e.Y, e.W, e.H)) return;
         // opened by the mouse: the keys stay with the program in front until
         // a click on the launcher
-        Send(window, Call("Show('edge')"));
+        Send(window, CallTo(e.Skin, "Show('edge')"));
+    }
+
+    void EdgesStep(IntPtr window, long now)
+    {
+        if (edge == null && EdgeFile != null) edge = new Edge { File = EdgeFile, Skin = config };
+        if (sideEdge == null && SideEdgeFile != null) sideEdge = new Edge { File = SideEdgeFile, Skin = SideConfig };
+        if (edge != null) EdgeStep(edge, window, now);
+        if (sideEdge != null) EdgeStep(sideEdge, window, now);
     }
 
     // --- Dashboard ---------------------------------------------------------------
@@ -1344,12 +1557,16 @@ public class RaintilePad
         if (now >= nextDashCheck)
         {
             nextDashCheck = now + 100;
-            bool on = System.IO.File.Exists(DashFlag);
+            // the launcher's and the Rainside's widgets (RainsideDashOn.txt):
+            // the data for both, DashTick() to those that show some
+            dashMain = System.IO.File.Exists(DashFlag);
+            dashSide = SideDashFlag != null && System.IO.File.Exists(SideDashFlag);
+            bool on = dashMain || dashSide;
             if (on && !dashOn)
             {
                 try
                 {
-                    string[] p = System.IO.File.ReadAllText(DashFlag).Trim().Split('|');
+                    string[] p = System.IO.File.ReadAllText(dashMain ? DashFlag : SideDashFlag).Trim().Split('|');
                     int ms;
                     if (p.Length > 0 && int.TryParse(p[0], out ms)) dashInterval = Math.Max(250, ms);
                     dashProcs = p.Length < 2 || p[1] != "0";
@@ -1373,7 +1590,7 @@ public class RaintilePad
         var d = dash;
         d.LhmPort = dashPort;
         bool procs = dashProcs, sensors = dashSensors;
-        string bang = Call("DashTick()");
+        string bang = (dashMain ? Call("DashTick()") : "") + (dashSide ? CallTo(SideConfig, "DashTick()") : "");
         collecting = true;
         ThreadPool.QueueUserWorkItem(delegate
         {
@@ -1391,7 +1608,8 @@ public class RaintilePad
             finally { collecting = false; }
         });
     }
-    bool dashFirst;
+    bool dashFirst, dashMain, dashSide;
+    public string SideDashFlag;
     int dashPort = 8085;
 
     static void Send(IntPtr window, string bang)
@@ -1695,7 +1913,10 @@ public class RaintilePad
             }
             if (TrackEnabled) { try { TrackStep(now); } catch { } }
             if (DashFlag != null && window != IntPtr.Zero) { try { DashStep(window, now); } catch { } }
-            if (EdgeFile != null && window != IntPtr.Zero) { try { EdgeStep(window, now); } catch { } }
+            if (window != IntPtr.Zero) { try { EdgesStep(window, now); } catch { } }
+            if (SideKeysFile != null && window != IntPtr.Zero) { try { SideKeysStep(window, now); } catch { } }
+            if (SideScreenFile != null && window != IntPtr.Zero) { try { CoveredStep(window, now); } catch { } }
+            if (SideReserveFile != null && window != IntPtr.Zero) { try { ReserveStep(window, now); } catch { } }
             if (DownloadFlag != null && window != IntPtr.Zero) { try { DownloadStep(window, now); } catch { } }
             if (!PadEnabled) continue;
 
@@ -1749,8 +1970,14 @@ $pad.PadEnabled = [bool]$Gamepad
 $pad.TrackEnabled = [bool]$Track -and $Generated -and $Data
 if ($Generated) {
     $pad.DashFlag = Join-Path $Generated 'DashOn.txt'
+    $pad.SideDashFlag = Join-Path $Generated 'RainsideDashOn.txt'
     $pad.DashFile = Join-Path $Generated 'DashData.txt'
     $pad.EdgeFile = Join-Path $Generated 'DockEdge.txt'
+    $pad.SideEdgeFile = Join-Path $Generated 'RainsideDockEdge.txt'
+    $pad.SideKeysFile = Join-Path $Generated 'RainsideKeys.txt'
+    $pad.SideSizeFile = Join-Path $Generated 'RainsideLauncherSize.txt'
+    $pad.SideScreenFile = Join-Path $Generated 'RainsideScreen.txt'
+    $pad.SideReserveFile = Join-Path $Generated 'RainsideReserve.txt'
     if ($Dash) { $pad.PrepareDash() }
     $pad.SizeFile = Join-Path $Generated 'LauncherSize.txt'
     $pad.DownloadFlag = Join-Path $Generated 'DownloadOn.txt'
@@ -1761,4 +1988,4 @@ if ($pad.TrackEnabled) {
     $pad.PlayedFile = Join-Path $Data 'TimePlayed.txt'
     $pad.ExeFile = Join-Path $Data 'GameExe.txt'
 }
-try { $pad.Run($quit) } finally { $mutex.ReleaseMutex() }
+try { $pad.Run($quit) } finally { $pad.ReleaseBar(); $mutex.ReleaseMutex() }

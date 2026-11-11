@@ -14,6 +14,10 @@
 -- project's own rules on what reaches Rainmeter: ASCII only, one line per
 -- value, no timer left running at rest.
 --
+-- What is on screen changes only with !Redraw: skin.undrawn is the last bang
+-- that changed a meter (updated, shown, hidden) and was not followed by one,
+-- skin.redraws how many there were.
+--
 -- The host (tests/run.py) gives the file functions Lua does not have:
 -- host_mkdtemp(), host_copytree(src, dst), host_listdir(dir), host_rmtree(dir).
 
@@ -285,6 +289,8 @@ function R.new(opts)
 	self.commands = {}  -- programs run (tile commands, scripts)
 	self.loads = 0
 	self.timers = {}    -- ActionTimer lists running: { measure, list }
+	self.redraws = 0    -- !Redraw sent
+	self.undrawn = nil  -- the last change of a meter not drawn yet (its bang)
 	self.maxSteps = opts.maxSteps or 5000
 	return self
 end
@@ -733,18 +739,26 @@ function Skin:bang(t)
 			local m = self:meter(t[2], '!UpdateMeter')
 			if m then m:update() end
 		end
+		self.undrawn = table.concat(t, ' ')
 	elseif name == '!updatemetergroup' then
 		if elsewhere(t, 3) then return end
 		for _, m in ipairs(group(self, t[2])) do m:update() end
+		self.undrawn = table.concat(t, ' ')
 	elseif name == '!showmeter' or name == '!hidemeter' or name == '!togglemeter' then
 		if elsewhere(t, 3) then return end
 		local m = self:meter(t[2], t[1])
 		if m then
 			if name == '!togglemeter' then m.hidden = not m.hidden else m.hidden = name == '!hidemeter' end
 		end
+		self.undrawn = table.concat(t, ' ')
 	elseif name == '!showmetergroup' or name == '!hidemetergroup' then
 		if elsewhere(t, 3) then return end
 		for _, m in ipairs(group(self, t[2])) do m.hidden = name == '!hidemetergroup' end
+		self.undrawn = table.concat(t, ' ')
+	elseif name == '!redraw' then
+		if elsewhere(t, 2) then return end
+		self.redraws = self.redraws + 1
+		self.undrawn = nil
 	elseif name == '!updatemeasure' or name == '!updatemeasuregroup' then
 		if name == '!updatemeasure' and not elsewhere(t, 3) and t[2] ~= '*' then self:measureNamed(t[2], '!UpdateMeasure') end
 	elseif name == '!setvariable' then

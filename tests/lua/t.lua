@@ -34,4 +34,12 @@ function t.atRest(skin)
 	if #list > 0 then error('timers still running: ' .. table.concat(list, ', '), 2) end
 end
 
+-- Everything the skin changed is on screen: no meter updated, shown or
+-- hidden after the last !Redraw.
+function t.drawn(skin, what)
+	if skin.undrawn then
+		error((what and what .. ': ' or '') .. 'changed and not redrawn: ' .. skin.undrawn, 2)
+	end
+end
+
 return t

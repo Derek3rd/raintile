@@ -50,6 +50,10 @@ namespace RaintileOptions
         TextBlock foundStatus, foundEmpty;
         ListBox foundList;
         Border foundFrame;   // the list's frame: as tall as the page allows (FillPageHeight)
+        // the entries of the list, built once per item and look (covers, where it is):
+        // the filters only show them again, without building every entry and reading
+        // every image from disk at each letter typed; emptied when the list is read again
+        readonly Dictionary<string, ListBoxItem> foundEntries = new Dictionary<string, ListBoxItem>();
         ComboBox foundTarget;
 
         void InitFound()
@@ -106,6 +110,7 @@ namespace RaintileOptions
         void ReadFound()
         {
             foundItems = new List<FoundItem>();
+            foundEntries.Clear();
             foundScanned = "";
             if (!File.Exists(Core.FoundFile)) return;
             try
@@ -308,9 +313,12 @@ namespace RaintileOptions
                     if (inCat != null && !foundShowAdded) continue;
                     string hay = (it.Name + " " + it.Store + " " + it.Source).ToLowerInvariant();
                     if (words.Any(w => !hay.Contains(w))) continue;
-                    var item = NewFoundEntry(it, inCat);
+                    string key = it.Id + "|" + foundCovers + "|" + inCat;
+                    ListBoxItem item;
+                    if (!foundEntries.TryGetValue(key, out item)) { item = NewFoundEntry(it, inCat); foundEntries[key] = item; }
                     foundList.Items.Add(item);
-                    if (inCat == null && foundSelected.Contains(it.Id)) item.IsSelected = true;
+                    // (an entry shown before keeps its state: set both ways)
+                    item.IsSelected = inCat == null && foundSelected.Contains(it.Id);
                 }
                 foundEmpty.Visibility = foundList.Items.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
                 foundEmpty.Text = scanProcess != null && !scanProcess.HasExited ? "Searching..."

@@ -760,6 +760,15 @@ local favorites = { list = {}, set = {} }
 local usage = {}        -- id -> { count, last }
 local virtualDirty = false
 
+-- The play time line of each tile (tileInfo), kept: the grid asks for it on
+-- every step of an animation. M.infoReset() forgets them wherever the data
+-- they come from is read or changed (launches, play time, Steam updates and
+-- downloads, the games no longer installed); a new day does too.
+M.info = { text = {}, sticky = {}, day = '' }
+function M.infoReset()
+	M.info.text, M.info.sticky = {}, {}
+end
+
 local function tileId(t)
 	return (t.file or '') .. '|' .. t.name
 end
@@ -795,6 +804,7 @@ end
 
 local function readUsage()
 	usage = {}
+	M.infoReset()
 	for _, line in ipairs(readLines(data .. 'Usage.txt')) do
 		local id, count, last = line:match('^(.*)|(%d+)|(%d+)$')
 		if id then usage[id] = { count = tonumber(count), last = tonumber(last) } end
@@ -814,6 +824,7 @@ end
 -- Options > Import, where they can be removed or kept) and light the dot.
 local function readMissing()
 	local set, n = {}, 0
+	M.infoReset()
 	for _, id in ipairs(readLines(resources .. 'Generated\\Missing.txt')) do set[id:lower()] = true end
 	for _, c in ipairs(cats) do
 		if not c.virtual then
@@ -835,6 +846,7 @@ local playtime = {}   -- steam app id -> { minutes, last }
 
 local function readPlaytime()
 	playtime = {}
+	M.infoReset()
 	for _, line in ipairs(readLines(resources .. 'Generated\\Playtime.txt')) do
 		local id, minutes, last = line:match('^(%d+)|(%d+)|(%d+)$')
 		if id then playtime[id] = { minutes = tonumber(minutes), last = tonumber(last) } end
@@ -848,6 +860,7 @@ local gameUpdates = {} -- steam app id -> { size, done, when, new, manifest }
 
 local function readGameUpdates()
 	gameUpdates = {}
+	M.infoReset()
 	for _, line in ipairs(readLines(resources .. 'Generated\\GameUpdates.txt')) do
 		local id, size, done, when, rest = line:match('^(%d+)|(%d+)|(%d+)|(%d+)(.*)$')
 		if id then
@@ -884,6 +897,7 @@ end
 
 function M.readDownloads()
 	M.dl.live = {}
+	M.infoReset()
 	for _, line in ipairs(readLines(resources .. 'Generated\\Downloads.txt')) do
 		local id, phase, done, total, rate, left, new = line:match('^(%d+)|(%a+)|(%d+)|(%d+)|(%d+)|(%-?%d+)|?([01]?)$')
 		if id then
@@ -948,8 +962,8 @@ end
 -- First line of a Steam tile with an update (above the play time), with the
 -- parts of DownloadInfo: "Downloading 40% - 540 MB / 1.3 GB - 25.3 MB/s -
 -- 2 min left", "Update 5.4 GB - Sat 06:27" while it waits
-function M.updateInfo(t)
-	local st = M.updateState(t)
+function M.updateInfo(t, st)
+	st = st or M.updateState(t) -- (st: the state its caller already worked out)
 	if not st then return nil end
 	local show = V.DownloadInfo
 	local parts = {}
@@ -978,6 +992,7 @@ end
 local timePlayed = {} -- tile id -> { minutes, last }
 local function readTimePlayed()
 	timePlayed = {}
+	M.infoReset()
 	for _, line in ipairs(readLines(data .. 'TimePlayed.txt')) do
 		local id, minutes, last = line:match('^(.*)|(%d+)|(%d+)$')
 		if id then timePlayed[id] = { minutes = tonumber(minutes), last = tonumber(last) } end
@@ -1087,7 +1102,7 @@ end
 -- Line shown on the tile (TileInfo): play time and last launch (a Steam
 -- update goes on a line of its own above it, M.updateInfo). The second value
 -- is true for the line shown whatever TileInfo says: "Not installed".
-local function tileInfo(t)
+function M.infoLine(t)
 	-- (being installed again: its download says so instead)
 	if t.missing and not M.updateState(t) then return 'Not installed', true end
 	-- Steam's own play time, otherwise the one measured by the helper
@@ -1104,6 +1119,18 @@ local function tileInfo(t)
 	if played then return played .. ' played' end
 	if last > 0 then return 'Last played ' .. ago(last) end
 	return nil
+end
+
+-- The same, worked out once per tile until M.infoReset() (false: no line)
+local function tileInfo(t)
+	local c = M.info
+	local text = c.text[t]
+	if text == nil then
+		text, c.sticky[t] = M.infoLine(t)
+		text = text or false
+		c.text[t] = text
+	end
+	return text or nil, c.sticky[t]
 end
 
 local VIRTUAL_LABELS = { favorites = 'Favorites', recent = 'Recent', unplayed = 'Not played yet' }
@@ -1660,11 +1687,15 @@ end
 
 -- Rendering -----------------------------------------------------------------
 
+-- M.changed: something on screen changed since the last redraw (an option,
+-- a meter shown or hidden, the window moved): a step of the animation clock
+-- that changed nothing draws nothing (frame(true))
 local function set(meter, option, value)
 	local key = meter .. '|' .. option
 	if cache[key] ~= value then
 		cache[key] = value
 		dirty[meter] = true
+		M.changed = true
 		SKIN:Bang('!SetOption', meter, option, value)
 	end
 end
@@ -1675,6 +1706,7 @@ local function show(meter, visible)
 	local key = meter .. '|Hidden'
 	if cache[key] ~= visible then
 		cache[key] = visible
+		M.changed = true
 		SKIN:Bang(visible and '!ShowMeter' or '!HideMeter', meter)
 	end
 end
@@ -1688,6 +1720,7 @@ local function infoSize(meter, text)
 	local s = infoSizes[text]
 	if not s then
 		show(meter, true)
+		M.changed = true
 		SKIN:Bang('!UpdateMeter', meter)
 		local m = SKIN:GetMeter(meter)
 		s = { m and m:GetW() or 0, m and m:GetH() or 0 }
@@ -3823,6 +3856,7 @@ function M.lineSize(meter, text)
 	local s = M.lineSizes[meter]
 	if not s or s.text ~= text then
 		show(meter, true)
+		M.changed = true
 		SKIN:Bang('!UpdateMeter', meter)
 		local m = SKIN:GetMeter(meter)
 		s = { text = text, w = m and m:GetW() or 0, h = m and m:GetH() or 0 }
@@ -3968,6 +4002,12 @@ local function edgeFade(edges)
 end
 
 local function placeSlots()
+	-- ("today", "yesterday" in the play time lines: again on a new day)
+	local day = os.date('%Y%m%d')
+	if day ~= M.info.day then
+		M.info.day = day
+		M.infoReset()
+	end
 	local frac = pos - base
 	local rects, cutEnd, cutStart = {}, {}, {}
 	dash.shown = {}
@@ -4087,7 +4127,7 @@ local function placeSlots()
 			-- the update line and the play time: always, only on the
 			-- highlighted tile (fading with the highlight) or never (UpdateInfo,
 			-- TileInfo); "Not installed" always
-			local updText = st and M.updateInfo(t)
+			local updText = st and M.updateInfo(t, st)
 			local updAlpha = updText and M.lineAlpha(V.UpdateInfo, slot, f) or 0
 			if updAlpha <= 0.01 then updText = nil end
 			M.placeUpdate(slot, t, st, x, y, f, op, wv and M.wheelImage(t, sel) == '')
@@ -4103,7 +4143,7 @@ local function placeSlots()
 			-- the mouse is
 			if wv and V.WheelInfoBack then
 				if sel then
-					local u = st and V.UpdateInfo ~= 'never' and M.updateInfo(t) or nil
+					local u = st and V.UpdateInfo ~= 'never' and M.updateInfo(t, st) or nil
 					local i, sticky = tileInfo(t)
 					if i and not sticky and V.TileInfo == 'never' then i = nil end
 					M.backdropInfo(t, u, f, i, f)
@@ -4256,8 +4296,12 @@ local function placeHover()
 	show('TileHover', true)
 end
 
--- Applies the current state to the grid and redraws.
-local function frame()
+-- Applies the current state to the grid and redraws. lazy (a step of the
+-- animation clock, Tick): no redraw when the step changed nothing (a
+-- highlight moving less than a pixel, a background panning slowly, the wait
+-- before a tile appears). Every other caller redraws in any case: some send
+-- their bangs themselves (the menu, the widgets) before calling it.
+local function frame(lazy)
 	if V.Wheel then
 		M.wheelAssign()
 	else
@@ -4273,7 +4317,8 @@ local function frame()
 	-- only changed meters are updated (e.g. a single one during Pan)
 	for meter in pairs(dirty) do SKIN:Bang('!UpdateMeter', meter) end
 	dirty = {}
-	SKIN:Bang('!Redraw')
+	if M.changed or not lazy then SKIN:Bang('!Redraw') end
+	M.changed = false
 end
 M.frame = frame -- for the functions defined above it
 
@@ -4402,6 +4447,8 @@ local function tickListFor(ms)
 end
 
 startTicker = function()
+	-- (whoever starts it may have sent bangs itself: its first step redraws)
+	M.changed = true
 	if ticking then return end
 	ticking = true
 	M.tickMs = V.FrameMs or 16
@@ -4437,6 +4484,7 @@ function M.dockPlace(p)
 	end
 	SKIN:Bang('!Move', tostring(V.ScreenX + dx), tostring(V.ScreenY + dy))
 	SKIN:Bang('!SetTransparency', tostring(math.floor(255 * e + 0.5)))
+	M.changed = true
 end
 function M.dockAnimated()
 	return V.Mode == 'dock' and V.AnimOpen
@@ -4526,8 +4574,8 @@ local function advance()
 		busy = busy or moving
 		pillPos.w, moving = approach(pillPos.w, w, 0.5, V.AnimPillSmooth)
 		busy = busy or moving
+		-- (updated by frame(), which follows, only when it moved: set() marks it)
 		drawPill('CatPillActive', pillPos.x, pillPos.w, V.ActiveCategoryColor)
-		SKIN:Bang('!UpdateMeter', 'CatPillActive')
 	end
 
 	return busy
@@ -4543,7 +4591,7 @@ function Tick(list)
 	M.animScale = (M.tickMs or 16) / 16
 	M.animFast = false
 	local busy = advance()
-	frame()
+	frame(true)
 	-- a backdrop fade that started in this frame (the wheel just stopped on a tile)
 	if V.Wheel and M.backdrop.f < 1 then busy = true end
 	if busy then
@@ -5469,6 +5517,7 @@ function Hide()
 	-- the downloads are followed only while it is open
 	os.remove(M.gen('DownloadOn.txt'))
 	M.dl.live = {}
+	M.infoReset()
 	if M.dockAnimated() then
 		-- goes out first; M.finishHide() hides the window at the end
 		M.dock.dir = -1
@@ -5628,6 +5677,7 @@ function M.shiftPlace()
 	if M.dock.dir ~= 0 then return end
 	local dx, dy = M.shiftOffset()
 	SKIN:Bang('!Move', tostring(V.ScreenX + dx), tostring(V.ScreenY + dy))
+	M.changed = true
 end
 
 -- (the Rainside, RainsideReserve=1) its room kept free while it is on
@@ -6804,6 +6854,7 @@ local function startTile(t)
 		local id = tileId(t)
 		local u = usage[id] or { count = 0, last = 0 }
 		usage[id] = { count = u.count + 1, last = os.time() }
+		M.infoReset()
 		writeUsage()
 		virtualDirty = true
 	end

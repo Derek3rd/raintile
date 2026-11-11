@@ -235,7 +235,7 @@ namespace RaintileOptions
                     new Item { Kind = "combo", Key = "RainsideHotKey", Label = "Shortcut", Help = "Out of its edge: shows and hides it. Always there: gives it the arrows and the gamepad (again: takes them back). The gamepad's is on Keybindings > Gamepad." },
                     new Item { Kind = "bool", Key = "RainsideCloseOnLaunch", Label = "Back in after launching a tile", Help = "", When = "RainsideMode=Edge" },
                     new Item { Kind = "bool", Key = "RainsideFullscreen", Label = "Hide under full-screen programs", Help = "While a game or a video covers its screen, back afterwards; its widgets stop meanwhile." },
-                    new Item { Kind = "bool", Key = "RainsideReserve", Label = "Keep its room free", Help = "As the taskbar: maximised windows stop beside it instead of going under it.", When = "RainsideMode=Fixed" },
+                    new Item { Kind = "bool", Key = "RainsideReserve", Label = "Keep its room free", Help = "As the taskbar: maximised windows stop beside it instead of going under it. Out of its edge: while it is out, the windows making room as it comes out." },
                     new Item { Kind = "choice", Key = "RainsideOrder", Label = "With the launcher on the same side", Help = "When the launcher is docked on the Rainside's side. Beside it: out of its edge, the Rainside comes out too while the launcher is open.", Choices = new List<string[]> { new[] { "Inside", "The launcher opens beside it" }, new[] { "Outside", "The launcher opens at the edge, the Rainside slides aside" } } },
                 } },
             } },

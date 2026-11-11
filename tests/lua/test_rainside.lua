@@ -187,8 +187,19 @@ function T.reserve()
 	local s = rainside({ RainsideReserve = 1, RainsideSide = 'Left', RainsideSize = '150' })
 	t.eq(R.readFile(s.resources .. 'Generated\\RainsideReserve.txt'), 'left|0|0|150|1040', 'not its room for the helper')
 	t.clean(s)
-	s = rainside({ RainsideReserve = 1, RainsideMode = 'Edge' })
-	t.eq(R.readFile(s.resources .. 'Generated\\RainsideReserve.txt'), nil, 'room kept for a Rainside out of its edge')
+	-- under a full-screen program: no room kept
+	s:call('RainsideCovered(1)')
+	t.eq(R.readFile(s.resources .. 'Generated\\RainsideReserve.txt'), nil, 'room kept while covered')
+	s:call('RainsideCovered(0)')
+	t.ok(R.readFile(s.resources .. 'Generated\\RainsideReserve.txt'), 'room not kept again when uncovered')
+	t.clean(s)
+	-- out of its edge: while it is out
+	s = rainside({ RainsideReserve = 1, RainsideMode = 'Edge', RainsideSide = 'Left', RainsideSize = '150' })
+	t.eq(R.readFile(s.resources .. 'Generated\\RainsideReserve.txt'), nil, 'room kept with the Rainside in')
+	s:call("Show('edge')")
+	t.eq(R.readFile(s.resources .. 'Generated\\RainsideReserve.txt'), 'left|0|0|150|1040', 'no room kept with the Rainside out')
+	s:call('Hide()')
+	t.eq(R.readFile(s.resources .. 'Generated\\RainsideReserve.txt'), nil, 'room still kept after it went in')
 	t.clean(s)
 end
 

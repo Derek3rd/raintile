@@ -1137,9 +1137,9 @@ public class RaintilePad
     }
 
     // --- The Rainside's room kept free (RainsideReserve) ----------------------
-    // While it keeps Generated\RainsideReserve.txt ("<side>|<x>|<y>|<w>|<h>"),
-    // its window is an app bar, as the taskbar: Windows keeps that room
-    // free of maximised windows. Let go when the file goes, the window
+    // While it keeps Generated\RainsideReserve.txt ("<side>|<x>|<y>|<w>|<h>":
+    // always there, or while it is out of its edge), its window is an app
+    // bar, as the taskbar: Windows keeps that room free of maximised windows. Let go when the file goes, the window
     // changes or the helper quits. A copy of the helper stopped without
     // quitting (Rainmeter ends it on a refresh of the launcher) cannot let
     // go: the next one does, without the file (also with the Rainside
@@ -1154,15 +1154,21 @@ public class RaintilePad
     public string SideReserveFile;
     IntPtr barWindow = IntPtr.Zero, freedWindow = IntPtr.Zero;
     string barLine;
-    long nextBarCheck;
+    long nextBarCheck, nextFree;
 
     void ReserveStep(IntPtr rainmeterWindow, long now)
     {
+        // (often: out of its edge, the Rainside writes the file as it comes
+        // out and removes it as it goes in, and the windows make room then)
         if (now < nextBarCheck) return;
-        nextBarCheck = now + 2000;
+        nextBarCheck = now + 250;
         string line = null;
         try { if (System.IO.File.Exists(SideReserveFile)) line = System.IO.File.ReadAllText(SideReserveFile).Trim(); }
         catch { line = null; }
+        // nothing changed: an app bar still shown, or none to free
+        if (line != null && line == barLine && barWindow != IntPtr.Zero && IsWindowVisible(barWindow)) return;
+        if (line == null && barWindow == IntPtr.Zero && now < nextFree) return;
+        nextFree = now + 5000;
         IntPtr w = SizedWindow(ProcessOf(rainmeterWindow), SideSizeFile, line == null);
         if (barWindow != IntPtr.Zero && (line == null || w != barWindow || line != barLine)) ReleaseBar();
         if (line == null)

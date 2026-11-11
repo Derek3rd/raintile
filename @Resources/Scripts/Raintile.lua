@@ -4596,7 +4596,8 @@ function M.sideSettings()
 	V.StartHidden, V.AutoHide = V.SideEdge, V.SideEdge
 	V.CloseOnLaunch = V.SideEdge and num('RainsideCloseOnLaunch', 1) ~= 0
 	V.SideFullscreen = num('RainsideFullscreen', 1) ~= 0
-	V.SideReserve = not V.SideEdge and num('RainsideReserve', 0) ~= 0
+	-- (out of its edge: while it is out, M.sideReserve)
+	V.SideReserve = num('RainsideReserve', 0) ~= 0
 	V.CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'
 	V.Wheel, V.CenterSelection = false, false
 	V.ShowClock, V.ShowDate, V.ShowPower = false, false, false
@@ -5358,6 +5359,7 @@ function Show(how)
 	-- (the Rainside opened with its keys over a full-screen program: shown)
 	if M.covered then
 		M.covered = false
+		M.sideReserve(visible)
 		if visible then
 			M.zpos(true)
 			SKIN:Bang('!Show')
@@ -5372,6 +5374,8 @@ function Show(how)
 		return
 	end
 	visible = true
+	-- (the Rainside coming out: the windows make room for it)
+	M.sideReserve(true)
 	-- start clean: no hover, zoom or launch left over from last time
 	launching = nil
 	typing = false
@@ -5437,6 +5441,8 @@ function Hide()
 	if V.SideOutside and M.sideCat then M.sideShift(false) end
 	if V.SideInside and M.sideCat then M.sideHold(false) end
 	visible = false
+	-- (the Rainside going back in: its room for the windows again)
+	M.sideReserve(false)
 	stopTyping()
 	stopTicker()
 	-- the tile with the focus, for a sorted category (its remembered position
@@ -5491,6 +5497,7 @@ function Toggle()
 		-- (the Rainside, over a full-screen program: shown all the same)
 		if M.covered then
 			M.covered = false
+			M.sideReserve(true)
 			updateDashState()
 		end
 		return
@@ -5594,6 +5601,16 @@ function M.shiftPlace()
 	SKIN:Bang('!Move', tostring(V.ScreenX + dx), tostring(V.ScreenY + dy))
 end
 
+-- (the Rainside, RainsideReserve=1) its room kept free while it is on
+-- screen (on): the helper makes its window an app bar while the file is
+-- there; out of its edge, from coming out to going in; not while a
+-- full-screen program covers it
+function M.sideReserve(on)
+	if not V.Side then return end
+	M.keepFile(M.gen('Reserve.txt'), V.SideReserve and on and not M.covered and table.concat({ V.DockSide,
+		math.floor(V.ScreenX), math.floor(V.ScreenY), math.floor(V.ScreenW), math.floor(V.ScreenH) }, '|') or nil)
+end
+
 -- (the Rainside, RainsideReserve=1) Windows put its room beside the
 -- taskbar, on the same side: there, from the helper
 function RainsideAt(x, y)
@@ -5620,6 +5637,7 @@ function RainsideCovered(on)
 		M.zpos(true)
 		SKIN:Bang('!Show')
 	end
+	M.sideReserve(not covered)
 	updateDashState()
 end
 
@@ -5724,8 +5742,7 @@ function PlaceWindow()
 		-- whether it is covered)
 		os.remove(M.gen('Screen.txt'))
 		M.keepFile(M.gen('Screen.txt'), V.SideFullscreen and monitor or nil)
-		M.keepFile(M.gen('Reserve.txt'), V.SideReserve and table.concat({ V.DockSide, math.floor(V.ScreenX), math.floor(V.ScreenY),
-			math.floor(V.ScreenW), math.floor(V.ScreenH) }, '|') or nil)
+		M.sideReserve(not V.SideEdge)
 	end
 	if V.Mode == 'window' then
 		SKIN:Bang('!Draggable', '1')

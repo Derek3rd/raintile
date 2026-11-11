@@ -50,8 +50,8 @@ RainsideHotKey=
 RainsideCloseOnLaunch=1
 ; 1 = hidden while a program covers its screen (a game, a video), back after
 RainsideFullscreen=1
-; Fixed: 1 = its room is kept free, as the taskbar's (maximised windows stop
-; beside it); 0 = it is over the windows
+; 1 = its room is kept free, as the taskbar's (maximised windows stop beside
+; it); with Edge while it is out; 0 = it is over the windows
 RainsideReserve=0
 ; The launcher docked on the same side: Inside = it opens beside the
 ; Rainside (edge, Rainside, launcher; out of its edge, the Rainside comes out

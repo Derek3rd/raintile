@@ -80,7 +80,7 @@ Sizes in percent (margins, menu, fonts) are of the area, not of the window, so t
 One category can live on a side of the screen, apart from the launcher: the **Rainside** (Options > **Rainside**, `Rainside=1` and `RainsideCategory`, the name of its file without `.ini`). It is a skin of its own (`Raintile\Rainside`, loaded and refreshed by the launcher, unloaded when you turn it off) with that category's tiles and widgets in a bar `RainsideSize` wide (or tall) on `RainsideSide`, without the top row; the category is no longer in the launcher's menu, but search still finds its tiles. Without a grid of its own (`NX`, `NY` of the category) its tiles are one line along the bar, about square; a vertical bar scrolls up and down, a horizontal one sideways.
 
 - **Always there** (`RainsideMode=Fixed`): on screen beside the windows. Its shortcut (`RainsideHotKey`, and `GamepadRainside` on the pad) gives it the arrows, `Enter`, `Esc` and the gamepad (a second press, `Esc`, `B`, a click elsewhere or another program in front take them back); with the mouse it always works. `RainsideReserve=1` keeps its room free as the taskbar's: maximised windows stop beside it instead of going under it.
-- **Out of its edge** (`RainsideMode=Edge`): hidden until the mouse rests on its edge of the screen (`DockEdgeDelay`, not with a full-screen program in front), or its shortcut opens it (with the keys); it goes back in a moment after the mouse leaves it (opened with the shortcut: with `Esc`, `B`, the shortcut again or a click elsewhere) and, with `RainsideCloseOnLaunch=1`, after starting a tile.
+- **Out of its edge** (`RainsideMode=Edge`): hidden until the mouse rests on its edge of the screen (`DockEdgeDelay`, not with a full-screen program in front), or its shortcut opens it (with the keys); it goes back in a moment after the mouse leaves it (opened with the shortcut: with `Esc`, `B`, the shortcut again or a click elsewhere) and, with `RainsideCloseOnLaunch=1`, after starting a tile. With `RainsideReserve=1` the maximised windows make room for it while it is out.
 - **Full-screen programs** (`RainsideFullscreen=1`): while a game or a video covers its screen it hides, its widgets stop, and it comes back afterwards. Its shortcut shows it anyway.
 - **The launcher on the same side**: docked on the Rainside's side, the launcher opens beside it (`RainsideOrder=Inside`: edge, Rainside, launcher; a Rainside out of its edge comes out too and stays out while the launcher is open) or at the edge, the Rainside sliding aside while it is open (`Outside`: edge, launcher, Rainside). Opening the launcher takes the keys back from the Rainside.
 
@@ -649,7 +649,7 @@ See [Rainside](#rainside).
 | `RainsideHotKey` | (none) | combination (HotKey plugin): `Edge` shows and hides it; `Fixed` gives it the keys and the gamepad, again takes them back |
 | `RainsideCloseOnLaunch` | `1` | `Edge`: back in after starting a tile |
 | `RainsideFullscreen` | `1` | hidden while a program covers its screen (a game, a video), back afterwards |
-| `RainsideReserve` | `0` | `Fixed`: its room kept free, as the taskbar's (an app bar) |
+| `RainsideReserve` | `0` | its room kept free, as the taskbar's (an app bar); with `Edge` while it is out |
 | `RainsideOrder` | `Inside` | the launcher docked on the same side: `Inside` beside the Rainside (out of its edge, it comes out too while the launcher is open), `Outside` at the edge with the Rainside sliding aside |
 
 ### Grid

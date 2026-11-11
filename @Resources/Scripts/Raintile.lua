@@ -107,6 +107,12 @@ local resources
 -- Data.ps1 has prepared it, the skin's own files (resources) are used.
 local data
 
+-- Files the script generates for this skin: the launcher's, or the
+-- Rainside's (Generated\Rainside<name>; Rainside\Rainside.ini)
+function M.gen(name)
+	return resources .. 'Generated\\' .. (V.Instance or '') .. name
+end
+
 -- Diagnostic messages in the Rainmeter log (DebugLog=1 in Settings.inc).
 local function dbg(msg)
 	if V.DebugLog then print('Raintile: ' .. msg) end
@@ -846,7 +852,7 @@ function M.writeDownloadFlag()
 			if u.manifest then lines[#lines + 1] = id .. '|' .. u.manifest end
 		end
 	end
-	local flag = resources .. 'Generated\\DownloadOn.txt'
+	local flag = M.gen('DownloadOn.txt')
 	if not V.GameUpdates then os.remove(flag) return end
 	table.sort(lines)
 	writeLines(flag, lines)
@@ -1154,9 +1160,16 @@ local function loadCategories(files)
 	cats = {}
 	thumbJobs, pending = {}, {}
 	readLogoColors()
+	-- the Rainside's category (RainsideCategory): on the Rainside only, but
+	-- search finds its tiles here too (M.sideCat)
+	M.sideCat = nil
 	for _, file in ipairs(files) do
 		local c = loadCategory(file)
-		if c and not c.hidden then cats[#cats + 1] = c end
+		if c and not V.Side and c.name:lower() == V.SideCategory:lower() then
+			M.sideCat = c
+		elseif c and (V.Side or not c.hidden) then
+			cats[#cats + 1] = c
+		end
 	end
 	table.sort(cats, function(a, b)
 		if a.order ~= b.order then return a.order < b.order end
@@ -1288,7 +1301,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 20
+local GRID_VERSION = 21
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1352,6 +1365,8 @@ local function writeGrid(path, sig, files)
 			w('ImageName=' .. c.icon)
 			w('X=' .. x)
 			w('Y=(#PadY#+(#MenuH#-#MenuIconSize#)/2)')
+			-- (the Rainside has no menu: there for the script, never shown)
+			if V.Side then w('Hidden=1') end
 			w('')
 			x = '#MenuIconGap#R'
 		end
@@ -1362,6 +1377,7 @@ local function writeGrid(path, sig, files)
 			w('X=' .. x)
 			w('Y=(#PadY#+#MenuH#/2)')
 			w('Text=' .. c.label)
+			if V.Side then w('Hidden=1') end
 			w('')
 		end
 	end
@@ -1631,6 +1647,7 @@ end
 
 
 local function show(meter, visible)
+	if visible and V.Side and M.topRow(meter) then visible = false end
 	local key = meter .. '|Hidden'
 	if cache[key] ~= visible then
 		cache[key] = visible
@@ -3741,7 +3758,7 @@ updateDashState = function()
 	if on == dash.on then return end
 	dash.on = on
 	D.syncSkins()
-	local flag = resources .. 'Generated\\DashOn.txt'
+	local flag = M.gen('DashOn.txt')
 	if not on then os.remove(flag) return end
 	-- not empty while the first data comes: the last values (of this session,
 	-- or the file of the last time), "..." without any
@@ -4519,6 +4536,60 @@ function M.evalSetting(raw, default)
 	return n or default
 end
 
+-- The Rainside (Rainside\\Rainside.ini, RainsideCategory): the launcher
+-- docked on its side (RainsideSide, RainsideSize), with its category alone,
+-- no top row (menu, search, clock, buttons) and none of what the launcher
+-- does for both: the setup, the scans, the update check, the helper and the
+-- thumbnails (its few tiles show their images as they are)
+function M.sideSettings()
+	V.Mode = 'dock'
+	V.DockSide = M.sideSide()
+	-- along the bar
+	V.Horizontal = V.DockSide == 'top' or V.DockSide == 'bottom'
+	-- Edge: it comes out of its edge (or with its keys) and goes back;
+	-- Fixed: always there, its keys give it the arrows and the gamepad
+	V.SideEdge = SKIN:GetVariable('RainsideMode', 'Fixed'):lower() == 'edge'
+	V.StartHidden, V.AutoHide = V.SideEdge, V.SideEdge
+	V.CloseOnLaunch = V.SideEdge and num('RainsideCloseOnLaunch', 1) ~= 0
+	V.CloseAction = '[!CommandMeasure MeasureScript "Hide()"]'
+	V.Wheel, V.CenterSelection = false, false
+	V.ShowClock, V.ShowDate, V.ShowPower = false, false, false
+	V.ShowFavorites, V.ShowRecent, V.ShowUnplayed = false, false, false
+	V.FilterBar, V.CheckUpdates, V.ScanOnStart = false, false, false
+	V.Thumbnails, V.LaunchAnimation, V.TileKeysOpen = false, false, false
+	V.PadLegend = false
+	V.MenuH = 0
+	V.PadX, V.PadY = V.Gap, V.Gap
+	V.GridY = V.PadY
+	V.GridTop = V.GridY
+end
+
+function M.sideSide()
+	local side = SKIN:GetVariable('RainsideSide', 'Right'):lower()
+	return (side == 'left' or side == 'top' or side == 'bottom') and side or 'right'
+end
+
+-- Meters of the top row, which the Rainside never shows
+local TOP_ROW = { '^Cat', '^Search', '^SidePill', '^SideIcon', '^SideHit', '^SideLabel', '^MeterClock', '^MeterDate',
+	'^MeterOptions', '^MeterPower', '^MeterMore', '^MeterNotice', '^MeterClose', '^MeterTopBar', '^MenuStrip',
+	'^Filter', '^Ring', '^PadLegend', '^Osk' }
+function M.topRow(meter)
+	for _, p in ipairs(TOP_ROW) do
+		if meter:find(p) then return true end
+	end
+	return false
+end
+
+-- The default grid of the Rainside, for a category without NX / NY: one
+-- line of tiles along the bar, about square
+function M.sideGrid()
+	if V.Horizontal then
+		V.DefNX, V.DefNY = math.max(1, math.floor(V.AreaW / math.max(1, V.AreaH) + 0.5)), 1
+	else
+		V.DefNX, V.DefNY = 1, math.max(1, math.floor(V.AreaH / math.max(1, V.AreaW) + 0.5))
+	end
+end
+
 function M.launcherRect(get)
 	local mode = trim(get('launchermode') or ''):lower()
 	-- a window never covers the taskbar (covering it is what full screen and
@@ -4543,11 +4614,13 @@ function M.launcherRect(get)
 		x, y = mx + math.floor((mw - w) / 2), my + math.floor((mh - h) / 2)
 	elseif mode == 'dock' then
 		local side = trim(get('dockside') or ''):lower()
+		-- (the Rainside is a narrow bar: smaller than the launcher can be)
+		local least = tonumber(get('_docklimit') or '')
 		if side == 'top' or side == 'bottom' then
-			h = math.max(160, math.min(mh, px(get('docksize'), mh, math.floor(mh * 0.35))))
+			h = math.max(least or 160, math.min(mh, px(get('docksize'), mh, math.floor(mh * 0.35))))
 			if side == 'bottom' then y = my + mh - h end
 		else
-			w = math.max(240, math.min(mw, px(get('docksize'), mw, math.floor(mw * 0.3))))
+			w = math.max(least or 240, math.min(mw, px(get('docksize'), mw, math.floor(mw * 0.3))))
 			if side == 'right' then x = mx + mw - w end
 		end
 	else
@@ -4567,6 +4640,15 @@ local function writeSizes()
 	local function get(key)
 		if values[key] ~= nil then return values[key] end
 		return defaults[key]
+	end
+	if V.Side then
+		-- the Rainside: docked on its side, its own size
+		local own = { launchermode = 'Dock', dockside = M.sideSide(), docksize = get('rainsidesize') or '10%', _docklimit = '48' }
+		local plain = get
+		get = function(key)
+			if own[key] then return own[key] end
+			return plain(key)
+		end
 	end
 	local _, rect, mon = M.launcherRect(get)
 	V.MonW, V.MonH = mon[3], mon[4] -- for the percentages below
@@ -4595,14 +4677,14 @@ local function writeSizes()
 	for _, key in ipairs(colors) do lines[#lines + 1] = key .. '=' .. parseColor(values[key]) end
 	local text = table.concat(lines, '\n') .. '\n'
 
-	local path = resources .. 'Generated\\Sizes.inc'
+	local path = M.gen('Sizes.inc')
 	local f = io.open(path, 'rb')
 	local old = f and f:read('*a') or ''
 	if f then f:close() end
 	if old == text then return false end
 	f = io.open(path, 'wb')
 	if not f then
-		print('Raintile: cannot write Generated\\Sizes.inc')
+		print('Raintile: cannot write ' .. path)
 		return false
 	end
 	f:write(text)
@@ -4634,10 +4716,10 @@ local function regenerate(files)
 			and table.concat(files, '|') == SKIN:GetVariable('CategoryFiles', '') then
 		return false
 	end
-	if writeGrid(resources .. 'Generated\\Grid.inc', sig, files) then
+	if writeGrid(M.gen('Grid.inc'), sig, files) then
 		SKIN:Bang('!Refresh')
 	else
-		print('Raintile: cannot write Generated\\Grid.inc')
+		print('Raintile: cannot write ' .. M.gen('Grid.inc'))
 	end
 	return true
 end
@@ -4659,10 +4741,19 @@ end
 
 function Initialize()
 	resources = SKIN:ReplaceVariables('#@#')
+	-- the launcher, or the Rainside (Rainside\Rainside.ini: Instance=Rainside),
+	-- one category on a side of the screen; each tells the other through
+	-- its config
+	V.Instance = SKIN:GetVariable('Instance', '')
+	V.Side = V.Instance ~= ''
+	V.MainConfig = SKIN:ReplaceVariables('#ROOTCONFIG#')
+	V.SideConfig = V.MainConfig .. '\\Rainside'
+	-- (the name of its file, without .ini; empty with Rainside=0)
+	V.SideCategory = num('Rainside', 0) ~= 0 and trim(SKIN:GetVariable('RainsideCategory', '')):gsub('%.[iI][nN][iI]$', '') or ''
 	-- widgets left on screen by the previous load: the helper stops until shown
-	os.remove(resources .. 'Generated\\DashOn.txt')
+	os.remove(M.gen('DashOn.txt'))
 	-- and the Steam downloads, followed only while it is open
-	os.remove(resources .. 'Generated\\DownloadOn.txt')
+	os.remove(M.gen('DownloadOn.txt'))
 	local userData = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Raintile\\'
 	data = fileExists(userData .. 'Settings.inc') and userData or resources
 	V.NeedsSetup = data ~= userData or settingsOutdated(userData .. 'Settings.inc')
@@ -4824,10 +4915,16 @@ function Initialize()
 		V.BgThumbMode = 'overscan' .. math.floor(over * 100 + 0.5)
 	end
 	V.HoverLogoScale = V.AnimLogoZoom and math.max(1, num('HoverLogoScale', 1.25)) or 1
+	if V.Side then M.sideSettings() end
 	-- area available for the grid (each category's tiles fill it)
 	V.AreaW = V.ScreenW - 2 * V.PadX
 	V.AreaH = V.ScreenH - 2 * V.PadY - V.MenuH - V.Gap
-	writeArea()
+	if V.Side then
+		V.AreaH = V.ScreenH - 2 * V.PadY
+		M.sideGrid()
+	else
+		writeArea()
+	end
 	for _, name in ipairs({ 'TileColor', 'ActiveCategoryColor', 'HoverCategoryColor', 'TextColor',
 			'TextDimColor', 'ScrollTrackColor', 'ScrollThumbColor', 'HoverColor', 'AccentColor' }) do
 		V[name] = parseColor(SKIN:GetVariable(name, '')) or '255,255,255,255'
@@ -4837,9 +4934,11 @@ function Initialize()
 	V.MenuMode = (mode == 'icon' or mode == 'text') and mode or 'icontext'
 
 	-- Starts from the stored file list; OnCategoryList() checks it again.
+	-- The Rainside: its category only (the launcher lists the files)
 	knownFiles = {}
-	for _, file in ipairs(splitList(SKIN:GetVariable('CategoryFiles', ''))) do
-		if fileExists(data .. 'Categories\\' .. file) then knownFiles[#knownFiles + 1] = file end
+	local list = V.Side and { V.SideCategory .. '.ini' } or splitList(SKIN:GetVariable('CategoryFiles', ''))
+	for _, file in ipairs(list) do
+		if file ~= '' and fileExists(data .. 'Categories\\' .. file) then knownFiles[#knownFiles + 1] = file end
 	end
 	if #knownFiles == 0 then return end -- first run: wait for the list
 
@@ -4890,6 +4989,11 @@ end
 -- program, with the launcher left open beside it, the keys are its own.
 local function hotKey(on)
 	on = on and M.focused
+	-- the Rainside: the launcher's mini-skins send it the keys (M.toSide)
+	if V.Side then
+		M.sideFocus(on)
+		return
+	end
 	if V.TileKeysOpen and #tileKeys > 0 then
 		if on then
 			SKIN:Bang('!ActivateConfig', V.TileKeysConfig, 'TileKeys.ini')
@@ -4897,6 +5001,9 @@ local function hotKey(on)
 			SKIN:Bang('!DeactivateConfig', V.TileKeysConfig)
 		end
 	end
+	-- the launcher hidden: Esc and the arrows go on for the Rainside while it
+	-- has them
+	if not visible and M.sideFocused then on = true end
 	if V.HotKey ~= '' then
 		if on then
 			SKIN:Bang('!ActivateConfig', V.HotKeyConfig, 'Hotkey.ini')
@@ -4919,7 +5026,7 @@ function Update()
 	if ready then
 		-- left by the Options window ("Save and refresh"): show the launcher
 		-- once loaded, also if it was hidden before the refresh
-		local flag = resources .. 'Generated\\ShowOnLoad'
+		local flag = M.gen('ShowOnLoad')
 		local showNow = fileExists(flag)
 		if showNow then os.remove(flag) end
 		local startHidden = V.StartHidden and not showNow
@@ -4930,6 +5037,7 @@ function Update()
 		if notice.missing > 0 or notice.hwaccel then showNotice() end
 		show('MeterPower', V.ShowPower and not M.compact)
 		updateDashState()
+		M.sideConfig()
 		if showNow then
 			M.zpos(true)
 			SKIN:Bang('!Show')
@@ -4940,7 +5048,8 @@ function Update()
 			hotKey(false)
 		else
 			-- shown on load: ready for the keys and the gamepad, as when opened
-			M.focused = true
+			-- (the Rainside: only its keys give it them)
+			M.focused = not V.Side
 			hotKey(true)
 			if appear then startTicker() end
 			ClockTick(0)
@@ -5164,6 +5273,7 @@ end
 function Show(how)
 	dbg('Show: visible=' .. tostring(visible) .. ' how=' .. tostring(how))
 	if not ready then return end
+	M.sideRelease()
 	if visible then
 		-- a refresh while hidden (e.g. saving in the Options window) leaves
 		-- the window hidden although the script starts as visible: show it
@@ -5226,6 +5336,13 @@ end
 function Hide()
 	dbg('Hide: visible=' .. tostring(visible) .. ' launching=' .. tostring(launching ~= nil))
 	if not ready or not visible then return end
+	if V.Side and not V.SideEdge then
+		-- the Rainside always there (Fixed): it stays, without the keys
+		M.closeTileMenu()
+		M.partOut()
+		M.setFocus(false)
+		return
+	end
 	visible = false
 	stopTyping()
 	stopTicker()
@@ -5247,7 +5364,7 @@ function Hide()
 	M.closeTileMenu()
 	updateDashState()
 	-- the downloads are followed only while it is open
-	os.remove(resources .. 'Generated\\DownloadOn.txt')
+	os.remove(M.gen('DownloadOn.txt'))
 	M.dl.live = {}
 	if M.dockAnimated() then
 		-- goes out first; M.finishHide() hides the window at the end
@@ -5281,6 +5398,78 @@ function Toggle()
 		return
 	end
 	if visible then Hide() else Show() end
+end
+
+-- Rainside --------------------------------------------------------------------
+-- The launcher and the Rainside (RainsideCategory) are two skins run by this
+-- script: the launcher loads the Rainside (M.sideConfig), keeps its category
+-- out of the menu (in search still, M.sideCat) and takes for it the keys and
+-- the gamepad, which reach the launcher only: Esc and the arrows of its
+-- mini-skins (Hotkey, Navigation), the buttons of the helper. While the
+-- Rainside has them (opened with its keys, RainsideHotKey / GamepadRainside)
+-- and the launcher is hidden, the launcher sends them on (M.toSide).
+M.sideFocused = false -- (the launcher) the Rainside has the keys
+
+-- (the Rainside) tells the launcher whether it has the keys now
+function M.sideFocus(on)
+	if M.sideSent == on then return end
+	M.sideSent = on
+	SKIN:Bang('!CommandMeasure', 'MeasureScript', 'RainsideFocus(' .. (on and 1 or 0) .. ')', V.MainConfig)
+	-- and the helper, which takes them back on a click elsewhere
+	-- (Generated\RainsideKeys.txt while it has them)
+	if on then
+		local f = io.open(M.gen('Keys.txt'), 'wb')
+		if f then f:write('1') f:close() end
+	else
+		os.remove(M.gen('Keys.txt'))
+	end
+end
+
+-- (the launcher) the Rainside took the keys, or gave them back
+function RainsideFocus(on)
+	if V.Side then return end
+	M.sideFocused = on == 1
+	hotKey(visible)
+end
+
+-- (the launcher) a key or a button while the Rainside has them and the
+-- launcher is hidden: for the Rainside
+function M.toSide(code)
+	if V.Side or visible or not M.sideFocused then return false end
+	SKIN:Bang('!CommandMeasure', 'MeasureScript', code, V.SideConfig)
+	return true
+end
+
+-- (the launcher) opening: the Rainside gives the keys back (and, coming
+-- out of its edge, goes back in)
+function M.sideRelease()
+	if V.Side or not M.sideFocused then return end
+	M.sideFocused = false
+	SKIN:Bang('!CommandMeasure', 'MeasureScript', 'FocusLost()', V.SideConfig)
+end
+
+-- (the launcher) GamepadRainside, from the helper: the Rainside's Toggle()
+-- (the launcher, if open, closes first)
+function RainsideToggle()
+	if V.Side or not ready or not M.sideCat or M.optionsOpen() then return end
+	if visible then Hide() end
+	SKIN:Bang('!CommandMeasure', 'MeasureScript', 'Toggle()', V.SideConfig)
+end
+
+-- (the launcher) on every load: the Rainside loaded with it (and refreshed,
+-- e.g. after saving in Options), or unloaded when no category is set.
+-- RainsideOn in State.inc: it was loaded
+function M.sideConfig()
+	if V.Side then return end
+	local want = M.sideCat ~= nil
+	local was = num('RainsideOn', 0) == 1
+	if want then
+		SKIN:Bang('!ActivateConfig', V.SideConfig, 'Rainside.ini')
+		if was then SKIN:Bang('!Refresh', V.SideConfig) end
+	elseif was then
+		SKIN:Bang('!DeactivateConfig', V.SideConfig)
+	end
+	if want ~= was then SKIN:Bang('!WriteKeyValue', 'Variables', 'RainsideOn', want and '1' or '0', data .. 'State.inc') end
 end
 
 local function close()
@@ -5325,8 +5514,10 @@ end
 function PlaceWindow()
 	-- docked with DockEdge=1: the helper opens it when the mouse rests on
 	-- that edge (Generated\DockEdge.txt: side, area, delay)
-	local edgeFile = resources .. 'Generated\\DockEdge.txt'
-	if V.Mode == 'dock' and num('DockEdge', 1) ~= 0 then
+	local edgeFile = M.gen('DockEdge.txt')
+	local edge = V.Mode == 'dock' and num('DockEdge', 1) ~= 0
+	if V.Side then edge = V.SideEdge end
+	if edge then
 		local line = table.concat({ V.DockSide, math.floor(num('MonitorX', V.ScreenX)), math.floor(num('MonitorY', V.ScreenY)),
 			math.floor(V.MonW or V.ScreenW), math.floor(V.MonH or V.ScreenH), math.max(0, math.floor(num('DockEdgeDelay', 300))) }, '|')
 		local f = io.open(edgeFile, 'rb')
@@ -5341,11 +5532,11 @@ function PlaceWindow()
 	end
 	-- its size, for the helper to tell its window from the other skins
 	local sizeLine = math.floor(V.ScreenW) .. '|' .. math.floor(V.ScreenH)
-	local sf = io.open(resources .. 'Generated\\LauncherSize.txt', 'rb')
+	local sf = io.open(M.gen('LauncherSize.txt'), 'rb')
 	local oldSize = sf and sf:read('*a')
 	if sf then sf:close() end
 	if oldSize ~= sizeLine then
-		sf = io.open(resources .. 'Generated\\LauncherSize.txt', 'wb')
+		sf = io.open(M.gen('LauncherSize.txt'), 'wb')
 		if sf then sf:write(sizeLine) sf:close() end
 	end
 	if V.Mode == 'window' then
@@ -5552,6 +5743,17 @@ function MouseInSkin(on)
 	-- left the skin in the same moment as a tile: the menu opening on it
 	if not inSkin and not pointed and left and os.time() - left.at <= 1 then setPointed(left.t) end
 	left = nil
+	-- the Rainside out of its edge: back in a moment after the mouse leaves
+	if V.Side and V.SideEdge then
+		SKIN:Bang('!CommandMeasure', 'MeasureRainsideLeave', inSkin and 'Stop 1' or 'Execute 1')
+	end
+end
+
+-- (the Rainside, RainsideMode=Edge) the mouse has been out of it for a
+-- moment (MeasureRainsideLeave): back in, unless its keys opened it
+function RainsideLeave()
+	if not V.Side or not V.SideEdge or not visible or M.focused or inSkin or launching then return end
+	Hide()
 end
 
 -- Pinned=1 written into (or taken out of) the tile's section of its category
@@ -5873,7 +6075,8 @@ end
 
 -- Creates the missing thumbnails in the background (called by OnRefreshAction).
 function BuildThumbnails()
-	if not ready or #pending == 0 then return end
+	-- (the launcher's only: it makes them for the Rainside's tiles too)
+	if not ready or #pending == 0 or V.Side then return end
 	local f = io.open(resources .. 'Generated\\Thumbs.txt', 'w')
 	if not f then return end
 	f:write(table.concat(thumbJobs, '\n'))
@@ -5904,6 +6107,8 @@ function OnThumbnails()
 		base = -1
 		frame()
 	end
+	-- the colours of the Rainside's tiles, taken from their logos here
+	if M.sideCat then SKIN:Bang('!CommandMeasure', 'MeasureScript', 'OnThumbnails()', V.SideConfig) end
 end
 
 -- Highlight of the tile under the mouse: a single box, handled by the script.
@@ -6660,6 +6865,7 @@ end
 -- Moves the highlight by dx columns and dy rows, scrolling the grid just
 -- enough to keep it visible.
 function Nav(dx, dy)
+	if M.toSide('Nav(' .. dx .. ',' .. dy .. ')') then return end
 	M.keyInput()
 	if not ready or launching or not visible then return end
 	if osk.open then oskMove(dx, dy) return end
@@ -6725,6 +6931,7 @@ end
 
 -- Launches the highlighted tile (or, if there is none, highlights the first).
 function Confirm()
+	if M.toSide('Confirm()') then return end
 	M.keyInput()
 	dbg(string.format('Confirm: ready=%s launching=%s visible=%s hover=%d on=%s', tostring(ready),
 		tostring(launching ~= nil), tostring(visible), hover.idx, tostring(hover.on)))
@@ -6743,7 +6950,8 @@ end
 -- Previous (-1) or next (+1) category, wrapping around.
 function NextCategory(delta)
 	M.keyInput()
-	if not ready or launching or not visible then return end
+	-- (the Rainside has one category)
+	if not ready or launching or not visible or V.Side then return end
 	if M.ringOn() then
 		local list = M.ringCats()
 		if #list == 0 then return end
@@ -6845,7 +7053,9 @@ local function runSearch(text)
 	end
 
 	local results = {}
-	for _, c in ipairs(cats) do
+	local searched = { unpack(cats) }
+	if M.sideCat then searched[#searched + 1] = M.sideCat end
+	for _, c in ipairs(searched) do
 		for _, t in ipairs(c.virtual and {} or c.tiles) do
 			-- (widgets are not launched like the other tiles: not searched)
 			local hay = (t.name .. ' ' .. (t.label or '') .. ' ' .. t.catLabel .. ' ' .. (t.store or '')
@@ -6898,7 +7108,8 @@ end
 
 function SearchOpen()
 	M.keyInput()
-	if not ready or launching or not visible or typing then return end
+	-- (the Rainside has no search)
+	if not ready or launching or not visible or typing or V.Side then return end
 	-- the keys arrive only with the focus, the gamepad's through Pad(): here
 	-- without it, this is a click on the bar, which gives the launcher the
 	-- focus (FocusGained may come after it)
@@ -7003,7 +7214,7 @@ local function closeOsk()
 end
 
 function PadSearch()
-	if not ready or launching or not visible then return end
+	if not ready or launching or not visible or V.Side then return end
 	if osk.open then
 		PadStart()
 		return
@@ -7127,6 +7338,8 @@ end
 -- only while the launcher is shown and has the focus, so the pad never acts
 -- on a launcher left open behind another program.
 function Pad(name, a, b)
+	-- (the tiles' pad shortcuts are the launcher's)
+	if name ~= 'PadTile' and M.toSide(string.format("Pad('%s',%s,%s)", tostring(name), tostring(a), tostring(b))) then return end
 	if not ready or not visible or not M.focused then return end
 	local f = ({ Nav = Nav, Confirm = Confirm, Escape = Escape, NextCategory = NextCategory,
 		PadSearch = PadSearch, PadStart = PadStart, PadOptions = PadOptions, PadX = PadX, PadChip = PadChip,
@@ -7276,6 +7489,7 @@ end
 
 -- Esc: closes the search if open, otherwise hides the launcher.
 function Escape()
+	if M.toSide('Escape()') then return end
 	M.keyInput()
 	if not ready then return end
 	if M.closeTileMenu() then return end

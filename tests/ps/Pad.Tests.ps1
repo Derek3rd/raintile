@@ -107,3 +107,14 @@ Test 'Pad: the pad shortcuts of the tiles, after the actions' {
     Assert-Equal (Press $p '') '' 'released'
     Assert-Equal (Press $p 'Y X') 'PadTile(3)' 'X + Y, written another way'
 }
+
+Test 'Pad: the Rainside has no button by default; its own open it, also hidden' {
+    $p = New-Pad
+    foreach ($b in @('LS', 'RS', 'BACK', 'START')) {
+        Assert-True ((Press $p $b) -notmatch 'RainsideToggle') "$b opened the Rainside by default"
+        [void](Press $p '')
+    }
+    $p = New-Pad 'Rainside=LS'
+    Assert-Equal (Press $p 'LS') 'RainsideToggle()' 'LS'
+    Assert-Equal (Press $p '') '' 'released'
+}

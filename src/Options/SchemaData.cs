@@ -223,6 +223,19 @@ namespace RaintileOptions
                     new Item { Kind = "size", Key = "FilterGap", Label = "Space between chips", Help = "", Axis = "W" },
                 } },
             } },
+            new Page { Id = "rainside", Switch = "Rainside", Title = "Rainside", Icon = 0xE90D, Desc = "One category on a side of the screen, apart from the launcher: always there, or coming out of its edge, with its widgets. The category is not in the launcher's menu; search still finds its tiles.", Groups = new List<Group>
+            {
+                new Group { Title = null, Help = null, Items = new List<Item>
+                {
+                    new Item { Kind = "bool", Key = "Rainside", Label = "Rainside", Help = "" },
+                    new Item { Kind = "category", Key = "RainsideCategory", Label = "Category", Help = "Its tiles and widgets, with its grid if it has one (otherwise one line of tiles along the side)." },
+                    new Item { Kind = "choice", Key = "RainsideMode", Label = "Mode", Help = "Always there: on screen beside the windows. Out of its edge: it comes out when the mouse rests on its edge (Edge delay, General) and goes back when the mouse leaves it.", Choices = new List<string[]> { new[] { "Fixed", "Always there" }, new[] { "Edge", "Out of its edge" } } },
+                    new Item { Kind = "choice", Key = "RainsideSide", Label = "Side", Help = "", Choices = new List<string[]> { new[] { "Left", "Left" }, new[] { "Right", "Right" }, new[] { "Top", "Top" }, new[] { "Bottom", "Bottom" } } },
+                    new Item { Kind = "size", Key = "RainsideSize", Label = "Size", Help = "Width on the left or the right; height (of the screen height) at the top or the bottom.", Axis = "W" },
+                    new Item { Kind = "combo", Key = "RainsideHotKey", Label = "Shortcut", Help = "Out of its edge: shows and hides it. Always there: gives it the arrows and the gamepad (again: takes them back). The gamepad's is on Keybindings > Gamepad." },
+                    new Item { Kind = "bool", Key = "RainsideCloseOnLaunch", Label = "Back in after launching a tile", Help = "", When = "RainsideMode=Edge" },
+                } },
+            } },
             new Page { Id = "theme", Title = "Theme", Icon = 0xE790, Desc = "The font and the colours the whole launcher shares; the colours of one part are on its page. Colours can be written as R,G,B,A or #RRGGBBAA: click the swatch to pick one.", Groups = new List<Group>
             {
                 new Group { Title = "Text", Help = null, Items = new List<Item>
@@ -323,6 +336,7 @@ namespace RaintileOptions
                     new Item { Kind = "pad", Key = "GamepadPrevChip", Label = "Previous filter chip", Help = "Of the search results." },
                     new Item { Kind = "pad", Key = "GamepadNextChip", Label = "Next filter chip", Help = "" },
                     new Item { Kind = "pad", Key = "GamepadOptions", Label = "Open these options", Help = "As the gear." },
+                    new Item { Kind = "pad", Key = "GamepadRainside", Label = "Rainside", Help = "As its shortcut (Rainside page), also while the launcher is hidden." },
                 } },
             } },
             new Page { Id = "dashboard", Title = "Widgets", Icon = 0xE9D2, Desc = "Tiles that show something instead of starting it, in any category: CPU, GPU, memory, disks, network, processes, system, temperatures, skins and custom widgets.", Groups = new List<Group>
@@ -406,6 +420,7 @@ namespace RaintileOptions
             new NavNode { Page = "general" },
             new NavNode { Page = "tiles", Children = new[] { "grid", "wheel", "playtime" } },
             new NavNode { Page = "toprow", Children = new[] { "shortcuts", "clock", "search" } },
+            new NavNode { Page = "rainside" },
             new NavNode { Page = "theme" },
             new NavNode { Page = "animations" },
             new NavNode { Page = "keybindings", Children = new[] { "keys", "gamepad" } },
@@ -481,6 +496,7 @@ namespace RaintileOptions
             { "GamepadNextCategory", "RB" },
             { "GamepadNextChip", "RT" },
             { "GamepadOptions", "RS" },
+            { "GamepadRainside", "" },
             { "GamepadPrevCategory", "LB" },
             { "GamepadPrevChip", "LT" },
             { "GamepadRepeatDelay", "350" },
@@ -534,6 +550,13 @@ namespace RaintileOptions
             { "NX", "4" },
             { "NY", "2" },
             { "OpenHotKey", "CTRL ALT G" },
+            { "Rainside", "0" },
+            { "RainsideCategory", "Apps" },
+            { "RainsideCloseOnLaunch", "1" },
+            { "RainsideHotKey", "" },
+            { "RainsideMode", "Fixed" },
+            { "RainsideSide", "Right" },
+            { "RainsideSize", "10%" },
             { "PadX", "40" },
             { "PadY", "24" },
             { "RecentCount", "12" },

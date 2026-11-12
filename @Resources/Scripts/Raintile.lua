@@ -4635,6 +4635,30 @@ function M.evalSetting(raw, default)
 	return n or default
 end
 
+-- Sounds (Sounds=1) --------------------------------------------------------
+-- A short sound for what happens on screen, each event with its switch
+-- (SoundOpen, SoundClose, ...): Rainmeter's !Play, a .wav, one at a time (the
+-- next one cuts it short). Raintile's own (@Resources\Sounds\<event>.wav,
+-- made by tools/make_sounds.py), or yours with the same name in Sounds\ of
+-- the data folder. The mouse moving over the tiles only with SoundMouse=1.
+M.SOUNDS = { 'open', 'close', 'move', 'launch', 'category', 'menu', 'key', 'back' }
+function M.readSounds()
+	V.Sounds = num('Sounds', 0) ~= 0
+	V.SoundMouse = num('SoundMouse', 0) ~= 0
+	M.soundFile = {}
+	for _, name in ipairs(M.SOUNDS) do
+		if V.Sounds and num('Sound' .. name:sub(1, 1):upper() .. name:sub(2), 1) ~= 0 then
+			local own = data .. 'Sounds\\' .. name .. '.wav'
+			M.soundFile[name] = fileExists(own) and own or (resources .. 'Sounds\\' .. name .. '.wav')
+		end
+	end
+end
+
+function M.sound(name)
+	local f = M.soundFile and M.soundFile[name]
+	if f and not M.quiet then SKIN:Bang('!Play', f) end
+end
+
 -- The Rainside (Rainside\\Rainside.ini, RainsideCategory): the launcher
 -- docked on its side (RainsideSide, RainsideSize), with its category alone,
 -- no top row (menu, search, clock, buttons) and none of what the launcher
@@ -5023,6 +5047,7 @@ function Initialize()
 	SKIN:Bang('!SetOption', 'MeasureLaunchAnim', 'ActionList1', 'Repeat Step, ' .. V.LaunchStepMs .. ', ' .. V.LaunchSteps
 		.. ' | Wait ' .. math.floor(num('LaunchHold', 1500)) .. ' | Finish')
 	V.InfiniteScroll = num('InfiniteScroll', 1) ~= 0
+	M.readSounds()
 	M.readWheel()
 	-- Smoothing of each animation; AnimSmooth if empty
 	local function smooth(name)
@@ -5246,6 +5271,7 @@ function PowerMenu()
 	if not ready then return end
 	power.open = not power.open
 	power.armed, power.hovered = 0, 0
+	M.sound(power.open and 'menu' or 'back')
 	renderPower()
 end
 
@@ -5350,6 +5376,7 @@ function MoreMenu()
 	M.more.open = not M.more.open
 	M.more.hovered = 0
 	if M.more.open then M.more.items = M.moreItems() end
+	M.sound(M.more.open and 'menu' or 'back')
 	M.renderMore()
 end
 
@@ -5432,6 +5459,7 @@ function Show(how)
 		return
 	end
 	visible = true
+	M.sound('open')
 	-- (the Rainside coming out: the windows make room for it)
 	M.sideReserve(true)
 	M.tellOut(true)
@@ -5498,6 +5526,7 @@ function Hide()
 	end
 	-- (RainsideOrder=Outside) the Rainside back to its edge
 	if V.SideOutside and M.sideCat then M.sideShift(false) end
+	M.sound('close')
 	visible = false
 	-- (the Rainside going back in: its room for the windows again)
 	M.sideReserve(false)
@@ -6227,6 +6256,7 @@ function M.openTileMenu()
 	M.closeMore()
 	local tm = M.tmenu
 	tm.open, tm.sel, tm.items, tm.t = true, 1, items, t
+	M.sound('menu')
 	M.renderTileMenu()
 	return true
 end
@@ -6244,6 +6274,7 @@ function M.tileMenuMove(dy)
 	local n = math.min(#tm.items, TILE_MENU_SLOTS)
 	if dy == 0 or n == 0 then return end
 	tm.sel = (tm.sel - 1 + (dy > 0 and 1 or -1)) % n + 1
+	M.sound('move')
 	M.renderTileMenu()
 end
 
@@ -6469,6 +6500,8 @@ function HoverTile(slot, mx, my)
 	local tx, ty = slotToGrid(slot)
 	hover.anchor = V.Horizontal and ty or tx
 	hover.part = nil
+	-- (the mouse onto another tile: with SoundMouse=1)
+	if V.SoundMouse and not (hover.on and hover.idx == indexAt(slot)) then M.sound('move') end
 	focus(t, indexAt(slot), tx, ty)
 	if V.Wheel then M.wheelHover(V.Horizontal and tx or ty) end
 end
@@ -6597,6 +6630,7 @@ function M.partStep(dx, dy)
 	if not name then return true end
 	M.kpart = { t = t, name = name }
 	hover.part = nil
+	M.sound('move')
 	M.focusPart(t, slot, name)
 	return true
 end
@@ -6719,6 +6753,7 @@ function SetCategory(i)
 	end
 	saveScroll()
 	active = i
+	M.sound('category')
 	if virtualDirty then fillVirtual() end
 	applyGeometry(cats[i])
 	SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), data .. 'State.inc')
@@ -6893,8 +6928,13 @@ local function launchTile(t, x, y)
 		-- a widget opens its own command, or the tool that goes with it
 		local cmd = t.command or D.WIDGET_COMMANDS[t.widget.kind]
 		if cmd then
+			M.sound('launch')
 			SKIN:Bang(cmd)
-			if V.CloseOnLaunch then Hide() end
+			if V.CloseOnLaunch then
+				M.quiet = true
+				Hide()
+				M.quiet = false
+			end
 		end
 		return
 	end
@@ -6910,9 +6950,14 @@ local function launchTile(t, x, y)
 	end
 	dbg('launch: ' .. t.command)
 
+	M.sound('launch')
 	startTile(t)
 	if not V.LaunchAnimation then
-		if V.CloseOnLaunch then close() end
+		if V.CloseOnLaunch then
+			M.quiet = true
+			close()
+			M.quiet = false
+		end
 		return
 	end
 
@@ -7150,6 +7195,7 @@ end
 -- the carousel, the mouse on the tile next to the middle and a wheel notch)
 function M.navFocus(t, idx, tx, ty, scrolled)
 	local same = hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty
+	if not same then M.sound('move') end
 	focus(t, idx, tx, ty)
 	if same and scrolled and not V.AnimScroll then frame() end
 end
@@ -7521,6 +7567,7 @@ function OskPress(i)
 	if not ready or not key then return end
 	if not typing then SearchOpen() end
 	osk.sel = i
+	M.sound('key')
 	if key.value == 'DONE' then
 		PadStart()
 		return
@@ -7568,6 +7615,7 @@ oskMove = function(dx, dy)
 			if key.row == row and mid >= key.col and mid < key.col + key.span then osk.sel = i break end
 		end
 	end
+	if OSK[osk.sel] ~= cur then M.sound('move') end
 	renderOsk()
 end
 
@@ -7784,14 +7832,18 @@ function Escape()
 	if M.toSide('Escape()') then return end
 	M.keyInput()
 	if not ready then return end
-	if M.closeTileMenu() then return end
+	-- (something closed, the launcher still open: the back sound; the
+	-- launcher closing: its own)
+	if M.closeTileMenu() then M.sound('back') return end
 	-- inside a widget (its parts): out of it, nothing closes
-	if not launching and M.partOut() then return end
-	if closePower() then return end
-	if M.closeMore() then return end
+	if not launching and M.partOut() then M.sound('back') return end
+	if closePower() then M.sound('back') return end
+	if M.closeMore() then M.sound('back') return end
 	if typing then
+		M.sound('back')
 		TypeKey('ESC')
 	elseif searchCat and not launching then
+		M.sound('back')
 		leaveSearch()
 		if V.AnimCategory then appear = 0 startTicker() end
 		render(true)
@@ -7811,7 +7863,10 @@ function LaunchFinish()
 	if not launching then return end
 	launching = nil
 	if V.CloseOnLaunch then
+		-- (the launch had its sound)
+		M.quiet = true
 		close()
+		M.quiet = false
 	else
 		hideSplash()
 		SKIN:Bang('!Redraw')

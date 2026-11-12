@@ -19,6 +19,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Tags and filter bar](#tags-and-filter-bar)
 - [Play time](#play-time)
 - [Launching a tile](#launching-a-tile)
+- [Sounds](#sounds)
 - [Widgets and the Dashboard](#widgets-and-the-dashboard)
   - [Widgets](#widgets)
   - [Temperatures and fans](#temperatures-and-fans)
@@ -269,6 +270,23 @@ On click the tile expands to full screen (with background and logo at full resol
 | `LaunchLogoSize` | `33%` | final logo size |
 | `LaunchFontSize` | `48` | centre text for tiles without a logo |
 
+## Sounds
+
+With `Sounds=1` (Options > Animations > **Sounds**) a short sound goes with what happens on screen, each with its own switch:
+
+| Sound | When | Setting | File |
+| --- | --- | --- | --- |
+| Opening | the launcher or the [Rainside](#rainside) opens | `SoundOpen` | `open.wav` |
+| Closing | it closes (not after starting a tile) | `SoundClose` | `close.wav` |
+| Moving | the highlight to another tile, part of a widget, menu entry or key, with the keys or the gamepad (with the mouse too: `SoundMouse=1`) | `SoundMove` | `move.wav` |
+| Starting a tile | a tile starts | `SoundLaunch` | `launch.wav` |
+| Another category | | `SoundCategory` | `category.wav` |
+| A menu | the tile menu, the ☰ list, the power list | `SoundMenu` | `menu.wav` |
+| A key | of the on-screen keyboard | `SoundKey` | `key.wav` |
+| Back | a menu, the search or a widget closed, the launcher staying open | `SoundBack` | `back.wav` |
+
+Raintile's own are in `@Resources\Sounds\` (made by `tools/make_sounds.py`, no samples of anyone else). To use yours, put a `.wav` with the same name in `Sounds\` of [your data folder](#your-data-and-updates): it plays instead. Rainmeter plays them with its `!Play` bang: `.wav` only, one at a time (the next cuts the last one short), at Rainmeter's own volume, which you set in the volume mixer of Windows.
+
 ## Widgets and the Dashboard
 
 A **widget** is a tile that shows something instead of starting a game: processor, graphics card, memory, disks, network, processes, temperatures, a skin of yours. Any tile of any category can be a widget, next to the games: e.g. a clock among your apps.
@@ -511,6 +529,7 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 | Top row > Search | search bar, filter bar |
 | Theme | font, text colours, background, accent, highlight |
 | Animations | effects, appearing tiles, smoothing, tile launch |
+| Animations > Sounds | the sounds of opening, moving, starting a tile... |
 | Keybindings | open/close shortcut, close key, tile hot keys |
 | Keybindings > Keyboard | navigation keys |
 | Keybindings > Gamepad | support, dead zone, repeat, the buttons of every action |
@@ -768,6 +787,16 @@ All of them only run while something moves.
 
 Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Container` option to clip them at the edges of the grid, hence Rainmeter 4.5+.
 
+### Sounds
+
+See [Sounds](#sounds).
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `Sounds` | `0` | `1` = a short sound for what happens on screen |
+| `SoundOpen`, `SoundClose`, `SoundMove`, `SoundLaunch`, `SoundCategory`, `SoundMenu`, `SoundKey`, `SoundBack` | `1` | each sound on or off |
+| `SoundMouse` | `0` | the moving sound also when the mouse moves onto another tile |
+
 ### Tile backgrounds
 
 | Setting | Default | Description |
@@ -905,6 +934,7 @@ Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its n
   Categories/*.ini           default categories (Dashboard.ini: the default Dashboard), copied to the data folder the first time
   Images/<category>/         their icons, backgrounds and logos
   Icons/                     icons of Favorites and Recent
+  Sounds/*.wav               the default sounds (tools/make_sounds.py); yours in Sounds\ of the data folder
   Scripts/Data.ps1           prepares the data folder
   Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic

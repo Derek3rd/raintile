@@ -221,7 +221,7 @@ Skin.__index = Skin
 
 -- Bangs that change nothing the tests look at: only recorded.
 local RECORDED = {
-	['!redraw'] = true, ['!show'] = true, ['!hide'] = true, ['!move'] = true, ['!zpos'] = true,
+	['!redraw'] = true, ['!play'] = true, ['!show'] = true, ['!hide'] = true, ['!move'] = true, ['!zpos'] = true,
 	['!settransparency'] = true, ['!draggable'] = true, ['!keeponscreen'] = true,
 	['!activateconfig'] = true, ['!deactivateconfig'] = true, ['!writekeyvalue'] = true,
 	['!clickthrough'] = true, ['!setwindowposition'] = true, ['!log'] = true, ['!update'] = true,

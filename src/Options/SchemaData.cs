@@ -254,6 +254,22 @@ namespace RaintileOptions
                     new Item { Kind = "color", Key = "HoverColor", Label = "Highlight fill", Help = "" },
                 } },
             } },
+            new Page { Id = "sounds", Switch = "Sounds", Title = "Sounds", Icon = 0, Desc = "A short sound for what happens on screen. Rainmeter plays one at a time, at its own volume: Rainmeter in the volume mixer of Windows. Your own: a .wav with the same name (open.wav, close.wav, move.wav, launch.wav, category.wav, menu.wav, key.wav, back.wav) in Sounds of your data folder (Info) plays instead.", Groups = new List<Group>
+            {
+                new Group { Title = null, Help = null, Items = new List<Item>
+                {
+                    new Item { Kind = "bool", Key = "Sounds", Label = "Sounds", Help = "" },
+                    new Item { Kind = "bool", Key = "SoundOpen", Label = "Opening", Help = "The launcher and the Rainside (open.wav)." },
+                    new Item { Kind = "bool", Key = "SoundClose", Label = "Closing", Help = "Not after starting a tile (close.wav)." },
+                    new Item { Kind = "bool", Key = "SoundMove", Label = "Moving", Help = "The highlight to another tile, part, menu entry or key, with the keys or the gamepad (move.wav)." },
+                    new Item { Kind = "bool", Key = "SoundMouse", Label = "Moving with the mouse", Help = "Onto another tile.", When = "SoundMove=1" },
+                    new Item { Kind = "bool", Key = "SoundLaunch", Label = "Starting a tile", Help = "launch.wav" },
+                    new Item { Kind = "bool", Key = "SoundCategory", Label = "Another category", Help = "category.wav" },
+                    new Item { Kind = "bool", Key = "SoundMenu", Label = "A menu", Help = "The tile menu, the \u2630 list, the power list (menu.wav)." },
+                    new Item { Kind = "bool", Key = "SoundKey", Label = "On-screen keyboard", Help = "A key typed (key.wav)." },
+                    new Item { Kind = "bool", Key = "SoundBack", Label = "Back", Help = "A menu, the search or a widget closed, the launcher staying open (back.wav)." },
+                } },
+            } },
             new Page { Id = "animations", Title = "Animations", Icon = 0xE945, Desc = "They only run while something moves: at rest the launcher uses no CPU. Lengths are in steps of 16 ms.", Groups = new List<Group>
             {
                 new Group { Title = "Effects", Help = null, Items = new List<Item>
@@ -425,7 +441,7 @@ namespace RaintileOptions
             new NavNode { Page = "toprow", Children = new[] { "shortcuts", "clock", "search" } },
             new NavNode { Page = "rainside" },
             new NavNode { Page = "theme" },
-            new NavNode { Page = "animations" },
+            new NavNode { Page = "animations", Children = new[] { "sounds" } },
             new NavNode { Page = "keybindings", Children = new[] { "keys", "gamepad" } },
             new NavNode { Page = "dashboard" },
             new NavNode { Page = "import", Children = new[] { "found" } },
@@ -567,6 +583,16 @@ namespace RaintileOptions
             { "PadY", "24" },
             { "RecentCount", "12" },
             { "RecentOrder", "Recent" },
+            { "SoundBack", "1" },
+            { "SoundCategory", "1" },
+            { "SoundClose", "1" },
+            { "SoundKey", "1" },
+            { "SoundLaunch", "1" },
+            { "SoundMenu", "1" },
+            { "SoundMouse", "0" },
+            { "SoundMove", "1" },
+            { "SoundOpen", "1" },
+            { "Sounds", "0" },
             { "ScanOnStart", "1" },
             { "ScreenH", "#SCREENAREAHEIGHT#" },
             { "ScreenW", "#SCREENAREAWIDTH#" },

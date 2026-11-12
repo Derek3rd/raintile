@@ -10,7 +10,8 @@ local T = {}
 local function played(s)
 	local list = {}
 	for k = (s.heard or 0) + 1, #s.log do
-		local f = s.log[k]:match('^!Play (.+)$')
+		-- (Rainmeter's Play command, run as given: no "!")
+		local f = s.log[k]:match('^run: Play "(.+)"$')
 		if f then
 			-- (the event whose file it is)
 			local event = f

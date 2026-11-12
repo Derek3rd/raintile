@@ -4638,7 +4638,7 @@ end
 -- Sounds (Sounds=1) --------------------------------------------------------
 -- A short sound for what happens on screen, each event with its own
 -- (SoundOpen=open.wav, SoundClose=, ...: the name of a .wav; empty = none):
--- Rainmeter's !Play, one at a time (the next one cuts it short). Looked for
+-- Rainmeter's Play command, one at a time (the next one cuts it short). Looked for
 -- in Sounds\ of the data folder (yours), then in @Resources\Sounds\
 -- (Raintile's: Kenney's UI Audio, CC0). The mouse moving over the
 -- tiles only with SoundMouse=1.
@@ -4666,7 +4666,9 @@ function M.sound(name)
 	local f = M.soundFile and M.soundFile[name]
 	if f and not M.quiet then
 		dbg('sound ' .. name .. ': ' .. f)
-		SKIN:Bang('!Play', f)
+		-- (Play is one of Rainmeter's commands without "!": "!Play" is an
+		-- invalid bang; the path has no quotes in it)
+		SKIN:Bang('[Play "' .. f .. '"]')
 	end
 end
 

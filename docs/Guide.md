@@ -276,16 +276,16 @@ With `Sounds=1` (Options > **Sounds**) a short sound goes with what happens on s
 
 | Sound | When | Setting | Default |
 | --- | --- | --- | --- |
-| Opening | the launcher or the [Rainside](#rainside) opens | `SoundOpen` | `open.wav` |
-| Closing | it closes (not after starting a tile) | `SoundClose` | `close.wav` |
-| Moving | the highlight to another tile, part of a widget, menu entry or key, with the keys or the gamepad (with the mouse too: `SoundMouse=1`) | `SoundMove` | `move.wav` |
-| Starting a tile | a tile starts | `SoundLaunch` | `launch.wav` |
-| Another category | | `SoundCategory` | `category.wav` |
-| A menu | the tile menu, the ☰ list, the power list | `SoundMenu` | `menu.wav` |
-| A key | of the on-screen keyboard | `SoundKey` | `key.wav` |
-| Back | a menu, the search or a widget closed, the launcher staying open | `SoundBack` | `back.wav` |
+| Opening | the launcher or the [Rainside](#rainside) opens | `SoundOpen` | `switch33.wav` |
+| Closing | it closes (not after starting a tile) | `SoundClose` | `switch21.wav` |
+| Moving | the highlight to another tile, part of a widget, menu entry or key, with the keys or the gamepad (with the mouse too: `SoundMouse=1`) | `SoundMove` | `rollover2.wav` |
+| Starting a tile | a tile starts | `SoundLaunch` | `switch18.wav` |
+| Another category | | `SoundCategory` | `switch28.wav` |
+| A menu | the tile menu, the ☰ list, the power list | `SoundMenu` | `switch7.wav` |
+| A key | of the on-screen keyboard | `SoundKey` | `click5.wav` |
+| Back | a menu, the search or a widget closed, the launcher staying open | `SoundBack` | `rollover5.wav` |
 
-Raintile's own are in `@Resources\Sounds\` (made by `tools/make_sounds.py`, no samples of anyone else). Yours: put `.wav` files in `Sounds\` of [your data folder](#your-data-and-updates), and they are in the lists too (one with the name of one of Raintile's plays instead of it). The settings hold the name of the file (`SoundOpen=open.wav`); empty = none. Rainmeter plays them with its `!Play` bang: `.wav` only, one at a time (the next cuts the last one short), at Rainmeter's own volume, which you set in the volume mixer of Windows.
+Raintile's own are in `@Resources\Sounds\`: the *UI Audio* set by [Kenney](https://www.kenney.nl), released under CC0 (free to use; `License.txt` there), 51 short clicks, switches and rollovers. Yours: put `.wav` files in `Sounds\` of [your data folder](#your-data-and-updates), and they are in the lists too (one with the name of one of Raintile's plays instead of it). The settings hold the name of the file (`SoundOpen=switch33.wav`); empty = none. Rainmeter plays them with its `!Play` bang: `.wav` only, one at a time (the next cuts the last one short), at Rainmeter's own volume, which you set in the volume mixer of Windows.
 
 ## Widgets and the Dashboard
 
@@ -794,7 +794,7 @@ See [Sounds](#sounds).
 | Setting | Default | Description |
 | --- | --- | --- |
 | `Sounds` | `0` | `1` = a short sound for what happens on screen |
-| `SoundOpen`, `SoundClose`, `SoundMove`, `SoundLaunch`, `SoundCategory`, `SoundMenu`, `SoundKey`, `SoundBack` | `open.wav`, `close.wav`, ... | the sound of each: the name of a `.wav` in `Sounds\` of the data folder or of the skin; empty = none |
+| `SoundOpen`, `SoundClose`, `SoundMove`, `SoundLaunch`, `SoundCategory`, `SoundMenu`, `SoundKey`, `SoundBack` | `switch33.wav`, `switch21.wav`, `rollover2.wav`, `switch18.wav`, `switch28.wav`, `switch7.wav`, `click5.wav`, `rollover5.wav` | the sound of each: the name of a `.wav` in `Sounds\` of the data folder or of the skin; empty = none |
 | `SoundMouse` | `0` | the moving sound also when the mouse moves onto another tile |
 
 ### Tile backgrounds
@@ -934,7 +934,7 @@ Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its n
   Categories/*.ini           default categories (Dashboard.ini: the default Dashboard), copied to the data folder the first time
   Images/<category>/         their icons, backgrounds and logos
   Icons/                     icons of Favorites and Recent
-  Sounds/*.wav               the default sounds (tools/make_sounds.py); yours in Sounds\ of the data folder
+  Sounds/*.wav               the sounds (Kenney's UI Audio, CC0: License.txt); yours in Sounds\ of the data folder
   Scripts/Data.ps1           prepares the data folder
   Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic

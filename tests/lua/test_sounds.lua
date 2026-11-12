@@ -11,7 +11,14 @@ local function played(s)
 	local list = {}
 	for k = (s.heard or 0) + 1, #s.log do
 		local f = s.log[k]:match('^!Play (.+)$')
-		if f then list[#list + 1] = f:match('([%w]+)%.wav$') or f end
+		if f then
+			-- (the event whose file it is)
+			local event = f
+			for name, file in pairs(s:upvalue('M').soundFile or {}) do
+				if file == f then event = name end
+			end
+			list[#list + 1] = event
+		end
 	end
 	s.heard = #s.log
 	return table.concat(list, ' ')
@@ -85,19 +92,20 @@ function T.switches()
 	t.clean(s)
 end
 
--- Raintile's sounds are there; the user's own of the same name instead; a
+-- Raintile's sounds are there (the defaults of Settings.inc and of the
+-- script agree); the user's own of the same name instead; a
 -- sound of the user's for another event; a name that is not there: none
 function T.files()
 	local s = R.new({ settings = { Sounds = 1, SoundKey = 'mine.wav', SoundBack = 'gone.wav', SoundMenu = '..\\..\\x.wav' } })
 	host_mkdir(s.data .. 'Sounds')
-	R.writeFile(s.data .. 'Sounds\\move.wav', 'RIFF')
+	R.writeFile(s.data .. 'Sounds\\rollover2.wav', 'RIFF')
 	R.writeFile(s.data .. 'Sounds\\mine.wav', 'RIFF')
 	s:start()
 	local M = s:upvalue('M')
 	for _, name in ipairs(M.SOUNDS) do
 		local f = M.soundFile[name]
 		if name == 'move' then
-			t.eq(f, s.data .. 'Sounds\\move.wav', 'not the user\'s move.wav')
+			t.eq(f, s.data .. 'Sounds\\rollover2.wav', 'not the user\'s rollover2.wav, the default name of move')
 		elseif name == 'key' then
 			t.eq(f, s.data .. 'Sounds\\mine.wav', 'not the user\'s sound picked for a key')
 		elseif name == 'back' then
@@ -105,8 +113,14 @@ function T.files()
 		elseif name == 'menu' then
 			t.eq(f, nil, 'a path out of the sounds folders taken')
 		else
-			t.eq(f, s.resources .. 'Sounds\\' .. name .. '.wav', 'not Raintile\'s ' .. name .. '.wav')
-			t.ok(R.readFile(f), 'Raintile has no ' .. name .. '.wav')
+			t.eq(f, s.resources .. 'Sounds\\' .. M.SOUND_DEFAULT[name], 'not Raintile\'s ' .. M.SOUND_DEFAULT[name])
+			t.ok(R.readFile(f), 'Raintile has no ' .. M.SOUND_DEFAULT[name])
+		end
+	end
+	-- the defaults of Settings.inc are the script's
+	for _, name in ipairs(M.SOUNDS) do
+		if name ~= 'key' and name ~= 'back' and name ~= 'menu' then
+			t.eq(s.vars['sound' .. name], M.SOUND_DEFAULT[name], 'Settings.inc and the script differ on Sound' .. name)
 		end
 	end
 	t.clean(s)

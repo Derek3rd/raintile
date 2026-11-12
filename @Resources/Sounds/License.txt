@@ -1,0 +1,11 @@
+Sounds of Raintile
+
+The .wav files in this folder are the "UI Audio" set (UI SFX Set) by Kenney
+Vleugels (www.kenney.nl), converted from Ogg Vorbis to 16-bit mono WAV at
+the same peak level. The set is released under Creative Commons Zero (CC0):
+http://creativecommons.org/publicdomain/zero/1.0/
+"You may use these assets in personal and commercial projects. Credit
+(Kenney or www.kenney.nl) would be nice but is not mandatory."
+
+Your own sounds go in Sounds\ of your data folder (%APPDATA%\Rainmeter\Raintile),
+never here: an update of Raintile replaces this folder.

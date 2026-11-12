@@ -4640,17 +4640,20 @@ end
 -- (SoundOpen=open.wav, SoundClose=, ...: the name of a .wav; empty = none):
 -- Rainmeter's !Play, one at a time (the next one cuts it short). Looked for
 -- in Sounds\ of the data folder (yours), then in @Resources\Sounds\
--- (Raintile's, made by tools/make_sounds.py). The mouse moving over the
+-- (Raintile's: Kenney's UI Audio, CC0). The mouse moving over the
 -- tiles only with SoundMouse=1.
 M.SOUNDS = { 'open', 'close', 'move', 'launch', 'category', 'menu', 'key', 'back' }
+-- (the default of each, if the settings have none)
+M.SOUND_DEFAULT = { open = 'switch33.wav', close = 'switch21.wav', move = 'rollover2.wav', launch = 'switch18.wav',
+	category = 'switch28.wav', menu = 'switch7.wav', key = 'click5.wav', back = 'rollover5.wav' }
 function M.readSounds()
 	V.Sounds = num('Sounds', 0) ~= 0
 	V.SoundMouse = num('SoundMouse', 0) ~= 0
 	M.soundFile = {}
 	for _, name in ipairs(M.SOUNDS) do
-		local v = trim(SKIN:GetVariable('Sound' .. name:sub(1, 1):upper() .. name:sub(2), name .. '.wav'))
+		local v = trim(SKIN:GetVariable('Sound' .. name:sub(1, 1):upper() .. name:sub(2), M.SOUND_DEFAULT[name]))
 		-- (1: the default one; only a file name, never a path elsewhere)
-		if v == '1' then v = name .. '.wav' end
+		if v == '1' then v = M.SOUND_DEFAULT[name] end
 		v = v:match('([^\\/]*)$')
 		if V.Sounds and v:lower():match('%.wav$') then
 			local own, ours = data .. 'Sounds\\' .. v, resources .. 'Sounds\\' .. v

@@ -797,6 +797,15 @@ namespace RaintileOptions
             cp.Children.Add(NewRow("Rainmeter", "The Manage window: skins, Rainmeter settings and log.", NewActionControl("OpenRainmeter", "Open Rainmeter"), null));
             cp.Children.Add(NewRow("Guide", "Every setting, the controls and troubleshooting, on GitHub.", NewActionControl("OpenGuide", "Open the Guide"), null));
             AddTo(sp, card);
+
+            // what of others' Raintile ships or runs on, and their licenses
+            // (README.md, "Credits and licenses")
+            card = NewCard("Credits and licenses", "");
+            cp = CardPanel(card);
+            cp.Children.Add(NewRow("Sounds", "UI Audio by Kenney (kenney.nl), Creative Commons Zero (CC0): free to use, credit not required. In Sounds of the skin folder, with License.txt.", NewActionControl("OpenKenney", "Open the website"), null));
+            cp.Children.Add(NewRow("HotKey plugin", "By Brian Ferguson, installed with Raintile: its shortcuts and keys. Source and license on GitHub.", NewActionControl("OpenHotKey", "Open the website"), null));
+            cp.Children.Add(NewRow("Rainmeter", "Raintile is a skin for Rainmeter, free and open source (GNU GPL v2).", NewActionControl("OpenRainmeterSite", "Open the website"), null));
+            AddTo(sp, card);
             return sv;
         }
     }

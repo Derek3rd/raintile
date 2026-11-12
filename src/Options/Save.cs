@@ -201,6 +201,9 @@ namespace RaintileOptions
                     case "OpenSkinFolder": Process.Start("explorer.exe", "\"" + Path.GetDirectoryName(Core.Resources) + "\""); break;
                     case "OpenRainmeter": InvokeRainmeter("!Manage"); break;
                     case "OpenGuide": OpenUrl("https://github.com/Derek3rd/raintile/blob/main/docs/Guide.md"); break;
+                    case "OpenKenney": OpenUrl("https://www.kenney.nl/assets/ui-audio"); break;
+                    case "OpenHotKey": OpenUrl("https://github.com/brianferguson/HotKey.dll"); break;
+                    case "OpenRainmeterSite": OpenUrl("https://www.rainmeter.net/"); break;
                 }
             }
             catch (Exception e) { ShowDialog("Open", e.Message); }

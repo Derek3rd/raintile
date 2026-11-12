@@ -67,3 +67,11 @@ The launcher places itself at the top-left corner and covers the screen. Do not 
 ## Documentation
 
 Everything else — every setting, category and tile files, adding games and apps, keyboard and gamepad controls, search, animations, how it works and troubleshooting — is in the **[Guide](docs/Guide.md)**.
+
+## Credits and licenses
+
+- **Sounds**: the *UI Audio* set by [Kenney](https://www.kenney.nl/assets/ui-audio), released under [Creative Commons Zero (CC0)](https://creativecommons.org/publicdomain/zero/1.0/) — free to use, credit not required (thank you!). In `@Resources/Sounds/`, with its `License.txt`.
+- **HotKey plugin**: by Brian Ferguson, shipped in the package for the shortcuts and the keys — source and license: [brianferguson/HotKey.dll](https://github.com/brianferguson/HotKey.dll) (see `tools/plugins/`).
+- **Rainmeter**: Raintile is a skin for [Rainmeter](https://www.rainmeter.net/), free and open source under the GNU GPL v2.
+
+Options > Info lists them too.

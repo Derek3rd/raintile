@@ -802,6 +802,7 @@ namespace RaintileOptions
             // (README.md, "Credits and licenses")
             card = NewCard("Credits and licenses", "");
             cp = CardPanel(card);
+            cp.Children.Add(NewRow("Raintile", "Copyright (C) 2026 Derek3rd. Free software under the GNU General Public License, version 3 or later: you can use, share and change it; a changed version you share stays under the GPL, with its source. No warranty.", NewActionControl("OpenLicense", "Open the license"), null));
             cp.Children.Add(NewRow("Sounds", "UI Audio by Kenney (kenney.nl), Creative Commons Zero (CC0): free to use, credit not required. In Sounds of the skin folder, with License.txt.", NewActionControl("OpenKenney", "Open the website"), null));
             cp.Children.Add(NewRow("HotKey plugin", "By Brian Ferguson, installed with Raintile: its shortcuts and keys. Source and license on GitHub.", NewActionControl("OpenHotKey", "Open the website"), null));
             cp.Children.Add(NewRow("Rainmeter", "Raintile is a skin for Rainmeter, free and open source (GNU GPL v2).", NewActionControl("OpenRainmeterSite", "Open the website"), null));

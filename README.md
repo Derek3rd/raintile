@@ -68,7 +68,11 @@ The launcher places itself at the top-left corner and covers the screen. Do not 
 
 Everything else — every setting, category and tile files, adding games and apps, keyboard and gamepad controls, search, animations, how it works and troubleshooting — is in the **[Guide](docs/Guide.md)**.
 
-## Credits and licenses
+## License and credits
+
+**Raintile** — Copyright (C) 2026 Derek3rd. Raintile is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. In short: you can use, share and change it; a changed version you share must stay under the GPL, with its source.
+
+What of others Raintile ships or runs on:
 
 - **Sounds**: the *UI Audio* set by [Kenney](https://www.kenney.nl/assets/ui-audio), released under [Creative Commons Zero (CC0)](https://creativecommons.org/publicdomain/zero/1.0/) — free to use, credit not required (thank you!). In `@Resources/Sounds/`, with its `License.txt`.
 - **HotKey plugin**: by Brian Ferguson, shipped in the package for the shortcuts and the keys — source and license: [brianferguson/HotKey.dll](https://github.com/brianferguson/HotKey.dll) (see `tools/plugins/`).

@@ -4822,10 +4822,13 @@ local function writeSizes()
 end
 
 -- Grid area in pixels for the framing editor of the Options window, which
--- cannot work out the layout by itself: "width,height,gap" in
--- Generated\Area.txt, rewritten only when it changes.
+-- cannot work out the layout by itself, and the launcher's own size (what the
+-- backdrop and the launch screen fill, for its low-resolution note):
+-- "width,height,gap,launcherW,launcherH" in Generated\Area.txt, rewritten
+-- only when it changes.
 local function writeArea()
-	local text = string.format('%d,%d,%d\n', math.floor(V.AreaW), math.floor(V.AreaH), math.floor(V.Gap))
+	local text = string.format('%d,%d,%d,%d,%d\n', math.floor(V.AreaW), math.floor(V.AreaH), math.floor(V.Gap),
+		math.floor(V.ScreenW), math.floor(V.ScreenH))
 	local path = resources .. 'Generated\\Area.txt'
 	local f = io.open(path, 'rb')
 	local old = f and f:read('*a') or ''

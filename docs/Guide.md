@@ -427,6 +427,8 @@ Images\Games\
 
 Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency.
 
+**How large a background should be.** A background is not only shown in its tile: the launch animation (`LaunchAnimation`) and the wheel's backdrop (`WheelBackdrop`) stretch it over the whole launcher, cut to its proportions. For a sharp picture it should be at least as large as the launcher on this screen (in window mode the window, docked the strip; e.g. 2560x1440 for a 1440p screen in full screen), and landscape. When it is enlarged more than 1.5 times somewhere (a rule of thumb: below about 2/3 of the resolution it shows), the tile editor says so under *Background*, with the size to use, and *Find online...* marks the images too small. Steam's library image is a wide banner: its 3840x1240 version (which *Find online...* shows first, when the game has it) is fine up to about 1440p, the 1920x620 one is not; for 4K look for a 16:9 image, for example on SteamGridDB or in the press kit of the game's publisher.
+
 **Find online...** next to *Background* and *Logo* in the tile editor (Options > the category > the tile) searches the images of that game or app: Steam's own (Steam games), [SteamGridDB](https://www.steamgriddb.com/) (with the key: games of every store and many apps, several of each), [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (logos of apps and services) and, for a link, the icon of its website. Click one and *Use it*: it is downloaded to the tile's folder, like a picked file.
 
 **Auto find images** under *All tiles* (Options > the category) does the same for every tile of the category without a background (**Background**), without a logo (**Logo**) or both (**All**: what each tile is missing), taking the first image found, one tile after the other, with a progress bar and a **Stop** button. To avoid wrong pictures, from SteamGridDB it only takes a game or app of the same name as the tile (or the Steam id of a Steam game). Widgets are left out. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
@@ -919,7 +921,7 @@ Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its n
   Generated/Sizes.inc        the launcher's rectangle (LauncherMode), percentage sizes and #hex colours converted for Rainmeter
   Generated/Thumbs/          thumbnails (safe to delete: they are rebuilt)
   Generated/Colors.txt       tile colours taken from logos (AutoTileColor)
-  Generated/Area.txt         grid area in pixels, for the framing preview of Options
+  Generated/Area.txt         grid area and launcher size in pixels, for the framing preview and the image sizes of Options
   Generated/EditTile.txt     tile to open Options on (Edit this tile), removed once read
   Generated/Found.json       games and apps found by the last search
   Generated/Found/           their icons

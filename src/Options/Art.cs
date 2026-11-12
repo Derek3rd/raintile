@@ -23,6 +23,7 @@ namespace RaintileOptions
         public string Source;    // shown under the picture
         public string Thumb;     // small picture for the choice (https)
         public string Url;       // the image itself (https)
+        public int Width, Height;   // its size in pixels, when the source says it (0: not known)
     }
 
     public static class Art
@@ -73,9 +74,8 @@ namespace RaintileOptions
 
         // --- Steam -------------------------------------------------------------
 
-        static IEnumerable<string> SteamUrls(string id, string kind)
+        static IEnumerable<string> SteamUrls(string id, string file)
         {
-            string file = kind == "background" ? "library_hero.jpg" : "logo.png";
             yield return "https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/" + id + "/" + file;
             yield return "https://cdn.cloudflare.steamstatic.com/steam/apps/" + id + "/" + file;
         }
@@ -83,9 +83,26 @@ namespace RaintileOptions
         // The first of Steam's addresses that has the image
         public static string SteamImage(string id, string kind)
         {
+            return SteamFile(id, kind == "background" ? "library_hero.jpg" : "logo.png");
+        }
+
+        static string SteamFile(string id, string file)
+        {
             if (string.IsNullOrEmpty(id)) return null;
-            foreach (var url in SteamUrls(id, kind)) if (Exists(url)) return url;
+            foreach (var url in SteamUrls(id, file)) if (Exists(url)) return url;
             return null;
+        }
+
+        // Steam's library hero at the size its publisher gave (3840x1240, not every
+        // game has it) and the half size Steam makes of it (1920x620): the larger
+        // stays sharp on a large screen
+        static IEnumerable<ArtChoice> SteamHeroes(string id)
+        {
+            foreach (var hero in new[] { new { File = "library_hero_2x.jpg", W = 3840, H = 1240 }, new { File = "library_hero.jpg", W = 1920, H = 620 } })
+            {
+                string url = SteamFile(id, hero.File);
+                if (url != null) yield return new ArtChoice { Kind = "background", Source = "Steam", Url = url, Thumb = url, Width = hero.W, Height = hero.H };
+            }
         }
 
         // --- SteamGridDB ---------------------------------------------------------
@@ -128,7 +145,10 @@ namespace RaintileOptions
                 var d = o as Dictionary<string, object>;
                 string url = Json.Str(d, "url"), thumb = Json.Str(d, "thumb");
                 if (!url.StartsWith("https://")) continue;
-                list.Add(new ArtChoice { Kind = kind, Source = "SteamGridDB", Url = url, Thumb = thumb.StartsWith("https://") ? thumb : url });
+                int width, height;
+                int.TryParse(Json.Str(d, "width"), out width);
+                int.TryParse(Json.Str(d, "height"), out height);
+                list.Add(new ArtChoice { Kind = kind, Source = "SteamGridDB", Url = url, Thumb = thumb.StartsWith("https://") ? thumb : url, Width = width, Height = height });
                 if (list.Count >= max) break;
             }
             return list;
@@ -235,8 +255,12 @@ namespace RaintileOptions
             string steamId = SteamId(command, source);
             try
             {
-                string steam = SteamImage(steamId, kind);
-                if (steam != null) list.Add(new ArtChoice { Kind = kind, Source = "Steam", Url = steam, Thumb = steam });
+                if (kind == "background") list.AddRange(SteamHeroes(steamId));
+                else
+                {
+                    string steam = SteamImage(steamId, kind);
+                    if (steam != null) list.Add(new ArtChoice { Kind = kind, Source = "Steam", Url = steam, Thumb = steam });
+                }
             }
             catch { }
             try

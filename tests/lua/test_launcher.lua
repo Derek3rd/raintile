@@ -77,6 +77,22 @@ function T.window_full_size_leaves_taskbar()
 	t.eq(V.ScreenH, 1080, 'full screen height')
 end
 
+-- Options reads the launcher's own size from Area.txt (after the grid area):
+-- the window's size in window mode, the whole screen in full screen.
+function T.area_file_has_launcher_size()
+	local opts = { screen = { 0, 0, 1920, 1080 }, work = { 0, 0, 1920, 1032 } }
+	opts.settings = { LauncherMode = 'Window', WindowW = '1280', WindowH = '720' }
+	local s = R.new(opts):start()
+	t.clean(s)
+	local area = R.readFile(s.resources .. 'Generated\\Area.txt') or ''
+	t.ok(area:match(',1280,720\n$'), 'window size not in Area.txt: ' .. area)
+	opts.settings = { LauncherMode = 'Fullscreen' }
+	s = R.new(opts):start()
+	t.clean(s)
+	area = R.readFile(s.resources .. 'Generated\\Area.txt') or ''
+	t.ok(area:match('^%d+,%d+,%d+,1920,1080\n$'), 'screen size not in Area.txt: ' .. area)
+end
+
 function T.docked_left_session()
 	local s = launcher({ LauncherMode = 'Dock', DockSide = 'Left' })
 	session(s)

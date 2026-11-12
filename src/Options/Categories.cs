@@ -49,7 +49,7 @@ namespace RaintileOptions
         // controls of the category pages
         ListBox catsList, tilesList;
         Border catCard, tileCard, importedCard, catIcon, bgThumb, logoThumb, preview;
-        TextBlock catIconHint, catInfiniteHint, gridColsHint, gridRowsHint, sizeHint, tileOpacityHint, tileNote, previewLabel, bgPath, logoPath;
+        TextBlock catIconHint, catInfiniteHint, gridColsHint, gridRowsHint, sizeHint, tileOpacityHint, tileNote, previewLabel, bgPath, bgLowRes, logoPath;
         Image previewBg, previewLogo;
         Panel frameRow, logoRow;
         NumberField zoomField, logoField;
@@ -734,14 +734,71 @@ namespace RaintileOptions
         // width, height, gap
         double[] GetArea()
         {
+            var parts = ReadAreaFile();
+            if (parts != null) return parts.Take(3).ToArray();
+            // skin not loaded yet: the screen without menu and margins, roughly
+            return new[] { screenPx[0] * 0.96, screenPx[1] * 0.88, 16 };
+        }
+
+        // The launcher's own size in its mode (window, docked, full screen) and on
+        // its monitor: what the backdrop and the launch screen fill
+        double[] GetLauncherSize()
+        {
+            var parts = ReadAreaFile();
+            if (parts != null && parts.Length >= 5) return new[] { parts[3], parts[4] };
+            // skin not loaded yet, or one that wrote only the area: the main screen
+            return new double[] { screenPx[0], screenPx[1] };
+        }
+
+        // Generated\Area.txt, written by the skin (writeArea in Raintile.lua):
+        // "width,height,gap" of the grid area, then the launcher's width and height
+        static double[] ReadAreaFile()
+        {
             try
             {
                 var parts = File.ReadAllText(Path.Combine(Core.Generated, "Area.txt")).Trim().Split(',');
-                if (parts.Length == 3) return parts.Select(p => double.Parse(p, Inv)).ToArray();
+                if (parts.Length == 3 || parts.Length == 5) return parts.Select(p => double.Parse(p, Inv)).ToArray();
             }
             catch { }
-            // skin not loaded yet: the screen without menu and margins, roughly
-            return new[] { screenPx[0] * 0.96, screenPx[1] * 0.88, 16 };
+            return null;
+        }
+
+        // The background of the tile shown is too small for the largest place the
+        // launcher draws it (docs/OptionsUI.md, 1: a state to notice): its tile,
+        // enlarged by its framing (BgZoom) and in the grid by BgStyle (BgOverscan,
+        // BgHoverZoom, as bgWindow in Raintile.lua); the launch screen
+        // (LaunchAnimation) and the wheel's backdrop fill the whole launcher.
+        void UpdateLowResNote()
+        {
+            if (bgLowRes == null) return;
+            var s = currentFile != null && !IsAllSelected() ? GetShownTile() : null;
+            var image = s != null ? ImagePixelSize(Core.GetTileImage(GetCurrentBase(), s, "Background")) : null;
+            SetFormHelp(bgLowRes, BackgroundLowResNote(image, s));
+        }
+
+        // The note for an image of image[0] x image[1] pixels as the background of
+        // tile s, at the place that enlarges it most ("" if it is large enough)
+        string BackgroundLowResNote(int[] image, IniSection s)
+        {
+            if (image == null || s == null || currentFile == null) return "";
+            // each place: its size, the zoom on top of filling it, its name
+            var places = new List<Tuple<double[], double, string>>();
+            double zoom, n;
+            if (!double.TryParse(GetPlaceKey(s, "BgZoom"), NumberStyles.Float, Inv, out zoom)) zoom = 1;
+            zoom = Math.Min(4.0, Math.Max(1.0, zoom));
+            string style = V("BgStyle").Trim().ToLowerInvariant();
+            // (the wheel's thumbnails are always cropped, as Initialize in Raintile.lua)
+            if (!IsWheelLayout() && style != "crop")
+            {
+                zoom *= Core.TryNumber(V("BgOverscan"), out n) ? Math.Max(1, n) : 1.15;
+                if (style == "zoom") zoom *= Core.TryNumber(V("BgHoverZoom"), out n) ? Math.Max(1, n) : 1.08;
+            }
+            places.Add(Tuple.Create(GetPlaceShape(currentFile, s, false, false), zoom, "in its tile"));
+            var launcher = GetLauncherSize();
+            if (V("LaunchAnimation") != "0") places.Add(Tuple.Create(launcher, 1.0, "on the launch screen"));
+            if (BackdropOn()) places.Add(Tuple.Create(launcher, 1.0, "on the wheel's backdrop"));
+            var worst = places.OrderByDescending(p => ImageUpscale(image[0], image[1], p.Item1[0], p.Item1[1], p.Item2)).First();
+            return LowResNote(image, worst.Item1[0], worst.Item1[1], worst.Item2, worst.Item3);
         }
 
         bool IsWheelLayout() { return V("ScrollMode").Equals("wheel", StringComparison.OrdinalIgnoreCase); }
@@ -752,7 +809,8 @@ namespace RaintileOptions
         //  - the wheel: its thumbnail, a square (WheelTileSize), the logo 70% of it
         //    (M.wheelGeometry); Size=, NX, NY and IconSize are the grid's. The
         //    backdrop puts the logo and the lines where they sit on the thumbnail.
-        double[] GetPlaceShape(string file, IniSection s, bool all)
+        // back: the wheel's backdrop instead of its thumbnail (Place on).
+        double[] GetPlaceShape(string file, IniSection s, bool all, bool back)
         {
             var area = GetArea();
             if (!IsWheelLayout())
@@ -764,7 +822,7 @@ namespace RaintileOptions
                 size = new[] { size[0] * span[0], size[1] * span[1] };
                 return new[] { size[0], size[1], GetLogoBox(file) };
             }
-            if (placeBack)
+            if (back)
             {
                 // the backdrop (Place on): the area under the top row, the logo
                 // WheelBackdropLogoSize percent of its height (M.backdropLogo)
@@ -1150,7 +1208,7 @@ namespace RaintileOptions
             else bgFrame.Zoom = zoom;
             LimitFocus();
             UpdateFraming();
-            if (save) SaveFraming();
+            if (save) { SaveFraming(); UpdateLowResNote(); }
         }
 
         // A new or removed background: the old framing no longer applies
@@ -1357,7 +1415,7 @@ namespace RaintileOptions
             placeBack = canBack && placeOn.SelectedIndex == 1;
             ReadFraming(s);
             // the tile in the grid, the square of the wheel, or the wheel's background
-            var shape = currentFile != null ? GetPlaceShape(currentFile, s, all) : new double[] { 16, 9, 96 };
+            var shape = currentFile != null ? GetPlaceShape(currentFile, s, all, placeBack) : new double[] { 16, 9, 96 };
             bgFrame.TW = shape[0]; bgFrame.TH = shape[1];
             if (placeHow != null) placeHow.Text = PlaceHowText();
             UpdateGridOnlyRows();
@@ -1392,6 +1450,7 @@ namespace RaintileOptions
             previewLabel.Text = label;
             // (the label is on the tile, never on the backdrop)
             previewLabel.Visibility = label != "" && V("ShowLabels") != "0" && !placeBack ? Visibility.Visible : Visibility.Collapsed;
+            UpdateLowResNote();
             if (all) return;
             SetThumb(bgThumb, bg);
             SetThumb(logoThumb, logo);
@@ -1649,6 +1708,25 @@ namespace RaintileOptions
         }
 
         static TextBlock FormHelp(Grid formRow) { return (TextBlock)formRow.Tag; }
+
+        // A note in the accent colour under the help of a stacked row, as AddRowNote
+        // on the settings pages (docs/OptionsUI.md, 1): hidden while it has no text
+        // (SetFormHelp)
+        TextBlock AddFormNote(Grid formRow)
+        {
+            var help = FormHelp(formRow);
+            int at = formRow.Children.IndexOf(help);
+            formRow.Children.Remove(help);
+            var under = NewPanel();
+            AddTo(under, help);
+            var note = NewHelp("", ResBrush("AccentBrush"));
+            note.Margin = T(0, Gap.Help, 0, 0);
+            SetFormHelp(note, "");
+            AddTo(under, note);
+            Grid.SetRow(under, 1);
+            formRow.Children.Insert(at, under);
+            return note;
+        }
 
         static void SetFormHelp(TextBlock help, string text)
         {
@@ -2659,7 +2737,8 @@ namespace RaintileOptions
                 var imageRow = NewFormRow(kind, row, "", kind == "Logo" ? NewHelp("Find online...: images of this game or app from Steam, SteamGridDB, Dashboard Icons or its website.") : null, remove);
                 AddTo(f, imageRow);
                 var pathLabel = FormHelp(imageRow);
-                if (kind == "Background") { bgThumb = thumb; bgPath = pathLabel; bgDel = remove; } else { logoThumb = thumb; logoPath = pathLabel; logoDel = remove; }
+                // (the background: too small for this screen, UpdateLowResNote)
+                if (kind == "Background") { bgThumb = thumb; bgPath = pathLabel; bgLowRes = AddFormNote(imageRow); bgDel = remove; } else { logoThumb = thumb; logoPath = pathLabel; logoDel = remove; }
                 string k = kind;
                 online.Click += (s, e) => FindTileArt(k);
                 choose.Click += (s, e) =>

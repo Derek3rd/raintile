@@ -4661,7 +4661,10 @@ end
 
 function M.sound(name)
 	local f = M.soundFile and M.soundFile[name]
-	if f and not M.quiet then SKIN:Bang('!Play', f) end
+	if f and not M.quiet then
+		dbg('sound ' .. name .. ': ' .. f)
+		SKIN:Bang('!Play', f)
+	end
 end
 
 -- The Rainside (Rainside\\Rainside.ini, RainsideCategory): the launcher

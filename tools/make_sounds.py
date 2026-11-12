@@ -62,7 +62,7 @@ def after(gap, part):
 
 def write(name, samples):
     peak = max(1e-9, max(abs(s) for s in samples))
-    scale = 0.85 / peak  # every sound as loud: near full scale, no clipping
+    scale = 0.4 / peak  # every sound as loud, well below full scale
     data = b''.join(struct.pack('<h', int(max(-1, min(1, s * scale)) * 32767)) for s in samples)
     path = os.path.join(OUT, name + '.wav')
     with wave.open(path, 'wb') as w:

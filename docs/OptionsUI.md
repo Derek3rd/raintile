@@ -161,7 +161,8 @@ always possible.
   - a keyboard shortcut (Ctrl+S on Save).
 - A state to notice that is not a setting's value (General > Profiles: the settings in
   the window differ from the profile shown) is a note in the accent colour under the
-  label of its row (`AddRowNote`, as the reason of a row that does not apply), shown
+  label of its row (`AddRowNote`, as the reason of a row that does not apply; `AddFormNote`
+  under the help of a stacked row: the tile's background too small for the screen), shown
   only while it holds.
 
 ## 2. One glyph, one action

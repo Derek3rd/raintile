@@ -358,3 +358,29 @@ Test 'Options: the images kept stay under their limit, the last used first' {
         Assert-True (-not [object]::ReferenceEquals($shown[5], (Invoke-Options 'GetBitmap' @($files[5], 0)))) 'the picture not used since kept over the limit'
     } finally { $limit.SetValue($null, $was) }
 }
+
+Test 'Options: the size of an image is read from its file, again when the file changes' {
+    $file = Join-Path (New-TestFolder) 'a.png'
+    New-TestImage $file 40 20
+    Assert-Equal ((Invoke-Options 'ImagePixelSize' @($file)) -join 'x') '40x20' 'size of the picture'
+    New-TestImage $file 60 30
+    (Get-Item -LiteralPath $file).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(1)
+    Assert-Equal ((Invoke-Options 'ImagePixelSize' @($file)) -join 'x') '60x30' 'the picture written again'
+    [IO.File]::WriteAllText($file, 'not an image')
+    (Get-Item -LiteralPath $file).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(2)
+    Assert-True ($null -eq (Invoke-Options 'ImagePixelSize' @($file))) 'a file that is not an image'
+    Assert-True ($null -eq (Invoke-Options 'ImagePixelSize' @(''))) 'no path'
+}
+
+Test 'Options: a background enlarged more than LowResLimit gets the low-resolution note' {
+    $note = { param($w, $h, $sw, $sh, $zoom) Invoke-Options 'LowResNote' @([int[]]@($w, $h), [double]$sw, [double]$sh, [double]$zoom, 'on the launch screen') }
+    # a Steam hero on a 1440p screen: cut to 16:9, its 620 rows become 1440
+    $text = & $note 1920 620 2560 1440 1
+    Assert-True ($text -match '2\.3') "enlargement not in the note: $text"
+    Assert-True ($text -match '2560.1440\.$') "size to use not in the note: $text"
+    Assert-Equal (& $note 1920 1080 2560 1440 1) '' '1920x1080 on 1440p (1.33x) is sharp enough'
+    Assert-Equal (& $note 3840 2160 2560 1440 1) '' 'a 4K image on 1440p'
+    # the zoom of the tile counts: 1.33 x 1.2 = 1.6
+    Assert-True ((& $note 1920 1080 2560 1440 1.2) -ne '') 'zoom of the tile not counted'
+    Assert-Equal (Invoke-Options 'LowResNote' @($null, [double]2560, [double]1440, [double]1, 'x')) '' 'no image size'
+}

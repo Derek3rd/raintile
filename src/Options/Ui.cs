@@ -854,6 +854,58 @@ namespace RaintileOptions
             bitmapBytes -= entry.Bytes;
         }
 
+        // Size in pixels of the image in a file, read from its header (GetBitmap
+        // decodes smaller for thumbnails); null if it cannot be read. Kept while
+        // the file does not change.
+        static readonly Dictionary<string, int[]> imageSizes = new Dictionary<string, int[]>(StringComparer.OrdinalIgnoreCase);
+        public static int[] ImagePixelSize(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            try
+            {
+                var f = new FileInfo(path);
+                if (!f.Exists) return null;
+                string key = path + "|" + f.LastWriteTimeUtc.Ticks + "|" + f.Length;
+                int[] size;
+                lock (imageSizes) if (imageSizes.TryGetValue(key, out size)) return size;
+                using (var stream = File.OpenRead(path))
+                {
+                    var decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.DelayCreation | BitmapCreateOptions.IgnoreColorProfile, BitmapCacheOption.None);
+                    // (an icon holds several sizes: the largest is drawn)
+                    foreach (var frame in decoder.Frames)
+                        if (size == null || frame.PixelWidth * frame.PixelHeight > size[0] * size[1]) size = new[] { frame.PixelWidth, frame.PixelHeight };
+                }
+                if (size == null || size[0] <= 0 || size[1] <= 0) return null;
+                lock (imageSizes) imageSizes[key] = size;
+                return size;
+            }
+            catch { return null; }
+        }
+
+        // How much an image is enlarged where Raintile draws it: it fills w x h,
+        // cut to its proportions (PreserveAspectRatio=2), then enlarged "zoom"
+        // more (BgZoom, BgOverscan of the tile). Over LowResLimit it looks
+        // blurry: a rule of thumb (2/3 of the resolution, as in print), not a
+        // measure; 1920x1080 on 2560x1440 (1.33) still looks sharp.
+        public const double LowResLimit = 1.5;
+        public static double ImageUpscale(int iw, int ih, double w, double h, double zoom)
+        {
+            if (iw <= 0 || ih <= 0 || w <= 0 || h <= 0) return 0;
+            return Math.Max(w / iw, h / ih) * Math.Max(1, zoom);
+        }
+
+        // The note for an image too small for where it is shown ("" if it is not):
+        // "where" says the place ("on the launch screen"), w x h its size there
+        public static string LowResNote(int[] image, double w, double h, double zoom, string where)
+        {
+            if (image == null) return "";
+            double scale = ImageUpscale(image[0], image[1], w, h, zoom);
+            if (scale <= LowResLimit) return "";
+            zoom = Math.Max(1, zoom);
+            return string.Format(Inv, "Low resolution for this screen: {0}{8}{1}, enlarged {2:0.#}{8} {3} ({4}{8}{5}), so it looks blurry. For a sharp image use one of at least {6}{8}{7}.",
+                image[0], image[1], scale, where, Math.Round(w), Math.Round(h), Math.Ceiling(w * zoom), Math.Ceiling(h * zoom), Times);
+        }
+
         public string SelectFile(string filter)
         {
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = filter };

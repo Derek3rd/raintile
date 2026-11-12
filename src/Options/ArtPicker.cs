@@ -71,6 +71,7 @@ namespace RaintileOptions
                     return;
                 }
                 status.Text = list.Count + " found: click one, then Use it." + (key == "" ? " A SteamGridDB key (Options > Import) finds more." : "");
+                bool anyLowRes = false;
                 foreach (var c in list)
                 {
                     var img = new Image { Stretch = Stretch.Uniform, Width = w, Height = h - 22 };
@@ -87,7 +88,12 @@ namespace RaintileOptions
                     catch { }
                     var panel = NewPanel();
                     AddTo(panel, img);
-                    var label = NewText(c.Source, Fs.Badge, ResBrush("DimBrush"));
+                    // a background: its size, in the accent colour when it is too
+                    // small for this screen (the note of the Background field)
+                    bool lowRes = background && c.Width > 0 && BackgroundLowResNote(new[] { c.Width, c.Height }, t) != "";
+                    anyLowRes |= lowRes;
+                    string size = background && c.Width > 0 ? " " + Dot + " " + c.Width + Times + c.Height + (lowRes ? ", low resolution" : "") : "";
+                    var label = NewText(c.Source + size, Fs.Badge, ResBrush(lowRes ? "AccentBrush" : "DimBrush"));
                     label.HorizontalAlignment = HorizontalAlignment.Center;
                     AddTo(panel, label);
                     var box = new Border
@@ -107,6 +113,7 @@ namespace RaintileOptions
                     };
                     wrap.Children.Add(box);
                 }
+                if (anyLowRes) status.Text += " Low resolution: enlarged more than " + LowResLimit.ToString("0.#", Inv) + Times + " on this screen, it looks blurry.";
             };
 
             use.Click += async (s, e) =>

@@ -1,8 +1,8 @@
 """Writes the default sounds of Raintile (@Resources/Sounds/*.wav).
 
 They are synthesised here (sine tones, a little filtered noise), so they are
-Raintile's own: no samples of anyone else. Short and quiet on purpose: they
-play over whatever else is playing. Run again after changing them:
+Raintile's own: no samples of anyone else. Short, all at the same level: Rainmeter's
+own volume (the Windows mixer) sets how loud. Run again after changing them:
 
     python tools/make_sounds.py
 """
@@ -62,7 +62,7 @@ def after(gap, part):
 
 def write(name, samples):
     peak = max(1e-9, max(abs(s) for s in samples))
-    scale = min(1.0, 0.5 / peak)  # never louder than half scale
+    scale = 0.85 / peak  # every sound as loud: near full scale, no clipping
     data = b''.join(struct.pack('<h', int(max(-1, min(1, s * scale)) * 32767)) for s in samples)
     path = os.path.join(OUT, name + '.wav')
     with wave.open(path, 'wb') as w:
@@ -76,20 +76,20 @@ def write(name, samples):
 def main():
     os.makedirs(OUT, exist_ok=True)
     # the launcher (or the Rainside) coming in / going away
-    write('open', mix(swoosh(0.22, 300, 4000, 0.18, 1), tone(0.22, 420, 700, 0.12, (1, 0.3), 2.5, 0.03)))
-    write('close', mix(swoosh(0.18, 4000, 300, 0.16, 2), tone(0.18, 640, 380, 0.1, (1, 0.3), 2.5, 0.02)))
-    # the highlight to another tile, part or entry
-    write('move', tone(0.03, 2400, 2100, 0.14, (1, 0.2), 3.0, 0.001))
+    write('open', mix(swoosh(0.34, 250, 5000, 0.5, 1), tone(0.34, 392, 784, 0.45, (1, 0.35, 0.1), 1.4, 0.04)))
+    write('close', mix(swoosh(0.30, 5000, 250, 0.45, 2), tone(0.30, 784, 392, 0.4, (1, 0.35, 0.1), 1.4, 0.03)))
+    # the highlight to another tile, part or entry: a soft wooden tick
+    write('move', tone(0.07, 1320, 1180, 0.8, (1, 0.5, 0.2), 1.8, 0.002))
     # a tile started: two notes up
-    write('launch', mix(tone(0.32, 659.3, None, 0.18, (1, 0.4, 0.15), 2.2), after(0.07, tone(0.36, 987.8, None, 0.18, (1, 0.4, 0.15), 2.2))))
-    # another category
-    write('category', mix(swoosh(0.14, 800, 5000, 0.14, 3), tone(0.12, 880, 1100, 0.06, (1,), 2.0, 0.01)))
-    # a menu opened
-    write('menu', tone(0.07, 1100, 760, 0.2, (1, 0.25), 2.5, 0.002))
-    # a key of the on-screen keyboard
-    write('key', tone(0.025, 1800, 1500, 0.16, (1, 0.3), 3.0, 0.001))
-    # back: something closed (the menu, the search, out of a widget)
-    write('back', tone(0.08, 520, 300, 0.2, (1, 0.25), 2.5, 0.002))
+    write('launch', mix(tone(0.45, 659.3, None, 0.6, (1, 0.4, 0.15), 1.6), after(0.09, tone(0.55, 987.8, None, 0.6, (1, 0.4, 0.15), 1.6))))
+    # another category: a short swoosh with a note
+    write('category', mix(swoosh(0.22, 600, 6000, 0.45, 3), tone(0.2, 880, 1175, 0.35, (1, 0.3), 1.5, 0.01)))
+    # a menu opened: a pop
+    write('menu', tone(0.13, 1046.5, 700, 0.8, (1, 0.35, 0.1), 1.8, 0.002))
+    # a key of the on-screen keyboard: a click
+    write('key', tone(0.06, 1568, 1300, 0.8, (1, 0.4), 2.0, 0.001))
+    # back: something closed, lower
+    write('back', tone(0.14, 587, 330, 0.8, (1, 0.35, 0.1), 1.8, 0.002))
 
 
 if __name__ == '__main__':

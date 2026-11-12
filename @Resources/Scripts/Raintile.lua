@@ -4636,20 +4636,25 @@ function M.evalSetting(raw, default)
 end
 
 -- Sounds (Sounds=1) --------------------------------------------------------
--- A short sound for what happens on screen, each event with its switch
--- (SoundOpen, SoundClose, ...): Rainmeter's !Play, a .wav, one at a time (the
--- next one cuts it short). Raintile's own (@Resources\Sounds\<event>.wav,
--- made by tools/make_sounds.py), or yours with the same name in Sounds\ of
--- the data folder. The mouse moving over the tiles only with SoundMouse=1.
+-- A short sound for what happens on screen, each event with its own
+-- (SoundOpen=open.wav, SoundClose=, ...: the name of a .wav; empty = none):
+-- Rainmeter's !Play, one at a time (the next one cuts it short). Looked for
+-- in Sounds\ of the data folder (yours), then in @Resources\Sounds\
+-- (Raintile's, made by tools/make_sounds.py). The mouse moving over the
+-- tiles only with SoundMouse=1.
 M.SOUNDS = { 'open', 'close', 'move', 'launch', 'category', 'menu', 'key', 'back' }
 function M.readSounds()
 	V.Sounds = num('Sounds', 0) ~= 0
 	V.SoundMouse = num('SoundMouse', 0) ~= 0
 	M.soundFile = {}
 	for _, name in ipairs(M.SOUNDS) do
-		if V.Sounds and num('Sound' .. name:sub(1, 1):upper() .. name:sub(2), 1) ~= 0 then
-			local own = data .. 'Sounds\\' .. name .. '.wav'
-			M.soundFile[name] = fileExists(own) and own or (resources .. 'Sounds\\' .. name .. '.wav')
+		local v = trim(SKIN:GetVariable('Sound' .. name:sub(1, 1):upper() .. name:sub(2), name .. '.wav'))
+		-- (1: the default one; only a file name, never a path elsewhere)
+		if v == '1' then v = name .. '.wav' end
+		v = v:match('([^\\/]*)$')
+		if V.Sounds and v:lower():match('%.wav$') then
+			local own, ours = data .. 'Sounds\\' .. v, resources .. 'Sounds\\' .. v
+			M.soundFile[name] = fileExists(own) and own or (fileExists(ours) and ours or nil)
 		end
 	end
 end
@@ -7195,7 +7200,6 @@ end
 -- the carousel, the mouse on the tile next to the middle and a wheel notch)
 function M.navFocus(t, idx, tx, ty, scrolled)
 	local same = hover.on and hover.idx == idx and hover.tx == tx and hover.ty == ty
-	if not same then M.sound('move') end
 	focus(t, idx, tx, ty)
 	if same and scrolled and not V.AnimScroll then frame() end
 end
@@ -7211,8 +7215,12 @@ function Nav(dx, dy)
 	if #cur().tiles == 0 then return end
 	-- inside a widget with parts: from part to part first
 	if M.partStep(dx, dy) then return end
+	-- (the sound only for a move asked for: not for the highlight placed
+	-- when opening or changing category, which would cut their sound short)
+	local was = hover.on and (hover.idx .. ',' .. hover.tx .. ',' .. hover.ty)
 	M.navTiles(dx, dy)
 	M.partArrive(dx, dy)
+	if (dx ~= 0 or dy ~= 0) and was ~= (hover.on and (hover.idx .. ',' .. hover.tx .. ',' .. hover.ty)) then M.sound('move') end
 end
 
 -- Nav() from tile to tile (also the wheel notch of the carousel). The

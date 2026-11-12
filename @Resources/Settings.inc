@@ -310,23 +310,21 @@ AnimLogoSmooth=0.2
 ; 1 = a short sound for what happens on screen; 0 = silent. Rainmeter plays
 ; one at a time, at its own volume (Rainmeter in the volume mixer of Windows)
 Sounds=0
-; Each sound on (1) or off (0): opening and closing (the launcher and the
-; Rainside), the highlight moving (keys and gamepad), a tile started,
-; another category, a menu opened, a key of the on-screen keyboard, back
-; (a menu, the search or a widget closed)
-SoundOpen=1
-SoundClose=1
-SoundMove=1
-SoundLaunch=1
-SoundCategory=1
-SoundMenu=1
-SoundKey=1
-SoundBack=1
+; The sound of each: the name of a .wav, looked for in Sounds\ of the data
+; folder (yours), then in the skin's (Raintile's); empty = none. Opening and
+; closing (the launcher and the Rainside), the highlight moving (keys and
+; gamepad), a tile started, another category, a menu opened, a key of the
+; on-screen keyboard, back (a menu, the search or a widget closed)
+SoundOpen=open.wav
+SoundClose=close.wav
+SoundMove=move.wav
+SoundLaunch=launch.wav
+SoundCategory=category.wav
+SoundMenu=menu.wav
+SoundKey=key.wav
+SoundBack=back.wav
 ; 1 = also when the mouse moves onto another tile
 SoundMouse=0
-; Your own sounds: a .wav with the same name (open.wav, close.wav, move.wav,
-; launch.wav, category.wav, menu.wav, key.wav, back.wav) in Sounds\ of the
-; data folder plays instead of Raintile's
 
 ; --- Tile backgrounds -----------------------------------------------------------
 ; In the grid (the wheel's thumbnails are always cropped):

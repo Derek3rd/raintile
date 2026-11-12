@@ -68,10 +68,10 @@ end
 
 -- an event off; the mouse only with SoundMouse=1
 function T.switches()
-	local s = opened({ Sounds = 1, SoundMove = 0 })
+	local s = opened({ Sounds = 1, SoundMove = '' })
 	s:call('Nav(0, 0)')
 	s:call('Nav(1, 0)')
-	t.eq(played(s), '', 'a move with SoundMove=0')
+	t.eq(played(s), '', 'a move with SoundMove empty')
 	t.clean(s)
 	s = opened({ Sounds = 1 })
 	s:call("HoverTile(1, '10', '10')")
@@ -85,23 +85,44 @@ function T.switches()
 	t.clean(s)
 end
 
--- Raintile's sounds are there; the user's own of the same name instead
+-- Raintile's sounds are there; the user's own of the same name instead; a
+-- sound of the user's for another event; a name that is not there: none
 function T.files()
-	local s = R.new({ settings = { Sounds = 1 } })
+	local s = R.new({ settings = { Sounds = 1, SoundKey = 'mine.wav', SoundBack = 'gone.wav', SoundMenu = '..\\..\\x.wav' } })
 	host_mkdir(s.data .. 'Sounds')
 	R.writeFile(s.data .. 'Sounds\\move.wav', 'RIFF')
+	R.writeFile(s.data .. 'Sounds\\mine.wav', 'RIFF')
 	s:start()
 	local M = s:upvalue('M')
 	for _, name in ipairs(M.SOUNDS) do
 		local f = M.soundFile[name]
-		t.ok(f, 'no file for ' .. name)
 		if name == 'move' then
 			t.eq(f, s.data .. 'Sounds\\move.wav', 'not the user\'s move.wav')
+		elseif name == 'key' then
+			t.eq(f, s.data .. 'Sounds\\mine.wav', 'not the user\'s sound picked for a key')
+		elseif name == 'back' then
+			t.eq(f, nil, 'a sound for a file that is not there')
+		elseif name == 'menu' then
+			t.eq(f, nil, 'a path out of the sounds folders taken')
 		else
 			t.eq(f, s.resources .. 'Sounds\\' .. name .. '.wav', 'not Raintile\'s ' .. name .. '.wav')
 			t.ok(R.readFile(f), 'Raintile has no ' .. name .. '.wav')
 		end
 	end
+	t.clean(s)
+end
+
+-- Opening or changing category places the highlight (the carousel: on the
+-- tile in the middle): no move sound right after, which would cut theirs
+-- short (Rainmeter plays one at a time)
+function T.no_move_after_open()
+	local s = opened({ Sounds = 1, CenterSelection = 1 })
+	s:call('Hide()')
+	played(s)
+	s:call('Show()')
+	t.eq(played(s), 'open', 'another sound after the opening one')
+	s:call('NextCategory(1)')
+	t.eq(played(s), 'category', 'another sound after the category one')
 	t.clean(s)
 end
 

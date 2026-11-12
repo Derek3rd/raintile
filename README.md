@@ -24,7 +24,7 @@ Your games, apps, links and system tools become large tiles with background art 
 - **Power button**: lock, sleep, restart or shut down the PC from the launcher.
 - **Hot keys for tiles**: give a game a key combination and start it from anywhere, even with the launcher closed.
 - **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.
-- **Sounds** (optional): short sounds of Raintile's own for opening, moving, starting a tile, changing category and the menus, each one on or off, or replaced by yours.
+- **Sounds** (optional): short sounds of Raintile's own for opening, moving, starting a tile, changing category and the menus, each one picked from a list (yours too) or off.
 - **Lightweight**: no update cycle (0% CPU at rest), a fixed number of meters however many tiles you have, thumbnails at the exact displayed size, loaded once and then just shown/hidden.
 - **Options window** to edit every setting, the categories and their tiles without touching files.
 - **Profiles**: save the settings, the look of the categories and the widgets' settings as named profiles (a desk and a couch setup, a docked wheel and a full-screen grid) and switch between them, or go back to the default settings; your tiles stay as they are.

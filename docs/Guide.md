@@ -272,9 +272,9 @@ On click the tile expands to full screen (with background and logo at full resol
 
 ## Sounds
 
-With `Sounds=1` (Options > Animations > **Sounds**) a short sound goes with what happens on screen, each with its own switch:
+With `Sounds=1` (Options > **Sounds**) a short sound goes with what happens on screen, each with its own (a list of the sounds there are, with **Play** to hear one, or *None*):
 
-| Sound | When | Setting | File |
+| Sound | When | Setting | Default |
 | --- | --- | --- | --- |
 | Opening | the launcher or the [Rainside](#rainside) opens | `SoundOpen` | `open.wav` |
 | Closing | it closes (not after starting a tile) | `SoundClose` | `close.wav` |
@@ -285,7 +285,7 @@ With `Sounds=1` (Options > Animations > **Sounds**) a short sound goes with what
 | A key | of the on-screen keyboard | `SoundKey` | `key.wav` |
 | Back | a menu, the search or a widget closed, the launcher staying open | `SoundBack` | `back.wav` |
 
-Raintile's own are in `@Resources\Sounds\` (made by `tools/make_sounds.py`, no samples of anyone else). To use yours, put a `.wav` with the same name in `Sounds\` of [your data folder](#your-data-and-updates): it plays instead. Rainmeter plays them with its `!Play` bang: `.wav` only, one at a time (the next cuts the last one short), at Rainmeter's own volume, which you set in the volume mixer of Windows.
+Raintile's own are in `@Resources\Sounds\` (made by `tools/make_sounds.py`, no samples of anyone else). Yours: put `.wav` files in `Sounds\` of [your data folder](#your-data-and-updates), and they are in the lists too (one with the name of one of Raintile's plays instead of it). The settings hold the name of the file (`SoundOpen=open.wav`); empty = none. Rainmeter plays them with its `!Play` bang: `.wav` only, one at a time (the next cuts the last one short), at Rainmeter's own volume, which you set in the volume mixer of Windows.
 
 ## Widgets and the Dashboard
 
@@ -529,7 +529,7 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 | Top row > Search | search bar, filter bar |
 | Theme | font, text colours, background, accent, highlight |
 | Animations | effects, appearing tiles, smoothing, tile launch |
-| Animations > Sounds | the sounds of opening, moving, starting a tile... |
+| Sounds | the sounds of opening, moving, starting a tile... |
 | Keybindings | open/close shortcut, close key, tile hot keys |
 | Keybindings > Keyboard | navigation keys |
 | Keybindings > Gamepad | support, dead zone, repeat, the buttons of every action |
@@ -794,7 +794,7 @@ See [Sounds](#sounds).
 | Setting | Default | Description |
 | --- | --- | --- |
 | `Sounds` | `0` | `1` = a short sound for what happens on screen |
-| `SoundOpen`, `SoundClose`, `SoundMove`, `SoundLaunch`, `SoundCategory`, `SoundMenu`, `SoundKey`, `SoundBack` | `1` | each sound on or off |
+| `SoundOpen`, `SoundClose`, `SoundMove`, `SoundLaunch`, `SoundCategory`, `SoundMenu`, `SoundKey`, `SoundBack` | `open.wav`, `close.wav`, ... | the sound of each: the name of a `.wav` in `Sounds\` of the data folder or of the skin; empty = none |
 | `SoundMouse` | `0` | the moving sound also when the mouse moves onto another tile |
 
 ### Tile backgrounds

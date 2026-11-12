@@ -233,6 +233,7 @@ namespace RaintileOptions
                     case "font": ((ComboBox)c.Input).Text = v; break;
                     case "secret": ((PasswordBox)c.Input).Password = Core.UnprotectSecret(v); break;
                     case "category": ((ComboBox)c.Input).SelectedItem = v; break;
+                    case "sound": ShowSoundChoices((ComboBox)c.Input, v); break;
                     case "stores":
                         foreach (var cb in c.Boxes) cb.IsChecked = v.Split('|').Select(x => x.Trim().Replace(".", "")).Contains(((string[])cb.Tag)[1]);
                         break;
@@ -354,6 +355,61 @@ namespace RaintileOptions
             cb.SelectionChanged += (s, e) => { if (cb.SelectedItem != null) SetValue(key, (string)cb.SelectedItem); };
             ctl[key] = new Ctl { Kind = "category", Input = cb };
             return cb;
+        }
+
+        // The sound of an event (Sounds page): the .wav files of the user's Sounds
+        // folder and of the skin's (the user's first when both have the name, as
+        // the launcher looks for them), or none; Play plays the one picked
+        static string SoundPath(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            foreach (var dir in new[] { System.IO.Path.Combine(Core.Data, "Sounds"), System.IO.Path.Combine(Core.Resources, "Sounds") })
+            {
+                string p = System.IO.Path.Combine(dir, name);
+                if (System.IO.File.Exists(p)) return p;
+            }
+            return null;
+        }
+
+        static List<string[]> SoundChoices(string current)
+        {
+            var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dir in new[] { System.IO.Path.Combine(Core.Data, "Sounds"), System.IO.Path.Combine(Core.Resources, "Sounds") })
+            {
+                try
+                {
+                    if (System.IO.Directory.Exists(dir))
+                        foreach (var f in System.IO.Directory.GetFiles(dir, "*.wav")) names.Add(System.IO.Path.GetFileName(f));
+                }
+                catch { }
+            }
+            // (a name of the settings no longer there: kept, so it is seen)
+            if (!string.IsNullOrEmpty(current) && current != "1" && !names.Contains(current)) names.Add(current);
+            var list = new List<string[]> { new[] { "", "None" } };
+            foreach (var n in names) list.Add(new[] { n, System.IO.Path.GetFileNameWithoutExtension(n) });
+            return list;
+        }
+
+        void ShowSoundChoices(ComboBox cb, string v)
+        {
+            SetChoices(cb, SoundChoices(v), v);
+        }
+
+        UIElement NewSoundControl(string key)
+        {
+            var cb = NewChoiceBox(SoundChoices(V(key)), V(key), v => { if (!updating) SetValue(key, v); });
+            var play = NewButton("Play", "", "Play the sound picked");
+            play.Margin = T(Gap.Control, 0, 0, 0);
+            play.Click += (s, e) =>
+            {
+                string path = SoundPath(ChoiceValue(cb));
+                if (path == null) return;
+                try { new System.Media.SoundPlayer(path).Play(); } catch { }
+            };
+            cb.SelectionChanged += (s, e) => play.IsEnabled = SoundPath(ChoiceValue(cb)) != null;
+            play.IsEnabled = SoundPath(V(key)) != null;
+            ctl[key] = new Ctl { Kind = "sound", Input = cb };
+            return NewFieldRow(null, cb, play);
         }
 
         // Where to look (ImportStores, "Steam|Epic|..."): a row per store with its
@@ -781,6 +837,7 @@ namespace RaintileOptions
                 case "secret": control = NewSecretControl(k); break;
                 case "font": control = NewFontControl(k); break;
                 case "category": control = NewCategoryControl(k); break;
+                case "sound": control = NewSoundControl(k); break;
                 case "pad": control = NewPadControl(k); break;
                 case "key": control = NewKeyControl(k); break;
                 case "combo": control = NewKeyControl(k, true); break;

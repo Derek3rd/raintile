@@ -255,6 +255,24 @@ function T.tile_hot_keys()
 	end
 end
 
+-- An update that copied the new files over the old ones left the key
+-- mini-skins of the HotKey plugin: unloaded (one still loaded would fire its
+-- keys twice) and deleted
+function T.old_key_skins_removed()
+	local s = R.new({})
+	local ini = s.tmp .. '\\Skins\\Raintile\\Navigation\\Navigation.ini'
+	host_mkdir(s.tmp .. '\\Skins\\Raintile\\Navigation')
+	R.writeFile(ini, '[Rainmeter]\r\nUpdate=-1\r\n')
+	s:start()
+	local unloaded = false
+	for _, line in ipairs(s.log) do
+		if line:find('!DeactivateConfig Raintile\\Navigation', 1, true) then unloaded = true end
+	end
+	t.ok(unloaded, 'the old Navigation mini-skin was not unloaded')
+	t.eq(R.readFile(ini), nil, 'the old Navigation mini-skin is still there')
+	t.clean(s)
+end
+
 -- On unload (OnCloseAction) no key is left
 function T.keys_off_on_unload()
 	local s = opened()

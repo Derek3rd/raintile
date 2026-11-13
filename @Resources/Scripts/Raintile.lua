@@ -4879,6 +4879,7 @@ function Initialize()
 	os.remove(M.gen('DashOn.txt'))
 	-- and the Steam downloads, followed only while it is open
 	os.remove(M.gen('DownloadOn.txt'))
+	M.removeOldKeySkins()
 	local userData = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Raintile\\'
 	data = fileExists(userData .. 'Settings.inc') and userData or resources
 	V.NeedsSetup = data ~= userData or settingsOutdated(userData .. 'Settings.inc')
@@ -5147,6 +5148,24 @@ end
 function KeysOff()
 	if V.Side then return end
 	M.keepFile(M.gen('HotKeys.txt'), 'end\r\n')
+end
+
+-- The key mini-skins of the versions with the HotKey plugin, left in the
+-- skin folder by an update that copies the new files over the old ones
+-- (Options > Info): one still loaded would keep its keys (and the plugin
+-- stays installed), firing them twice. Unloaded and deleted once; their
+-- empty folders stay (Lua removes files only).
+function M.removeOldKeySkins()
+	if V.Side then return end
+	local root = SKIN:ReplaceVariables('#ROOTCONFIGPATH#')
+	for _, name in ipairs({ 'Hotkey', 'Navigation', 'Typing', 'TileKeys' }) do
+		local ini = root .. name .. '\\' .. name .. '.ini'
+		if fileExists(ini) then
+			SKIN:Bang('!DeactivateConfig', V.MainConfig .. '\\' .. name)
+			os.remove(ini)
+		end
+	end
+	os.remove(M.gen('TileKeys.inc'))
 end
 
 -- Only while the launcher has the focus (M.setFocus): typing in another

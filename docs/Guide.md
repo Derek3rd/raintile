@@ -285,7 +285,18 @@ With `Sounds=1` (Options > **Sounds**) a short sound goes with what happens on s
 | A key | of the on-screen keyboard | `SoundKey` | `click5.wav` |
 | Back | a menu, the search or a widget closed, the launcher staying open | `SoundBack` | `rollover5.wav` |
 
-Raintile's own are in `@Resources\Sounds\`: the *UI Audio* set by [Kenney](https://www.kenney.nl), released under CC0 (free to use; `License.txt` there), 51 short clicks, switches and rollovers. Yours: put `.wav` files in `Sounds\` of [your data folder](#your-data-and-updates), and they are in the lists too (one with the name of one of Raintile's plays instead of it). The settings hold the name of the file (`SoundOpen=switch33.wav`); empty = none. Rainmeter plays them with its `Play` command: `.wav` only, one at a time (the next cuts the last one short), at Rainmeter's own volume, which you set in the volume mixer of Windows.
+Raintile's own are in `@Resources\Sounds\`: the *UI Audio* set by [Kenney](https://www.kenney.nl), released under CC0 (free to use; `License.txt` there), 51 short clicks, switches and rollovers. Yours: put `.wav` files in `Sounds\` of [your data folder](#your-data-and-updates), and they are in the lists too (one with the name of one of Raintile's plays instead of it). The settings hold the name of the file (`SoundOpen=switch33.wav`); empty = none.
+
+**More sounds for one event**: a name is a set. Next to `swoosh.wav`, the files `swoosh_<variant>.wav` play where that variant applies, `swoosh.wav` (or nothing, without it) everywhere else; the lists show the set once. The variants:
+
+| Event | Variants |
+| --- | --- |
+| Opening, closing | `_side`: the Rainside |
+| Moving | `_up`, `_down`, `_left`, `_right`; then `_v` (up, down) or `_h` (left, right) |
+| Another category | `_next`, `_prev` (the keys and the pad; a click: the side of the active one) |
+| A key | `_delete`, `_done` |
+
+[Custom widgets](Widgets.md#sounds) can play sounds too (theirs, or the launcher's), with sounds on only. Rainmeter plays them with its `Play` command: `.wav` only, one at a time (the next cuts the last one short), at Rainmeter's own volume, which you set in the volume mixer of Windows.
 
 ## Widgets and the Dashboard
 

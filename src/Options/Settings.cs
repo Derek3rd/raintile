@@ -359,27 +359,47 @@ namespace RaintileOptions
 
         // The sound of an event (Sounds page): the .wav files of the user's Sounds
         // folder and of the skin's (the user's first when both have the name, as
-        // the launcher looks for them), or none; Play plays the one picked
+        // the launcher looks for them), or none. A name is a set: name_next.wav,
+        // name_up.wav... (SoundVariants, as M.SOUND_VARIANTS of the launcher) are
+        // listed once, under the name; Play plays the set's own file, or one of
+        // its variants when it has none
+        static readonly string[] SoundVariants = { "side", "up", "down", "left", "right", "h", "v", "next", "prev", "delete", "done" };
+
+        static IEnumerable<string> SoundDirs()
+        {
+            return new[] { System.IO.Path.Combine(Core.Data, "Sounds"), System.IO.Path.Combine(Core.Resources, "Sounds") };
+        }
+
+        // "swoosh_next" -> "swoosh"; a name without a variant stays as it is
+        static string SoundStem(string name)
+        {
+            foreach (var v in SoundVariants)
+                if (name.EndsWith("_" + v, StringComparison.OrdinalIgnoreCase) && name.Length > v.Length + 1) return name.Substring(0, name.Length - v.Length - 1);
+            return name;
+        }
+
         static string SoundPath(string name)
         {
             if (string.IsNullOrEmpty(name)) return null;
-            foreach (var dir in new[] { System.IO.Path.Combine(Core.Data, "Sounds"), System.IO.Path.Combine(Core.Resources, "Sounds") })
-            {
-                string p = System.IO.Path.Combine(dir, name);
-                if (System.IO.File.Exists(p)) return p;
-            }
+            string stem = System.IO.Path.GetFileNameWithoutExtension(name);
+            foreach (var file in new[] { name }.Concat(SoundVariants.Select(v => stem + "_" + v + ".wav")))
+                foreach (var dir in SoundDirs())
+                {
+                    string p = System.IO.Path.Combine(dir, file);
+                    if (System.IO.File.Exists(p)) return p;
+                }
             return null;
         }
 
         static List<string[]> SoundChoices(string current)
         {
             var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var dir in new[] { System.IO.Path.Combine(Core.Data, "Sounds"), System.IO.Path.Combine(Core.Resources, "Sounds") })
+            foreach (var dir in SoundDirs())
             {
                 try
                 {
                     if (System.IO.Directory.Exists(dir))
-                        foreach (var f in System.IO.Directory.GetFiles(dir, "*.wav")) names.Add(System.IO.Path.GetFileName(f));
+                        foreach (var f in System.IO.Directory.GetFiles(dir, "*.wav")) names.Add(SoundStem(System.IO.Path.GetFileNameWithoutExtension(f)) + ".wav");
                 }
                 catch { }
             }

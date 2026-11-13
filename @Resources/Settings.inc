@@ -316,6 +316,9 @@ Sounds=0
 ; closing (the launcher and the Rainside), the highlight moving (keys and
 ; gamepad), a tile started, another category, a menu opened, a key of the
 ; on-screen keyboard, back (a menu, the search or a widget closed)
+; A name is a set: <name>_<variant>.wav plays where it applies (open, close:
+; _side; move: _up _down _left _right, then _v _h; category: _next _prev;
+; key: _delete _done), <name>.wav elsewhere
 SoundOpen=switch33.wav
 SoundClose=switch21.wav
 SoundMove=rollover2.wav

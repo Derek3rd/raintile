@@ -288,7 +288,7 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "LaunchFontSize", Label = "Text size for tiles without a logo", Help = "", Min = 8.0, Max = 120.0, Step = 1.0, Unit = "pt" },
                 } },
             } },
-            new Page { Id = "sounds", Switch = "Sounds", Title = "Sounds", Icon = 0xE767, Desc = "A short sound for what happens on screen. Rainmeter plays one at a time, at its own volume: Rainmeter in the volume mixer of Windows. The lists have Raintile's sounds (Kenney's UI Audio, free to use) and yours: the .wav files in Sounds of your data folder (Info).", Groups = new List<Group>
+            new Page { Id = "sounds", Switch = "Sounds", Title = "Sounds", Icon = 0xE767, Desc = "A short sound for what happens on screen. Rainmeter plays one at a time, at its own volume: Rainmeter in the volume mixer of Windows. The lists have Raintile's sounds (Kenney's UI Audio, free to use) and yours: the .wav files in Sounds of your data folder (Info). A name is a set: name_up.wav, name_next.wav... play where they apply (the Guide, Sounds).", Groups = new List<Group>
             {
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {

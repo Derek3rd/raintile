@@ -141,4 +141,91 @@ function T.no_move_after_open()
 	t.clean(s)
 end
 
+-- A sound is a set: name_<variant>.wav where that variant applies (the way
+-- of a move, the next or previous category, the Rainside, a key), its axis
+-- for a move (_h, _v), the plain name otherwise
+function T.variants()
+	local s = R.new({ settings = { Sounds = 1, SoundMove = 'step.wav', SoundCategory = 'page.wav', SoundKey = 'tap.wav' } })
+	host_mkdir(s.data .. 'Sounds')
+	for _, f in ipairs({ 'step.wav', 'step_up.wav', 'step_h.wav', 'page_next.wav', 'page_prev.wav', 'tap_delete.wav' }) do
+		R.writeFile(s.data .. 'Sounds\\' .. f, 'RIFF')
+	end
+	s:start()
+	local function last()
+		for k = #s.log, 1, -1 do
+			local f = s.log[k]:match('^run: Play "(.+)"$')
+			if f then return f:match('([^\\]+)$') end
+		end
+	end
+	local M = s:upvalue('M')
+	local cases = {
+		{ 'move', 'up', 'step_up.wav' }, { 'move', 'down', 'step.wav' }, { 'move', 'left', 'step_h.wav' },
+		{ 'move', 'right', 'step_h.wav' }, { 'move', nil, 'step.wav' },
+		{ 'category', 'next', 'page_next.wav' }, { 'category', 'prev', 'page_prev.wav' },
+		{ 'key', 'delete', 'tap_delete.wav' },
+	}
+	for _, c in ipairs(cases) do
+		s.log = {}
+		M.sound(c[1], c[2])
+		t.eq(last(), c[3], c[1] .. ' ' .. tostring(c[2]))
+	end
+	-- the categories: next and previous by the keys, round past the last too
+	s:call('Show()')
+	s.log = {}
+	s:call('NextCategory(-1)')
+	t.eq(last(), 'page_prev.wav', 'the previous category')
+	s.log = {}
+	s:call('NextCategory(1)')
+	t.eq(last(), 'page_next.wav', 'the next category')
+	t.clean(s)
+end
+
+-- A widget's sounds (#WIDGETSOUND:...#): its own .wav, or the launcher's
+-- event; only with Sounds=1, only files of its folder
+local SNDW = '[Box]\r\nMeter=Shape\r\nShape=Rectangle 0,0,10,10\r\nLeftMouseUpAction=#WIDGETSOUND:ding.wav#\r\n'
+local function soundWidget(settings)
+	local s = R.new({ settings = settings })
+	host_mkdir(s.data .. 'Widgets')
+	host_mkdir(s.data .. 'Widgets\\SndW')
+	R.writeFile(s.data .. 'Widgets\\SndW\\SndW.ini', SNDW)
+	R.writeFile(s.data .. 'Widgets\\SndW\\ding.wav', 'RIFF')
+	local cat = s.data .. 'Categories\\Dashboard.ini'
+	R.writeFile(cat, R.readFile(cat) .. '\r\n[Snd]\r\nWidget=custom\r\nParam=SndW\r\n')
+	s:start()
+	local idx
+	for _, w in ipairs(s:upvalue('widgets')) do
+		if w.widget.param == 'SndW' then idx = w.widget.idx end
+	end
+	return s, idx
+end
+
+function T.widget_sounds()
+	local s, i = soundWidget({ Sounds = 1 })
+	t.ok(i, 'no test widget')
+	local grid = R.readFile(s.resources .. 'Generated\\Grid.inc') or ''
+	t.ok(grid:find('WidgetSound(' .. i .. ",'ding.wav')", 1, true), '#WIDGETSOUND:# not turned into WidgetSound()')
+	local function lastPlay()
+		for k = #s.log, 1, -1 do
+			local f = s.log[k]:match('^run: Play "(.+)"$')
+			if f then return f end
+		end
+	end
+	s.log = {}
+	s:call("WidgetSound(" .. i .. ",'ding.wav')")
+	t.eq(lastPlay(), s.data .. 'Widgets\\SndW\\ding.wav', 'the widget\'s own sound')
+	s.log = {}
+	s:call("WidgetSound(" .. i .. ",'move_up')")
+	t.eq(lastPlay(), s:upvalue('M').soundFile.move, 'the launcher\'s move sound')
+	s.log = {}
+	s:call("WidgetSound(" .. i .. ",'..\\\\..\\\\x.wav')")
+	s:call("WidgetSound(" .. i .. ",'gone.wav')")
+	t.eq(lastPlay(), nil, 'a sound out of the widget\'s folder, or not there')
+	t.clean(s)
+	s, i = soundWidget({ Sounds = 0 })
+	s.log = {}
+	s:call("WidgetSound(" .. i .. ",'ding.wav')")
+	t.eq(lastPlay(), nil, 'a widget\'s sound with Sounds=0')
+	t.clean(s)
+end
+
 return T

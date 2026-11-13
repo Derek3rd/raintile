@@ -3335,6 +3335,35 @@ function D.customWidgetFile(name)
 	return nil
 end
 
+-- #WIDGETSOUND:<sound>#, in a value of a custom widget: the bang that
+-- plays that sound through WidgetSound(), so it follows Sounds= like the
+-- launcher's own. <sound>: a .wav of the widget's folder (click.wav), or one
+-- of the launcher's events, with a variant too (move, move_up, back...)
+function D.widgetSounds(v, i)
+	return (v:gsub('#WIDGETSOUND:([%w_%-%.]+)#', function(name)
+		return '[!CommandMeasure MeasureScript "WidgetSound(' .. i .. ",'" .. name .. "'" .. ')"]'
+	end))
+end
+
+-- A widget's sound (#WIDGETSOUND:...#): nothing with Sounds=0. The
+-- launcher's sound of an event (the one picked for it), or a .wav of the
+-- widget's own folder (a name only: never a file elsewhere)
+function WidgetSound(i, name)
+	local t = widgets[tonumber(i) or 0]
+	if not ready or not V.Sounds or M.quiet or not t or type(name) ~= 'string' then return end
+	local event, variant = name:match('^(%a+)_?(%a*)$')
+	if event and M.soundVariant[event] then
+		M.sound(event, variant ~= '' and variant or nil)
+		return
+	end
+	if not name:lower():match('^[%w_%-%.]+%.wav$') or name:find('..', 1, true) then return end
+	local _, dir = D.customWidgetFile(t.widget.param or '')
+	if dir and fileExists(dir .. name) then
+		dbg('widget sound: ' .. dir .. name)
+		SKIN:Bang('[Play "' .. dir .. name .. '"]')
+	end
+end
+
 function D.customWidgetText(t, i, w, h)
 	local path, dir = D.customWidgetFile(t.widget.param)
 	if not path then return nil end
@@ -3469,6 +3498,7 @@ function D.customWidgetText(t, i, w, h)
 				v = trim(own(v):gsub('#WIDGETPATH#', (dir:gsub('%%', '%%%%'))):gsub('#WIDGETOPTION#', ((t.widget.option or ''):gsub('%%', '%%%%')))
 					:gsub('#WIDGETW#', tostring(w)):gsub('#WIDGETH#', tostring(h))
 					:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end))
+				v = D.widgetSounds(v, i)
 				if key == 'onshow' then api.onShow = v
 				elseif key == 'onhide' then api.onHide = v
 				elseif key == 'listy' and v ~= '' then
@@ -3488,6 +3518,7 @@ function D.customWidgetText(t, i, w, h)
 					:gsub('#WIDGETOPTION#', ((t.widget.option or ''):gsub('%%', '%%%%')))
 				-- #WIDGET:<Section>#: that section's name in the launcher
 				v = v:gsub('#WIDGET:([^#]+)#', function(n) return ref(n) end)
+				v = D.widgetSounds(v, i)
 				-- the Rainside's widgets are on screen while its own flag is
 				-- there (RainsideDashOn.txt): a script told the launcher's
 				-- watches that one
@@ -4642,34 +4673,62 @@ end
 -- in Sounds\ of the data folder (yours), then in @Resources\Sounds\
 -- (Raintile's: Kenney's UI Audio, CC0). The mouse moving over the
 -- tiles only with SoundMouse=1.
+-- A name is a set: <name>_<variant>.wav plays where that variant applies
+-- (M.SOUND_VARIANTS: a move up, the next category, the Rainside opening...),
+-- <name>.wav where there is none; a move falls back to _h / _v first.
 M.SOUNDS = { 'open', 'close', 'move', 'launch', 'category', 'menu', 'key', 'back' }
 -- (the default of each, if the settings have none)
 M.SOUND_DEFAULT = { open = 'switch33.wav', close = 'switch21.wav', move = 'rollover2.wav', launch = 'switch18.wav',
 	category = 'switch28.wav', menu = 'switch7.wav', key = 'click5.wav', back = 'rollover5.wav' }
+M.SOUND_VARIANTS = { open = { 'side' }, close = { 'side' }, move = { 'up', 'down', 'left', 'right', 'h', 'v' },
+	category = { 'next', 'prev' }, key = { 'delete', 'done' } }
 function M.readSounds()
 	V.Sounds = num('Sounds', 0) ~= 0
 	V.SoundMouse = num('SoundMouse', 0) ~= 0
-	M.soundFile = {}
+	-- M.soundFile[event]: its file; M.soundVariant[event][variant]: a variant's
+	M.soundFile, M.soundVariant = {}, {}
+	local function find(file)
+		local own, ours = data .. 'Sounds\\' .. file, resources .. 'Sounds\\' .. file
+		return fileExists(own) and own or (fileExists(ours) and ours or nil)
+	end
 	for _, name in ipairs(M.SOUNDS) do
 		local v = trim(SKIN:GetVariable('Sound' .. name:sub(1, 1):upper() .. name:sub(2), M.SOUND_DEFAULT[name]))
 		-- (1: the default one; only a file name, never a path elsewhere)
 		if v == '1' then v = M.SOUND_DEFAULT[name] end
 		v = v:match('([^\\/]*)$')
+		M.soundVariant[name] = {}
 		if V.Sounds and v:lower():match('%.wav$') then
-			local own, ours = data .. 'Sounds\\' .. v, resources .. 'Sounds\\' .. v
-			M.soundFile[name] = fileExists(own) and own or (fileExists(ours) and ours or nil)
+			local stem = v:sub(1, -5)
+			M.soundFile[name] = find(v)
+			for _, variant in ipairs(M.SOUND_VARIANTS[name] or {}) do
+				M.soundVariant[name][variant] = find(stem .. '_' .. variant .. '.wav')
+			end
 		end
 	end
 end
 
-function M.sound(name)
-	local f = M.soundFile and M.soundFile[name]
-	if f and not M.quiet then
-		dbg('sound ' .. name .. ': ' .. f)
+-- variant: where it applies (a move: 'up', 'down', 'left', 'right'; the
+-- category: 'next', 'prev'; opening and closing: 'side'; a key: 'delete',
+-- 'done'), nil for none
+function M.sound(name, variant)
+	if M.quiet or not M.soundFile then return end
+	local own = M.soundVariant and M.soundVariant[name] or {}
+	local f = variant and own[variant]
+	-- (a move: its axis, before the plain one)
+	if not f and (variant == 'up' or variant == 'down') then f = own.v end
+	if not f and (variant == 'left' or variant == 'right') then f = own.h end
+	f = f or M.soundFile[name]
+	if f then
+		dbg('sound ' .. name .. (variant and ('_' .. variant) or '') .. ': ' .. f)
 		-- (Play is one of Rainmeter's commands without "!": "!Play" is an
 		-- invalid bang; the path has no quotes in it)
 		SKIN:Bang('[Play "' .. f .. '"]')
 	end
+end
+
+-- The way of a move, for its sound
+function M.way(dx, dy)
+	if dy < 0 then return 'up' elseif dy > 0 then return 'down' elseif dx < 0 then return 'left' elseif dx > 0 then return 'right' end
 end
 
 -- The Rainside (Rainside\\Rainside.ini, RainsideCategory): the launcher
@@ -5472,7 +5531,7 @@ function Show(how)
 		return
 	end
 	visible = true
-	M.sound('open')
+	M.sound('open', V.Side and 'side' or nil)
 	-- (the Rainside coming out: the windows make room for it)
 	M.sideReserve(true)
 	M.tellOut(true)
@@ -5539,7 +5598,7 @@ function Hide()
 	end
 	-- (RainsideOrder=Outside) the Rainside back to its edge
 	if V.SideOutside and M.sideCat then M.sideShift(false) end
-	M.sound('close')
+	M.sound('close', V.Side and 'side' or nil)
 	visible = false
 	-- (the Rainside going back in: its room for the windows again)
 	M.sideReserve(false)
@@ -6287,7 +6346,7 @@ function M.tileMenuMove(dy)
 	local n = math.min(#tm.items, TILE_MENU_SLOTS)
 	if dy == 0 or n == 0 then return end
 	tm.sel = (tm.sel - 1 + (dy > 0 and 1 or -1)) % n + 1
-	M.sound('move')
+	M.sound('move', dy > 0 and 'down' or 'up')
 	M.renderTileMenu()
 end
 
@@ -6643,7 +6702,7 @@ function M.partStep(dx, dy)
 	if not name then return true end
 	M.kpart = { t = t, name = name }
 	hover.part = nil
-	M.sound('move')
+	M.sound('move', M.way(dx, dy))
 	M.focusPart(t, slot, name)
 	return true
 end
@@ -6739,6 +6798,9 @@ function Layout()
 end
 
 function SetCategory(i)
+	-- (the way NextCategory went, for the sound; a click: none)
+	local way = M.catWay
+	M.catWay = nil
 	if not ready or launching or i < 1 or i > #cats then return end
 	stopTyping()
 	if leaveSearch() and i == active then
@@ -6765,8 +6827,9 @@ function SetCategory(i)
 		return
 	end
 	saveScroll()
+	-- (the way: from NextCategory, or which side of the active one)
+	M.sound('category', way or (i > active and 'next' or 'prev'))
 	active = i
-	M.sound('category')
 	if virtualDirty then fillVirtual() end
 	applyGeometry(cats[i])
 	SKIN:Bang('!WriteKeyValue', 'Variables', 'LastCategory', tostring(i), data .. 'State.inc')
@@ -7228,7 +7291,7 @@ function Nav(dx, dy)
 	local was = hover.on and (hover.idx .. ',' .. hover.tx .. ',' .. hover.ty)
 	M.navTiles(dx, dy)
 	M.partArrive(dx, dy)
-	if (dx ~= 0 or dy ~= 0) and was ~= (hover.on and (hover.idx .. ',' .. hover.tx .. ',' .. hover.ty)) then M.sound('move') end
+	if (dx ~= 0 or dy ~= 0) and was ~= (hover.on and (hover.idx .. ',' .. hover.tx .. ',' .. hover.ty)) then M.sound('move', M.way(dx, dy)) end
 end
 
 -- Nav() from tile to tile (also the wheel notch of the carousel). The
@@ -7311,10 +7374,13 @@ function NextCategory(delta)
 		if #list == 0 then return end
 		local j = 0
 		for k, i in ipairs(list) do if i == active then j = k end end
+		M.catWay = delta < 0 and 'prev' or 'next'
 		if j == 0 then SetCategory(list[1]) return end
 		SetCategory(list[(j - 1 + delta) % #list + 1])
 		return
 	end
+	-- (round past the last: still the next one, for its sound)
+	M.catWay = delta < 0 and 'prev' or 'next'
 	SetCategory((active - 1 + delta) % #cats + 1)
 end
 
@@ -7583,7 +7649,7 @@ function OskPress(i)
 	if not ready or not key then return end
 	if not typing then SearchOpen() end
 	osk.sel = i
-	M.sound('key')
+	M.sound('key', key.value == 'BACK' and 'delete' or key.value == 'DONE' and 'done' or nil)
 	if key.value == 'DONE' then
 		PadStart()
 		return
@@ -7631,7 +7697,7 @@ oskMove = function(dx, dy)
 			if key.row == row and mid >= key.col and mid < key.col + key.span then osk.sel = i break end
 		end
 	end
-	if OSK[osk.sel] ~= cur then M.sound('move') end
+	if OSK[osk.sel] ~= cur then M.sound('move', M.way(dx, dy)) end
 	renderOsk()
 end
 

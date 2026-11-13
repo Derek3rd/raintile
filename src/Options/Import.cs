@@ -483,7 +483,7 @@ namespace RaintileOptions
             overlay.Visibility = Visibility.Collapsed;
             autoAdding = false;
             string text = error ?? (added == null || added.Count == 0 ? "No game to add: every game found is already among the tiles."
-                : AutoAddedText(added) + " Their tiles have a dot in their category (Categories) until you select them. Save and refresh to see them in the launcher.");
+                : AutoAddedText(added) + " Open their category (Categories) to see them, with a dot. Save and refresh to see them in the launcher.");
             ShowDialog("Auto add games", text);
         }
 

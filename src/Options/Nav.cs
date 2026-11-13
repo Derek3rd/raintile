@@ -362,7 +362,7 @@ namespace RaintileOptions
                 if ((tag.Id == "page:import" || tag.Id == "page:found") && navDots.Found) tip = "New games or apps found, or tiles of games no longer installed.";
                 else if (tag.Id == "page:info" && navDots.Update) tip = "A new version of Raintile is available.";
                 else if ((tag.Id == "categories" && navDots.NewTileFiles.Count > 0) || (tag.Type == "category" && navDots.NewTileFiles.Contains(tag.File)))
-                    tip = "Games added by themselves: their tiles have a dot until you select them.";
+                    tip = "Games added by themselves: open the category to see them.";
                 tag.Dot.Visibility = tip != null ? Visibility.Visible : Visibility.Collapsed;
                 tag.DotTip = tip;
             }
@@ -534,6 +534,8 @@ namespace RaintileOptions
                 case "widget": ShowWidgetPage(tag.File); break;
                 default: return;
             }
+            // the Categories page: the tiles added by themselves have been seen
+            if (tag.Id == "categories") SetNewTilesSeen(null);
             navCurrent = tag.Id;
         }
 

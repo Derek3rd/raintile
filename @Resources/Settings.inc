@@ -440,10 +440,10 @@ ScanOnStart=1
 ; turned on in Options, every game not among the tiles yet at once, then each
 ; new one the search finds (on every skin load and when Options > Found
 ; opens), to ImportCategory or to its folder's own category. Apps are still
-; picked by hand. A dot on the gear, on the category in Options and on the
-; tiles marks what was added until the tile is selected there. Games already
-; handled are remembered (AutoAdded.txt in the data folder): a game tile you
-; remove does not come back (add it again from Found).
+; picked by hand. A dot on the gear and on the category in Options marks what
+; was added until the category is opened there. Games already handled are
+; remembered (AutoAdded.txt in the data folder): a game tile you remove does
+; not come back (add it again from Found).
 AutoAddGames=0
 ; Categories where games and apps go when added
 ImportCategory=Games

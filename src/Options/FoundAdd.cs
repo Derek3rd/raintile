@@ -15,7 +15,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Windows;
 
 namespace RaintileOptions
 {
@@ -242,18 +241,19 @@ namespace RaintileOptions
             return newTiles;
         }
 
-        bool IsNewTile(string file, string name)
-        {
-            return NewTiles().Any(t => string.Equals(t.File, file, StringComparison.OrdinalIgnoreCase) && t.Name == name);
-        }
+        // The new tiles of the category shown when it was opened: their dot stays
+        // in its strip while it is shown, the menu and the gear forget them at once
+        HashSet<string> newShown = new HashSet<string>();
 
-        // A new tile shown in its category (selected in the strip): not new any more
-        void SetTileSeen(ListTag tag)
+        // A category opened (null: the Categories page, every category): its new
+        // tiles have been seen
+        void SetNewTilesSeen(string file)
         {
-            if (!IsNewTile(currentFile, tag.Section.Name)) return;
-            newTiles.RemoveAll(t => string.Equals(t.File, currentFile, StringComparison.OrdinalIgnoreCase) && t.Name == tag.Section.Name);
+            var seen = NewTiles().Where(t => file == null || string.Equals(t.File, file, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (file != null) newShown = new HashSet<string>(seen.Select(t => t.Name));
+            if (seen.Count == 0) return;
+            newTiles.RemoveAll(seen.Contains);
             WriteNewTiles(newTiles.Select(t => t.File + "|" + t.Name));
-            tag.Dot.Visibility = Visibility.Collapsed;
             NewTilesChanged();
         }
 

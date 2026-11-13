@@ -480,7 +480,7 @@ namespace RaintileOptions
                 Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = ResBrush("AccentBrush"),
                 BorderBrush = ResBrush("CardBg"), BorderThickness = T(1.5), Margin = T(0, 3, 3, 0),   // ui-exempt: drawn on the thumbnail
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-                Visibility = Visibility.Collapsed, ToolTip = "Added by itself: new",
+                Visibility = Visibility.Collapsed, ToolTip = "Added by itself since the category was last opened",
             };
             g.Children.Add(dot);
             AddTo(sp, g);
@@ -531,7 +531,7 @@ namespace RaintileOptions
             SetStripThumb(tag, GetBitmap(bg, 264), GetBitmap(logo, 160), GetTileBrush(b, s, bg, logo));
             tag.Own.Visibility = !tag.Imported && HasOwnValues(s) ? Visibility.Visible : Visibility.Collapsed;
             tag.Pin.Visibility = !tag.Imported && IsPinned(s) ? Visibility.Visible : Visibility.Collapsed;
-            tag.Dot.Visibility = !tag.Imported && IsNewTile(currentFile, s.Name) ? Visibility.Visible : Visibility.Collapsed;
+            tag.Dot.Visibility = !tag.Imported && newShown.Contains(s.Name) ? Visibility.Visible : Visibility.Collapsed;
         }
 
         // Only the marks of own settings: placement changes leave the small tiles as they are
@@ -641,12 +641,13 @@ namespace RaintileOptions
         }
 
         // Tiles of the category chosen in the menu
-        // (with tiles added by themselves: All tiles selected, so the dots of
-        // every new one are there to see)
+        // (with tiles added by themselves: seen now, All tiles selected, so the
+        // dots of every new one are there to see)
         void ShowCategory()
         {
             if (tilesList == null) return;
-            RefreshTiles(NewTiles().Any(t => string.Equals(t.File, currentFile, StringComparison.OrdinalIgnoreCase)) ? -1 : 0);
+            SetNewTilesSeen(currentFile);
+            RefreshTiles(newShown.Count > 0 ? -1 : 0);
         }
 
         // The tile opened from the launcher's menu (Edit this tile)
@@ -1522,7 +1523,6 @@ namespace RaintileOptions
             loading = true;
             var s = GetShownTile();
             var sel = TagOf(tilesList.SelectedItem);
-            if (sel != null && sel.Section != null && !sel.All && !sel.Imported) SetTileSeen(sel);
             bool imported = sel != null && sel.Imported;
             bool all = sel != null && sel.All;
             tileCard.IsEnabled = s != null && !imported;

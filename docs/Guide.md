@@ -940,7 +940,7 @@ The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your da
 
 ## Troubleshooting
 
-- **First stop: the Rainmeter log** (*Manage* > *Log*). Raintile's messages start with `Raintile:`. Set `DebugLog=1` for more detail.
+- **First stop: the Rainmeter log** (right click on the Rainmeter icon in the taskbar > *About* > *Log*; to keep it in a file, *Manage* > *Settings* > *Log to file*: `%APPDATA%\Rainmeter\Rainmeter.log`). Raintile's messages start with `Raintile:`. Set `DebugLog=1` for more detail.
 - **The keys or the gamepad don't work**: both come from the background helper, started with the skin; a second or two after a refresh it is ready. In Rainmeter use **Refresh all** (not just *Refresh skin*) after an update. If the keyboard hook cannot start, the log says so (`Raintile: the keyboard hook could not start`).
 - **A category icon doesn't show**: the icon goes in `Images\<file name>\icon.png` — the folder is named after the category *file* (`Games`), not its menu label. The log shows exactly where it looked (`Raintile: no icon for category ...`).
 - **A tile image doesn't show**: check the file name matches the tile name (or its `Image`/`Background`/`Logo` key); explicit names that are not found are logged.

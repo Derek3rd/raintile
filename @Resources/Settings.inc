@@ -456,7 +456,7 @@ CheckUpdates=1
 UpdateChannel=Release
 
 ; --- Diagnostics ----------------------------------------------------------------
-; 1 = write to the Rainmeter log (Manage > Log) what happens on confirm, on
+; 1 = write to the Rainmeter log (About > Log) what happens on confirm, on
 ; tile launch and on show/hide, and the keys pressed while it has the keys
 DebugLog=0
 

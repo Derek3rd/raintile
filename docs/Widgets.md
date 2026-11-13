@@ -257,7 +257,7 @@ Use a key only for the service it is for, never write it to a file or a log, and
 1. Copy the folder to `Widgets\<Id>\` in the data folder (with the repository linked as the skin, `widgets\<Id>\` of the repository is not read by the launcher).
 2. Add a tile with `Widget=custom`, `Param=<Id>`, refresh the skin.
 3. A widget that is not shown says why on its tile: the file looked for, a file with no meters and no `List=`, a UTF-16 file.
-4. Errors of formulas and bangs go to Rainmeter's log (Manage > Log), under the names with the prefix (`CW11_Read`).
+4. Errors of formulas and bangs go to Rainmeter's log (About > Log: right click on the Rainmeter icon in the taskbar), under the names with the prefix (`CW11_Read`).
 
 ## Publishing in the gallery
 

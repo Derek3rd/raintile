@@ -399,7 +399,7 @@ namespace RaintileOptions
                 } },
                 new Group { Title = "Diagnostics", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "DebugLog", Label = "Debug log", Help = "Writes details to the Rainmeter log (Manage > Log)." },
+                    new Item { Kind = "bool", Key = "DebugLog", Label = "Debug log", Help = "Writes details to the Rainmeter log (About > Log)." },
                 } },
                 new Group { Title = "Other settings", Help = null, Other = true, Items = new List<Item>
                 {

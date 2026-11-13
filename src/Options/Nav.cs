@@ -670,7 +670,7 @@ namespace RaintileOptions
                     try { Directory.Delete(folder, true); } catch { }
                 }
                 ShowDialog("Update Raintile", "Raintile " + latest + " is installed. Rainmeter reloads now.\r\n\r\nThe previous files are in:\r\n" + backup);
-                // every skin is reloaded (new mini-skins and scripts are seen);
+                // every skin is reloaded (new skins and scripts are seen);
                 // the launcher shows itself once loaded
                 WriteShowOnLoad();
                 win.Close();

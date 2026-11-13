@@ -248,7 +248,7 @@ Use a key only for the service it is for, never write it to a file or a log, and
 
 - A widget is self-contained: its files in its folder, nothing installed elsewhere, nothing left running.
 - Nothing runs while the launcher is hidden: no timers, no polling; work starts from `OnShow` (and can stop on `OnHide`).
-- No plugins beyond Rainmeter's own (and HotKey); no DLLs of your own.
+- No plugins beyond Rainmeter's own; no DLLs of your own.
 - Text: ASCII in the `.ini` and the scripts (`[\xHHHH]` in a meter's text for other characters), files UTF-8 without BOM.
 - Widgets are Rainmeter code and can run programs: the gallery reviews them before they are listed.
 

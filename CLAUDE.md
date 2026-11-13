@@ -19,7 +19,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - Keep the author's style: do not restructure or reformat code that is not part of the change.
 
 ## Layout
-- `Raintile.ini`: main skin. `Hotkey/`, `Navigation/`, `Typing/`, `TileKeys/`: helper skins the launcher loads and unloads itself.
+- `Raintile.ini`: main skin. `Rainside/`: the Rainside, the same skin run as a bar, loaded by the launcher.
 - `@Resources/Scripts/Raintile.lua`: launcher logic.
 - `@Resources/Scripts/*.ps1`: background jobs (`Scan`, `Thumbs`, `Update`, `Data`, `Helper`, `Playtime`, `GameUpdates`).
 - `src/Options/`: the Options window (`RaintileOptions.exe`, C# 7.3, WPF), one file per page or feature. The workflows build it into `@Resources/Bin/`; without its window (`-Action`) it also runs the tile menu's *Run as administrator* and *Remove*. Its styles are in `@Resources/Scripts/Options.xaml`, the settings schema (pages, menu, defaults) in `src/Options/SchemaData.cs`. There is no other Options window: without the program the skin says it is missing.
@@ -41,12 +41,12 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - Scripts and tools never hide a failure: a step that can fail is checked (its exit code, its `RESULT:`), never sent to `Out-Null` or `2>$null` when the next step depends on it, and the tool stops with what failed. A silent failure makes the next step work on stale data (a program not rebuilt, shots of the old one).
 - Lua 5.1 allows at most 200 locals per function, the main chunk included: put new functions in the existing tables (`D` for the Dashboard, `M` for the rest) instead of new top-level locals.
 - No update cycle (`Update=-1`): the skin redraws only on events, and animations run on ActionTimer only while something moves. Never add polling or a timer that runs at rest. Animations are time-based (`M.animScale`), so they last the same at every frame rate.
-- Keys and gamepad act only while the launcher has the focus (`M.focused`, set by `Show`, `FocusLost`/`FocusGained` from the helper): HotKey mini-skins are turned on through `hotKey()`, gamepad buttons other than open/close reach the skin through `Pad()`. The mouse always works.
+- Keys and gamepad act only while the launcher has the focus (`M.focused`, set by `Show`, `FocusLost`/`FocusGained` from the helper): the keys the helper hooks (`Generated/HotKeys.txt`, `M.writeKeys()`) change through `hotKey()`, gamepad buttons other than open/close reach the skin through `Pad()`. The mouse always works.
 - The helper (`Helper.ps1`) may push live data to the skin (Dashboard, Steam downloads) only while it is shown, and only when the data changes: the skin asks for it with a flag file in `Generated/` written on show and removed on hide.
 - Fixed number of meters: the grid is generated into `Generated/Grid.inc` and tiles are shown or hidden. Never one meter per tile. When the meters written by `writeGrid()` change, bump `GRID_VERSION` in `Raintile.lua`, or skins with the old `Grid.inc` keep it and the new meters do not exist.
 - LinearGradient angles in Rainmeter run the other way round (0 = right to left).
 - Image names: with or without extension; a dot in a tile name is not an extension (`Battle.net` -> `Battle.net.png`).
-- Dependencies: Rainmeter built-in plugins (ActionTimer, InputText, RunCommand) plus HotKey; .NET Framework 4.8 for the Options program. No new plugins, DLLs or PowerShell modules.
+- Dependencies: Rainmeter built-in plugins only (ActionTimer, InputText, RunCommand; the keyboard is the helper's hook); .NET Framework 4.8 for the Options program. No new plugins, DLLs or PowerShell modules.
 - User data lives in `#SETTINGSPATH#Raintile\` (`%APPDATA%\Rainmeter\Raintile`), never in the skin folder, so `.rmskin` updates do not touch it.
 - A new setting goes into `@Resources/Settings.inc` with its comment and default, and into `src/Options/SchemaData.cs` (`tools/check.py` compares the two), with its range: what the value can be (a number: its minimum and maximum, whether it can be negative or have decimals; a size is never negative), so the window refuses the rest, on the page of the part of the launcher it changes, after the setting it depends on and with its `When` (`docs/OptionsUI.md`, "Where a setting goes"); `Data.ps1` merges it into the user's file. Keep `Data.ps1` idempotent and never let it lose user values. Profiles (General > Profiles) hold every setting but those in `PROFILE_EXCLUDED` of `SchemaData.cs`: a new setting that belongs to this PC, to the games data or is a secret goes there; a new look key of `[Category]` goes into `CATEGORY_LOOK` (`tools/check.py` checks both).
 - Pass the resources path as `"#@#."`: a trailing backslash would escape the closing quote.

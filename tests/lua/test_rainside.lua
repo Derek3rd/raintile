@@ -123,6 +123,13 @@ function T.launcher_side()
 	local M = s:upvalue('M')
 	t.ok(M.sideCat and M.sideCat.file == 'Apps.ini', 'the Rainside\'s category not kept for search')
 	t.ok(logged(s, '!ActivateConfig Raintile\\Rainside Rainside.ini'), 'the launcher did not load the Rainside')
+	t.clean(s)
+	-- its key (RainsideHotKey), in the launcher's list: Toggle() of the Rainside
+	s = R.new({ settings = { Rainside = 1, RainsideCategory = 'Apps', RainsideHotKey = 'CTRL ALT R' } }):start()
+	s:call('Hide()')
+	t.ok((R.readFile(s.resources .. 'Generated\\HotKeys.txt') or ''):find('CTRL ALT R|down|Raintile\\Rainside|Toggle()', 1, true),
+		'the Rainside\'s key is not for the Rainside')
+	s:call('Show()')
 	-- search finds its tiles
 	s:call("SearchOpen()")
 	s:call("TypeKey('C')")
@@ -149,7 +156,8 @@ function T.keys_to_the_rainside()
 	local s = R.new({ settings = { Rainside = 1, RainsideCategory = 'Apps' } }):start()
 	s:call('Hide()')
 	s:call('RainsideFocus(1)')
-	t.ok(logged(s, '!ActivateConfig Raintile\\Navigation'), 'the arrows are off while the Rainside has the keys')
+	local keys = R.readFile(s.resources .. 'Generated\\HotKeys.txt') or ''
+	t.ok(keys:find('UP|down|Raintile|Nav(0,-1)', 1, true), 'the arrows are off while the Rainside has the keys')
 	s:call('Nav(0, 1)')
 	t.ok(logged(s, '!CommandMeasure MeasureScript Nav(0,1) Raintile\\Rainside'), 'the arrow did not go to the Rainside')
 	s:call("Pad('Confirm')")

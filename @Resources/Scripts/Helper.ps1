@@ -21,6 +21,10 @@
 # through the skin's Pad(), which ignores it while the launcher is hidden or
 # does not have the focus.
 #
+# Keyboard (RaintileKeys): the keys the skin lists in Generated\HotKeys.txt
+# (open/close, the tiles' hot keys, and while the launcher has the focus Esc,
+# the navigation or the letters of the search), with a keyboard hook.
+#
 # Focus: while the launcher is visible, a click outside its window (e.g. on
 # the second monitor, or on a program over it) or another program coming to
 # the foreground sends FocusLost(), a click on it FocusGained(). The skin
@@ -610,6 +614,274 @@ public class RaintileDash
     }
 }
 
+// Keyboard: the keys the skin lists in Generated\HotKeys.txt, one per line
+// "<keys>|<down/up>|<config>|<function>" (the keys as in Settings.inc:
+// "CTRL ALT G", "ESCAPE"), last line "end"; "log" writes every key to the
+// Rainmeter log (DebugLog). The skin rewrites the list when it changes (shown,
+// hidden, focus, typing). A low-level keyboard hook with the rules of the
+// HotKey plugin it replaces: the function runs when a key of the combination
+// goes down (or, "up", is released) while the others are held, again on every
+// repeat; the key still reaches the program in front. No hook while the list
+// is empty. The hook only queues the call: another thread sends it, so a busy
+// Rainmeter never slows the keys of the PC down.
+public class RaintileKeys
+{
+    public class Binding { public int[] Keys; public bool Up; public string Config, Function; }
+
+    // The plugin's key names
+    static readonly Dictionary<string, int> Names = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "LBUTTON", 0x01 }, { "RBUTTON", 0x02 }, { "MBUTTON", 0x04 }, { "XBUTTON1", 0x05 }, { "XBUTTON2", 0x06 },
+        { "BACKSPACE", 0x08 }, { "TAB", 0x09 }, { "ENTER", 0x0D }, { "SHIFT", 0x10 }, { "CTRL", 0x11 }, { "ALT", 0x12 },
+        { "PAUSE", 0x13 }, { "CAPSLOCK", 0x14 }, { "ESCAPE", 0x1B }, { "SPACE", 0x20 }, { "PAGEUP", 0x21 }, { "PAGEDOWN", 0x22 },
+        { "END", 0x23 }, { "HOME", 0x24 }, { "LEFT", 0x25 }, { "UP", 0x26 }, { "RIGHT", 0x27 }, { "DOWN", 0x28 },
+        { "PRINTSCREEN", 0x2C }, { "INSERT", 0x2D }, { "DELETE", 0x2E }, { "LWIN", 0x5B }, { "RWIN", 0x5C }, { "MENU", 0x5D },
+        { "MULT", 0x6A }, { "ADD", 0x6B }, { "SUBTRACT", 0x6D }, { "DECIMAL", 0x6E }, { "DIVIDE", 0x6F },
+        { "NUMLOCK", 0x90 }, { "SCROLLLOCK", 0x91 },
+        { "LSHIFT", 0xA0 }, { "RSHIFT", 0xA1 }, { "LCTRL", 0xA2 }, { "RCTRL", 0xA3 }, { "LALT", 0xA4 }, { "RALT", 0xA5 },
+        { "COLON", 0xBA }, { "PLUS", 0xBB }, { "COMMA", 0xBC }, { "MINUS", 0xBD }, { "PERIOD", 0xBE }, { "FORWARDSLASH", 0xBF },
+        { "BACKTICK", 0xC0 }, { "LBRACKET", 0xDB }, { "BACKSLASH", 0xDC }, { "RBRACKET", 0xDD }, { "QUOTE", 0xDE },
+    };
+
+    static RaintileKeys()
+    {
+        for (int n = 0; n <= 9; n++) Names["NUM" + n] = 0x60 + n;
+        for (int n = 1; n <= 24; n++) Names["F" + n] = 0x6F + n;
+    }
+
+    [DllImport("user32.dll")] static extern short VkKeyScanEx(char c, IntPtr layout);
+    [DllImport("user32.dll")] static extern IntPtr GetKeyboardLayout(uint thread);
+
+    // The keys of a combination, as the plugin reads them: one character (the
+    // key that types it), a name, or a number (0x.., 0o.., 0b.., decimal). A
+    // generic modifier (CTRL) covers its left and right keys. Sorted; null if
+    // a key is not valid (the plugin dropped the whole combination).
+    public static int[] ParseCombo(string text)
+    {
+        var keys = new List<int>();
+        foreach (string token in (text ?? "").Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            int vk = 0;
+            char c = token[0];
+            if (token.Length == 1)
+            {
+                // letters and digits are their own key on every layout
+                if (c >= 'a' && c <= 'z') vk = c - 'a' + 'A';
+                else if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) vk = c;
+                else vk = VkKeyScanEx(c, GetKeyboardLayout(0)) & 0xFF;
+            }
+            else if (c == '0' && (token[1] == 'x' || token[1] == 'o' || token[1] == 'b'))
+            {
+                try { vk = Convert.ToInt32(token.Substring(2), token[1] == 'x' ? 16 : token[1] == 'o' ? 8 : 2); }
+                catch (FormatException) { vk = 0; }
+                catch (ArgumentException) { vk = 0; }
+                catch (OverflowException) { vk = 0; }
+            }
+            else if (!Names.TryGetValue(token, out vk))
+            {
+                // a decimal number: its leading digits, as wcstol
+                int i = 0;
+                while (i < token.Length && i < 4 && token[i] >= '0' && token[i] <= '9') vk = vk * 10 + (token[i++] - '0');
+            }
+            if (vk < 0x01 || vk > 0xFE) return null;
+            if (!keys.Contains(vk)) keys.Add(vk);
+        }
+        if (keys.Count == 0) return null;
+        // SHIFT covers LSHIFT and RSHIFT, CTRL and ALT theirs
+        if (keys.Contains(0x10)) keys.RemoveAll(k => k == 0xA0 || k == 0xA1);
+        if (keys.Contains(0x11)) keys.RemoveAll(k => k == 0xA2 || k == 0xA3);
+        if (keys.Contains(0x12)) keys.RemoveAll(k => k == 0xA4 || k == 0xA5);
+        keys.Sort();
+        return keys.ToArray();
+    }
+
+    // The plugin's rule: the key that went down (up) is one of the
+    // combination, and the others are held (more keys held do not matter)
+    public static bool Fires(int[] keys, int vk, Func<int, bool> held)
+    {
+        if (Array.IndexOf(keys, vk) < 0) return false;
+        foreach (int k in keys)
+            if (k != vk && !held(k)) return false;
+        return true;
+    }
+
+    // Generated\HotKeys.txt; null while it is incomplete (no "end": being
+    // written). Lines that are not valid are left out.
+    public static List<Binding> ParseList(string[] lines, out bool log)
+    {
+        log = false;
+        var list = new List<Binding>();
+        foreach (string raw in lines)
+        {
+            string line = raw.Trim();
+            if (line == "end") return list;
+            if (line == "log") { log = true; continue; }
+            string[] p = line.Split('|');
+            if (p.Length != 4) continue;
+            int[] keys = ParseCombo(p[0]);
+            string when = p[1].Trim().ToLowerInvariant(), config = p[2].Trim(), function = p[3].Trim();
+            // only a call of the skin's script, with nothing that would end the bang
+            if (keys == null || (when != "down" && when != "up") || config == "" || function.IndexOf('(') < 1
+                || !function.EndsWith(")") || (config + function).IndexOfAny(new[] { '"', '[', ']' }) >= 0) continue;
+            list.Add(new Binding { Keys = keys, Up = when == "up", Config = config, Function = function });
+        }
+        return null;
+    }
+
+    // --- Windows: the hook ------------------------------------------------------
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct Msg { public IntPtr Window; public uint Message; public IntPtr WParam, LParam; public uint Time; public int X, Y; }
+
+    delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)] static extern IntPtr SetWindowsHookEx(int id, HookProc proc, IntPtr module, uint thread);
+    [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
+    [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr GetModuleHandle(string name);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] static extern int GetMessage(out Msg msg, IntPtr window, uint min, uint max);
+    [DllImport("user32.dll")] static extern bool PeekMessage(out Msg msg, IntPtr window, uint min, uint max, uint remove);
+    [DllImport("user32.dll")] static extern bool PostThreadMessage(uint thread, uint msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
+
+    const int WH_KEYBOARD_LL = 13;
+    const uint WM_QUIT = 0x12, WM_APP = 0x8000;
+    static readonly Func<int, bool> Held = k => (GetAsyncKeyState(k) & 0x8000) != 0;
+
+    readonly string file;
+    readonly object loading = new object();
+    readonly System.Collections.Concurrent.BlockingCollection<string> queue = new System.Collections.Concurrent.BlockingCollection<string>();
+    readonly ManualResetEvent started = new ManualResetEvent(false);
+    readonly HookProc proc; // kept here: Windows calls it, the collector must not take it
+    volatile Binding[] bindings = new Binding[0];
+    volatile bool log;
+    uint hookThread;
+    IntPtr hook;
+    System.IO.FileSystemWatcher watcher;
+
+    public RaintileKeys(string file)
+    {
+        this.file = file;
+        proc = Proc;
+    }
+
+    public void Start()
+    {
+        // the hook's thread above the helper's (below normal): Windows waits
+        // for it on every key of the PC, and drops a hook that is too slow
+        new Thread(HookLoop) { IsBackground = true, Priority = ThreadPriority.Highest }.Start();
+        new Thread(SendLoop) { IsBackground = true }.Start();
+        started.WaitOne();
+        watcher = new System.IO.FileSystemWatcher(System.IO.Path.GetDirectoryName(file), System.IO.Path.GetFileName(file));
+        watcher.NotifyFilter = System.IO.NotifyFilters.LastWrite | System.IO.NotifyFilters.FileName | System.IO.NotifyFilters.Size;
+        System.IO.FileSystemEventHandler changed = (s, e) => Load();
+        watcher.Changed += changed;
+        watcher.Created += changed;
+        watcher.Deleted += changed;
+        watcher.Renamed += (s, e) => Load();
+        watcher.Error += (s, e) => Load();
+        watcher.EnableRaisingEvents = true;
+        Load();
+    }
+
+    public void Stop()
+    {
+        if (watcher != null) watcher.Dispose();
+        PostThreadMessage(hookThread, WM_QUIT, IntPtr.Zero, IntPtr.Zero);
+        queue.CompleteAdding();
+    }
+
+    // The list read again; while the skin is writing it (locked, or no "end"
+    // yet) a few more tries
+    void Load()
+    {
+        lock (loading)
+        {
+            for (int i = 0; i < 20; i++)
+            {
+                try
+                {
+                    string[] lines = System.IO.File.Exists(file) ? System.IO.File.ReadAllLines(file) : new[] { "end" };
+                    bool l;
+                    List<Binding> list = ParseList(lines, out l);
+                    if (list != null)
+                    {
+                        bindings = list.ToArray();
+                        log = l;
+                        PostThreadMessage(hookThread, WM_APP, IntPtr.Zero, IntPtr.Zero);
+                        return;
+                    }
+                }
+                catch (System.IO.IOException) { }
+                catch (UnauthorizedAccessException) { }
+                Thread.Sleep(25);
+            }
+        }
+    }
+
+    void HookLoop()
+    {
+        Msg msg;
+        hookThread = GetCurrentThreadId();
+        PeekMessage(out msg, IntPtr.Zero, 0, 0, 0); // the thread's queue, before anything is posted to it
+        started.Set();
+        while (GetMessage(out msg, IntPtr.Zero, 0, 0) > 0)
+            if (msg.Message == WM_APP) SetHook(bindings.Length > 0);
+        SetHook(false);
+    }
+
+    void SetHook(bool on)
+    {
+        if (on && hook == IntPtr.Zero)
+        {
+            hook = SetWindowsHookEx(WH_KEYBOARD_LL, proc, GetModuleHandle(null), 0);
+            if (hook == IntPtr.Zero)
+                Post("[!Log \"Raintile: the keyboard hook could not start (error " + Marshal.GetLastWin32Error() + "): no keys\" Error]");
+        }
+        else if (!on && hook != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(hook);
+            hook = IntPtr.Zero;
+        }
+    }
+
+    IntPtr Proc(int code, IntPtr wParam, IntPtr lParam)
+    {
+        // (nothing may escape from here: Windows called it)
+        try
+        {
+            int m = (int)wParam;
+            bool down = m == 0x100 || m == 0x104, up = m == 0x101 || m == 0x105; // WM_(SYS)KEYDOWN, WM_(SYS)KEYUP
+            if (code >= 0 && (down || up))
+            {
+                int vk = Marshal.ReadInt32(lParam);
+                if (log) Post("[!Log \"Raintile: key 0x" + vk.ToString("X2") + " (" + vk + ") " + (up ? "up" : "down") + "\"]");
+                foreach (Binding b in bindings)
+                    if (b.Up == up && Fires(b.Keys, vk, Held)) Post(RaintilePad.CallTo(b.Config, b.Function));
+            }
+        }
+        catch { }
+        return CallNextHookEx(hook, code, wParam, lParam);
+    }
+
+    // (after Stop the queue takes nothing more)
+    void Post(string bang)
+    {
+        try { queue.Add(bang); }
+        catch (InvalidOperationException) { }
+    }
+
+    void SendLoop()
+    {
+        foreach (string bang in queue.GetConsumingEnumerable())
+        {
+            IntPtr window = RaintilePad.RainmeterWindow();
+            if (window != IntPtr.Zero) RaintilePad.Send(window, bang);
+        }
+    }
+}
+
 public class RaintilePad
 {
     // XInput buttons
@@ -739,7 +1011,7 @@ public class RaintilePad
         return CallTo(config, function);
     }
 
-    static string CallTo(string skin, string function)
+    internal static string CallTo(string skin, string function)
     {
         return "[!CommandMeasure MeasureScript \"" + function + "\" \"" + skin + "\"]";
     }
@@ -875,7 +1147,7 @@ public class RaintilePad
     [DllImport("user32.dll")]
     static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wParam, ref CopyData data);
 
-    static IntPtr RainmeterWindow()
+    internal static IntPtr RainmeterWindow()
     {
         return FindWindow("DummyRainWClass", null);
     }
@@ -1636,7 +1908,7 @@ public class RaintilePad
     public string SideDashFlag;
     int dashPort = 8085;
 
-    static void Send(IntPtr window, string bang)
+    internal static void Send(IntPtr window, string bang)
     {
         IntPtr text = Marshal.StringToHGlobalUni(bang);
         try
@@ -2033,4 +2305,10 @@ if ($pad.TrackEnabled) {
     $pad.PlayedFile = Join-Path $Data 'TimePlayed.txt'
     $pad.ExeFile = Join-Path $Data 'GameExe.txt'
 }
-try { $pad.Run($quit) } finally { $pad.ReleaseBar(); $mutex.ReleaseMutex() }
+# the keyboard (Generated\HotKeys.txt, written by the skin)
+$keys = $null
+if ($Generated) {
+    $keys = New-Object RaintileKeys((Join-Path $Generated 'HotKeys.txt'))
+    $keys.Start()
+}
+try { $pad.Run($quit) } finally { if ($keys) { $keys.Stop() }; $pad.ReleaseBar(); $mutex.ReleaseMutex() }

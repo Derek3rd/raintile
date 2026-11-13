@@ -168,14 +168,19 @@ end
 
 -- Focus ---------------------------------------------------------------------------
 
--- Whether a key mini-skin (Navigation, Hotkey, Typing) is on: the last
--- !ActivateConfig or !DeactivateConfig the launcher sent for it.
+-- The keys the helper hooks now (Generated\\HotKeys.txt), one line each
+local function keyLines(s)
+	local lines = {}
+	for line in (R.readFile(s.resources .. 'Generated\\HotKeys.txt') or ''):gmatch('[^\r\n]+') do lines[#lines + 1] = line end
+	return lines
+end
+
+-- Whether a set of keys is on: Navigation (the arrows), Close (Esc), Typing
+-- (the letters of the search)
+local KEY_SETS = { Navigation = 'UP|down|Raintile|Nav(0,-1)', Close = 'ESCAPE|down|Raintile|Escape()', Typing = "A|down|Raintile|TypeKey('a')" }
 local function keysOn(s, name)
-	local target = 'raintile\\' .. name:lower()
-	for k = #s.log, 1, -1 do
-		local e = s.log[k]:lower() .. ' '
-		if e:find('!activateconfig ' .. target .. ' ', 1, true) == 1 then return true end
-		if e:find('!deactivateconfig ' .. target .. ' ', 1, true) == 1 then return false end
+	for _, line in ipairs(keyLines(s)) do
+		if line == KEY_SETS[name] then return true end
 	end
 	return false
 end
@@ -185,8 +190,77 @@ local function opened(settings)
 	local s = launcher(settings)
 	s:call('Hide()')
 	s:call('Show()')
-	t.ok(keysOn(s, 'Navigation') and keysOn(s, 'Hotkey'), 'the keys are off after Show()')
+	t.ok(keysOn(s, 'Navigation') and keysOn(s, 'Close'), 'the keys are off after Show()')
 	return s
+end
+
+-- The list for the helper: complete, the keys as in Settings.inc, Confirm
+-- and Search on release; hidden, only the open/close key
+function T.keys_for_the_helper()
+	local s = opened()
+	local lines = keyLines(s)
+	t.eq(lines[#lines], 'end', 'the list does not end with "end"')
+	local has = {}
+	for _, line in ipairs(lines) do has[line] = true end
+	for _, want in ipairs({ 'CTRL ALT G|down|Raintile|Toggle()', 'ESCAPE|down|Raintile|Escape()', 'W|down|Raintile|Nav(0,-1)',
+		'ENTER|up|Raintile|Confirm()', 'SPACE|up|Raintile|Confirm()', 'Q|down|Raintile|NextCategory(-1)', 'F|up|Raintile|SearchOpen()' }) do
+		t.ok(has[want], 'missing: ' .. want)
+	end
+	t.ok(not keysOn(s, 'Typing'), 'the letters of the search are on without typing')
+	t.ok(not has['log'], 'the keys logged without DebugLog')
+	s:call('Hide()')
+	lines = keyLines(s)
+	t.eq(table.concat(lines, ' / '), 'CTRL ALT G|down|Raintile|Toggle() / end', 'hidden: more than the open/close key')
+	t.clean(s)
+	-- no keyboard navigation: Esc only
+	s = launcher({ KeyboardNav = 0, CloseHotKey = '' })
+	s:call('Hide()')
+	s:call('Show()')
+	t.ok(not keysOn(s, 'Navigation') and not keysOn(s, 'Close'), 'keys on with KeyboardNav=0 and no close key')
+	t.clean(s)
+	-- DebugLog: the keys are logged only while the launcher has them
+	s = opened({ DebugLog = 1 })
+	has = {}
+	for _, line in ipairs(keyLines(s)) do has[line] = true end
+	t.ok(has['log'], 'DebugLog: the keys not logged')
+	s:call('Hide()')
+	has = {}
+	for _, line in ipairs(keyLines(s)) do has[line] = true end
+	t.ok(not has['log'], 'DebugLog: the keys logged with the launcher hidden')
+	t.clean(s)
+end
+
+-- The tiles' hot keys: always listed (TileKeysWhen=Always), or only while the
+-- launcher has the focus (Open); none in Grid.inc (no plugin)
+function T.tile_hot_keys()
+	for _, when in ipairs({ 'Always', 'Open' }) do
+		local s = R.new({ settings = { TileKeysWhen = when } })
+		local cat = s.data .. 'Categories\\Apps.ini'
+		R.writeFile(cat, R.readFile(cat):gsub('(%[Calculator%]\r?\n)', '%1HotKey=CTRL ALT 1\r\n', 1))
+		s:start()
+		local function listed()
+			for _, line in ipairs(keyLines(s)) do
+				if line == 'CTRL ALT 1|down|Raintile|TileHotKey(1)' then return true end
+			end
+			return false
+		end
+		s:call('Hide()')
+		t.eq(listed(), when == 'Always', when .. ': the tile key with the launcher hidden')
+		s:call('Show()')
+		t.ok(listed(), when .. ': no tile key with the launcher open')
+		s:call('FocusLost()')
+		t.eq(listed(), when == 'Always', when .. ': the tile key without the focus')
+		t.ok(not (R.readFile(s.resources .. 'Generated\\Grid.inc') or ''):find('Plugin=HotKey', 1, true), 'a HotKey measure in Grid.inc')
+		t.clean(s)
+	end
+end
+
+-- On unload (OnCloseAction) no key is left
+function T.keys_off_on_unload()
+	local s = opened()
+	s:call('KeysOff()')
+	t.eq(table.concat(keyLines(s), ' / '), 'end', 'keys left after the launcher closed')
+	t.clean(s)
 end
 
 -- As a window the launcher stays open beside the program that took the
@@ -199,12 +273,12 @@ function T.window_focus_frees_keys()
 	t.ok(s:upvalue('active') ~= before, 'the gamepad does not switch category')
 	s:call('FocusLost()')
 	t.ok(s:upvalue('visible'), 'the window hid on focus loss')
-	t.ok(not keysOn(s, 'Navigation') and not keysOn(s, 'Hotkey'), 'the keys are still on without the focus')
+	t.ok(not keysOn(s, 'Navigation') and not keysOn(s, 'Close'), 'the keys are still on without the focus')
 	before = s:upvalue('active')
 	s:call("Pad('NextCategory',1)")
 	t.eq(s:upvalue('active'), before, 'category after a gamepad button without the focus')
 	s:call('FocusGained()')
-	t.ok(keysOn(s, 'Navigation') and keysOn(s, 'Hotkey'), 'a click on it did not give the keys back')
+	t.ok(keysOn(s, 'Navigation') and keysOn(s, 'Close'), 'a click on it did not give the keys back')
 	s:call("Pad('NextCategory',1)")
 	t.ok(s:upvalue('active') ~= before, 'the gamepad does not switch category with the focus back')
 	t.clean(s)
@@ -219,7 +293,7 @@ function T.focus_loss_stops_typing()
 	s:call("TypeKey('a')")
 	s:call('FocusLost()')
 	t.ok(not s:upvalue('typing'), 'still typing without the focus')
-	t.ok(not keysOn(s, 'Typing'), 'the Typing mini-skin is still on')
+	t.ok(not keysOn(s, 'Typing'), 'the letters of the search are still on')
 	t.ok(not keysOn(s, 'Navigation'), 'the keys came back after the search without the focus')
 	t.eq(#s:running(), 0, 'animations still running')
 	t.clean(s)

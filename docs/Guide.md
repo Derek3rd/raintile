@@ -76,7 +76,7 @@ You can also toggle it from a Windows shortcut: create a shortcut with this targ
 
 Sizes in percent (margins, menu, fonts) are of the area, not of the window, so they stay the same in every mode.
 
-When the resolution changes or a monitor is added or removed (a game streaming host matching its client, a virtual display), the launcher lays itself out again for its area: at once while you are using it, otherwise the next time it opens, so it never reloads over a game. The [Rainside](#rainside) follows at once.
+When the resolution changes or a monitor is added or removed (a game streaming host matching its client, a virtual display), the launcher lays itself out again for its area: at once while it is on screen (left behind another window, it stays there, without its keys), the next time it opens while it is hidden, so it never shows up over a game. The [Rainside](#rainside) follows at once.
 
 **Compact menu**: when the categories do not all fit in the menu (a narrow window, a launcher docked left or right, or just many categories) the clock, Favorites/Recent/Not played yet, the search, the power button and the gear move into a list opened by the **☰** button at the top left (with the time and date at its top). The categories stay in a strip between it and the X: scroll it with the wheel; its edges fade where more categories are hidden, and it follows the active one. *Search* in that list opens the search bar in the place of the categories.
 

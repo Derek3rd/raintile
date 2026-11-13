@@ -94,8 +94,8 @@ function T.area_file_has_launcher_size()
 end
 
 -- The screens changed (Helper.ps1: DisplayChanged), as when a game streaming
--- host matches its client or adds a virtual display: the launcher in use is
--- laid out again at once, a hidden one when it opens (never under a game),
+-- host matches its client or adds a virtual display: the launcher on screen
+-- is laid out again at once, a hidden one when it opens (never over a game),
 -- and nothing reloads when its monitor did not change.
 function T.follows_display_changes()
 	local s = launcher({})
@@ -123,6 +123,24 @@ function T.follows_display_changes()
 	t.clean(s)
 	t.eq(size(), '1920x1080', 'opened at the old size')
 	t.ok(s:upvalue('visible'), 'not shown after the new layout')
+	t.ok(s:upvalue('M').focused, 'opened without the focus')
+end
+
+-- A window left open behind another one (the focus went elsewhere: the
+-- display settings where the resolution changes) follows at once, and stays
+-- behind it, without its keys.
+function T.window_behind_follows_display_changes()
+	local s = launcher({ LauncherMode = 'Window', WindowW = '70%', WindowH = '80%' })
+	s:call('FocusLost()')
+	s:setScreen({ 0, 0, 1366, 768 })
+	s:call('DisplayChanged()')
+	t.clean(s)
+	local V = s:upvalue('V')
+	t.eq(V.ScreenW .. 'x' .. V.ScreenH, math.floor(1366 * 0.7 + 0.5) .. 'x' .. math.floor(768 * 0.8 + 0.5),
+		'not laid out again for the new resolution')
+	t.ok(s:upvalue('visible'), 'hidden by the new layout')
+	t.ok(not s:upvalue('M').focused, 'took the focus from the window in front')
+	t.eq(R.readFile(s.resources .. 'Generated\\ShowOnLoad'), nil, 'ShowOnLoad left behind')
 end
 
 function T.docked_left_session()

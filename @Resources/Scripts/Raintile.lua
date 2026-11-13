@@ -5214,10 +5214,17 @@ function Update()
 	-- With UpdateDivider=-1 this is only called once, on load.
 	if ready then
 		-- left by the Options window ("Save and refresh"): show the launcher
-		-- once loaded, also if it was hidden before the refresh
+		-- once loaded, also if it was hidden before the refresh; "back"
+		-- (M.followDisplay): it was open behind another window, so again,
+		-- without the keys
 		local flag = M.gen('ShowOnLoad')
-		local showNow = fileExists(flag)
-		if showNow then os.remove(flag) end
+		local f = io.open(flag, 'rb')
+		local showNow, back = f ~= nil, false
+		if f then
+			back = f:read('*a') == 'back'
+			f:close()
+			os.remove(flag)
+		end
 		local startHidden = V.StartHidden and not showNow
 		if V.AnimOpen and not startHidden then appear = 0 end
 		-- the Rainside: the grid's container on its own margins (the skin's
@@ -5232,7 +5239,7 @@ function Update()
 		updateDashState()
 		M.sideConfig()
 		if showNow then
-			M.zpos(true)
+			M.zpos(not back)
 			SKIN:Bang('!Show')
 		end
 		if startHidden then
@@ -5243,7 +5250,7 @@ function Update()
 			if V.Side then M.zpos(true) end
 			-- shown on load: ready for the keys and the gamepad, as when opened
 			-- (the Rainside: only its keys give it them)
-			M.focused = not V.Side
+			M.focused = not V.Side and not back
 			hotKey(true)
 			if appear then startTicker() end
 			ClockTick(0)
@@ -5464,28 +5471,29 @@ end
 
 -- The monitor changed (M.areaMoved): laid out again for the one of now. The
 -- skin reloads (writeSizes) and, with show, shows itself once loaded
--- (ShowOnLoad, as after "Save and refresh" in Options). True: it is reloading.
+-- (ShowOnLoad, as after "Save and refresh" in Options): 'front' in use,
+-- 'back' behind the window that has the focus. True: it is reloading.
 function M.followDisplay(show)
 	if not M.areaMoved() then return false end
 	local flag = M.gen('ShowOnLoad')
-	if show then M.keepFile(flag, '1') end
+	if show then M.keepFile(flag, show) end
 	if writeSizes() then return true end
 	if show then M.keepFile(flag, nil) end
 	return false
 end
 
 -- Helper.ps1: the screens changed (a resolution, a monitor added or removed).
--- The launcher in use follows at once; hidden, or left open behind a game,
--- when it is opened next (Show, Toggle), so it never reloads under a game.
--- The Rainside, always there, at once.
+-- The launcher on screen follows at once, as it was (in use, or behind the
+-- window that has the focus); hidden, when it is opened next (Show), so it
+-- never shows up over a game. The Rainside, always there, at once.
 function DisplayChanged()
 	if not ready then return end
 	if V.Side then
-		M.followDisplay(false)
+		M.followDisplay(nil)
 		return
 	end
 	-- (reloading, the launcher reloads the Rainside too: M.sideConfig)
-	if visible and M.focused and not launching and M.followDisplay(true) then return end
+	if visible and not launching and M.followDisplay(M.focused and 'front' or 'back') then return end
 	if M.sideCat then SKIN:Bang('!CommandMeasure', 'MeasureScript', 'DisplayChanged()', V.SideConfig) end
 end
 
@@ -5494,7 +5502,7 @@ end
 function Show(how)
 	dbg('Show: visible=' .. tostring(visible) .. ' how=' .. tostring(how))
 	if not ready then return end
-	if M.followDisplay(true) then return end
+	if M.followDisplay('front') then return end
 	M.sideRelease()
 	-- (the Rainside opened with its keys over a full-screen program: shown)
 	if M.covered then
@@ -5635,7 +5643,6 @@ function Toggle()
 	-- (the open/close key and buttons: shortcuts, off while Options is open)
 	if M.optionsOpen() then return end
 	if visible and not M.focused and not launching then
-		if M.followDisplay(true) then return end
 		M.zpos(true)
 		SKIN:Bang('!Show')
 		M.setFocus(true)

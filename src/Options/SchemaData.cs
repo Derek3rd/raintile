@@ -359,7 +359,7 @@ namespace RaintileOptions
                 {
                 } },
             } },
-            new Page { Id = "import", Title = "Import", Icon = 0xE896, Desc = "Where to look for the games and apps installed on this PC, and where they go. The ones found are on Found, below: pick the ones to add, they become normal tiles with their images. Nothing is added by itself.", Groups = new List<Group>
+            new Page { Id = "import", Title = "Import", Icon = 0xE896, Desc = "Where to look for the games and apps installed on this PC, and where they go. The ones found are on Found, below: pick the ones to add, they become normal tiles with their images. Nothing is added by itself, unless Auto add games is on (Search, below).", Groups = new List<Group>
             {
                 new Group { Title = "Game stores", Help = null, Items = new List<Item>
                 {
@@ -381,6 +381,7 @@ namespace RaintileOptions
                 new Group { Title = "Search", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "ScanOnStart", Label = "Look for new ones on start", Help = "In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear." },
+                    new Item { Kind = "bool", Key = "AutoAddGames", Label = "Auto add games", Help = "Turned on, every game found that is not among the tiles yet becomes a tile at once; then each new one the search finds, on every skin load and when Found opens. They go where games go (above), with a dot on the gear and on their category until you open it. Apps are still picked on Found. A game whose tile you remove does not come back while this stays on: add it again from Found, or turn this off and on again to add back every game missing." },
                     new Item { Kind = "secret", Key = "SteamGridDBKey", Label = "SteamGridDB API key", Help = "Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded. Saved encrypted: only your Windows user on this PC can read it." },
                 } },
             } },
@@ -451,6 +452,7 @@ namespace RaintileOptions
             { "AnimSmooth", "0.3" },
             { "AnimStagger", "2" },
             { "AppsCategory", "Apps" },
+            { "AutoAddGames", "0" },
             { "AutoHide", "1" },
             { "AutoTileColor", "1" },
             { "BgColor", "8,8,12,200" },
@@ -637,7 +639,7 @@ namespace RaintileOptions
         // diagnostics, the sensors' port (this PC) and the play time measured
         // (data). tools/check.py checks that they are settings, and that every
         // secret is here.
-        public static readonly string[] PROFILE_EXCLUDED = { "SteamGridDBKey", "ImportStores", "ImportFolders", "ScanOnStart", "ImportCategory", "AppsCategory", "CheckUpdates", "UpdateChannel", "DebugLog", "SensorPort", "TrackPlaytime" };
+        public static readonly string[] PROFILE_EXCLUDED = { "SteamGridDBKey", "ImportStores", "ImportFolders", "ScanOnStart", "AutoAddGames", "ImportCategory", "AppsCategory", "CheckUpdates", "UpdateChannel", "DebugLog", "SensorPort", "TrackPlaytime" };
         // The look of a category ([Category] of its file) a profile holds: not its
         // name, icon, place, Hidden or Sort, nor its tiles. tools/check.py checks
         // them against the [Category] keys Raintile.lua reads.

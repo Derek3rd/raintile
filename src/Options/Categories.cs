@@ -32,7 +32,8 @@ namespace RaintileOptions
         public bool All;   // the "All tiles" entry of a category: its own settings
         public Border Thumb;
         public TextBlock Title;
-        public FrameworkElement Dot;   // a tile with settings of its own
+        public FrameworkElement Own;   // a tile with settings of its own
+        public FrameworkElement Dot;   // a tile added by itself, not shown yet (NewTiles.txt)
         public FrameworkElement Pin;   // a pinned tile (Pinned=1)
     }
 
@@ -156,13 +157,7 @@ namespace RaintileOptions
 
         CategoryModel GetModel(string file)
         {
-            CategoryModel m;
-            if (!models.TryGetValue(file, out m))
-            {
-                m = Core.ReadCategory(Path.Combine(Core.CategoriesDir, file));
-                models[file] = m;
-            }
-            return m;
+            return GetModel(models, file);
         }
 
         void SetChanged(string file) { changedFiles[file] = true; UpdateDirty(); PreviewChanged(file); }
@@ -456,7 +451,7 @@ namespace RaintileOptions
         }
 
         // Keys a tile can take from All tiles (framing, logo, play time line, TileColor,
-        // TileOpacity, TileSize): a tile with one of them has settings of its own (the dot in the strip)
+        // TileOpacity, TileSize): a tile with one of them has settings of its own (its mark in the strip)
         static readonly string[] OWN_KEYS = { "BgFocus", "BgZoom", "LogoPos", "LogoScale", "InfoPos", "BackLogoPos", "BackLogoScale", "BackInfoPos", "Color", "Opacity", "Size" };
 
         static bool HasOwnValues(IniSection s)
@@ -473,23 +468,21 @@ namespace RaintileOptions
             var thumb = new Border { Height = 68, CornerRadius = new CornerRadius(6), Background = ResBrush("FieldBg"), ClipToBounds = true };
             thumb.Child = new Image { Stretch = Stretch.Uniform, Margin = T(14, 10) };   // ui-exempt: drawn on the thumbnail
             g.Children.Add(thumb);
+            // marks on the thumbnail: pinned at the left, its own settings at the
+            // right, and the dot of what is new (as on the gear and in the menu)
+            // on that corner
+            var pin = NewStripMark(Glyph.Pin, HorizontalAlignment.Left, "Pinned: at the start of the category");
+            g.Children.Add(pin);
+            var own = NewStripMark(Glyph.Own, HorizontalAlignment.Right, "Its own colour, background, framing, logo or play time placement, not the one of All tiles");
+            g.Children.Add(own);
             var dot = new Border
             {
                 Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = ResBrush("AccentBrush"),
-                BorderBrush = ResBrush("CardBg"), BorderThickness = T(1.5), Margin = T(0, 5, 5, 0),   // ui-exempt: drawn on the thumbnail
+                BorderBrush = ResBrush("CardBg"), BorderThickness = T(1.5), Margin = T(0, 3, 3, 0),   // ui-exempt: drawn on the thumbnail
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-                Visibility = Visibility.Collapsed, ToolTip = "Its own colour, background, framing, logo or play time placement, not the one of All tiles",
+                Visibility = Visibility.Collapsed, ToolTip = "Added by itself since the category was last opened",
             };
             g.Children.Add(dot);
-            var pin = new Border
-            {
-                Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = ResBrush("CardBg"),
-                Margin = T(4, 4, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,   // ui-exempt: drawn on the thumbnail VerticalAlignment = VerticalAlignment.Top,
-                Visibility = Visibility.Collapsed, ToolTip = "Pinned: at the start of the category",
-                Child = NewGlyph(Glyph.Pin, Fs.Badge),
-            };
-            ((TextBlock)pin.Child).HorizontalAlignment = HorizontalAlignment.Center;
-            g.Children.Add(pin);
             AddTo(sp, g);
             // a caption under a thumbnail: help size, the full name when it is cut
             var t = NewText(title, Fs.Help);
@@ -497,9 +490,23 @@ namespace RaintileOptions
             SetTrimmed(t);
             AddTo(sp, t);
             item.Content = sp;
-            tag.Thumb = thumb; tag.Title = t; tag.Dot = dot; tag.Pin = pin;
+            tag.Thumb = thumb; tag.Title = t; tag.Own = own; tag.Dot = dot; tag.Pin = pin;
             item.Tag = tag;
             return item;
+        }
+
+        // A mark on a corner of a small tile: a glyph in a round badge
+        Border NewStripMark(int glyph, HorizontalAlignment side, string tip)
+        {
+            var mark = new Border
+            {
+                Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = ResBrush("CardBg"),
+                Margin = T(4), HorizontalAlignment = side, VerticalAlignment = VerticalAlignment.Top,   // ui-exempt: drawn on the thumbnail
+                Visibility = Visibility.Collapsed, ToolTip = tip, Child = NewGlyph(glyph, Fs.Badge),
+            };
+            ((TextBlock)mark.Child).HorizontalAlignment = HorizontalAlignment.Center;
+            ((TextBlock)mark.Child).VerticalAlignment = VerticalAlignment.Center;
+            return mark;
         }
 
         // A small tile: the background filling it (or the colour) and the logo on it
@@ -522,17 +529,18 @@ namespace RaintileOptions
             string bg = Core.GetTileImage(b, s, "Background"), logo = Core.GetTileImage(b, s, "Logo");
             tag.Title.Text = s.Name;
             SetStripThumb(tag, GetBitmap(bg, 264), GetBitmap(logo, 160), GetTileBrush(b, s, bg, logo));
-            tag.Dot.Visibility = !tag.Imported && HasOwnValues(s) ? Visibility.Visible : Visibility.Collapsed;
+            tag.Own.Visibility = !tag.Imported && HasOwnValues(s) ? Visibility.Visible : Visibility.Collapsed;
             tag.Pin.Visibility = !tag.Imported && IsPinned(s) ? Visibility.Visible : Visibility.Collapsed;
+            tag.Dot.Visibility = !tag.Imported && newShown.Contains(s.Name) ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        // Only the dots: placement changes leave the small tiles as they are
-        void UpdateTileDots()
+        // Only the marks of own settings: placement changes leave the small tiles as they are
+        void UpdateTileOwnMarks()
         {
             foreach (ListBoxItem it in tilesList.Items)
             {
                 var tag = (ListTag)it.Tag;
-                if (tag.Dot != null && !tag.All) tag.Dot.Visibility = !tag.Imported && HasOwnValues(tag.Section) ? Visibility.Visible : Visibility.Collapsed;
+                if (tag.Own != null && !tag.All) tag.Own.Visibility = !tag.Imported && HasOwnValues(tag.Section) ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 
@@ -633,10 +641,13 @@ namespace RaintileOptions
         }
 
         // Tiles of the category chosen in the menu
+        // (with tiles added by themselves: seen now, All tiles selected, so the
+        // dots of every new one are there to see)
         void ShowCategory()
         {
             if (tilesList == null) return;
-            RefreshTiles();
+            SetNewTilesSeen(currentFile);
+            RefreshTiles(newShown.Count > 0 ? -1 : 0);
         }
 
         // The tile opened from the launcher's menu (Edit this tile)
@@ -683,14 +694,7 @@ namespace RaintileOptions
         // A new category file and its image folders
         string NewCategoryFile(string b, string name)
         {
-            var m = new CategoryModel { Header = "; Format: see Games.ini" };
-            var c = Core.GetCategorySection(m);
-            Core.SetKey(c, "Name", name);
-            Core.SetKey(c, "Order", (Core.GetCategoryFiles().Count + 1).ToString());
-            Directory.CreateDirectory(Core.CategoriesDir);
-            Core.WriteCategory(Path.Combine(Core.CategoriesDir, b + ".ini"), m);
-            foreach (var kind in new[] { "background", "logo" }) Directory.CreateDirectory(Path.Combine(Core.ImagesRoot, b, kind));
-            models[b + ".ini"] = m;
+            models[b + ".ini"] = Core.CreateCategoryFile(b, name);
             return b + ".ini";
         }
 
@@ -1008,13 +1012,13 @@ namespace RaintileOptions
             if (!a && !b) return;
             SetChanged(currentFile);
             UpdatePlaceState();
-            UpdateTileDots();
+            UpdateTileOwnMarks();
         }
 
         // The category's placement changed: the dots, the chips and the summary
         void AfterCategoryPlace()
         {
-            UpdateTileDots();
+            UpdateTileOwnMarks();
             UpdatePlaceState();
             UpdatePlacementHint();
         }
@@ -2393,7 +2397,7 @@ namespace RaintileOptions
                 if (t == null) return;
                 ClearPlaceKeys(t, keys);
                 if (IsAllSelected()) AfterCategoryPlace();
-                else { UpdatePlaceState(); UpdateTileDots(); }
+                else { UpdatePlaceState(); UpdateTileOwnMarks(); }
                 UpdateTilePreview();
             };
             btnFrameReset.Click += (s, e) => resetPlace(new[] { "BgFocus", "BgZoom" });
@@ -2610,7 +2614,7 @@ namespace RaintileOptions
                 Core.SetKey(tile, "Opacity", t);
                 SetChanged(currentFile);
                 SetActionVisible(tileOpacityReset, t != "");
-                UpdateTileDots();
+                UpdateTileOwnMarks();
             }, true, 5);
             tileOpacityReset.Click += (s, e) =>
             {
@@ -2618,7 +2622,7 @@ namespace RaintileOptions
                 if (tile == null) return;
                 Core.SetKey(tile, "Opacity", "");
                 SetChanged(currentFile);
-                UpdateTileDots();
+                UpdateTileOwnMarks();
                 ShowTileOpacity(tile);
             };
             var opacityRow = AddTo(f, NewFormRow("Background", tileOpacity.Root, "", null, tileOpacityReset));
@@ -2637,7 +2641,7 @@ namespace RaintileOptions
                 Core.SetKey(t, "Size", c == all[0] && r == all[1] ? "" : c + "x" + r);
                 SetChanged(currentFile);
                 SetActionVisible(tileSizeReset, Core.GetKey(t, "Size") != "");
-                UpdateTileDots();
+                UpdateTileOwnMarks();
                 UpdateTilePreview();
             };
             sizeCols = NewNumberField(1, 8, 1, "columns", sizeChanged);
@@ -2649,7 +2653,7 @@ namespace RaintileOptions
                 if (t == null) return;
                 Core.SetKey(t, "Size", "");
                 SetChanged(currentFile);
-                UpdateTileDots();
+                UpdateTileOwnMarks();
                 ShowTile();
             };
             AddGridOnlyReason(AddTo(f, NewFormRow("Width", sizeCols.Root, "Cells the tile takes in the grid (at most the grid of the category); the other tiles fill the space around it. Without a size of its own it has the one of All tiles. Search, Favorites and Recent show it in one cell.", null, tileSizeReset)));

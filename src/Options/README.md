@@ -13,7 +13,9 @@ The Options window of Raintile as a Windows program: C#, WPF, .NET Framework 4.8
   too: no compiled XAML). The workflows copy `RaintileOptions.exe` to
   `@Resources/Bin/`, where the skin looks for it (`OpenOptions` in `Raintile.lua`).
 - **Arguments**: `-Resources <@Resources> -Data <data folder> -Config <skin>
-  [-Page import|tile|info]`, or `-Action runas|remove` for the tile menu (no window).
+  [-Page import|tile|info|new]` (new: the category of the games added by themselves),
+  or without the window `-Action runas|remove` for the tile menu and `-Action autoadd`
+  for the games added by themselves (after the skin's search).
 
 | File | What it holds |
 | --- | --- |
@@ -24,6 +26,7 @@ The Options window of Raintile as a Windows program: C#, WPF, .NET Framework 4.8
 | `Nav.cs` | menu, pages, Info and updates, start of the window |
 | `Categories.cs` | Categories page, tiles of a category, framing and logo editor |
 | `Import.cs` | games and apps found, tiles of games no longer installed |
+| `FoundAdd.cs` | what was found becomes tiles: Add selected and the games added by themselves (`-Action autoadd`), on the window's categories or on the files |
 | `Save.cs` | saving, Save and refresh, backup and restore |
 | `Gamepad.cs` | the window with a controller (XInput): moving between controls, pressing, pages |
 | `Osk.cs` | on-screen keyboard for text fields, for the controller |

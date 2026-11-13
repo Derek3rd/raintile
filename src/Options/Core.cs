@@ -485,6 +485,19 @@ namespace RaintileOptions
             }
         }
 
+        // A new empty category file, with its image folders
+        public static CategoryModel CreateCategoryFile(string b, string name)
+        {
+            var m = new CategoryModel { Header = "; Format: see Games.ini" };
+            var c = GetCategorySection(m);
+            SetKey(c, "Name", name);
+            SetKey(c, "Order", (GetCategoryFiles().Count + 1).ToString());
+            Directory.CreateDirectory(CategoriesDir);
+            WriteCategory(Path.Combine(CategoriesDir, b + ".ini"), m);
+            foreach (var kind in new[] { "background", "logo" }) Directory.CreateDirectory(Path.Combine(ImagesRoot, b, kind));
+            return m;
+        }
+
         public static List<FileInfo> GetCategoryFiles()
         {
             if (!Directory.Exists(CategoriesDir)) return new List<FileInfo>();

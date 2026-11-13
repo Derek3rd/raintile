@@ -55,12 +55,13 @@ namespace RaintileOptions
         </DockPanel>
       </Border>
     </Grid>
-    <!-- Shown after ""Save and refresh"" while the skin reloads -->
+    <!-- Shown after ""Save and refresh"" while the skin reloads, and while games
+         are added (AutoAddGames turned on): its texts set by ShowProgressOverlay -->
     <Grid x:Name=""Overlay"" Grid.ColumnSpan=""2"" Background=""#D915151B"" Visibility=""Collapsed"">
       <Border Style=""{StaticResource Card}"" Width=""400"" Padding=""28,24"" HorizontalAlignment=""Center"" VerticalAlignment=""Center"">
         <StackPanel>
-          <TextBlock Text=""Saving and refreshing"" FontSize=""17"" FontWeight=""SemiBold""/>
-          <TextBlock Text=""The launcher opens in a moment."" Foreground=""{StaticResource DimBrush}"" Margin=""0,4,0,18""/>
+          <TextBlock x:Name=""OverlayTitle"" FontSize=""17"" FontWeight=""SemiBold""/>
+          <TextBlock x:Name=""OverlayText"" TextWrapping=""Wrap"" Foreground=""{StaticResource DimBrush}"" Margin=""0,4,0,18""/>
           <DockPanel Margin=""0,0,0,8"">
             <TextBlock x:Name=""ProgressPercent"" DockPanel.Dock=""Right"" FontWeight=""SemiBold"" Foreground=""{StaticResource AccentBrush}""/>
             <TextBlock x:Name=""ProgressStage"" Foreground=""{StaticResource DimBrush}"" FontSize=""12.5""/>

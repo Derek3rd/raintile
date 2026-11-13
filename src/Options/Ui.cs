@@ -46,6 +46,7 @@ namespace RaintileOptions
         public const int GroupOpen = 0xE70D, GroupClosed = 0xE76C;   // menu groups only
         public const int Refresh = 0xE72C;  // a list read again from where it comes from (Import > Found)
         public const int Pin = 0xE718;      // marks a pinned tile (not a button)
+        public const int Own = 0xE9E9;      // marks a tile with settings of its own, not those of All tiles (not a button)
         // the pad button that presses a button, before its text while the pad is in use
         // (AddPadHint), and on the keys and the hint line of the on-screen keyboard
         public const int PadA = 0xF093, PadB = 0xF094, PadY = 0xF095, PadX = 0xF096, PadStart = 0xEDE3;
@@ -199,7 +200,8 @@ namespace RaintileOptions
     static class Program
     {
         // Arguments: -Resources <dir> -Data <dir> -Config <name> -Page <page>, or
-        // -Action runas|remove for the tile menu (TileAction.cs, no window)
+        // without the window -Action runas|remove for the tile menu (TileAction.cs)
+        // and -Action autoadd for the games added by themselves (FoundAdd.cs)
         [STAThread]
         static int Main(string[] args)
         {
@@ -224,6 +226,7 @@ namespace RaintileOptions
             {
                 Core.Init(resources, data, config);
                 if (action == "runas" || action == "remove") return TileAction.Run(action);
+                if (action == "autoadd") return OptionsApp.RunAutoAdd();
                 Core.DeleteOldUpdateFiles();
                 var app = new OptionsApp(page, clock);
                 // while the window is open the launcher's shortcuts do nothing

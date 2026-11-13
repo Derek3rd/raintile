@@ -32,12 +32,11 @@ Your games, apps, links and system tools become large tiles with background art 
 
 - Windows 10 or 11
 - [Rainmeter](https://www.rainmeter.net/) **4.5** or later
-- The **HotKey** plugin, for the open shortcut, Esc and keyboard navigation ([HotKey.dll](https://github.com/brianferguson/HotKey.dll))
-- Windows PowerShell 5.1 and .NET Framework 4.8 (both included in Windows 10/11), used for thumbnails, the search of games and apps, the gamepad helper and the Options window
+- Windows PowerShell 5.1 and .NET Framework 4.8 (both included in Windows 10/11), used for thumbnails, the search of games and apps, the keyboard and gamepad helper and the Options window
 
 ## Installation
 
-**With the package** (recommended): download the `.rmskin` file of the latest [release](https://github.com/Derek3rd/raintile/releases) and open it: the Rainmeter installer installs and loads the skin. Install the HotKey plugin too if you don't have it.
+**With the package** (recommended): download the `.rmskin` file of the latest [release](https://github.com/Derek3rd/raintile/releases) and open it: the Rainmeter installer installs and loads the skin. No plugins to install.
 
 **By hand**:
 
@@ -47,9 +46,8 @@ Your games, apps, links and system tools become large tiles with background art 
    Documents\Rainmeter\Skins\Raintile\Raintile.ini
    ```
 
-2. Install the HotKey plugin if you don't have it yet.
-3. In Rainmeter: **Manage** > **Refresh all**, then load `Raintile\Raintile.ini`.
-4. Press **Ctrl+Alt+G** to show or hide the launcher.
+2. In Rainmeter: **Manage** > **Refresh all**, then load `Raintile\Raintile.ini`.
+3. Press **Ctrl+Alt+G** to show or hide the launcher.
 
 **Updates**: Raintile checks GitHub once a day and shows a dot on the gear when a new version is out; Options > Info installs it with one click (directly, or with the Rainmeter installer). Your settings, categories and images live in `%APPDATA%\Rainmeter\Raintile\`, so updating never touches them.
 

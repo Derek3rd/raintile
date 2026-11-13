@@ -57,7 +57,7 @@ The launcher loads **once** (when Rainmeter starts, or on *Refresh skin*) and th
 | Losing focus: a click outside the launcher (e.g. on a second monitor) or another program coming to the foreground (`AutoHide=1`; not as a window) | | ✓ |
 | Docked: the mouse resting on that edge of the screen (`DockEdge=1`) | ✓ | |
 
-Without the HotKey plugin you can toggle it from a Windows shortcut: create a shortcut with this target and assign it a *Shortcut key* in its properties:
+You can also toggle it from a Windows shortcut: create a shortcut with this target and assign it a *Shortcut key* in its properties:
 
 ```
 "C:\Program Files\Rainmeter\Rainmeter.exe" !CommandMeasure MeasureScript "Toggle()" "Raintile"
@@ -140,9 +140,9 @@ Keys are only captured **while the launcher is visible and has the [focus](#focu
 | `F` | open the search |
 | `Esc` | close the search, or the launcher |
 
-Mouse and keyboard move the same highlight. A widget with parts (the rows of a list, e.g. Modrinth, the buttons of a player) is a tile like the others for the arrows and the D-pad; Enter / `A` enters it, onto its first part: then the arrows go from part to part without leaving the tile, Enter / `A` presses the part, as a click does, and Esc / `B` leaves it (a second one closes the launcher). Every action has two configurable keys (`NavUp`/`NavUp2`, `NavConfirm`/`NavConfirm2`, ...) using HotKey plugin key names: letters, `UP`, `DOWN`, `LEFT`, `RIGHT`, `SPACE`, `ENTER`, `TAB`, ... `KeyboardNav=0` turns keyboard navigation off. Confirm keys act on **release**, so key repeat and the release itself never reach the game you just launched.
+Mouse and keyboard move the same highlight. A widget with parts (the rows of a list, e.g. Modrinth, the buttons of a player) is a tile like the others for the arrows and the D-pad; Enter / `A` enters it, onto its first part: then the arrows go from part to part without leaving the tile, Enter / `A` presses the part, as a click does, and Esc / `B` leaves it (a second one closes the launcher). Every action has two configurable keys (`NavUp`/`NavUp2`, `NavConfirm`/`NavConfirm2`, ...) using these key names: letters, `UP`, `DOWN`, `LEFT`, `RIGHT`, `SPACE`, `ENTER`, `TAB`, ... `KeyboardNav=0` turns keyboard navigation off. Confirm keys act on **release**, so key repeat and the release itself never reach the game you just launched.
 
-The keys are registered by two invisible mini-skins, `Raintile\Hotkey` (Esc) and `Raintile\Navigation` (everything else), which the launcher activates when shown and deactivates when hidden or when it loses the focus. Don't load them by hand.
+The keys are read by the background helper (`Helper.ps1`) with a keyboard hook, no plugin needed: the launcher lists the keys active at each moment in `Generated\HotKeys.txt`, so Esc and the navigation keys work only while it is shown and has the focus, and reach the other programs as usual the rest of the time. The open/close combination and the tiles' hot keys (`TileKeysWhen=Always`) are always listed. A key the launcher uses still reaches the program in front, as it did with the HotKey plugin of earlier versions.
 
 ### Gamepad
 
@@ -193,7 +193,7 @@ At the top left, after the [clock](#clock) and the Favorites / Recent buttons, t
 - While typing, letters, digits (keypad too), space, `-` and `.` go into the search and `Backspace` deletes; the other keys of the launcher are off. **Enter** stops typing and keeps the results; the first one is highlighted: `Space`/`Enter` (or gamepad `A`) launches it, WASD/arrows move through the results.
 - `Esc`, clicking a category or an empty search go back to the categories, at the position you left them.
 - Results use the default grid (`NX`/`NY` in `Settings.inc`).
-- The keys are taken by the `Raintile\Typing` mini-skin (HotKey plugin), active only while you type.
+- The letters are listed for the helper (`Generated\HotKeys.txt`) only while you type.
 
 ## Tile menu
 
@@ -386,7 +386,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `BackLogoPos`, `BackLogoScale`, `BackInfoPos` | the same on the wheel's backdrop, when the selected tile's logo or lines go there (`WheelLogoOn`, `WheelInfoOn` = `Background`): the logo's centre in % of the area under the top row (default `50,50`), its size times `WheelBackdropLogoSize` (default `1`), the lines' place in the room they leave there (default `0,0`); default: the category's. See [Grid or wheel](#grid-or-wheel) |
 | `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
 | `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
-| `HotKey` | key combination that starts the tile, also while the launcher is hidden: HotKey plugin names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
+| `HotKey` | key combination that starts the tile, also while the launcher is hidden: key names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
 | `PadKey` | gamepad buttons held together that start the tile while the launcher is open (`LB A`; `A B X Y LB RB LT RT BACK START LS RS UP DOWN LEFT RIGHT`). See [Launching a tile](#launching-a-tile) |
 | `Pinned` | `1` = at the start of the category, in the order of the file, whatever the category's `Sort=`: see [Sorting the tiles](#options-window) |
 | `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
@@ -591,6 +591,12 @@ With `CheckUpdates=1` (Options > Info > *Updates*) the skin asks GitHub for the 
 - Either way your data is not touched, and only files of this repository's releases on GitHub (https) are downloaded, into a new temporary folder, and checked to be a Rainmeter package before they are used. Without the Options program (a copy of the repository) the PowerShell window only has the installer.
 - **Check now** asks GitHub again; **Release page** opens the release on GitHub.
 
+**The HotKey plugin after updating from an older version.** Earlier versions used the HotKey plugin for the keys and installed it with the package; now the keys are read by the background helper, and the update leaves the plugin where it was, unused by Raintile. On load the launcher unloads and deletes the key mini-skins of those versions (`Hotkey`, `Navigation`, `Typing`, `TileKeys`: their empty folders stay in the skin folder and can be deleted). To remove the plugin too:
+
+1. Check that no other skin needs it: in PowerShell, `Get-ChildItem "$env:USERPROFILE\Documents\Rainmeter\Skins" -Recurse -Include *.ini,*.inc | Where-Object FullName -notmatch '\\@' | Select-String 'Plugin\s*=\s*HotKey' -List` lists the skins that use it (your skins folder, if you moved it; folders starting with `@`, such as the backups, are left out: Rainmeter does not load them). If one is listed, keep the plugin.
+2. Close Rainmeter (right click on its icon in the taskbar > *Exit*): it keeps the plugins it loaded open.
+3. Delete `%APPDATA%\Rainmeter\Plugins\HotKey.dll`, then start Rainmeter again.
+
 ### Checks and tests
 
 `python tools/check.py` checks a copy of the repository before a commit; the **checks** job of the **Release package** workflow runs it on every pull request, on Windows. It needs Python 3, Windows PowerShell and `lupa` (`pip install lupa`, which brings Lua 5.1, the version of Rainmeter). It takes a few seconds.
@@ -617,7 +623,7 @@ For the update check the tag must hold the version (if it has no number, the num
 
 **Nightly builds.** On every push to the branch `nightly` the **Nightly** workflow (`.github/workflows/nightly.yml`) builds the Options program and the `.rmskin` and publishes them as the pre-release **`nightly`** (replacing the previous one). Its version is the last release plus the number of commits since it: after `v1.2.1`, `1.2.1.1`, `1.2.1.2`, ... until the next release; it is written into the package's `Raintile.ini` (`tools/build_rmskin.py --nightly-version`). So the work merged into `nightly` reaches the skins on the nightly channel at once, the others with the next release.
 
-The package holds the skin only (with the HotKey plugin from `tools/plugins/`): `README.md`, `docs\`, `tests\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
+The package holds the skin only, with no plugins (Rainmeter's own are enough): `README.md`, `docs\`, `tests\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
 
 In the package no *VariableFiles* are needed (settings are in the data folder) and the installer's default backup should be kept: the first update to this version recovers the user's categories and images from that backup.
 
@@ -648,7 +654,7 @@ See [Rainside](#rainside).
 | `RainsideMode` | `Fixed` | `Fixed`: always on screen; `Edge`: out of its edge when the mouse rests on it, back in when it leaves |
 | `RainsideSide` | `Right` | `Left`, `Right`, `Top`, `Bottom` |
 | `RainsideSize` | `10%` | its width (left, right) or height (top, bottom), pixels or % of the area |
-| `RainsideHotKey` | (none) | combination (HotKey plugin): `Edge` shows and hides it; `Fixed` gives it the keys and the gamepad, again takes them back |
+| `RainsideHotKey` | (none) | combination (as `OpenHotKey`): `Edge` shows and hides it; `Fixed` gives it the keys and the gamepad, again takes them back |
 | `RainsideCloseOnLaunch` | `1` | `Edge`: back in after starting a tile |
 | `RainsideFullscreen` | `1` | hidden while a program covers its screen (a game, a video), back afterwards |
 | `RainsideReserve` | `0` | its room kept free, as the taskbar's (an app bar); with `Edge` while it is out |
@@ -727,7 +733,7 @@ See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `OpenHotKey` | `CTRL ALT G` | combination that opens/closes the launcher (HotKey plugin) |
+| `OpenHotKey` | `CTRL ALT G` | combination that opens/closes the launcher: key names separated by spaces (`CTRL ALT G`, `LWIN SPACE`, `CTRL SHIFT F1`) |
 | `CloseAction` | `[!CommandMeasure MeasureScript "Hide()"]` | action of the X; `[!DeactivateConfig]` unloads the skin |
 | `CloseSize` | `14` | size of the X and gear buttons |
 | `CloseHotKey` | `ESCAPE` | close key, registered only while visible and in [focus](#focus); empty = none |
@@ -839,7 +845,7 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFold
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `DebugLog` | `0` | write to the Rainmeter log what happens on confirm, launch, show/hide and focus loss, and the keys seen by the HotKey plugin |
+| `DebugLog` | `0` | write to the Rainmeter log what happens on confirm, launch, show/hide and focus loss, and, while the launcher has the keys, every key pressed |
 
 ### Appearance
 
@@ -894,10 +900,6 @@ Raintile is designed to be light even on a large full-screen window:
 
 ```
 Raintile.ini                 main skin (styles, measures, fixed meters)
-Hotkey/Hotkey.ini            Esc mini-skin (activated by the launcher while it has the focus)
-Navigation/Navigation.ini    navigation keys mini-skin (activated by the launcher while it has the focus)
-Typing/Typing.ini            keys typed in the search bar (activated while typing)
-TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated while the launcher is open, with the focus)
 Instance.inc                 read by Raintile.ini as the launcher: its generated files
 Rainside/Rainside.ini        the Rainside (loaded by the launcher): Raintile.ini included and run as a bar
 Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its name and generated files
@@ -937,15 +939,15 @@ Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its n
   Generated/Rainside*        the same files of the Rainside (RainsideGrid.inc, RainsideSizes.inc, RainsideDashOn.txt,
                              RainsideDockEdge.txt, RainsideLauncherSize.txt), and RainsideKeys.txt (while it has the keys),
                              RainsideScreen.txt (its screen, RainsideFullscreen), RainsideReserve.txt (RainsideReserve)
-  Generated/TileKeys.inc     the measures of the TileKeys mini-skin
+  Generated/HotKeys.txt      the keys active now, for the helper's keyboard hook
 ```
 
 The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your data is](#where-your-data-is).
 
 ## Troubleshooting
 
-- **First stop: the Rainmeter log** (*Manage* > *Log*). Raintile's messages start with `Raintile:`. Set `DebugLog=1` for more detail.
-- **Esc, keyboard navigation or the gamepad don't work after an update**: in Rainmeter use **Refresh all** (not just *Refresh skin*) so it sees new or renamed mini-skins and scripts. Check that the HotKey plugin is installed.
+- **First stop: the Rainmeter log** (right click on the Rainmeter icon in the taskbar > *About* > *Log*; to keep it in a file, *Manage* > *Settings* > *Log to file*: `%APPDATA%\Rainmeter\Rainmeter.log`). Raintile's messages start with `Raintile:`. Set `DebugLog=1` for more detail.
+- **The keys or the gamepad don't work**: both come from the background helper, started with the skin; a second or two after a refresh it is ready. In Rainmeter use **Refresh all** (not just *Refresh skin*) after an update. If the keyboard hook cannot start, the log says so (`Raintile: the keyboard hook could not start`).
 - **A category icon doesn't show**: the icon goes in `Images\<file name>\icon.png` — the folder is named after the category *file* (`Games`), not its menu label. The log shows exactly where it looked (`Raintile: no icon for category ...`).
 - **A tile image doesn't show**: check the file name matches the tile name (or its `Image`/`Background`/`Logo` key); explicit names that are not found are logged.
 - **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. The program needs .NET Framework 4.8 (included in Windows 10/11); if it does not start, delete `@Resources\Bin\` in the skin folder and the window opens with PowerShell instead.

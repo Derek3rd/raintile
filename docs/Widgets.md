@@ -248,7 +248,7 @@ Use a key only for the service it is for, never write it to a file or a log, and
 
 - A widget is self-contained: its files in its folder, nothing installed elsewhere, nothing left running.
 - Nothing runs while the launcher is hidden: no timers, no polling; work starts from `OnShow` (and can stop on `OnHide`).
-- No plugins beyond Rainmeter's own (and HotKey); no DLLs of your own.
+- No plugins beyond Rainmeter's own; no DLLs of your own.
 - Text: ASCII in the `.ini` and the scripts (`[\xHHHH]` in a meter's text for other characters), files UTF-8 without BOM.
 - Widgets are Rainmeter code and can run programs: the gallery reviews them before they are listed.
 
@@ -257,7 +257,7 @@ Use a key only for the service it is for, never write it to a file or a log, and
 1. Copy the folder to `Widgets\<Id>\` in the data folder (with the repository linked as the skin, `widgets\<Id>\` of the repository is not read by the launcher).
 2. Add a tile with `Widget=custom`, `Param=<Id>`, refresh the skin.
 3. A widget that is not shown says why on its tile: the file looked for, a file with no meters and no `List=`, a UTF-16 file.
-4. Errors of formulas and bangs go to Rainmeter's log (Manage > Log), under the names with the prefix (`CW11_Read`).
+4. Errors of formulas and bangs go to Rainmeter's log (About > Log: right click on the Rainmeter icon in the taskbar), under the names with the prefix (`CW11_Read`).
 
 ## Publishing in the gallery
 

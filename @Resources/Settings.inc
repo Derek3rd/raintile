@@ -42,7 +42,7 @@ RainsideMode=Fixed
 RainsideSide=Right
 ; Its width (its height at the top or the bottom), pixels or % of the area
 RainsideSize=10%
-; Key combination (HotKey plugin, as OpenHotKey): with Edge it shows and hides
+; Key combination (as OpenHotKey): with Edge it shows and hides
 ; it; with Fixed it gives it the arrows and the gamepad (again: takes them
 ; back). Empty = none
 RainsideHotKey=
@@ -205,7 +205,7 @@ FilterFontSize=10
 ; The launcher loads once (when Rainmeter starts) and is then only shown and
 ; hidden. To open/close it from a shortcut:
 ;   Rainmeter.exe !CommandMeasure MeasureScript "Toggle()" "Raintile"
-; Key combination that opens and closes the launcher (HotKey plugin): keys
+; Key combination that opens and closes the launcher: key names
 ; separated by spaces, e.g. CTRL ALT G, LWIN SPACE, CTRL SHIFT F1
 OpenHotKey=CTRL ALT G
 ; Action of the X at the top right (default: hide the launcher).
@@ -215,7 +215,7 @@ CloseSize=14
 ; 1 = power button left of the gear: Lock, Sleep, Restart, Shut down (the
 ; last two want a second click)
 ShowPower=1
-; Key that closes the launcher (HotKey plugin), registered only while the
+; Key that closes the launcher, active only while the
 ; launcher is visible and has the focus. Empty = no key.
 CloseHotKey=ESCAPE
 ; Hot keys of the tiles (HotKey= in the category files): Always = they start
@@ -224,10 +224,10 @@ CloseHotKey=ESCAPE
 ; time)
 TileKeysWhen=Always
 ; Keyboard navigation, only active while the launcher is visible and has the
-; focus (HotKey plugin): 1 = on, 0 = off. The launcher has the focus when it
+; focus: 1 = on, 0 = off. The launcher has the focus when it
 ; is opened or clicked, and loses it to a click on another program or another
 ; program in front; the shortcut gives it back. Each action has two keys
-; (HotKey plugin names: letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
+; (key names: letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
 KeyboardNav=1
 NavUp=W
 NavUp2=UP
@@ -456,8 +456,8 @@ CheckUpdates=1
 UpdateChannel=Release
 
 ; --- Diagnostics ----------------------------------------------------------------
-; 1 = write to the Rainmeter log (Manage > Log) what happens on confirm, on
-; tile launch and on show/hide, and the keys seen by the HotKey plugin
+; 1 = write to the Rainmeter log (About > Log) what happens on confirm, on
+; tile launch and on show/hide, and the keys pressed while it has the keys
 DebugLog=0
 
 ; --- Appearance -----------------------------------------------------------------

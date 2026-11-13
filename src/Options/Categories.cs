@@ -156,13 +156,7 @@ namespace RaintileOptions
 
         CategoryModel GetModel(string file)
         {
-            CategoryModel m;
-            if (!models.TryGetValue(file, out m))
-            {
-                m = Core.ReadCategory(Path.Combine(Core.CategoriesDir, file));
-                models[file] = m;
-            }
-            return m;
+            return GetModel(models, file);
         }
 
         void SetChanged(string file) { changedFiles[file] = true; UpdateDirty(); PreviewChanged(file); }
@@ -683,14 +677,7 @@ namespace RaintileOptions
         // A new category file and its image folders
         string NewCategoryFile(string b, string name)
         {
-            var m = new CategoryModel { Header = "; Format: see Games.ini" };
-            var c = Core.GetCategorySection(m);
-            Core.SetKey(c, "Name", name);
-            Core.SetKey(c, "Order", (Core.GetCategoryFiles().Count + 1).ToString());
-            Directory.CreateDirectory(Core.CategoriesDir);
-            Core.WriteCategory(Path.Combine(Core.CategoriesDir, b + ".ini"), m);
-            foreach (var kind in new[] { "background", "logo" }) Directory.CreateDirectory(Path.Combine(Core.ImagesRoot, b, kind));
-            models[b + ".ini"] = m;
+            models[b + ".ini"] = Core.CreateCategoryFile(b, name);
             return b + ".ini";
         }
 

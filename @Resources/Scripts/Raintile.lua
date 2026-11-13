@@ -38,9 +38,9 @@ local typed = ''      -- text typed so far
 local leaveSearch     -- defined in the Search section
 local stopTyping      -- defined in the Search section
 local updateSearchBar -- defined in the Search section
--- Dot on the gear: an update, new games or apps found, tiles of games no
--- longer installed (see showNotice)
-local notice = { found = 0, update = nil, missing = 0 }
+-- Dot on the gear: an update, games added by themselves (their names), new
+-- games or apps found, tiles of games no longer installed (see showNotice)
+local notice = { found = 0, update = nil, missing = 0, added = {} }
 local showNotice      -- defined with OpenNotice
 -- Filter bar under the menu, shown only with the search results: chips =
 -- { { kind = 'all' | 'store' | 'tag', key, label }, ... }; the results shown
@@ -4643,7 +4643,7 @@ function M.sideSettings()
 	V.Wheel, V.CenterSelection = false, false
 	V.ShowClock, V.ShowDate, V.ShowPower = false, false, false
 	V.ShowFavorites, V.ShowRecent, V.ShowUnplayed = false, false, false
-	V.FilterBar, V.CheckUpdates, V.ScanOnStart = false, false, false
+	V.FilterBar, V.CheckUpdates, V.ScanOnStart, V.AutoAddGames = false, false, false, false
 	V.Thumbnails, V.LaunchAnimation, V.TileKeysOpen = false, false, false
 	V.PadLegend = false
 	-- above the windows (it is meant to be seen)
@@ -4940,6 +4940,7 @@ function Initialize()
 	end
 	V.DebugLog = num('DebugLog', 0) ~= 0
 	V.ScanOnStart = num('ScanOnStart', 1) ~= 0
+	V.AutoAddGames = num('AutoAddGames', 0) ~= 0
 	V.ShowFavorites = num('ShowFavorites', 1) ~= 0
 	V.ShowRecent = num('ShowRecent', 1) ~= 0
 	V.RecentMostUsed = SKIN:GetVariable('RecentOrder', 'Recent'):lower() == 'mostused'
@@ -5201,7 +5202,8 @@ function Update()
 		updateEmptyHint()
 		render(true)
 		M.checkHwAccel()
-		if notice.missing > 0 or notice.hwaccel then showNotice() end
+		M.readAutoAdded()
+		if notice.missing > 0 or notice.hwaccel or #notice.added > 0 then showNotice() end
 		show('MeterPower', V.ShowPower and not M.compact)
 		updateDashState()
 		M.sideConfig()
@@ -5560,6 +5562,7 @@ function Hide()
 		return
 	end
 	SKIN:Bang('!Hide')
+	M.refreshAdded()
 end
 
 -- End of the docked launcher going out: the window is hidden, ready (in
@@ -5571,6 +5574,7 @@ function M.finishHide()
 	M.dock.p = 0
 	SKIN:Bang('!SetTransparency', '255')
 	SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
+	M.refreshAdded()
 end
 
 -- Open, or close; a launcher left open without the focus (a window, AutoHide=0,
@@ -5895,20 +5899,27 @@ function OnSetup()
 end
 
 -- Background search of the installed games and apps on every load
--- (ScanOnStart=1). Nothing is added: new ones light the dot on the gear, and
--- are added from the Options window.
+-- (ScanOnStart=1, or AutoAddGames=1). New ones light the dot on the gear, and
+-- are added from the Options window; new games by themselves with
+-- AutoAddGames=1 (OnScan).
 function AutoScan()
-	if not ready or not V.ScanOnStart then return end
+	if not ready or not (V.ScanOnStart or V.AutoAddGames) then return end
 	SKIN:Bang('!CommandMeasure', 'MeasureScan', 'Run')
 end
 
--- Dot on the gear: an update, new games or apps found, or tiles of games no
--- longer installed. A click opens the Options window where they are (Info or
--- Import).
+-- Dot on the gear: an update, games added by themselves, new games or apps
+-- found, or tiles of games no longer installed. A click opens the Options
+-- window where they are (Info or Import).
 showNotice = function()
 	local tip
+	local added = #notice.added
 	if notice.update then
 		tip = 'Raintile ' .. notice.update .. ' is available: click for details'
+	elseif added > 0 then
+		-- the first names, the rest counted
+		local names = table.concat(notice.added, ', ', 1, math.min(added, 5))
+		if added > 5 then names = names .. ' and ' .. (added - 5) .. ' more' end
+		tip = D.text((added == 1 and '1 game' or (added .. ' games')) .. ' added by themselves: ' .. names .. '. Click to see them')
 	elseif notice.found > 0 then
 		tip = 'New games or apps found: click to add them'
 	elseif notice.missing > 0 then
@@ -5925,7 +5936,7 @@ showNotice = function()
 end
 
 function OpenNotice()
-	if not notice.update and notice.found == 0 and notice.missing == 0 and notice.hwaccel then
+	if not notice.update and #notice.added == 0 and notice.found == 0 and notice.missing == 0 and notice.hwaccel then
 		-- Rainmeter > Manage > Settings, where the box is; asked only once
 		notice.hwaccel = false
 		SKIN:Bang('!WriteKeyValue', 'Variables', 'HwAccelHint', '1', data .. 'State.inc')
@@ -6327,6 +6338,36 @@ function OnScan()
 	showNotice()
 	base = -1
 	render(false)
+	-- the new games become tiles (the Options program, without its window,
+	-- which calls OnAutoAdded); while the window is open it adds them itself
+	-- when Found opens, on its unsaved changes
+	if V.AutoAddGames and not M.optionsOpen() and fileExists(resources .. 'Bin\\RaintileOptions.exe') then
+		SKIN:Bang(SKIN:GetVariable('AutoAddAction'))
+	end
+end
+
+-- Names of the games added by themselves, not seen on Found yet
+-- (Generated\AutoAddedNames.txt, written by the Options program)
+function M.readAutoAdded()
+	notice.added = readLines(resources .. 'Generated\\AutoAddedNames.txt')
+end
+
+-- The Options program added games by themselves: the dot lists them, and the
+-- skin reloads to show their tiles (M.refreshAdded)
+function OnAutoAdded()
+	if not ready then return end
+	M.readAutoAdded()
+	showNotice()
+	M.addedRefresh = true
+	M.refreshAdded()
+end
+
+-- Reloads for the tiles added by themselves, but not under the hands of
+-- whoever is using the launcher: then when it hides or loses the focus
+function M.refreshAdded()
+	if not M.addedRefresh or (visible and M.focused) then return end
+	M.addedRefresh = false
+	SKIN:Bang('!Refresh')
 end
 
 -- The Options window removed or kept tiles of games no longer installed
@@ -6383,6 +6424,7 @@ end
 -- The Options window showed the list: nothing is new any more
 function OnFoundSeen()
 	notice.found = 0
+	notice.added = {}
 	showNotice()
 end
 
@@ -7640,7 +7682,8 @@ function FocusLost()
 	if not ready or not visible then return end
 	M.setFocus(false)
 	M.zpos(false)
-	if launching or V.Mode == 'window' or not V.AutoHide then return end
+	if launching then return end
+	if V.Mode == 'window' or not V.AutoHide then M.refreshAdded() return end
 	Hide()
 end
 

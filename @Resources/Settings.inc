@@ -417,7 +417,7 @@ ClockFontSize=18
 ; --- Games and apps ---------------------------------------------------------------
 ; Right click on the skin > "Add games and apps..." (or Options > Import):
 ; the games and apps installed on this PC are listed, and the ones you pick
-; become normal tiles. Nothing is added by itself.
+; become normal tiles. Nothing is added by itself, unless AutoAddGames=1.
 ; Where to look, separated by |: Steam Epic GOG Ubisoft Battlenet EA Xbox
 ; GooglePlay (games), Folders (the programs in ImportFolders) and Apps (the
 ; Start menu)
@@ -432,10 +432,17 @@ ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|GooglePlay|Folders|Apps
 ; of their kind: ImportCategory or AppsCategory)
 ImportFolders=
 ; 1 = look for new games and apps in the background on every skin load: new
-; ones light a dot on the gear (nothing is added). The same search finds the
-; tiles of games no longer installed: they are greyed out, light the dot and
-; can be removed or kept in Options > Import.
+; ones light a dot on the gear (nothing is added, unless AutoAddGames=1). The
+; same search finds the tiles of games no longer installed: they are greyed
+; out, light the dot and can be removed or kept in Options > Import.
 ScanOnStart=1
+; 1 = add the games found by themselves: on the first search every game not
+; among the tiles yet, then each new one the search finds (on every skin load
+; and when Options > Found opens), to ImportCategory or to its folder's own
+; category. Apps are still picked by hand. A dot on the gear lists what was
+; added. Games already handled are remembered (AutoAdded.txt in the data
+; folder): a game tile you remove does not come back (add it again from Found).
+AutoAddGames=0
 ; Categories where games and apps go when added
 ImportCategory=Games
 AppsCategory=Apps

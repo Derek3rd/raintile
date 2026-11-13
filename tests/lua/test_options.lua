@@ -47,4 +47,67 @@ function T.options_program_present()
 	t.clean(s)
 end
 
+-- A skin with the Options program, after its search (OnScan)
+local function scanned(settings, patch)
+	local s = R.new({ settings = settings })
+	host_mkdir(s.resources .. 'Bin')
+	R.writeFile(s.resources .. 'Bin\\RaintileOptions.exe', '')
+	if patch then patch(s) end
+	s:start()
+	local before = #s.commands
+	s.measures.measurescan.value = 'RESULT:MISSING=0\r\nRESULT:NEW=0'
+	s:call('OnScan()')
+	return s, before
+end
+
+-- AutoAddGames=1: the search hands the games found to the Options program,
+-- without its window; not with the setting off, nor while the window is open
+-- (it adds them itself, on its unsaved changes)
+function T.auto_add_after_scan()
+	local s, before = scanned({ AutoAddGames = 1 })
+	t.ok(ran(s, before, 'RaintileOptions%.exe".-%-Action autoadd'), 'the games found were not handed to the Options program')
+	t.clean(s)
+	s, before = scanned({})
+	t.ok(not ran(s, before, '%-Action autoadd'), 'games added with AutoAddGames=0')
+	t.clean(s)
+	s, before = scanned({ AutoAddGames = 1 }, function(sk)
+		R.writeFile(sk.resources .. 'Generated\\OptionsOpen.txt', tostring(os.time()))
+	end)
+	t.ok(not ran(s, before, '%-Action autoadd'), 'games added by the skin while the Options window is open')
+	t.clean(s)
+end
+
+-- The games added by themselves (Generated\AutoAddedNames.txt): the dot on the
+-- gear lists them, also after the refresh that shows their tiles, until Found
+-- has shown them
+function T.auto_added_notice()
+	local s = R.new({ settings = { AutoAddGames = 1 } }):start()
+	s:call('Hide()')
+	R.writeFile(s.resources .. 'Generated\\AutoAddedNames.txt', 'Portal 2\r\nCaf\195\169 Story\r\n')
+	local loads = s.loads
+	s:call('OnAutoAdded()')
+	t.ok(s.loads > loads, 'no refresh for the tiles added, with the launcher hidden')
+	local notice = s.meters.meternotice
+	t.ok(not notice.hidden, 'no dot on the gear after games were added')
+	local tip = notice.set.tooltiptext or ''
+	t.ok(tip:find('2 games added by themselves: Portal 2, Caf[\\xE9] Story', 1, true), 'the dot does not list the games added: ' .. tip)
+	s:call('OnFoundSeen()')
+	t.ok(notice.hidden, 'the dot stays after Found showed the games added')
+	t.clean(s)
+end
+
+-- Not under the hands of whoever uses the launcher: the refresh waits for it
+-- to hide
+function T.auto_added_refresh_waits()
+	local s = R.new({ settings = { AutoAddGames = 1 } }):start()
+	s:call('Show()')
+	R.writeFile(s.resources .. 'Generated\\AutoAddedNames.txt', 'Portal 2\r\n')
+	local loads = s.loads
+	s:call('OnAutoAdded()')
+	t.eq(s.loads, loads, 'the skin refreshed while the launcher is in use')
+	s:call('Hide()')
+	t.ok(s.loads > loads, 'no refresh once the launcher hid')
+	t.clean(s)
+end
+
 return T

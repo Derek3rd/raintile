@@ -319,9 +319,11 @@ namespace RaintileOptions
             foreach (ListBoxItem it in nav.Items) SetNavApplies(it);
         }
 
-        // Import: games or apps found and not seen in the list yet
+        // Import: games or apps found and not seen in the list yet, or games added
+        // by themselves not shown there yet
         bool TestNewFound()
         {
+            if (File.Exists(AutoAddedNoticeFile)) return true;
             if (!File.Exists(Core.FoundFile)) return false;
             string text;
             try { text = File.ReadAllText(Core.FoundFile); } catch { return false; }

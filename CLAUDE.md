@@ -22,7 +22,7 @@ This file is shared by everyone who works on Raintile (people and Claude session
 - `Raintile.ini`: main skin. `Rainside/`: the Rainside, the same skin run as a bar, loaded by the launcher.
 - `@Resources/Scripts/Raintile.lua`: launcher logic.
 - `@Resources/Scripts/*.ps1`: background jobs (`Scan`, `Thumbs`, `Update`, `Data`, `Helper`, `Playtime`, `GameUpdates`).
-- `src/Options/`: the Options window (`RaintileOptions.exe`, C# 7.3, WPF), one file per page or feature. The workflows build it into `@Resources/Bin/`; without its window (`-Action`) it also runs the tile menu's *Run as administrator* and *Remove*. Its styles are in `@Resources/Scripts/Options.xaml`, the settings schema (pages, menu, defaults) in `src/Options/SchemaData.cs`. There is no other Options window: without the program the skin says it is missing.
+- `src/Options/`: the Options window (`RaintileOptions.exe`, C# 7.3, WPF), one file per page or feature. The workflows build it into `@Resources/Bin/`; without its window (`-Action`) it also runs the tile menu's *Run as administrator* and *Remove*, and adds the games found by themselves (`AutoAddGames`). Its styles are in `@Resources/Scripts/Options.xaml`, the settings schema (pages, menu, defaults) in `src/Options/SchemaData.cs`. There is no other Options window: without the program the skin says it is missing.
 - `@Resources/Settings.inc`, `State.inc`, `Categories/`, `Images/`: the defaults, copied to the user data folder on first run.
 - `@Resources/Generated/`: written by the skin (git-ignored). Never edit or commit it.
 - `widgets/`: the widget gallery (`index.json`) and the widgets hosted here (`widgets/<Id>/`). `docs/Widgets.md`: how to write widgets and the widget API.

@@ -384,3 +384,48 @@ Test 'Options: a background enlarged more than LowResLimit gets the low-resoluti
     Assert-True ((& $note 1920 1080 2560 1440 1.2) -ne '') 'zoom of the tile not counted'
     Assert-Equal (Invoke-Options 'LowResNote' @($null, [double]2560, [double]1440, [double]1, 'x')) '' 'no image size'
 }
+
+# The games found (Generated\Found.json) added by themselves to the category
+# files (AutoAddGames, -Action autoadd without the bang to the skin): the new
+# games only, each once, never the apps
+Test 'Options: the games found are added by themselves once, the apps never' {
+    $d = New-TestFolder
+    $res = Join-Path $d 'Res'; $data = Join-Path $d 'Data'
+    New-Item -ItemType Directory -Force -Path (Join-Path $res 'Generated'), (Join-Path $data 'Categories') | Out-Null
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    $settings = Join-Path $data 'Settings.inc'
+    $games = Join-Path $data 'Categories\Games.ini'
+    [IO.File]::WriteAllText($settings, "[Variables]`r`nAutoAddGames=1`r`nImportCategory=Games`r`n", $utf8)
+    [IO.File]::WriteAllText($games, "[Category]`r`nName=Games`r`n`r`n[Old Game]`r`nCommand=steam://rungameid/1`r`n", $utf8)
+    function Write-Found([object[]]$Items) {
+        $json = ConvertTo-Json -InputObject @{ Scanned = '2026-11-13T10:00:00'; Items = $Items } -Depth 4
+        [IO.File]::WriteAllText((Join-Path $res 'Generated\Found.json'), $json, $utf8)
+    }
+    Write-Found @(
+        @{ Id = 'Steam:1'; Kind = 'game'; Store = 'Steam'; Name = 'Old Game'; Command = 'steam://rungameid/1' },
+        @{ Id = 'Epic:x'; Kind = 'game'; Store = 'Epic'; Name = 'New Game'; Command = 'com.epicgames.launcher://apps/x' },
+        @{ Id = 'Folders:c:\emu\a.exe'; Kind = 'game'; Store = 'Folders'; Source = 'Emu'; Category = 'Emulators'; Name = 'Emu Game'; Command = '"C:\Emu\a.exe"' },
+        @{ Id = 'Apps:calc'; Kind = 'app'; Store = 'Apps'; Name = 'Calculator'; Command = 'calc.exe' })
+    $optionsApp.Assembly.GetType('RaintileOptions.Core').GetMethod('Init').Invoke($null, [object[]]@([string]$res, [string]$data, 'Test')) | Out-Null
+    $add = { @($optionsApp.GetMethod('AutoAddToFiles').Invoke($null, $null)) -join '|' }
+
+    Assert-Equal (& $add) 'New Game|Emu Game' 'games added'
+    $text = [IO.File]::ReadAllText($games)
+    Assert-True ($text -match '(?m)^\[New Game\]\r?\nCommand=com\.epicgames\.launcher://apps/x\r?\nSource=Epic:x') "the new game in Games.ini:`n$text"
+    Assert-True ([IO.File]::ReadAllText((Join-Path $data 'Categories\Emulators.ini')) -match '\[Emu Game\]') 'the game of a folder not in its own category'
+    Assert-True ((Get-ChildItem -LiteralPath (Join-Path $data 'Categories') -Recurse | Select-String -SimpleMatch 'Calculator') -eq $null) 'an app added'
+    $handled = @([IO.File]::ReadAllLines((Join-Path $data 'AutoAdded.txt')))
+    Assert-Equal ($handled -join '|') 'Epic:x|Folders:c:\emu\a.exe|Steam:1' 'games handled'
+
+    # a tile removed by hand does not come back
+    [IO.File]::WriteAllText($games, "[Category]`r`nName=Games`r`n`r`n[Old Game]`r`nCommand=steam://rungameid/1`r`n", $utf8)
+    Assert-Equal (& $add) '' 'a removed game added again'
+    Assert-True (-not ([IO.File]::ReadAllText($games) -match 'New Game')) 'the removed game is back in Games.ini'
+
+    # a game found later is added; nothing with the setting off
+    Write-Found @(@{ Id = 'GOG:7'; Kind = 'game'; Store = 'GOG'; Name = 'Later Game'; Command = '"C:\GOG\later.exe"' })
+    [IO.File]::WriteAllText($settings, "[Variables]`r`nAutoAddGames=0`r`nImportCategory=Games`r`n", $utf8)
+    Assert-Equal (& $add) '' 'a game added with AutoAddGames=0'
+    [IO.File]::WriteAllText($settings, "[Variables]`r`nAutoAddGames=1`r`nImportCategory=Games`r`n", $utf8)
+    Assert-Equal (& $add) 'Later Game' 'a game found later'
+}

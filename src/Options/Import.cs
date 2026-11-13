@@ -55,6 +55,9 @@ namespace RaintileOptions
         // every image from disk at each letter typed; emptied when the list is read again
         readonly Dictionary<string, ListBoxItem> foundEntries = new Dictionary<string, ListBoxItem>();
         ComboBox foundTarget;
+        // games added by themselves, shown in the status: the ones added while
+        // the window was closed (Generated\AutoAddedNames.txt) and here
+        List<string> foundAutoAdded = new List<string>();
 
         void InitFound()
         {
@@ -66,6 +69,7 @@ namespace RaintileOptions
                 scanTimer.Stop();
                 foundScanButton.IsEnabled = true;
                 ReadFound();
+                AutoAddInWindow();
                 RefreshFoundSources();
                 RefreshFoundList();
                 UpdateFoundStatus();
@@ -123,49 +127,22 @@ namespace RaintileOptions
             catch { }
         }
 
-        // Tiles of every category (as in the window, unsaved changes too):
-        // name key / command -> category name
-        class PresentMap
-        {
-            public Dictionary<string, string> Names = new Dictionary<string, string>();
-            public Dictionary<string, string> Commands = new Dictionary<string, string>();
-        }
-
-        PresentMap GetPresentMap()
-        {
-            var map = new PresentMap();
-            foreach (var e in GetCategoryEntries())
-            {
-                var m = GetModel(e.File);
-                foreach (var s in Core.GetTiles(m))
-                {
-                    map.Names[Core.GetNameKey(s.Name)] = e.Name;
-                    string cmd = Core.GetKey(s, "Command");
-                    if (cmd != "") map.Commands[cmd.ToLowerInvariant()] = e.Name;
-                }
-                foreach (var n in Core.GetImportedNames(m)) map.Names[Core.GetNameKey(n)] = e.Name;
-            }
-            return map;
-        }
-
-        static string GetPresentIn(FoundItem it, PresentMap map)
-        {
-            string c;
-            if (map.Commands.TryGetValue((it.Command ?? "").ToLowerInvariant(), out c)) return c;
-            return map.Names.TryGetValue(Core.GetNameKey(it.Name), out c) ? c : null;
-        }
-
-        // Everything in the list has been seen: no dot on the gear until something
-        // else turns up
+        // Everything in the list has been seen, and the games added by themselves
+        // (foundAutoAdded): no dot on the gear until something else turns up
         void SetFoundSeen()
         {
+            bool names = File.Exists(AutoAddedNoticeFile);
+            if (names) try { File.Delete(AutoAddedNoticeFile); } catch { }
             var ids = new HashSet<string>();
             if (File.Exists(Core.SeenFile)) foreach (var l in File.ReadAllLines(Core.SeenFile)) if (l != "") ids.Add(l);
             int before = ids.Count;
             foreach (var it in foundItems) ids.Add(it.Id);
-            if (ids.Count == before) return;
-            Directory.CreateDirectory(Path.GetDirectoryName(Core.SeenFile));
-            File.WriteAllLines(Core.SeenFile, ids.ToArray(), Core.Utf8);
+            if (ids.Count != before)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Core.SeenFile));
+                File.WriteAllLines(Core.SeenFile, ids.ToArray(), Core.Utf8);
+            }
+            else if (!names) return;
             InvokeRainmeter("!CommandMeasure MeasureScript \"OnFoundSeen()\" \"" + Core.Config + "\"");
             UpdateNavDots(true);
         }
@@ -204,6 +181,8 @@ namespace RaintileOptions
             DateTime d;
             if (DateTime.TryParse(foundScanned, out d)) when = ", searched " + d.ToString("g");
             foundStatus.Text = foundScanned != "" ? what + " found" + when + "." : "Not searched yet.";
+            // (written here, the launcher shows them after a refresh)
+            if (extra == "" && foundAutoAdded.Count > 0) extra = AutoAddedText(foundAutoAdded) + (needsRefresh ? " Save and refresh to see them in the launcher." : "");
             if (extra != "") foundStatus.Text = extra + " " + foundStatus.Text;
         }
 
@@ -302,7 +281,7 @@ namespace RaintileOptions
             try
             {
                 foundList.Items.Clear();
-                var present = GetPresentMap();
+                var present = GetPresentMap(models);
                 var words = Regex.Split(foundFilter.ToLowerInvariant(), @"\s+").Where(w => w != "").ToList();
                 foreach (var it in SortedFound())
                 {
@@ -346,15 +325,6 @@ namespace RaintileOptions
             }
             RefreshFoundList();
             scanTimer.Start();
-        }
-
-        // Category file for an added item; created if it does not exist yet
-        string GetCategoryFileFor(string b)
-        {
-            if (models.ContainsKey(b + ".ini") || File.Exists(Path.Combine(Core.CategoriesDir, b + ".ini"))) return b + ".ini";
-            string file = NewCategoryFile(b, b);
-            BuildNav(navCurrent);
-            return file;
         }
 
         // --- SteamGridDB --------------------------------------------------------------------
@@ -439,83 +409,45 @@ namespace RaintileOptions
             var sel = foundItems.Where(i => foundSelected.Contains(i.Id)).ToList();
             if (sel.Count == 0) return;
             string target = (string)((ComboBoxItem)foundTarget.SelectedItem).Tag;
-            string key = Core.UnprotectSecret(V("SteamGridDBKey"));
-            var present = GetPresentMap();
-            var touched = new HashSet<string>();
-            int added = 0;
-            win.Cursor = Cursors.Wait;
-            try
+            int added = AddFoundToWindow(sel, target).Count;
+            UpdateFoundStatus(added > 0 ? "Added " + added + ": save and refresh to see them in the launcher." : "Nothing added: already in the launcher.");
+        }
+
+        // The items become tiles of the window's categories (with its unsaved
+        // changes), written at once; the names added
+        List<string> AddFoundToWindow(List<FoundItem> items, string target)
+        {
+            foreach (var it in items) foundSelected.Remove(it.Id);
+            var ctx = new FoundAddContext
             {
-                for (int i = 0; i < sel.Count; i++)
+                Models = models, Setting = V, CategoryCreated = () => BuildNav(navCurrent),
+                Progress = (i, n, it) =>
                 {
-                    var it = sel[i];
-                    foundStatus.Text = "Adding " + (i + 1) + " of " + sel.Count + ": " + it.Name + "...";
+                    foundStatus.Text = "Adding " + (i + 1) + " of " + n + ": " + it.Name + "...";
                     win.Dispatcher.Invoke(new Action(() => { }), DispatcherPriority.Background);
-                    foundSelected.Remove(it.Id);
-                    if (GetPresentIn(it, present) != null) continue;
-                    // by type: a folder's own category first, then the one of its kind
-                    string b = target != "auto" ? Path.GetFileNameWithoutExtension(target)
-                        : !string.IsNullOrEmpty(it.Category) ? Core.GetTileName(it.Category)
-                        : V(Schema.KindOf(it.Kind).CategoryKey);
-                    if (b == "") b = Schema.KindOf(it.Kind).DefaultCategory;
-                    string file = GetCategoryFileFor(b);
-                    var m = GetModel(file);
-                    string name = Core.GetTileName(it.Name);
-                    if (name == "") continue;
-                    if (TestTileName(m, name)) name = name + " (" + it.Source + ")";
-                    if (TestTileName(m, name)) continue;
-                    var s = new IniSection { Name = name };
-                    Core.SetKey(s, "Command", it.Command);
-                    Core.SetKey(s, "Source", it.Id);
-                    Core.SetKey(s, "Added", DateTime.Now.ToString("yyyy-MM-dd"));   // for Not played yet
-                    // images in the default folders, named after the tile: the
-                    // local ones; for games Steam's servers, then SteamGridDB;
-                    // for apps a logo of Dashboard Icons, or SteamGridDB for
-                    // a game/app of that very name; last the program's icon
-                    try
-                    {
-                        foreach (var kind in new[] { "background", "logo" })
-                        {
-                            string local = kind == "background" ? it.Hero : it.Logo;
-                            if (local != "" && File.Exists(local)) { Core.CopyTileImage(b, kind, name, local); continue; }
-                            if (Schema.KindOf(it.Kind).GameArt)
-                            {
-                                if (DownloadTileImage(Art.SteamImage(it.SteamAppId, kind), b, kind, name)) continue;
-                                if (key != "")
-                                {
-                                    try { GetSGDBImage(key, kind == "background" ? "heroes" : "logos", name, it.SteamAppId, Path.Combine(Core.ImagesRoot, b, kind, name)); } catch { }
-                                }
-                                continue;
-                            }
-                            if (kind == "logo")
-                            {
-                                string icon = null;
-                                try { icon = Art.DashboardIconNames(it.Name).FirstOrDefault(); } catch { }
-                                if (icon != null && DownloadTileImage(Art.DashboardIconUrl(icon), b, kind, name)) continue;
-                            }
-                            if (key != "") AppSgdbImage(key, kind, it.Name, b, name);
-                        }
-                        if (Core.FindImage(Path.Combine(Core.ImagesRoot, b, "logo"), name) == null && it.Icon != "" && File.Exists(it.Icon))
-                            Core.CopyTileImage(b, "logo", name, it.Icon);
-                    }
-                    catch { }
-                    m.Sections.Add(s);
-                    present.Names[Core.GetNameKey(name)] = b;
-                    present.Commands[(it.Command ?? "").ToLowerInvariant()] = b;
-                    touched.Add(file);
-                    added++;
-                }
-            }
+                },
+            };
+            List<string> added;
+            win.Cursor = Cursors.Wait;
+            try { added = AddFoundItems(items, target, ctx); }
             finally { win.Cursor = null; }
-            foreach (var f in touched)
+            foreach (var f in ctx.Touched)
             {
                 Core.WriteCategory(Path.Combine(Core.CategoriesDir, f), GetModel(f));
                 changedFiles.Remove(f);
             }
-            if (added > 0) needsRefresh = true;
+            if (added.Count > 0) needsRefresh = true;
             UpdateDirty();
             RefreshFoundList();
-            UpdateFoundStatus(added > 0 ? "Added " + added + ": save and refresh to see them in the launcher." : "Nothing added: already in the launcher.");
+            return added;
+        }
+
+        // Games added by themselves (AutoAddGames, as set in the window), after
+        // each search of Found
+        void AutoAddInWindow()
+        {
+            if (V("AutoAddGames") != "1") return;
+            foundAutoAdded.AddRange(AutoAddGames(foundItems, GetPresentMap(models), list => AddFoundToWindow(list, "auto")));
         }
 
         Border NewFoundCard()
@@ -620,11 +552,13 @@ namespace RaintileOptions
             AddTo(f, bottom);
 
             foundScanButton.Click += (s, e) => StartFoundScan();
+            foundAutoAdded = ReadAutoAddedNotice();
             ReadFound();
             RefreshFoundSources();
             UpdateFoundStatus();
             RefreshFoundList();
-            if (foundItems.Count > 0) SetFoundSeen(); else StartFoundScan();
+            // games added by themselves: every opening looks for new ones
+            if (foundItems.Count > 0 && V("AutoAddGames") != "1") SetFoundSeen(); else StartFoundScan();
             return card;
         }
 

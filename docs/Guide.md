@@ -455,7 +455,7 @@ Logo placement, framing and the place of the [play time](#play-time) line can al
 
 ## Adding games and apps
 
-Right click on the launcher > **Add games and apps...**, or **Import > Found** in the Options window, shows what is installed on this PC (**Import** itself holds where to look, your folders and where they go). Nothing is added by itself: tick the games and apps you want and press **Add selected**. They become normal tiles, which you can edit, move and keep even after uninstalling.
+Right click on the launcher > **Add games and apps...**, or **Import > Found** in the Options window, shows what is installed on this PC (**Import** itself holds where to look, your folders and where they go). Nothing is added by itself (unless games are, see *Games added by themselves* below): tick the games and apps you want and press **Add selected**. They become normal tiles, which you can edit, move and keep even after uninstalling.
 
 The search (`Scripts\Scan.ps1`, in the background) looks in:
 
@@ -477,11 +477,12 @@ The search (`Scripts\Scan.ps1`, in the background) looks in:
 - **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. Steam games without local images get theirs from Steam's servers (no key needed). Other games, and Steam games without images there, get background and logo from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Apps get a logo from [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (some 3500 apps and services) or, with the key, from SteamGridDB when it has an app of that very name; otherwise the program's icon. Set the key in Options > Import: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
 - Something already in the launcher, in any category (same name or same command), is not listed again.
 - **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear, and on **Import** in the menu of the Options window. A click on it opens the list (Import > Found).
+- **Games added by themselves**: with `AutoAddGames=1` (Options > Import > *Add games by themselves*) every game found that is not among the tiles yet becomes a tile, and then each new game the search finds: after the search on every skin load (it runs with `AutoAddGames=1` even when `ScanOnStart=0`) and each time **Found** opens. They go where games go (`ImportCategory`, or the category of their folder), with their images, as with **Add selected**; apps are still picked by hand. A dot on the gear lists the games added (a click opens the list, where the status line names them too); the launcher reloads to show their tiles, once it is hidden or loses the focus if you are using it. The games already handled, added or already there, are remembered (`AutoAdded.txt` in the data folder): a game whose tile you remove does not come back, add it again from the list.
 - **Games no longer installed** are reported by the same search (see below).
 - The added tiles are written at once; **Save and refresh** shows them in the launcher.
 - **Older versions** imported games automatically, in a block below the line `; ===== IMPORTED AUTOMATICALLY =====`. Opening **Import** turns those games into normal tiles, once.
 
-Settings: `ImportStores` (e.g. `Steam|Epic|Apps`), `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
+Settings: `ImportStores` (e.g. `Steam|Epic|Apps`), `ScanOnStart`, `AutoAddGames`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
 ### Games no longer installed
 
@@ -833,7 +834,7 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadDeadZone` (0-32767), `GamepadRepeatD
 
 ### Games and apps
 
-See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFolders`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
+See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFolders`, `ScanOnStart`, `AutoAddGames`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
 ### Updates
 

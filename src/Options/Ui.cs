@@ -199,7 +199,8 @@ namespace RaintileOptions
     static class Program
     {
         // Arguments: -Resources <dir> -Data <dir> -Config <name> -Page <page>, or
-        // -Action runas|remove for the tile menu (TileAction.cs, no window)
+        // without the window -Action runas|remove for the tile menu (TileAction.cs)
+        // and -Action autoadd for the games added by themselves (FoundAdd.cs)
         [STAThread]
         static int Main(string[] args)
         {
@@ -224,6 +225,7 @@ namespace RaintileOptions
             {
                 Core.Init(resources, data, config);
                 if (action == "runas" || action == "remove") return TileAction.Run(action);
+                if (action == "autoadd") return OptionsApp.RunAutoAdd();
                 Core.DeleteOldUpdateFiles();
                 var app = new OptionsApp(page, clock);
                 // while the window is open the launcher's shortcuts do nothing

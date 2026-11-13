@@ -591,6 +591,12 @@ With `CheckUpdates=1` (Options > Info > *Updates*) the skin asks GitHub for the 
 - Either way your data is not touched, and only files of this repository's releases on GitHub (https) are downloaded, into a new temporary folder, and checked to be a Rainmeter package before they are used. Without the Options program (a copy of the repository) the PowerShell window only has the installer.
 - **Check now** asks GitHub again; **Release page** opens the release on GitHub.
 
+**The HotKey plugin after updating from an older version.** Earlier versions used the HotKey plugin for the keys and installed it with the package; now the keys are read by the background helper, and the update leaves the plugin where it was, unused by Raintile. On load the launcher unloads and deletes the key mini-skins of those versions (`Hotkey`, `Navigation`, `Typing`, `TileKeys`: their empty folders stay in the skin folder and can be deleted). To remove the plugin too:
+
+1. Check that no other skin needs it: in PowerShell, `Get-ChildItem "$env:USERPROFILE\Documents\Rainmeter\Skins" -Recurse -Include *.ini,*.inc | Where-Object FullName -notmatch '\\@' | Select-String 'Plugin\s*=\s*HotKey' -List` lists the skins that use it (your skins folder, if you moved it; folders starting with `@`, such as the backups, are left out: Rainmeter does not load them). If one is listed, keep the plugin.
+2. Close Rainmeter (right click on its icon in the taskbar > *Exit*): it keeps the plugins it loaded open.
+3. Delete `%APPDATA%\Rainmeter\Plugins\HotKey.dll`, then start Rainmeter again.
+
 ### Checks and tests
 
 `python tools/check.py` checks a copy of the repository before a commit; the **checks** job of the **Release package** workflow runs it on every pull request, on Windows. It needs Python 3, Windows PowerShell and `lupa` (`pip install lupa`, which brings Lua 5.1, the version of Rainmeter). It takes a few seconds.

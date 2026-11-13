@@ -436,12 +436,14 @@ ImportFolders=
 ; same search finds the tiles of games no longer installed: they are greyed
 ; out, light the dot and can be removed or kept in Options > Import.
 ScanOnStart=1
-; 1 = add the games found by themselves: on the first search every game not
-; among the tiles yet, then each new one the search finds (on every skin load
-; and when Options > Found opens), to ImportCategory or to its folder's own
-; category. Apps are still picked by hand. A dot on the gear lists what was
-; added. Games already handled are remembered (AutoAdded.txt in the data
-; folder): a game tile you remove does not come back (add it again from Found).
+; 1 = add the games found by themselves (Options > Import > Auto add games):
+; turned on in Options, every game not among the tiles yet at once, then each
+; new one the search finds (on every skin load and when Options > Found
+; opens), to ImportCategory or to its folder's own category. Apps are still
+; picked by hand. A dot on the gear, on the category in Options and on the
+; tiles marks what was added until the tile is selected there. Games already
+; handled are remembered (AutoAdded.txt in the data folder): a game tile you
+; remove does not come back (add it again from Found).
 AutoAddGames=0
 ; Categories where games and apps go when added
 ImportCategory=Games

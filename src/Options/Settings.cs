@@ -137,6 +137,8 @@ namespace RaintileOptions
         {
             if (updating) return;
             values[key] = value;
+            // turned on: the games found are added at once (Import.cs)
+            if (key == "AutoAddGames" && value == "1") StartAutoAddNow();
             UpdateDirty();
             UpdateResets();
             if (keyButtons.ContainsKey(key)) UpdateKeyConflicts();

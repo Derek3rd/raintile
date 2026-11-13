@@ -6,14 +6,16 @@
 //
 // Games added by themselves: every game found that is not among the tiles and
 // was never handled before. AutoAdded.txt (data folder) lists the ids handled,
-// added or already there, so a tile removed later does not come back; the
-// names added are listed in Generated\AutoAddedNames.txt for the dot on the
-// gear until Found is shown.
+// added or already there, so a tile removed later does not come back. The
+// tiles added are new until they are shown in their category
+// (Generated\NewTiles.txt, "<category file>|<tile name>"): a dot on the gear,
+// on the category in the menu and on the tile in its category.
 
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Windows;
 
 namespace RaintileOptions
 {
@@ -28,10 +30,16 @@ namespace RaintileOptions
         public readonly HashSet<string> Touched = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
+    // A tile added: its category file and its name
+    class AddedTile
+    {
+        public string File, Name;
+    }
+
     public partial class OptionsApp
     {
         static string AutoAddedFile { get { return Path.Combine(Core.Data, "AutoAdded.txt"); } }
-        static string AutoAddedNoticeFile { get { return Path.Combine(Core.Generated, "AutoAddedNames.txt"); } }
+        static string NewTilesFile { get { return Path.Combine(Core.Generated, "NewTiles.txt"); } }
 
         static CategoryModel GetModel(Dictionary<string, CategoryModel> models, string file)
         {
@@ -89,12 +97,12 @@ namespace RaintileOptions
         // The items as tiles of their category (target "auto": by type, a folder's
         // own category first, then the one of its kind; else that category file),
         // with their images; the files changed go into ctx.Touched, not written.
-        // Returns the names of the tiles added.
-        static List<string> AddFoundItems(List<FoundItem> items, string target, FoundAddContext ctx)
+        // Returns the tiles added.
+        static List<AddedTile> AddFoundItems(List<FoundItem> items, string target, FoundAddContext ctx)
         {
             string key = Core.UnprotectSecret(ctx.Setting("SteamGridDBKey"));
             var present = GetPresentMap(ctx.Models);
-            var added = new List<string>();
+            var added = new List<AddedTile>();
             for (int i = 0; i < items.Count; i++)
             {
                 var it = items[i];
@@ -119,7 +127,7 @@ namespace RaintileOptions
                 present.Names[Core.GetNameKey(name)] = b;
                 present.Commands[(it.Command ?? "").ToLowerInvariant()] = b;
                 ctx.Touched.Add(file);
-                added.Add(name);
+                added.Add(new AddedTile { File = file, Name = name });
             }
             return added;
         }
@@ -170,43 +178,100 @@ namespace RaintileOptions
 
         // The games found and not handled yet that are not among the tiles go
         // through add (which writes them); all those games are handled from then
-        // on. Returns the names added.
-        static List<string> AutoAddGames(List<FoundItem> found, PresentMap present, Func<List<FoundItem>, List<string>> add)
+        // on. The tiles added are new (NewTiles.txt).
+        static List<AddedTile> AutoAddGames(List<FoundItem> found, PresentMap present, Func<List<FoundItem>, List<AddedTile>> add)
         {
             var handled = ReadIdLines(AutoAddedFile);
             var games = found.Where(it => Schema.KindOf(it.Kind).Id == "game" && !handled.Contains(it.Id)).ToList();
-            if (games.Count == 0) return new List<string>();
+            if (games.Count == 0) return new List<AddedTile>();
             var missing = games.Where(it => GetPresentIn(it, present) == null).ToList();
-            var added = missing.Count > 0 ? add(missing) : new List<string>();
+            var added = missing.Count > 0 ? add(missing) : new List<AddedTile>();
             handled.UnionWith(games.Select(it => it.Id));
             Core.WriteAllTextAtomic(AutoAddedFile, string.Join("\r\n", handled.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) + "\r\n");
+            if (added.Count > 0) WriteNewTiles(ReadNewTiles().Concat(added.Select(t => t.File + "|" + t.Name)));
             return added;
         }
 
-        // Names added by themselves and not shown on Found yet
-        static List<string> ReadAutoAddedNotice()
+        // --- New tiles (added by themselves, not shown in their category yet) -----------
+
+        static List<string> ReadNewTiles()
         {
-            return File.Exists(AutoAddedNoticeFile) ? File.ReadAllLines(AutoAddedNoticeFile, Core.Utf8).Where(l => l != "").ToList() : new List<string>();
+            return File.Exists(NewTilesFile) ? File.ReadAllLines(NewTilesFile, Core.Utf8).Where(l => l.Contains("|")).ToList() : new List<string>();
         }
 
-        static string AutoAddedText(List<string> names)
+        // The list written again (gone when empty)
+        static void WriteNewTiles(IEnumerable<string> lines)
         {
-            if (names.Count == 0) return "";
+            var list = lines.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (list.Count > 0) Core.WriteAllTextAtomic(NewTilesFile, string.Join("\r\n", list) + "\r\n");
+            else if (File.Exists(NewTilesFile)) File.Delete(NewTilesFile);
+        }
+
+        // In the window: the dots of the menu follow, the skin reads the list
+        // again for the dot on the gear
+        void NewTilesChanged()
+        {
+            InvokeRainmeter("!CommandMeasure MeasureScript \"OnNewTiles()\" \"" + Core.Config + "\"");
+            UpdateNavDots(true);
+        }
+
+        // The new tiles that are still tiles of their category, as the window has
+        // them (a tile renamed or removed since leaves the list); read again
+        // after UpdateNavDots(true)
+        List<AddedTile> newTiles;
+
+        List<AddedTile> NewTiles()
+        {
+            if (newTiles != null) return newTiles;
+            newTiles = new List<AddedTile>();
+            var lines = ReadNewTiles();
+            if (lines.Count == 0) return newTiles;
+            var files = Core.GetCategoryFiles().ToDictionary(f => f.Name, f => f.Name, StringComparer.OrdinalIgnoreCase);
+            foreach (var l in lines)
+            {
+                var p = l.Split(new[] { '|' }, 2);
+                string file;
+                if (!files.TryGetValue(p[0], out file) || !Core.GetTiles(GetModel(file)).Any(s => s.Name == p[1])) continue;
+                newTiles.Add(new AddedTile { File = file, Name = p[1] });
+            }
+            if (newTiles.Count != lines.Count)
+            {
+                WriteNewTiles(newTiles.Select(t => t.File + "|" + t.Name));
+                InvokeRainmeter("!CommandMeasure MeasureScript \"OnNewTiles()\" \"" + Core.Config + "\"");
+            }
+            return newTiles;
+        }
+
+        bool IsNewTile(string file, string name)
+        {
+            return NewTiles().Any(t => string.Equals(t.File, file, StringComparison.OrdinalIgnoreCase) && t.Name == name);
+        }
+
+        // A new tile shown in its category (selected in the strip): not new any more
+        void SetTileSeen(ListTag tag)
+        {
+            if (!IsNewTile(currentFile, tag.Section.Name)) return;
+            newTiles.RemoveAll(t => string.Equals(t.File, currentFile, StringComparison.OrdinalIgnoreCase) && t.Name == tag.Section.Name);
+            WriteNewTiles(newTiles.Select(t => t.File + "|" + t.Name));
+            tag.Dot.Visibility = Visibility.Collapsed;
+            NewTilesChanged();
+        }
+
+        static string AutoAddedText(List<AddedTile> tiles)
+        {
+            if (tiles.Count == 0) return "";
             const int shown = 5;
-            string list = string.Join(", ", names.Take(shown)) + (names.Count > shown ? " and " + (names.Count - shown) + " more" : "");
-            return (names.Count == 1 ? "1 game" : names.Count + " games") + " added by themselves: " + list + ".";
+            string list = string.Join(", ", tiles.Take(shown).Select(t => t.Name)) + (tiles.Count > shown ? " and " + (tiles.Count - shown) + " more" : "");
+            return (tiles.Count == 1 ? "1 game" : tiles.Count + " games") + " added: " + list + ".";
         }
 
         // -Action autoadd: after the skin's search, on the category files. The
         // skin runs it only with AutoAddGames=1 and the window closed (it adds
-        // them itself when Found opens): checked again here, the setting may
-        // have changed meanwhile
+        // them itself when Found opens, or the setting is turned on): checked
+        // again here, the setting may have changed meanwhile
         public static int RunAutoAdd()
         {
-            var added = AutoAddToFiles();
-            if (added.Count == 0) return 0;
-            Core.WriteAllTextAtomic(AutoAddedNoticeFile, string.Join("\r\n", ReadAutoAddedNotice().Concat(added)) + "\r\n");
-            InvokeRainmeter("!CommandMeasure MeasureScript \"OnAutoAdded()\" \"" + Core.Config + "\"");
+            if (AutoAddToFiles().Count > 0) InvokeRainmeter("!CommandMeasure MeasureScript \"OnAutoAdded()\" \"" + Core.Config + "\"");
             return 0;
         }
 
@@ -227,10 +292,10 @@ namespace RaintileOptions
             var ctx = new FoundAddContext { Setting = setting };
             return AutoAddGames(found, GetPresentMap(ctx.Models), list =>
             {
-                var names = AddFoundItems(list, "auto", ctx);
+                var added = AddFoundItems(list, "auto", ctx);
                 foreach (var f in ctx.Touched) Core.WriteCategory(Path.Combine(Core.CategoriesDir, f), GetModel(ctx.Models, f));
-                return names;
-            });
+                return added;
+            }).Select(t => t.Name).ToList();
         }
     }
 }

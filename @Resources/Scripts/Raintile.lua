@@ -38,8 +38,9 @@ local typed = ''      -- text typed so far
 local leaveSearch     -- defined in the Search section
 local stopTyping      -- defined in the Search section
 local updateSearchBar -- defined in the Search section
--- Dot on the gear: an update, games added by themselves (their names), new
--- games or apps found, tiles of games no longer installed (see showNotice)
+-- Dot on the gear: an update, games added by themselves (the names of their
+-- tiles not shown in Options yet), new games or apps found, tiles of games no
+-- longer installed (see showNotice)
 local notice = { found = 0, update = nil, missing = 0, added = {} }
 local showNotice      -- defined with OpenNotice
 -- Filter bar under the menu, shown only with the search results: chips =
@@ -5909,7 +5910,7 @@ end
 
 -- Dot on the gear: an update, games added by themselves, new games or apps
 -- found, or tiles of games no longer installed. A click opens the Options
--- window where they are (Info or Import).
+-- window where they are (Info, the category of the games added, or Import).
 showNotice = function()
 	local tip
 	local added = #notice.added
@@ -5945,6 +5946,7 @@ function OpenNotice()
 		SKIN:Bang('!Manage', 'Settings')
 		return
 	end
+	if not notice.update and #notice.added > 0 then OpenOptions('new') return end
 	SKIN:Bang(SKIN:GetVariable(notice.update and 'OptionsInfoAction' or 'OptionsImportAction'))
 end
 
@@ -6346,18 +6348,29 @@ function OnScan()
 	end
 end
 
--- Names of the games added by themselves, not seen on Found yet
--- (Generated\AutoAddedNames.txt, written by the Options program)
+-- Names of the games added by themselves whose tiles were not shown in
+-- Options yet (Generated\NewTiles.txt, "<category file>|<tile name>",
+-- written by the Options program)
 function M.readAutoAdded()
-	notice.added = readLines(resources .. 'Generated\\AutoAddedNames.txt')
+	notice.added = {}
+	for _, line in ipairs(readLines(resources .. 'Generated\\NewTiles.txt')) do
+		local name = line:match('^[^|]*|(.+)$')
+		if name then notice.added[#notice.added + 1] = name end
+	end
 end
 
--- The Options program added games by themselves: the dot lists them, and the
--- skin reloads to show their tiles (M.refreshAdded)
-function OnAutoAdded()
+-- The Options program changed the list: the dot follows
+function OnNewTiles()
 	if not ready then return end
 	M.readAutoAdded()
 	showNotice()
+end
+
+-- The Options program added games by themselves (without its window): the dot
+-- lists them, and the skin reloads to show their tiles (M.refreshAdded)
+function OnAutoAdded()
+	if not ready then return end
+	OnNewTiles()
 	M.addedRefresh = true
 	M.refreshAdded()
 end
@@ -6424,7 +6437,6 @@ end
 -- The Options window showed the list: nothing is new any more
 function OnFoundSeen()
 	notice.found = 0
-	notice.added = {}
 	showNotice()
 end
 

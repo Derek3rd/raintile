@@ -46,6 +46,11 @@ namespace RaintileOptions
         bool foundShowAdded, foundCovers = true, foundBuilding;
         Process scanProcess;
         DispatcherTimer scanTimer;
+        // AutoAddGames just turned on: a search, then the games added, with the
+        // progress over the window (the search counts for its first part)
+        bool autoAdding;
+        DateTime autoAddStart;
+        const double AUTO_ADD_SEARCH = 0.4;
         Button foundScanButton, foundAddButton;
         TextBlock foundStatus, foundEmpty;
         ListBox foundList;
@@ -55,21 +60,27 @@ namespace RaintileOptions
         // every image from disk at each letter typed; emptied when the list is read again
         readonly Dictionary<string, ListBoxItem> foundEntries = new Dictionary<string, ListBoxItem>();
         ComboBox foundTarget;
-        // games added by themselves, shown in the status: the ones added while
-        // the window was closed (Generated\AutoAddedNames.txt) and here
-        List<string> foundAutoAdded = new List<string>();
+        // games added by themselves here, shown in the status
+        readonly List<AddedTile> foundAutoAdded = new List<AddedTile>();
 
         void InitFound()
         {
             // Search in the background (a separate PowerShell): the window stays usable
             scanTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+            // (the controls of Found are there only once its page was shown)
             scanTimer.Tick += (s, e) =>
             {
-                if (scanProcess == null || !scanProcess.HasExited) return;
+                if (scanProcess == null || !scanProcess.HasExited)
+                {
+                    // how long a search takes is not known: the bar slows down
+                    // towards the end of its part
+                    if (autoAdding) SetOverlayProgress(AUTO_ADD_SEARCH * (1 - Math.Exp(-(DateTime.Now - autoAddStart).TotalSeconds / 8)), "Searching the stores and your folders...");
+                    return;
+                }
                 scanTimer.Stop();
-                foundScanButton.IsEnabled = true;
+                if (foundScanButton != null) foundScanButton.IsEnabled = true;
                 ReadFound();
-                AutoAddInWindow();
+                var added = AutoAddInWindow();
                 RefreshFoundSources();
                 RefreshFoundList();
                 UpdateFoundStatus();
@@ -77,6 +88,7 @@ namespace RaintileOptions
                 RefreshMissingList();
                 InvokeRainmeter("!CommandMeasure MeasureScript \"OnMissing()\" \"" + Core.Config + "\"");
                 UpdateNavDots(true);
+                if (autoAdding) FinishAutoAddNow(added);
             };
         }
 
@@ -127,22 +139,17 @@ namespace RaintileOptions
             catch { }
         }
 
-        // Everything in the list has been seen, and the games added by themselves
-        // (foundAutoAdded): no dot on the gear until something else turns up
+        // Everything in the list has been seen: no dot on the gear until something
+        // else turns up
         void SetFoundSeen()
         {
-            bool names = File.Exists(AutoAddedNoticeFile);
-            if (names) try { File.Delete(AutoAddedNoticeFile); } catch { }
             var ids = new HashSet<string>();
             if (File.Exists(Core.SeenFile)) foreach (var l in File.ReadAllLines(Core.SeenFile)) if (l != "") ids.Add(l);
             int before = ids.Count;
             foreach (var it in foundItems) ids.Add(it.Id);
-            if (ids.Count != before)
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(Core.SeenFile));
-                File.WriteAllLines(Core.SeenFile, ids.ToArray(), Core.Utf8);
-            }
-            else if (!names) return;
+            if (ids.Count == before) return;
+            Directory.CreateDirectory(Path.GetDirectoryName(Core.SeenFile));
+            File.WriteAllLines(Core.SeenFile, ids.ToArray(), Core.Utf8);
             InvokeRainmeter("!CommandMeasure MeasureScript \"OnFoundSeen()\" \"" + Core.Config + "\"");
             UpdateNavDots(true);
         }
@@ -174,6 +181,7 @@ namespace RaintileOptions
 
         void UpdateFoundStatus(string extra = "")
         {
+            if (foundStatus == null) return;
             // "12 games and 30 apps found": each kind, in the order of the table
             var counts = Schema.IMPORT_KINDS.Select(k => foundItems.Count(i => Schema.KindOf(i.Kind) == k) + " " + k.Plural.ToLowerInvariant()).ToList();
             string what = counts.Count > 1 ? string.Join(", ", counts.Take(counts.Count - 1)) + " and " + counts.Last() : counts.FirstOrDefault();
@@ -311,16 +319,17 @@ namespace RaintileOptions
         void StartFoundScan()
         {
             if (scanProcess != null && !scanProcess.HasExited) return;
-            foundScanButton.IsEnabled = false;
-            foundStatus.Text = "Searching the stores and the Start menu...";
+            if (foundScanButton != null) foundScanButton.IsEnabled = false;
+            if (foundStatus != null) foundStatus.Text = "Searching the stores and the Start menu...";
             try
             {
                 scanProcess = StartScript("Scan.ps1", "-Resources " + Arg(Core.Resources) + " -Data " + Arg(Core.Data) + " -Stores \"" + V("ImportStores") + "\"");
             }
             catch (Exception e)
             {
-                foundScanButton.IsEnabled = true;
-                foundStatus.Text = "The search could not start: " + e.Message;
+                if (foundScanButton != null) foundScanButton.IsEnabled = true;
+                if (foundStatus != null) foundStatus.Text = "The search could not start: " + e.Message;
+                if (autoAdding) FinishAutoAddNow(null, "The search could not start: " + e.Message);
                 return;
             }
             RefreshFoundList();
@@ -415,7 +424,7 @@ namespace RaintileOptions
 
         // The items become tiles of the window's categories (with its unsaved
         // changes), written at once; the names added
-        List<string> AddFoundToWindow(List<FoundItem> items, string target)
+        List<AddedTile> AddFoundToWindow(List<FoundItem> items, string target)
         {
             foreach (var it in items) foundSelected.Remove(it.Id);
             var ctx = new FoundAddContext
@@ -423,11 +432,13 @@ namespace RaintileOptions
                 Models = models, Setting = V, CategoryCreated = () => BuildNav(navCurrent),
                 Progress = (i, n, it) =>
                 {
-                    foundStatus.Text = "Adding " + (i + 1) + " of " + n + ": " + it.Name + "...";
+                    string text = "Adding " + (i + 1) + " of " + n + ": " + it.Name + "...";
+                    if (autoAdding) SetOverlayProgress(AUTO_ADD_SEARCH + (1 - AUTO_ADD_SEARCH) * i / n, text);
+                    else if (foundStatus != null) foundStatus.Text = text;
                     win.Dispatcher.Invoke(new Action(() => { }), DispatcherPriority.Background);
                 },
             };
-            List<string> added;
+            List<AddedTile> added;
             win.Cursor = Cursors.Wait;
             try { added = AddFoundItems(items, target, ctx); }
             finally { win.Cursor = null; }
@@ -443,11 +454,37 @@ namespace RaintileOptions
         }
 
         // Games added by themselves (AutoAddGames, as set in the window), after
-        // each search of Found
-        void AutoAddInWindow()
+        // each search of Found; the tiles added
+        List<AddedTile> AutoAddInWindow()
         {
-            if (V("AutoAddGames") != "1") return;
-            foundAutoAdded.AddRange(AutoAddGames(foundItems, GetPresentMap(models), list => AddFoundToWindow(list, "auto")));
+            if (V("AutoAddGames") != "1") return new List<AddedTile>();
+            var added = AutoAddGames(foundItems, GetPresentMap(models), list => AddFoundToWindow(list, "auto"));
+            foundAutoAdded.AddRange(added);
+            if (added.Count > 0) NewTilesChanged();
+            return added;
+        }
+
+        // AutoAddGames turned on: the search runs (or the one running is waited
+        // for) and the games found are added at once
+        void StartAutoAddNow()
+        {
+            if (autoAdding || refreshing) return;
+            autoAdding = true;
+            autoAddStart = DateTime.Now;
+            ShowProgressOverlay("Adding games", "Every game found that is not among the tiles yet becomes a tile, with its images.");
+            SetOverlayProgress(0, "Searching the stores and your folders...");
+            if (scanProcess == null || scanProcess.HasExited) StartFoundScan();
+        }
+
+        // The end: the overlay goes, a dialog says what was added and where
+        void FinishAutoAddNow(List<AddedTile> added, string error = null)
+        {
+            SetOverlayProgress(1, "Done.");
+            overlay.Visibility = Visibility.Collapsed;
+            autoAdding = false;
+            string text = error ?? (added == null || added.Count == 0 ? "No game to add: every game found is already among the tiles."
+                : AutoAddedText(added) + " Their tiles have a dot in their category (Categories) until you select them. Save and refresh to see them in the launcher.");
+            ShowDialog("Auto add games", text);
         }
 
         Border NewFoundCard()
@@ -552,7 +589,6 @@ namespace RaintileOptions
             AddTo(f, bottom);
 
             foundScanButton.Click += (s, e) => StartFoundScan();
-            foundAutoAdded = ReadAutoAddedNotice();
             ReadFound();
             RefreshFoundSources();
             UpdateFoundStatus();

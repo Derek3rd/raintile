@@ -179,6 +179,15 @@ Icon buttons use the `IconButton` style and the glyphs of `Glyph` (Segoe MDL2 As
 | `0xE74A` `0xE74B` `0xE72B` `0xE72A` | `Glyph.Up` `Down` `Left` `Right` | Move an entry in a list | "Move up", ... |
 | `0xE72C` | `Glyph.Refresh` | **A list** is read again from where it comes from (Import > Found: the search runs again): at the right end of the list's filter row, disabled while it runs | "Search again" |
 
+Marks (not buttons), in a round badge on a corner of a small tile of the strip (`NewStripMark`):
+
+| Glyph | Constant | Mark |
+| --- | --- | --- |
+| `0xE718` | `Glyph.Pin` | a pinned tile, top left |
+| `0xE9E9` | `Glyph.Own` | a tile with settings of its own, not those of All tiles, top right |
+
+The accent dot means only **something new to look at**, the same everywhere: on the gear of the launcher, on the entries of the menu it leads to (a group too, open or closed), on a small tile (a game added by itself, until it is selected). Never for a state that stays.
+
 In short: the arrow and the x act on a field, in the action column of its row (or,
 for a field with two values such as a pair of keys, right after each value); the bin
 acts on a whole entry of a list, in the list's header; the pencil edits a row of a

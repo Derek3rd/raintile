@@ -43,7 +43,9 @@ namespace RaintileOptions
         readonly Dictionary<string, bool> navOpen = new Dictionary<string, bool> { { "tiles", true }, { "toprow", true }, { "keybindings", true }, { "import", true }, { "categories", true } };
         bool navBuilding;
         string navCurrent, navPending;
-        bool[] navDots;   // new found / missing, update
+        // what the dots of the menu show, read again after a change (UpdateNavDots)
+        class NavDotState { public bool Found, Update; public HashSet<string> NewTileFiles; }
+        NavDotState navDots;
         string[] editTile;
 
         public int Run()
@@ -129,7 +131,7 @@ namespace RaintileOptions
             ((Button)win.FindName("BtnClose")).Click += (s, e) => win.Close();
             win.PreviewKeyDown += (s, e) =>
             {
-                if (refreshing) { e.Handled = true; return; }   // waiting for the skin
+                if (refreshing || autoAdding) { e.Handled = true; return; }   // waiting for the skin, or for the games added
                 if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control && capturing == null)
                 {
                     e.Handled = true;
@@ -173,6 +175,8 @@ namespace RaintileOptions
             AddStartStep("  rest of the setup");
             updating = false;
             editTile = openPage == "tile" ? ReadEditTile() : null;
+            // (-Page new: the category of the first tile added by itself, not shown yet)
+            if (openPage == "new") { var t = NewTiles().FirstOrDefault(); if (t != null) editTile = new[] { t.File, "" }; }
             // The menu is built before the window appears, the page right after
             if (openPage == "info") BuildNav("");
             else if (editTile != null) { navOpen["categories"] = true; BuildNav("cat:" + editTile[0]); }
@@ -203,7 +207,7 @@ namespace RaintileOptions
             {
                 var sel = nav.SelectedItem as ListBoxItem;
                 if (sel != null) ShowNavTarget((NavTag)sel.Tag);
-                SelectTileByName(editTile[1]);
+                if (editTile[1] != "") SelectTileByName(editTile[1]);
             }
             else
             {
@@ -242,7 +246,7 @@ namespace RaintileOptions
         ListBoxItem NewNavItem(string id, string title, int glyph, int level, NavTag tag, string icon = "", bool? open = null)
         {
             var item = new ListBoxItem();
-            var g = NewGrid("Auto", "*", "Auto");
+            var g = NewGrid("Auto", "*", "Auto", "Auto");
             if (level == 0)
             {
                 var gl = NewGlyph(glyph, 15);   // ui-exempt: menu chrome
@@ -272,26 +276,24 @@ namespace RaintileOptions
                 if (tip == "") { e.Handled = true; return; }
                 item.ToolTip = tip;
             };
+            // the dot of the gear in the launcher, on the entries it leads to (a
+            // group too, also closed)
+            var dot = new Ellipse
+            {
+                Width = 8, Height = 8, Fill = ResBrush("AccentBrush"), Margin = T(Gap.Control, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
+            };
+            SetCol(dot, 2);
+            g.Children.Add(dot);
+            tag.Dot = dot;
             if (open != null)
             {
                 var ch = NewGlyph(open.Value ? Glyph.GroupOpen : Glyph.GroupClosed, 9);   // ui-exempt: menu chrome
                 ch.Foreground = ResBrush("DimBrush");
                 ch.Margin = T(Gap.Control, 0, 0, 0);
-                SetCol(ch, 2);
+                SetCol(ch, 3);
                 g.Children.Add(ch);
                 item.PreviewMouseLeftButtonDown += (s, e) => SwitchNavGroup(item, e);
-            }
-            else if (level == 0)
-            {
-                // the dot of the gear in the launcher, on the entry it leads to
-                var dot = new Ellipse
-                {
-                    Width = 8, Height = 8, Fill = ResBrush("AccentBrush"), Margin = T(Gap.Control, 0, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
-                };
-                SetCol(dot, 2);
-                g.Children.Add(dot);
-                tag.Dot = dot;
             }
             item.Content = g;
             tag.Id = id;
@@ -319,11 +321,9 @@ namespace RaintileOptions
             foreach (ListBoxItem it in nav.Items) SetNavApplies(it);
         }
 
-        // Import: games or apps found and not seen in the list yet, or games added
-        // by themselves not shown there yet
+        // Import: games or apps found and not seen in the list yet
         bool TestNewFound()
         {
-            if (File.Exists(AutoAddedNoticeFile)) return true;
             if (!File.Exists(Core.FoundFile)) return false;
             string text;
             try { text = File.ReadAllText(Core.FoundFile); } catch { return false; }
@@ -345,16 +345,26 @@ namespace RaintileOptions
         {
             // while the window opens the files are not read: ShowFirstPage does it
             if (!reload && navDots == null && !firstShown) return;
-            if (reload || navDots == null) navDots = new[] { TestNewFound() || TestMissingAny(), TestUpdateAvailable() };
-            bool newFound = navDots[0], update = navDots[1];
+            if (reload || navDots == null)
+            {
+                newTiles = null;
+                navDots = new NavDotState
+                {
+                    Found = TestNewFound() || TestMissingAny(), Update = TestUpdateAvailable(),
+                    NewTileFiles = new HashSet<string>(NewTiles().Select(t => t.File), StringComparer.OrdinalIgnoreCase),
+                };
+            }
             foreach (var it in nav.Items.OfType<ListBoxItem>().Concat(navBottom.Items.OfType<ListBoxItem>()))
             {
                 var tag = (NavTag)it.Tag;
                 if (tag.Dot == null) continue;
-                bool on = (tag.Id == "page:import" && newFound) || (tag.Id == "page:info" && update);
-                tag.Dot.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-                tag.DotTip = !on ? null : (update && tag.Id == "page:info") ? "A new version of Raintile is available."
-                    : "New games or apps found, or tiles of games no longer installed.";
+                string tip = null;
+                if ((tag.Id == "page:import" || tag.Id == "page:found") && navDots.Found) tip = "New games or apps found, or tiles of games no longer installed.";
+                else if (tag.Id == "page:info" && navDots.Update) tip = "A new version of Raintile is available.";
+                else if ((tag.Id == "categories" && navDots.NewTileFiles.Count > 0) || (tag.Type == "category" && navDots.NewTileFiles.Contains(tag.File)))
+                    tip = "Games added by themselves: their tiles have a dot until you select them.";
+                tag.Dot.Visibility = tip != null ? Visibility.Visible : Visibility.Collapsed;
+                tag.DotTip = tip;
             }
         }
 

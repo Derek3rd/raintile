@@ -77,13 +77,17 @@ function T.auto_add_after_scan()
 	t.clean(s)
 end
 
--- The games added by themselves (Generated\AutoAddedNames.txt): the dot on the
--- gear lists them, also after the refresh that shows their tiles, until Found
--- has shown them
+-- The games added by themselves (Generated\NewTiles.txt, "<file>|<tile>"): the
+-- dot on the gear lists them, also after the refresh that shows their tiles,
+-- until Options has shown every one of them; a click opens Options on their
+-- category
 function T.auto_added_notice()
-	local s = R.new({ settings = { AutoAddGames = 1 } }):start()
+	local s = R.new({ settings = { AutoAddGames = 1 } })
+	host_mkdir(s.resources .. 'Bin')
+	R.writeFile(s.resources .. 'Bin\\RaintileOptions.exe', '')
+	s:start()
 	s:call('Hide()')
-	R.writeFile(s.resources .. 'Generated\\AutoAddedNames.txt', 'Portal 2\r\nCaf\195\169 Story\r\n')
+	R.writeFile(s.resources .. 'Generated\\NewTiles.txt', 'Games.ini|Portal 2\r\nGames.ini|Caf\195\169 Story\r\n')
 	local loads = s.loads
 	s:call('OnAutoAdded()')
 	t.ok(s.loads > loads, 'no refresh for the tiles added, with the launcher hidden')
@@ -92,7 +96,13 @@ function T.auto_added_notice()
 	local tip = notice.set.tooltiptext or ''
 	t.ok(tip:find('2 games added by themselves: Portal 2, Caf[\\xE9] Story', 1, true), 'the dot does not list the games added: ' .. tip)
 	s:call('OnFoundSeen()')
-	t.ok(notice.hidden, 'the dot stays after Found showed the games added')
+	t.ok(not notice.hidden, 'the dot went with Found, before the new tiles were shown')
+	local before = #s.commands
+	s:call('OpenNotice()')
+	t.ok(ran(s, before, 'RaintileOptions%.exe".-%-Page new'), 'the dot does not open Options on the games added')
+	R.writeFile(s.resources .. 'Generated\\NewTiles.txt', '')
+	s:call('OnNewTiles()')
+	t.ok(notice.hidden, 'the dot stays after Options showed every new tile')
 	t.clean(s)
 end
 
@@ -101,7 +111,7 @@ end
 function T.auto_added_refresh_waits()
 	local s = R.new({ settings = { AutoAddGames = 1 } }):start()
 	s:call('Show()')
-	R.writeFile(s.resources .. 'Generated\\AutoAddedNames.txt', 'Portal 2\r\n')
+	R.writeFile(s.resources .. 'Generated\\NewTiles.txt', 'Games.ini|Portal 2\r\n')
 	local loads = s.loads
 	s:call('OnAutoAdded()')
 	t.eq(s.loads, loads, 'the skin refreshed while the launcher is in use')

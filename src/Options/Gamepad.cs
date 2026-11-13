@@ -384,7 +384,7 @@ namespace RaintileOptions
                 if (pid != padProcess) StopPad();
                 return;
             }
-            if (root == win && refreshing) return;
+            if (root == win && (refreshing || autoAdding)) return;
 
             // a button was just picked (PadDial.cs): it does nothing more, Start
             // does not save on its release

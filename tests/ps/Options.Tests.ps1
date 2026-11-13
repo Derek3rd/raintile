@@ -416,6 +416,9 @@ Test 'Options: the games found are added by themselves once, the apps never' {
     Assert-True ((Get-ChildItem -LiteralPath (Join-Path $data 'Categories') -Recurse | Select-String -SimpleMatch 'Calculator') -eq $null) 'an app added'
     $handled = @([IO.File]::ReadAllLines((Join-Path $data 'AutoAdded.txt')))
     Assert-Equal ($handled -join '|') 'Epic:x|Folders:c:\emu\a.exe|Steam:1' 'games handled'
+    # new until shown in their category: the dots of the gear, the menu, the strip
+    $newTiles = Join-Path $res 'Generated\NewTiles.txt'
+    Assert-Equal (@([IO.File]::ReadAllLines($newTiles)) -join ',') 'Games.ini|New Game,Emulators.ini|Emu Game' 'new tiles'
 
     # a tile removed by hand does not come back
     [IO.File]::WriteAllText($games, "[Category]`r`nName=Games`r`n`r`n[Old Game]`r`nCommand=steam://rungameid/1`r`n", $utf8)
@@ -428,4 +431,5 @@ Test 'Options: the games found are added by themselves once, the apps never' {
     Assert-Equal (& $add) '' 'a game added with AutoAddGames=0'
     [IO.File]::WriteAllText($settings, "[Variables]`r`nAutoAddGames=1`r`nImportCategory=Games`r`n", $utf8)
     Assert-Equal (& $add) 'Later Game' 'a game found later'
+    Assert-Equal (@([IO.File]::ReadAllLines($newTiles)) -join ',') 'Games.ini|New Game,Emulators.ini|Emu Game,Games.ini|Later Game' 'new tiles after a later game'
 }

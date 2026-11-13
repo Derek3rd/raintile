@@ -93,6 +93,38 @@ function T.area_file_has_launcher_size()
 	t.ok(area:match('^%d+,%d+,%d+,1920,1080\n$'), 'screen size not in Area.txt: ' .. area)
 end
 
+-- The screens changed (Helper.ps1: DisplayChanged), as when a game streaming
+-- host matches its client or adds a virtual display: the launcher in use is
+-- laid out again at once, a hidden one when it opens (never under a game),
+-- and nothing reloads when its monitor did not change.
+function T.follows_display_changes()
+	local s = launcher({})
+	local function size()
+		local V = s:upvalue('V')
+		return V.ScreenW .. 'x' .. V.ScreenH
+	end
+	local loads = s.loads
+	s:call('DisplayChanged()')
+	t.eq(s.loads, loads, 'reloaded although its monitor did not change')
+	-- in use: at once, and still shown
+	s:setScreen({ 0, 0, 3840, 2160 })
+	s:call('DisplayChanged()')
+	t.clean(s)
+	t.eq(size(), '3840x2160', 'not laid out again in use')
+	t.ok(s:upvalue('visible'), 'not shown after the new layout')
+	t.eq(R.readFile(s.resources .. 'Generated\\ShowOnLoad'), nil, 'ShowOnLoad left behind')
+	-- hidden: when it opens
+	s:call('Hide()')
+	loads = s.loads
+	s:setScreen({ 0, 0, 1920, 1080 })
+	s:call('DisplayChanged()')
+	t.eq(s.loads, loads, 'reloaded while hidden')
+	s:call('Show()')
+	t.clean(s)
+	t.eq(size(), '1920x1080', 'opened at the old size')
+	t.ok(s:upvalue('visible'), 'not shown after the new layout')
+end
+
 function T.docked_left_session()
 	local s = launcher({ LauncherMode = 'Dock', DockSide = 'Left' })
 	session(s)

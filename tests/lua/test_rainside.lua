@@ -58,6 +58,18 @@ function T.its_category_on_its_side()
 	t.clean(s)
 end
 
+-- The screens changed (the launcher passes DisplayChanged on): the Rainside,
+-- always there, goes to the edge of the new screen at once
+function T.follows_display_changes()
+	local s = rainside({ RainsideSide = 'Right', RainsideSize = '200' })
+	s:setScreen({ 0, 0, 3840, 2160 })
+	s:call('DisplayChanged()')
+	t.clean(s)
+	local V = s:upvalue('V')
+	t.eq(V.ScreenX, 3840 - 200, 'not on the right edge of the new screen')
+	t.eq(V.ScreenH, 2160, 'not as tall as the new screen')
+end
+
 -- At the top: a row of tiles, as tall as RainsideSize
 function T.along_the_top()
 	local s = rainside({ RainsideSide = 'Top', RainsideSize = '160' })

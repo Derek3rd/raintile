@@ -4711,8 +4711,8 @@ function M.launcherRect(get)
 		if mode == 'window' and raw then raw = raw:gsub('#SCREENAREA', '#WORKAREA') end
 		return raw
 	end
-	local mx, my = M.evalSetting(area('screenx'), 0), M.evalSetting(area('screeny'), 0)
-	local mw, mh = M.evalSetting(area('screenw'), 1920), M.evalSetting(area('screenh'), 1080)
+	local spec = { area('screenx'), area('screeny'), area('screenw'), area('screenh') }
+	local mx, my, mw, mh = M.evalArea(spec)
 	local function px(raw, total, default)
 		local p = trim(raw or ''):match('^([%d%.]+)%s*%%$')
 		if p then return math.floor((tonumber(p) or 0) * total / 100 + 0.5) end
@@ -4737,7 +4737,29 @@ function M.launcherRect(get)
 	else
 		mode = 'fullscreen'
 	end
-	return mode, { math.floor(x), math.floor(y), math.floor(w), math.floor(h) }, { mx, my, mw, mh }
+	-- (and the area as the settings write it: M.areaMoved)
+	return mode, { math.floor(x), math.floor(y), math.floor(w), math.floor(h) }, { mx, my, mw, mh }, spec
+end
+
+-- An area as the settings write it (#SCREENAREAWIDTH#, #SCREENAREAX@2#, ...),
+-- in pixels now: x, y, w, h
+function M.evalArea(spec)
+	return M.evalSetting(spec[1], 0), M.evalSetting(spec[2], 0), M.evalSetting(spec[3], 1920), M.evalSetting(spec[4], 1080)
+end
+
+-- The area the launcher was laid out in (writeSizes): as the settings write
+-- it, and its pixels then
+M.area = nil
+
+-- The monitor changed since the launcher was laid out: a resolution changed,
+-- a monitor added or removed (a game streaming host matching its client, a
+-- virtual display). Rainmeter's variables follow, the numbers of Sizes.inc
+-- do not.
+function M.areaMoved()
+	local a = M.area
+	if not a then return false end
+	local x, y, w, h = M.evalArea(a.spec)
+	return x ~= a.at[1] or y ~= a.at[2] or w ~= a.at[3] or h ~= a.at[4]
 end
 
 local function writeSizes()
@@ -4753,7 +4775,8 @@ local function writeSizes()
 		return defaults[key]
 	end
 	if V.Side then get = M.sideGet(get) end
-	local mode, rect, mon = M.launcherRect(get)
+	local mode, rect, mon, spec = M.launcherRect(get)
+	M.area = { spec = spec, at = mon }
 	-- the launcher docked where the Rainside always is (RainsideOrder=Inside):
 	-- beside it
 	-- (out of its edge: only while it is out, M.besideSide)
@@ -5439,11 +5462,39 @@ local function stopClock()
 	SKIN:Bang('!CommandMeasure', 'MeasureClock', 'Stop 2')
 end
 
+-- The monitor changed (M.areaMoved): laid out again for the one of now. The
+-- skin reloads (writeSizes) and, with show, shows itself once loaded
+-- (ShowOnLoad, as after "Save and refresh" in Options). True: it is reloading.
+function M.followDisplay(show)
+	if not M.areaMoved() then return false end
+	local flag = M.gen('ShowOnLoad')
+	if show then M.keepFile(flag, '1') end
+	if writeSizes() then return true end
+	if show then M.keepFile(flag, nil) end
+	return false
+end
+
+-- Helper.ps1: the screens changed (a resolution, a monitor added or removed).
+-- The launcher in use follows at once; hidden, or left open behind a game,
+-- when it is opened next (Show, Toggle), so it never reloads under a game.
+-- The Rainside, always there, at once.
+function DisplayChanged()
+	if not ready then return end
+	if V.Side then
+		M.followDisplay(false)
+		return
+	end
+	-- (reloading, the launcher reloads the Rainside too: M.sideConfig)
+	if visible and M.focused and not launching and M.followDisplay(true) then return end
+	if M.sideCat then SKIN:Bang('!CommandMeasure', 'MeasureScript', 'DisplayChanged()', V.SideConfig) end
+end
+
 -- how = 'edge': opened by the mouse on the docked edge (Helper.ps1), without
 -- the focus: the keys stay with the program in front until a click on it
 function Show(how)
 	dbg('Show: visible=' .. tostring(visible) .. ' how=' .. tostring(how))
 	if not ready then return end
+	if M.followDisplay(true) then return end
 	M.sideRelease()
 	-- (the Rainside opened with its keys over a full-screen program: shown)
 	if M.covered then
@@ -5584,6 +5635,7 @@ function Toggle()
 	-- (the open/close key and buttons: shortcuts, off while Options is open)
 	if M.optionsOpen() then return end
 	if visible and not M.focused and not launching then
+		if M.followDisplay(true) then return end
 		M.zpos(true)
 		SKIN:Bang('!Show')
 		M.setFocus(true)

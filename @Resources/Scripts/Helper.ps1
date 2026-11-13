@@ -1189,6 +1189,9 @@ public class RaintilePad
     [DllImport("user32.dll")]
     static extern bool GetCursorPos(out Point point);
 
+    [DllImport("user32.dll")]
+    static extern int GetSystemMetrics(int index);
+
     static uint ProcessOf(IntPtr window)
     {
         uint id;
@@ -1324,6 +1327,42 @@ public class RaintilePad
         launcherShown = shown;
         mouseWasDown = down;
         return change;
+    }
+
+    // --- Screens changed ------------------------------------------------------
+    // The skin reads its monitor when it loads: a resolution changed or a
+    // monitor added or removed (a game streaming host matching the client,
+    // a virtual display) would leave the launcher at the old size. The
+    // virtual screen, the main monitor and the number of monitors are
+    // compared on every loop (a few calls, on the loop that runs anyway);
+    // once they have stayed the same for DISPLAY_SETTLE ms after a change
+    // (a mode change comes in steps), DisplayChanged() tells the launcher.
+    const int DISPLAY_SETTLE = 1500;
+    string display;
+    long displayChanged = -1;
+
+    static string DisplaySignature()
+    {
+        // SM_XVIRTUALSCREEN..SM_CYVIRTUALSCREEN (76-79), SM_CXSCREEN,
+        // SM_CYSCREEN (0, 1), SM_CMONITORS (80)
+        return GetSystemMetrics(76) + "," + GetSystemMetrics(77) + "," + GetSystemMetrics(78) + ","
+            + GetSystemMetrics(79) + "," + GetSystemMetrics(0) + "," + GetSystemMetrics(1) + "," + GetSystemMetrics(80);
+    }
+
+    bool DisplayStep(long now)
+    {
+        string sig = DisplaySignature();
+        // (the first one is what the skin loaded with)
+        if (display == null) display = sig;
+        if (sig != display)
+        {
+            display = sig;
+            displayChanged = now;
+            return false;
+        }
+        if (displayChanged < 0 || now - displayChanged < DISPLAY_SETTLE) return false;
+        displayChanged = -1;
+        return true;
     }
 
     // --- The Rainside's keys ---------------------------------------------------
@@ -2227,6 +2266,8 @@ public class RaintilePad
                 int focus = FocusStep(window, now, down);
                 if (focus < 0) Send(window, Call("FocusLost()"));
                 else if (focus > 0) Send(window, Call("FocusGained()"));
+                // (the launcher passes it on to the Rainside)
+                if (DisplayStep(now)) Send(window, Call("DisplayChanged()"));
             }
             if (TrackEnabled) { try { TrackStep(now); } catch { } }
             if (DashFlag != null && window != IntPtr.Zero) { try { DashStep(window, now); } catch { } }

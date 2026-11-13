@@ -424,6 +424,9 @@ Test 'Options: the games found are added by themselves once, the apps never' {
     [IO.File]::WriteAllText($games, "[Category]`r`nName=Games`r`n`r`n[Old Game]`r`nCommand=steam://rungameid/1`r`n", $utf8)
     Assert-Equal (& $add) '' 'a removed game added again'
     Assert-True (-not ([IO.File]::ReadAllText($games) -match 'New Game')) 'the removed game is back in Games.ini'
+    # the setting turned off and on again in the window: every missing game back
+    $optionsApp.GetMethod('ForgetAutoAdded').Invoke($null, $null) | Out-Null
+    Assert-Equal (& $add) 'New Game' 'the removed game after the setting was turned on again'
 
     # a game found later is added; nothing with the setting off
     Write-Found @(@{ Id = 'GOG:7'; Kind = 'game'; Store = 'GOG'; Name = 'Later Game'; Command = '"C:\GOG\later.exe"' })

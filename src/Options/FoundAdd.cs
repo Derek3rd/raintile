@@ -6,7 +6,8 @@
 //
 // Games added by themselves: every game found that is not among the tiles and
 // was never handled before. AutoAdded.txt (data folder) lists the ids handled,
-// added or already there, so a tile removed later does not come back. The
+// added or already there, so a tile removed later does not come back while
+// the setting stays on: turned on again, it starts from nothing. The
 // tiles added are new until they are shown in their category
 // (Generated\NewTiles.txt, "<category file>|<tile name>"): a dot on the gear,
 // on the category in the menu and on the tile in its category.
@@ -189,6 +190,14 @@ namespace RaintileOptions
             Core.WriteAllTextAtomic(AutoAddedFile, string.Join("\r\n", handled.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) + "\r\n");
             if (added.Count > 0) WriteNewTiles(ReadNewTiles().Concat(added.Select(t => t.File + "|" + t.Name)));
             return added;
+        }
+
+        // AutoAddGames turned on again: the games handled are forgotten, so every
+        // game found that is not among the tiles is added, also those removed
+        // before (public: tests)
+        public static void ForgetAutoAdded()
+        {
+            if (File.Exists(AutoAddedFile)) File.Delete(AutoAddedFile);
         }
 
         // --- New tiles (added by themselves, not shown in their category yet) -----------

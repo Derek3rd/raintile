@@ -443,7 +443,8 @@ ScanOnStart=1
 ; picked by hand. A dot on the gear and on the category in Options marks what
 ; was added until the category is opened there. Games already handled are
 ; remembered (AutoAdded.txt in the data folder): a game tile you remove does
-; not come back (add it again from Found).
+; not come back while it stays on (add it again from Found); turned off and on
+; again in Options, every game not among the tiles is added back.
 AutoAddGames=0
 ; Categories where games and apps go when added
 ImportCategory=Games

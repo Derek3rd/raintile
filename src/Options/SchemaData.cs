@@ -381,7 +381,7 @@ namespace RaintileOptions
                 new Group { Title = "Search", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "ScanOnStart", Label = "Look for new ones on start", Help = "In the background, each time the skin loads: new games or apps, and tiles of games no longer installed, light a dot on the gear." },
-                    new Item { Kind = "bool", Key = "AutoAddGames", Label = "Auto add games", Help = "Turned on, every game found that is not among the tiles yet becomes a tile at once; then each new one the search finds, on every skin load and when Found opens. They go where games go (above), with a dot on the gear and on their category until you open it. Apps are still picked on Found. A game whose tile you remove does not come back: add it again from Found." },
+                    new Item { Kind = "bool", Key = "AutoAddGames", Label = "Auto add games", Help = "Turned on, every game found that is not among the tiles yet becomes a tile at once; then each new one the search finds, on every skin load and when Found opens. They go where games go (above), with a dot on the gear and on their category until you open it. Apps are still picked on Found. A game whose tile you remove does not come back while this stays on: add it again from Found, or turn this off and on again to add back every game missing." },
                     new Item { Kind = "secret", Key = "SteamGridDBKey", Label = "SteamGridDB API key", Help = "Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded. Saved encrypted: only your Windows user on this PC can read it." },
                 } },
             } },

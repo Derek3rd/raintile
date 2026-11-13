@@ -469,6 +469,7 @@ namespace RaintileOptions
         void StartAutoAddNow()
         {
             if (autoAdding || refreshing) return;
+            ForgetAutoAdded();
             autoAdding = true;
             autoAddStart = DateTime.Now;
             ShowProgressOverlay("Adding games", "Every game found that is not among the tiles yet becomes a tile, with its images.");

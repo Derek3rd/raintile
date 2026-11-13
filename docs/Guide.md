@@ -19,6 +19,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Tags and filter bar](#tags-and-filter-bar)
 - [Play time](#play-time)
 - [Launching a tile](#launching-a-tile)
+- [Streaming the PC](#streaming-the-pc)
 - [Widgets and the Dashboard](#widgets-and-the-dashboard)
   - [Widgets](#widgets)
   - [Temperatures and fans](#temperatures-and-fans)
@@ -63,6 +64,8 @@ You can also toggle it from a Windows shortcut: create a shortcut with this targ
 "C:\Program Files\Rainmeter\Rainmeter.exe" !CommandMeasure MeasureScript "Toggle()" "Raintile"
 ```
 
+`"Show()"` or `"Hide()"` in its place only opens or only closes it (for a script, see [Streaming the PC](#streaming-the-pc)).
+
 ### Full screen, window or docked
 
 `LauncherMode` (Options > General > Screen) sets how the launcher shows on its area (`ScreenX/Y/W/H`, a monitor or its work area):
@@ -72,6 +75,8 @@ You can also toggle it from a Windows shortcut: create a shortcut with this targ
 - **Dock**: on a side of the screen (`DockSide`: `Left`, `Right`, `Top`, `Bottom`), `DockSize` wide (left and right) or tall (top and bottom). It comes in from that side, sliding and fading, and goes back the same way; it hides when you click outside it (`AutoHide`). With `DockEdge=1` it also opens when the mouse rests on that edge of the screen for `DockEdgeDelay` ms, but not while a full-screen program (a game, a video) is in front; move the mouse away from the edge to open it again from there. Opened from the edge it does not take the keys: they stay with the program you were using until you click the launcher or press the shortcut.
 
 Sizes in percent (margins, menu, fonts) are of the area, not of the window, so they stay the same in every mode.
+
+When the resolution changes or a monitor is added or removed (a game streaming host matching its client, a virtual display), the launcher lays itself out again for its area: at once while it is on screen (left behind another window, it stays there, without its keys), the next time it opens while it is hidden, so it never shows up over a game. The [Rainside](#rainside) follows at once.
 
 **Compact menu**: when the categories do not all fit in the menu (a narrow window, a launcher docked left or right, or just many categories) the clock, Favorites/Recent/Not played yet, the search, the power button and the gear move into a list opened by the **☰** button at the top left (with the time and date at its top). The categories stay in a strip between it and the X: scroll it with the wheel; its edges fade where more categories are hidden, and it follows the active one. *Search* in that list opens the search bar in the place of the categories.
 
@@ -268,6 +273,17 @@ On click the tile expands to full screen (with background and logo at full resol
 | `LaunchHold` | `1500` | ms at full screen before hiding |
 | `LaunchLogoSize` | `33%` | final logo size |
 | `LaunchFontSize` | `48` | centre text for tiles without a logo |
+
+## Streaming the PC
+
+Raintile works on a PC streamed to another device with a game streaming host (Sunshine, Apollo) and a client (Moonlight, Artemis): the keys, the mouse and the controller the host passes on reach it as they would from the PC itself.
+
+- **Monitor**: keep the launcher on the *Main monitor* (Options > General > Screen), not on a numbered one. When the host adds a virtual display and makes it the main one (or the only one), the launcher goes there, at its resolution; a numbered monitor can change number when a display is added. Rainmeter itself must be running in your Windows session: on the lock screen or a UAC prompt there is no Raintile.
+- **Controller**: Raintile reads Xbox controllers (XInput). Set the host's emulated gamepad type (Configuration > Input) to **Xbox 360**: a PlayStation controller emulated as a DualShock 4 is not seen. Moonlight's combination to quit the stream (`Back` + `Start` + `LB` + `RB`) also holds `Back` + `Start`: change `GamepadToggle` if it gets in the way.
+- **Open it with the stream**: in the host's application (e.g. *Desktop*), add a command preparation with
+  - *Do*: `"C:\Program Files\Rainmeter\Rainmeter.exe" !CommandMeasure MeasureScript "Show()" "Raintile"`
+  - *Undo*: the same with `"Hide()"`
+- **4K**: the launcher draws every pixel of its area; on a 4K display turn on Rainmeter's hardware acceleration (Raintile suggests it with a notice) and see the last point of [Troubleshooting](#troubleshooting) if animations are choppy.
 
 ## Widgets and the Dashboard
 
@@ -882,7 +898,7 @@ Sizes in `Settings.inc` can be written in pixels (`PadX=40`) or as a percentage 
 - of the **width** for `PadX`, `SearchW`, `MenuItemPad`, `MenuGap`, `MenuIconGap`;
 - of the **height** for all the others (`PadY`, `Gap`, `MenuH`, `MenuIconSize`, `MenuRadius`, `IconSize`, `LabelPad`, `ScrollBarSize`, `LaunchLogoSize`), including `IconSize` in category files.
 
-With percentages the same settings work on monitors with different resolutions. Rainmeter does not understand `2%` in its formulas, so the script converts percentages to pixels into `Generated\Sizes.inc` (included after `Settings.inc`) and rewrites it, refreshing the skin, only when a percentage or the resolution changes. Font sizes stay in points.
+With percentages the same settings work on monitors with different resolutions. Rainmeter does not understand `2%` in its formulas, so the script converts percentages to pixels into `Generated\Sizes.inc` (included after `Settings.inc`) and rewrites it, refreshing the skin, only when a percentage or the resolution changes (also while it runs: see [Full screen, window or docked](#full-screen-window-or-docked)). Font sizes stay in points.
 
 ## How it works
 

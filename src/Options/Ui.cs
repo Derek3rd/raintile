@@ -496,7 +496,8 @@ namespace RaintileOptions
         {
             var d = new CardDetails { Visibility = Visibility.Collapsed };
             var content = NewPanel(Orientation.Horizontal);
-            d.Label = NewText("", Fs.Label);
+            // (the colour of the labels, not the link's dim one: it is easy to miss otherwise)
+            d.Label = NewText("", Fs.Label, ResBrush("TextBrush"));
             d.Changed = NewText("", Fs.Label, ResBrush("AccentBrush"));
             AddTo(content, d.Label);
             AddTo(content, d.Changed);

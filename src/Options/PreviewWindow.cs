@@ -193,6 +193,8 @@ namespace RaintileOptions
             LoadWheelCategories();
             if (currentFile != null) PreviewFollow(currentFile);
             PlacePreview();
+            // a run of the UI tools: not on screen either, as Options (Nav.cs)
+            if (offscreen) w.SourceInitialized += (s, e) => Cloak(w);
             w.Show();
             if (previewMax && previewFree.HasValue) w.WindowState = WindowState.Maximized;
             DrawWheel();

@@ -15,7 +15,10 @@ The Options window of Raintile as a Windows program: C#, WPF, .NET Framework 4.8
 - **Arguments**: `-Resources <@Resources> -Data <data folder> -Config <skin>
   [-Page import|tile|info|new]` (new: the category of the games added by themselves),
   or without the window `-Action runas|remove` for the tile menu and `-Action autoadd`
-  for the games added by themselves (after the skin's search).
+  for the games added by themselves (after the skin's search). `-Offscreen` is for
+  `tools/options-shots.ps1` and `tools/options-resize.ps1`: the window is cloaked (not
+  on screen, still rendered), never takes the focus, has no taskbar button, and selects
+  and scrolls when the tools ask with a message (`Nav.cs`).
 
 | File | What it holds |
 | --- | --- |

@@ -246,15 +246,20 @@ namespace RaintileOptions
     {
         // Arguments: -Resources <dir> -Data <dir> -Config <name> -Page <page>, or
         // without the window -Action runas|remove for the tile menu (TileAction.cs)
-        // and -Action autoadd for the games added by themselves (FoundAdd.cs)
+        // and -Action autoadd for the games added by themselves (FoundAdd.cs).
+        // -Offscreen (no value): the window of the UI tools (tools/options-shots.ps1),
+        // not on screen and never taking the focus (Nav.cs)
         [STAThread]
         static int Main(string[] args)
         {
             var clock = Stopwatch.StartNew();
             string resources = null, data = "", config = "Raintile", page = "", action = "";
-            for (int i = 0; i + 1 < args.Length; i++)
+            bool offscreen = false;
+            for (int i = 0; i < args.Length; i++)
             {
                 string a = args[i].TrimStart('-', '/').ToLowerInvariant();
+                if (a == "offscreen") { offscreen = true; continue; }
+                if (i + 1 >= args.Length) break;
                 if (a == "resources") resources = args[++i];
                 else if (a == "data") data = args[++i];
                 else if (a == "config") config = args[++i];
@@ -273,7 +278,7 @@ namespace RaintileOptions
                 if (action == "runas" || action == "remove") return TileAction.Run(action);
                 if (action == "autoadd") return OptionsApp.RunAutoAdd();
                 Core.DeleteOldUpdateFiles();
-                var app = new OptionsApp(page, clock);
+                var app = new OptionsApp(page, clock, offscreen);
                 // while the window is open the launcher's shortcuts do nothing
                 // (Generated\OptionsOpen.txt, read by Raintile.lua at each one):
                 // a hot key or pad buttons being picked here would start a tile
@@ -299,11 +304,14 @@ namespace RaintileOptions
         readonly Stopwatch startClock;
         readonly List<string> startSteps = new List<string>();
         bool firstShown;
+        // -Offscreen: a run of the UI tools, which must leave the desktop alone
+        readonly bool offscreen;
 
-        public OptionsApp(string page, Stopwatch clock)
+        public OptionsApp(string page, Stopwatch clock, bool offscreen)
         {
             openPage = page ?? "";
             startClock = clock;
+            this.offscreen = offscreen;
         }
 
         void AddStartStep(string name)

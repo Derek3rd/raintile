@@ -550,8 +550,10 @@ namespace RaintileOptions
 
         void ShowNavTarget(NavTag tag)
         {
-            // another page from the menu (or LB / RB): the menu back in place of the results
-            if (navSearch != null && SearchShown) navSearch.Text = "";
+            // another page from the menu (or LB / RB): the menu back in place of the
+            // results; not for the page of a result (OpenSearchHit)
+            if (navSearch != null && SearchShown && !keepSearch) navSearch.Text = "";
+            keepSearch = false;
             switch (tag.Type)
             {
                 case "page": ShowPage(tag.Page); break;

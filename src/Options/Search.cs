@@ -2,7 +2,8 @@
 // cards and settings that have every word typed (the start of one of their
 // words: labels, help, keys and Keywords, the words people use for them); the
 // window shows the results in place of the menu, and a result opens its page on
-// its row, lit for a moment. docs/OptionsUI.md, "Search".
+// its row, lit for a moment; the results stay, to try another one, until the
+// field is emptied. docs/OptionsUI.md, "Search".
 
 using System;
 using System.Collections.Generic;
@@ -160,6 +161,7 @@ namespace RaintileOptions
         TextBox navSearch;
         ListBox navResults;
         bool resultsFilling;
+        bool keepSearch;   // a result is opening its page: the results stay (ShowNavTarget)
         // what a result lights when its page is shown: the row of a setting (the
         // header of a card with a switch, the switch beside the page title), the
         // card of a group (NewSettingsPage)
@@ -176,7 +178,7 @@ namespace RaintileOptions
             {
                 if (Keyboard.Modifiers != ModifierKeys.None) return;
                 if (e.Key == Key.Escape && navSearch.Text != "") { e.Handled = true; navSearch.Text = ""; }
-                else if (e.Key == Key.Enter) { e.Handled = true; var first = SearchResultItems().FirstOrDefault(); if (first != null) OpenSearchHit((SearchHit)first.Tag); }
+                else if (e.Key == Key.Enter) { e.Handled = true; var first = SearchResultItems().FirstOrDefault(); if (first != null) OpenSearchResult(first); }
                 else if (e.Key == Key.Down) { e.Handled = true; SearchStepDown(); }
             };
             navResults.SelectionChanged += (s, e) =>
@@ -197,7 +199,7 @@ namespace RaintileOptions
                     if (n < 0) navSearch.Focus();
                     else if (n < items.Count) items[n].Focus();
                 }
-                else if ((e.Key == Key.Enter || e.Key == Key.Space) && i >= 0) { e.Handled = true; OpenSearchHit((SearchHit)items[i].Tag); }
+                else if ((e.Key == Key.Enter || e.Key == Key.Space) && i >= 0) { e.Handled = true; OpenSearchResult(items[i]); }
                 else if (e.Key == Key.Escape) { e.Handled = true; navSearch.Text = ""; navSearch.Focus(); }
             };
         }
@@ -245,8 +247,12 @@ namespace RaintileOptions
                 }
             }
             finally { resultsFilling = false; }
+            bool wasShown = SearchShown;
             navResults.Visibility = q != "" ? Visibility.Visible : Visibility.Collapsed;
             nav.Visibility = q != "" ? Visibility.Collapsed : Visibility.Visible;
+            // the menu back: on the page shown, so it says where it lives
+            if (wasShown && q == "")
+                win.Dispatcher.BeginInvoke(new Action(() => { if (nav.SelectedItem != null) nav.ScrollIntoView(nav.SelectedItem); }), DispatcherPriority.Loaded);
         }
 
         ListBoxItem NewSearchResult(SearchHit h)
@@ -262,15 +268,28 @@ namespace RaintileOptions
             }
             var item = new ListBoxItem { Content = sp, Tag = h, Padding = Gap.ListItem };
             AutomationProperties.SetName(item, h.Path != "" ? h.Title + ", " + h.Path : h.Title);
+            // a click on the result already open lights its row again
+            item.PreviewMouseLeftButtonDown += (s, e) => { if (item.IsSelected) OpenSearchHit(h); };
             return item;
         }
 
-        // Opens the page of a result (its group in the menu open, the menu back
-        // in place of the results), then lights its row: the menu shows where it is
+        // A result picked with the keys: marked as the one open, the focus stays
+        // on it (the next one is an arrow away)
+        void OpenSearchResult(ListBoxItem item)
+        {
+            resultsFilling = true;
+            try { navResults.SelectedItem = item; }
+            finally { resultsFilling = false; }
+            item.Focus();
+            OpenSearchHit((SearchHit)item.Tag);
+        }
+
+        // Opens the page of a result (its group in the menu open, for when the
+        // menu comes back), then lights its row; the results stay
         void OpenSearchHit(SearchHit h)
         {
             var page = h.Page;
-            navSearch.Text = "";
+            keepSearch = true;
             if (page.Id == "info")
             {
                 // (selected again: Info may be the page shown)
@@ -292,22 +311,11 @@ namespace RaintileOptions
         {
             // a page for a mode not in use (Wheel with the grid): said in the status line
             status.Text = !string.IsNullOrEmpty(h.Page.When) && !WhenHolds(h.Page.When) ? h.Page.Title + ": " + WhenReason(h.Page.When, null) : "";
-            // the menu shows where it lives
-            if (nav.SelectedItem != null) nav.ScrollIntoView(nav.SelectedItem);
+            // (a page, or a row not on the page shown: the page only)
             FrameworkElement fe;
-            if (!foundTargets.TryGetValue((object)h.Item ?? h.Group ?? (object)h.Page, out fe) || !fe.IsVisible)
-            {
-                var sel = (nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem;
-                if (sel != null) { if (padMode) PadSetFocus(sel); else sel.Focus(); }
-                return;
-            }
-            // the focus on its first control, for the keys and the pad; then the
-            // row scrolled into view with room around it (focusing scrolls too, to
-            // the control only: it would win if it came after)
-            fe.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
-            var f = Keyboard.FocusedElement as FrameworkElement;
-            if (padMode && f != null && IsPadTarget(f)) PadSetFocus(f, false);
-            fe.UpdateLayout();
+            if (!foundTargets.TryGetValue((object)h.Item ?? h.Group ?? (object)h.Page, out fe) || !fe.IsVisible) return;
+            // the focus stays on the result: the row is scrolled into view with
+            // room around it and lit, its control a click (or right) away
             BringIntoViewWithRoom(fe);
             FlashFound(fe);
         }

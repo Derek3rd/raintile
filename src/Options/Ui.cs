@@ -409,13 +409,14 @@ namespace RaintileOptions
         }
 
         // A search field: the magnifier and, while it is empty, the hint inside it
-        // (it says what it searches, as a label would); box holds the three
+        // (it says what it searches, as a label would); while it is not, the x that
+        // empties it. box holds them all
         public TextBox NewSearchBox(string hint, out Grid box)
         {
             box = new Grid();
             // (a text box puts its padding twice before its text, in its border and
-            // in its text host: half the room of the magnifier)
-            var tb = new TextBox { Padding = T((Gap.Column + Gap.Icon) / 2, Gap.Line, Gap.Control, Gap.Line) };
+            // in its text host: half the room of the magnifier, and of the x)
+            var tb = new TextBox { Padding = T((Gap.Column + Gap.Icon) / 2, Gap.Line, (Gap.Column + Gap.Icon) / 2, Gap.Line) };
             AutomationProperties.SetName(tb, hint);
             box.Children.Add(tb);
             var glyph = NewGlyph(Glyph.Search, Fs.Help);
@@ -431,7 +432,17 @@ namespace RaintileOptions
             h.TextTrimming = TextTrimming.CharacterEllipsis;
             h.IsHitTestVisible = false;
             box.Children.Add(h);
-            tb.TextChanged += (s, e) => h.Visibility = tb.Text == "" ? Visibility.Visible : Visibility.Collapsed;
+            var clear = NewClearButton("Clear the search (Esc)");
+            clear.Margin = T(0);
+            clear.HorizontalAlignment = HorizontalAlignment.Right;
+            clear.Click += (s, e) => { tb.Text = ""; tb.Focus(); };
+            SetActionVisible(clear, false);
+            box.Children.Add(clear);
+            tb.TextChanged += (s, e) =>
+            {
+                h.Visibility = tb.Text == "" ? Visibility.Visible : Visibility.Collapsed;
+                SetActionVisible(clear, tb.Text != "");
+            };
             return tb;
         }
 

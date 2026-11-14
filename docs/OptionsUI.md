@@ -166,12 +166,15 @@ too, so they are found together).
 ### Search
 
 The field above the menu (`Search.cs`) finds pages, cards and settings while you type:
-its results take the place of the menu, the best first; a result opens its page,
-with its menu group open and the menu back, and lights its row for a moment
-(`FlashFound`), so it also shows where the setting lives. `Ctrl+F` goes to it; the
-arrows go from it to the results and back (up from the menu's first entry too); `Esc`
-empties it. With the pad: up from the first entry of the menu, `A` for the on-screen
-keyboard, down to the results, `B` closes the search.
+its results take the place of the menu, the best first, each with where it is; a
+result opens its page and lights its row for a moment (`FlashFound`). The results
+stay, the one open marked, so another can be tried (a click on the one open lights
+its row again), until the field is emptied (`Esc`, its x, or a page picked from the
+menu at the bottom): the menu comes back on the page shown. `Ctrl+F` goes to it; the
+arrows go from it to the results and back (up from the menu's first entry too), and
+`Enter` opens one, the focus staying on it. With the pad: up from the first entry of
+the menu, `A` for the on-screen keyboard, down to the results, `A` opens one, `B`
+closes the search.
 
 - **What it reads** (`Schema.Search`): every word typed must start a word of the
   entry (its label or title, its help, its key, its `Keywords`; a colour also answers

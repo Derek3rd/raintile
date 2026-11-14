@@ -250,7 +250,7 @@ namespace RaintileOptions
                 } },
                 new Group { Title = "Colours", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "color", Key = "BgColor", Label = "Launcher background and transparency", Help = "Its opacity is the launcher's transparency: the last value of R,G,B,A (0 = see-through, 255 = solid), or the last two digits of #RRGGBBAA.", Keywords = "transparency transparent opacity see-through" },
+                    new Item { Kind = "color", Key = "BgColor", Label = "Launcher background and transparency", Help = "Its opacity (below) is the launcher's transparency: 0 % see-through, 100 % solid.", Keywords = "transparency transparent opacity see-through" },
                     new Item { Kind = "color", Key = "AccentColor", Label = "Accent", Help = "Highlight border, scrollbar, buttons under the mouse." },
                     new Item { Kind = "color", Key = "HoverColor", Label = "Highlight fill", Help = "" },
                 } },

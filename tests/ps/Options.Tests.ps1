@@ -436,3 +436,29 @@ Test 'Options: the games found are added by themselves once, the apps never' {
     Assert-Equal (& $add) 'Later Game' 'a game found later'
     Assert-Equal (@([IO.File]::ReadAllLines($newTiles)) -join ',') 'Games.ini|New Game,Emulators.ini|Emu Game,Games.ini|Later Game' 'new tiles after a later game'
 }
+
+Test 'Options: the search finds settings by the words people use for them' {
+    $schema = $optionsApp.Assembly.GetType('RaintileOptions.Schema')
+    $search = { param($q) @($schema.GetMethod('Search').Invoke($null, [object[]]@([string]$q))) }
+    $first = { param($q) $h = & $search $q; if ($h.Count -eq 0) { '(nothing)' } elseif ($h[0].Item) { $h[0].Item.Key } elseif ($h[0].Group) { 'card ' + $h[0].Group.Title } else { 'page ' + $h[0].Page.Id } }
+
+    Assert-Equal (& $first 'transparency') 'BgColor' 'transparency (a keyword)'
+    Assert-Equal (& $first 'TRANSP') 'BgColor' 'the start of a word, any case'
+    Assert-Equal (& $first 'bgcolor') 'BgColor' 'the key'
+    Assert-Equal (& $first 'wheel turn') 'WheelStepTime' 'two words'
+    Assert-Equal (& $first 'delete game') 'page categories' 'removing a game'
+    Assert-Equal (& $first 'steamgriddb') 'SteamGridDBKey' 'the SteamGridDB key'
+    Assert-Equal (& $first 'profiles') 'card Profiles' 'a card'
+    # a page's name lists the page, not every setting on it
+    $anim = & $search 'animations'
+    Assert-Equal (& $first 'animations') 'page animations' 'a page'
+    Assert-True (-not ($anim | Where-Object { $_.Item -and $_.Page.Id -eq 'animations' })) 'the settings of Animations found by the page name'
+    # every colour is found as one
+    Assert-True ((& $search 'colour' | Where-Object { $_.Item -and $_.Item.Key -eq 'ScrollThumbColor' }).Count -eq 1) 'a colour whose label does not say it'
+    Assert-Equal (& $search '').Count 0 'empty query'
+    Assert-Equal (& $search 'zzqx').Count 0 'nothing to find'
+    Assert-True ((& $search 'e').Count -le $schema.GetField('SearchMax').GetValue($null)) 'more results than the most shown'
+    # where it is: the page (with its menu entry) and the card
+    $h = (& $search 'recent tiles')[0]
+    Assert-Equal $h.Path 'Top row > Quick categories > Recent' 'the place of Recent > Tiles'
+}

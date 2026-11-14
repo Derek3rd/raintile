@@ -504,8 +504,7 @@ namespace RaintileOptions
         {
             padFocus = fe;
             fe.Focus();
-            // some room around it: the title of its card, the next row
-            if (scroll) fe.BringIntoView(new Rect(-24, -56, fe.ActualWidth + 48, fe.ActualHeight + 112));
+            if (scroll) BringIntoViewWithRoom(fe);
             ShowRing();
         }
 
@@ -677,6 +676,7 @@ namespace RaintileOptions
 
         void PadMove(Window root, int dir)
         {
+            if (root == win && SearchPadMove(dir)) return;
             // the menu: up and down select (round its end), right goes into the page
             if (root == win && InMenu(padFocus))
             {
@@ -787,6 +787,7 @@ namespace RaintileOptions
         {
             // a dialog: as Esc
             if (root != win) { root.Close(); return; }
+            if (SearchPadBack()) return;
             var list = padFocus is ListBoxItem ? ItemsControl.ItemsControlFromItemContainer(padFocus) : null;
             if (list == nav || list == navBottom) { win.Close(); return; }
             var sel = (nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem;

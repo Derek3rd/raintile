@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -47,6 +48,7 @@ namespace RaintileOptions
         public const int Refresh = 0xE72C;  // a list read again from where it comes from (Import > Found)
         public const int Pin = 0xE718;      // marks a pinned tile (not a button)
         public const int Own = 0xE9E9;      // marks a tile with settings of its own, not those of All tiles (not a button)
+        public const int Search = 0xE721;   // inside a search field (not a button)
         // the pad button that presses a button, before its text while the pad is in use
         // (AddPadHint), and on the keys and the hint line of the on-screen keyboard
         public const int PadA = 0xF093, PadB = 0xF094, PadY = 0xF095, PadX = 0xF096, PadStart = 0xEDE3;
@@ -404,6 +406,40 @@ namespace RaintileOptions
         public TextBlock NewHelp(string text, Brush brush = null)
         {
             return NewText(text, Fs.Help, brush ?? ResBrush("DimBrush"), false, true);
+        }
+
+        // A search field: the magnifier and, while it is empty, the hint inside it
+        // (it says what it searches, as a label would); box holds the three
+        public TextBox NewSearchBox(string hint, out Grid box)
+        {
+            box = new Grid();
+            // (a text box puts its padding twice before its text, in its border and
+            // in its text host: half the room of the magnifier)
+            var tb = new TextBox { Padding = T((Gap.Column + Gap.Icon) / 2, Gap.Line, Gap.Control, Gap.Line) };
+            AutomationProperties.SetName(tb, hint);
+            box.Children.Add(tb);
+            var glyph = NewGlyph(Glyph.Search, Fs.Help);
+            glyph.Foreground = ResBrush("DimBrush");
+            glyph.Margin = T(Gap.Group, 0, 0, 0);
+            glyph.HorizontalAlignment = HorizontalAlignment.Left;
+            glyph.IsHitTestVisible = false;
+            box.Children.Add(glyph);
+            // where the text box draws its text: its padding, border and inner margin
+            var h = NewText(hint, Fs.Label, ResBrush("DimBrush"));
+            h.Margin = T(Gap.Column + Gap.Icon + Gap.Help, 0, Gap.Control, 0);
+            h.VerticalAlignment = VerticalAlignment.Center;
+            h.TextTrimming = TextTrimming.CharacterEllipsis;
+            h.IsHitTestVisible = false;
+            box.Children.Add(h);
+            tb.TextChanged += (s, e) => h.Visibility = tb.Text == "" ? Visibility.Visible : Visibility.Collapsed;
+            return tb;
+        }
+
+        // Scrolls an element into view with some room around it: the title of its
+        // card above, the next row below (the pad, a search result)
+        public static void BringIntoViewWithRoom(FrameworkElement fe)
+        {
+            fe.BringIntoView(new Rect(-24, -56, fe.ActualWidth + 48, fe.ActualHeight + 112));
         }
 
         // Title of a card or of a list

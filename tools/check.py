@@ -317,6 +317,14 @@ def check_schema_layout(schema):
                 fail('Options schema: page %s: its switch %s is not the first setting of its first group, or not a bool' % (pm.group(1), psw.group(1)))
         if len(groups) == 1 and groups[0][0] != 'null' and pm.group(1) != 'info' and not re.search(r'Dash|Market|Found|Other', pm.group(3)):
             fail('Options schema: page %s: its only card has a title (the page has it)' % pm.group(1))
+    # Keywords: the other words the search finds a page, card or setting by
+    # (docs/OptionsUI.md, "Search"): lower case ASCII, each word once
+    for m in re.finditer(r'Keywords = "([^"]*)"', schema):
+        words = m.group(1).split(' ')
+        if not re.fullmatch(r'[a-z0-9-]+( [a-z0-9-]+)*', m.group(1)):
+            fail('Options schema: Keywords "%s": lower case letters, digits and dashes, one space between words' % m.group(1))
+        elif len(set(words)) != len(words):
+            fail('Options schema: Keywords "%s" has a word twice' % m.group(1))
     nav = re.search(r'NavTree = new List<NavNode>(.*?)\n        \};', schema, re.S).group(1)
     listed = re.findall(r'Page = "([a-z]+)"', nav) + [c for ch in re.findall(r'Children = new\[\] \{([^}]*)\}', nav) for c in re.findall(r'"([a-z]+)"', ch)]
     for pid in order:

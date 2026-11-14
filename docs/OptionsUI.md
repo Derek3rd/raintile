@@ -8,7 +8,8 @@ Most rules are already code: the constants and helpers in `src/Options/Ui.cs`
 (`Glyph`, `Fs`, `Gap`, `FieldWidth`, `NewHelp`, `NewSectionTitle`, `NewLabelBlock`,
 `NewClearButton`, `NewDeleteButton`, `NewResetIcon`, `SetActionVisible`,
 `MarkInvalid`, `SetTrimmed`, `NewNumberField`, `NewSizeField`, `NewChoiceBox` with
-`SelectChoice` / `ChoiceValue` / `SetChoices`, `NumericOnly`, `NewEqualButtons`, `AddRowNote`, `ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
+`SelectChoice` / `ChoiceValue` / `SetChoices`, `NumericOnly`, `NewEqualButtons`, `AddRowNote`, `ShowDialog`,
+`NewSearchBox`, `BringIntoViewWithRoom`), and in `Categories.cs` the stacked row `NewFormRow` with
 `SetFormHelp`. Build new UI with them: no glyph codes,
 font sizes or margins written by hand. When a page needs something the helpers do
 not have, add it to `Ui.cs` and to this page, not to the page's own file.
@@ -162,6 +163,31 @@ too, so they are found together).
   a page's only card has no title, that every card after the first has a title or a
   switch, and that every page is in the menu (`NavTree`) once.
 
+### Search
+
+The field above the menu (`Search.cs`) finds pages, cards and settings while you type:
+its results take the place of the menu, the best first; a result opens its page,
+with its menu group open and the menu back, and lights its row for a moment
+(`FlashFound`), so it also shows where the setting lives. `Ctrl+F` goes to it; the
+arrows go from it to the results and back (up from the menu's first entry too); `Esc`
+empties it. With the pad: up from the first entry of the menu, `A` for the on-screen
+keyboard, down to the results, `B` closes the search.
+
+- **What it reads** (`Schema.Search`): every word typed must start a word of the
+  entry (its label or title, its help, its key, its `Keywords`; a colour also answers
+  to *colour*) or of where it is (its card, its page), and one at least of the entry
+  itself: a page's name lists the page, not every setting on it. A label counts more
+  than a keyword, a keyword than the key, the key than the help.
+- **`Keywords`** (`Page`, `Group`, `Item`): the words people use for something that
+  its label and help do not say (*transparency* for the background's alpha; *delete*,
+  *remove* for Categories, where tiles are removed). Lower case, separated by spaces,
+  each once (`tools/check.py`). Add them when a setting is looked for by another name,
+  not words already in its label or help.
+- A page whose mode is not in use (Wheel with the grid) still opens from a result;
+  the status line says what it needs.
+- A new kind of row lit by a result: register it in `foundTargets` where the page is
+  built (`NewSettingsPage`), as the rows, the switch cards and the cards are.
+
 ## 1. Nothing only in a tooltip
 
 The window is used with the mouse, the keyboard and the gamepad: hovering is not
@@ -201,6 +227,8 @@ Marks (not buttons), in a round badge on a corner of a small tile of the strip (
 | --- | --- | --- |
 | `0xE718` | `Glyph.Pin` | a pinned tile, top left |
 | `0xE9E9` | `Glyph.Own` | a tile with settings of its own, not those of All tiles, top right |
+
+`0xE721` `Glyph.Search` is the magnifier inside a search field (`NewSearchBox`), not a button.
 
 The accent dot means only **something new to look at**, the same everywhere: on the gear of the launcher, on the entries of the menu it leads to (a group too, open or closed), on a small tile (a game added by itself, until it is selected). Never for a state that stays.
 
@@ -421,6 +449,7 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 - [ ] A new setting is on the page of the part it changes ("Where a setting goes"),
       after the switch it depends on, with its `When` (or in the group of its switch).
 - [ ] No title is repeated: page, card and first row do not say the same word.
+- [ ] A setting people look for by another name has it in its `Keywords` ("Search").
 - [ ] Every field shows its help; tooltips only name icon buttons, show cut text or
       shortcuts.
 - [ ] The control matches the kind of value: a single choice is a combo, a unit only

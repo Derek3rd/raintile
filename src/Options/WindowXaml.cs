@@ -19,11 +19,16 @@ namespace RaintileOptions
           <TextBlock Text=""Raintile"" FontSize=""21"" FontWeight=""SemiBold""/>
           <TextBlock x:Name=""Version"" Foreground=""{StaticResource DimBrush}"" FontSize=""12"" Margin=""0,2,0,0""/>
         </StackPanel>
+        <!-- the search (OptionsApp.InitSearch): its results in place of the menu -->
+        <Grid x:Name=""NavSearchHost"" DockPanel.Dock=""Top"" Margin=""0,0,0,12""/>
         <StackPanel DockPanel.Dock=""Bottom"" Margin=""0,10,0,0"">
           <Border Height=""1"" Background=""{StaticResource LineBrush}"" Margin=""8,0,8,8""/>
           <ListBox x:Name=""NavBottom""/>
         </StackPanel>
-        <ListBox x:Name=""Nav""/>
+        <Grid>
+          <ListBox x:Name=""Nav""/>
+          <ListBox x:Name=""NavResults"" Visibility=""Collapsed""/>
+        </Grid>
       </DockPanel>
     </Border>
     <Grid Grid.Column=""1"">

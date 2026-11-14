@@ -12,13 +12,13 @@ namespace RaintileOptions
         {
             new Page { Id = "general", Title = "General", Icon = 0xE713, Desc = "Profiles of your settings, where the launcher appears, its margins, and how it opens and closes.", Groups = new List<Group>
             {
-                new Group { Title = "Profiles", Help = null, Profiles = true, Items = new List<Item>
+                new Group { Title = "Profiles", Help = null, Profiles = true, Keywords = "preset save load setup", Items = new List<Item>
                 {
                 } },
                 new Group { Title = "Screen", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "screen", Key = "ScreenX", Label = "Area", Help = "Where the launcher shows: a monitor, or its work area (the taskbar stays free)." },
-                    new Item { Kind = "choice", Key = "LauncherMode", Label = "Mode", Help = "Full screen: all of the area. Window: drag an empty part of it to move it; it stays open when you click elsewhere. Docked: on a side of the screen, it comes in from there.", Choices = new List<string[]> { new[] { "Fullscreen", "Full screen" }, new[] { "Window", "Window" }, new[] { "Dock", "Docked on a side" } } },
+                    new Item { Kind = "screen", Key = "ScreenX", Label = "Area", Help = "Where the launcher shows: a monitor, or its work area (the taskbar stays free).", Keywords = "monitor display" },
+                    new Item { Kind = "choice", Key = "LauncherMode", Label = "Mode", Help = "Full screen: all of the area. Window: drag an empty part of it to move it; it stays open when you click elsewhere. Docked: on a side of the screen, it comes in from there.", Choices = new List<string[]> { new[] { "Fullscreen", "Full screen" }, new[] { "Window", "Window" }, new[] { "Dock", "Docked on a side" } }, Keywords = "fullscreen windowed dock sidebar" },
                 } },
                 new Group { Title = "Window", Help = null, When = "LauncherMode=Window", Items = new List<Item>
                 {
@@ -39,25 +39,25 @@ namespace RaintileOptions
                 } },
                 new Group { Title = "Opening and closing", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "StartHidden", Label = "Start hidden", Help = "Stay hidden when Rainmeter starts, until you open it with the shortcut or the gamepad." },
-                    new Item { Kind = "bool", Key = "AutoHide", Label = "Hide when it loses focus", Help = "A click outside the launcher or another program in front hides it. Off, or as a window, it stays open without keys or gamepad." },
+                    new Item { Kind = "bool", Key = "StartHidden", Label = "Start hidden", Help = "Stay hidden when Rainmeter starts, until you open it with the shortcut or the gamepad.", Keywords = "startup boot" },
+                    new Item { Kind = "bool", Key = "AutoHide", Label = "Hide when it loses focus", Help = "A click outside the launcher or another program in front hides it. Off, or as a window, it stays open without keys or gamepad.", Keywords = "focus click outside" },
                     new Item { Kind = "bool", Key = "CloseOnLaunch", Label = "Hide after launching a tile", Help = "" },
                     new Item { Kind = "choice", Key = "CloseAction", Label = "Close button (X)", Help = "Unloading frees memory, but the next opening is slower.", Choices = new List<string[]> { new[] { "[!CommandMeasure MeasureScript \"Hide()\"]", "Hide" }, new[] { "[!DeactivateConfig]", "Unload the skin" } } },
-                    new Item { Kind = "choice", Key = "ShowZPos", Label = "Window level when shown", Help = "Normal: on top only while in use. On the desktop, focus loss is not seen.", Choices = new List<string[]> { new[] { "1", "On top" }, new[] { "2", "Always on top" }, new[] { "0", "Normal" }, new[] { "-2", "On the desktop" }, new[] { "", "Unchanged" } } },
+                    new Item { Kind = "choice", Key = "ShowZPos", Label = "Window level when shown", Help = "Normal: on top only while in use. On the desktop, focus loss is not seen.", Choices = new List<string[]> { new[] { "1", "On top" }, new[] { "2", "Always on top" }, new[] { "0", "Normal" }, new[] { "-2", "On the desktop" }, new[] { "", "Unchanged" } }, Keywords = "top above below behind desktop" },
                 } },
             } },
             new Page { Id = "tiles", Title = "Tiles", Icon = 0xE8A9, Desc = "How the tiles are laid out, on a grid or on a wheel (the pages below), and how they look.", Groups = new List<Group>
             {
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "choice", Key = "ScrollMode", Label = "Layout", Help = "Grid: rows and columns. Wheel: one line of square tiles on an arc (the thumbnails), the selected one in the middle and, if you like, as the launcher's backdrop; suggested docked. Each has its page below; the page of the other one is greyed out in the menu.", Choices = new List<string[]> { new[] { "Grid", "Grid" }, new[] { "Wheel", "Wheel" } } },
+                    new Item { Kind = "choice", Key = "ScrollMode", Label = "Layout", Help = "Grid: rows and columns. Wheel: one line of square tiles on an arc (the thumbnails), the selected one in the middle and, if you like, as the launcher's backdrop; suggested docked. Each has its page below; the page of the other one is greyed out in the menu.", Choices = new List<string[]> { new[] { "Grid", "Grid" }, new[] { "Wheel", "Wheel" } }, Keywords = "carousel layout" },
                     new Item { Kind = "bool", Key = "InfiniteScroll", Label = "Infinite scroll", Help = "After the last tile the first one comes back, when there are more than fit on screen (a tile never shows twice). A category can have its own (Categories, the category: Infinite scroll)." },
                     new Item { Kind = "int", Key = "ScrollStep", Label = "Mouse wheel notch", Help = "Rows (or columns) it scrolls in the grid, tiles it turns in the wheel.", Min = 1.0, Max = 5.0, Step = 1.0, Unit = "" },
                     new Item { Kind = "size", Key = "Gap", Label = "Space", Help = "Under the top row, and between the tiles of the grid.", Axis = "H" },
                 } },
                 new Group { Title = "Tile", Help = "The tiles of the grid and the thumbnails of the wheel.", Items = new List<Item>
                 {
-                    new Item { Kind = "color", Key = "TileColor", Label = "Default tile colour", Help = "" },
+                    new Item { Kind = "color", Key = "TileColor", Label = "Default tile colour", Help = "", Keywords = "background" },
                     new Item { Kind = "bool", Key = "AutoTileColor", Label = "Colour from the logo", Help = "Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo." },
                     new Item { Kind = "int", Key = "TileRadius", Label = "Rounded corners", Help = "Radius of the corners of the tiles and of the highlight. 0 = square.", Min = 0.0, Max = 60.0, Step = 1.0, Unit = "px" },
                     new Item { Kind = "size", Key = "LabelPad", Label = "Inner margin", Help = "From the edge of the tile to its label and to the lines of the play time and updates.", Axis = "H" },
@@ -66,8 +66,8 @@ namespace RaintileOptions
                 } },
                 new Group { Title = null, Help = null, Switch = "ShowLabels", Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "ShowLabels", Label = "Labels", Help = "" },
-                    new Item { Kind = "int", Key = "LabelFontSize", Label = "Font size", Help = "", Min = 6.0, Max = 40.0, Step = 1.0, Unit = "pt" },
+                    new Item { Kind = "bool", Key = "ShowLabels", Label = "Labels", Help = "", Keywords = "names text" },
+                    new Item { Kind = "int", Key = "LabelFontSize", Label = "Font size", Help = "", Min = 6.0, Max = 40.0, Step = 1.0, Unit = "pt", Keywords = "names text" },
                 } },
             } },
             new Page { Id = "grid", When = "ScrollMode=Grid", Title = "Grid", Icon = 0, Desc = "Rows and columns, scrolled by rows or columns, and how the background images of the tiles move. Each category can have its own grid (Categories).", Groups = new List<Group>
@@ -115,7 +115,7 @@ namespace RaintileOptions
                 } },
                 new Group { Title = null, Help = "The launcher's background takes the background image of the selected tile, filling it as a desktop wallpaper (cut from its centre, not framed).", Switch = "WheelBackdrop", Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "WheelBackdrop", Label = "Backdrop", Help = "" },
+                    new Item { Kind = "bool", Key = "WheelBackdrop", Label = "Backdrop", Help = "", Keywords = "wallpaper background" },
                     new Item { Kind = "int", Key = "WheelBackdropOpacity", Label = "Opacity", Help = "Over the launcher's background colour.", Min = 5.0, Max = 100.0, Step = 5.0, Unit = "%" },
                     new Item { Kind = "choice", Key = "WheelLogoOn", Label = "Logo of the selected tile", Help = "On the backdrop: on the area under the top row, at its own place and size (Categories > the tile > Place on: The backdrop). The other thumbnails keep theirs; with Logos only, the selected one shows its background image.", Choices = new List<string[]> { new[] { "Tile", "On its thumbnail" }, new[] { "Background", "On the backdrop" } } },
                     new Item { Kind = "int", Key = "WheelBackdropLogoSize", Label = "Logo size", Help = "Its height in percent of the area under the top row, times the size the tile has there.", Min = 5.0, Max = 80.0, Step = 1.0, Unit = "%", When = "WheelLogoOn=Background" },
@@ -221,7 +221,7 @@ namespace RaintileOptions
                     new Item { Kind = "size", Key = "FilterGap", Label = "Space between chips", Help = "", Axis = "W" },
                 } },
             } },
-            new Page { Id = "rainside", Switch = "Rainside", Title = "Rainside", Icon = 0xE90D, Desc = "One category on a side of the screen, apart from the launcher: always there, or coming out of its edge, with its widgets. The category is not in the launcher's menu; search still finds its tiles.", Groups = new List<Group>
+            new Page { Id = "rainside", Switch = "Rainside", Title = "Rainside", Icon = 0xE90D, Desc = "One category on a side of the screen, apart from the launcher: always there, or coming out of its edge, with its widgets. The category is not in the launcher's menu; search still finds its tiles.", Keywords = "sidebar panel bar", Groups = new List<Group>
             {
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {
@@ -240,17 +240,17 @@ namespace RaintileOptions
                     new Item { Kind = "choice", Key = "RainsideOrder", Label = "With the launcher on the same side", Help = "When the launcher is docked on the Rainside's side. Each opens with its own shortcut; out of its edge, the launcher opens beside the Rainside if it is out, at the edge if not.", Choices = new List<string[]> { new[] { "Inside", "The launcher opens beside it" }, new[] { "Outside", "The launcher opens at the edge, the Rainside slides aside" } } },
                 } },
             } },
-            new Page { Id = "theme", Title = "Theme", Icon = 0xE790, Desc = "The font and the colours the whole launcher shares; the colours of one part are on its page. Colours can be written as R,G,B,A or #RRGGBBAA: click the swatch to pick one.", Groups = new List<Group>
+            new Page { Id = "theme", Title = "Theme", Icon = 0xE790, Desc = "The font and the colours the whole launcher shares; the colours of one part are on its page. Colours can be written as R,G,B,A or #RRGGBBAA: click the swatch to pick one.", Keywords = "dark light look appearance colour color", Groups = new List<Group>
             {
                 new Group { Title = "Text", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "font", Key = "FontFace", Label = "Font", Help = "" },
+                    new Item { Kind = "font", Key = "FontFace", Label = "Font", Help = "", Keywords = "typeface text" },
                     new Item { Kind = "color", Key = "TextColor", Label = "Text", Help = "" },
                     new Item { Kind = "color", Key = "TextDimColor", Label = "Dimmed text", Help = "" },
                 } },
                 new Group { Title = "Colours", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "color", Key = "BgColor", Label = "Launcher background and transparency", Help = "Its opacity is the launcher's transparency: the last value of R,G,B,A (0 = see-through, 255 = solid), or the last two digits of #RRGGBBAA." },
+                    new Item { Kind = "color", Key = "BgColor", Label = "Launcher background and transparency", Help = "Its opacity is the launcher's transparency: the last value of R,G,B,A (0 = see-through, 255 = solid), or the last two digits of #RRGGBBAA.", Keywords = "transparency transparent opacity see-through" },
                     new Item { Kind = "color", Key = "AccentColor", Label = "Accent", Help = "Highlight border, scrollbar, buttons under the mouse." },
                     new Item { Kind = "color", Key = "HoverColor", Label = "Highlight fill", Help = "" },
                 } },
@@ -259,7 +259,7 @@ namespace RaintileOptions
             {
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "int", Key = "FadeDuration", Label = "Fade when opening and closing", Help = "The whole launcher. Applies from the next time Rainmeter loads the skin.", Min = 0.0, Max = 1000.0, Step = 10.0, Unit = "ms" },
+                    new Item { Kind = "int", Key = "FadeDuration", Label = "Fade when opening and closing", Help = "The whole launcher. Applies from the next time Rainmeter loads the skin.", Min = 0.0, Max = 1000.0, Step = 10.0, Unit = "ms", Keywords = "speed duration fast slow" },
                     new Item { Kind = "float", Key = "AnimSmooth", Label = "Smoothing", Help = "Of every movement without a smoothing of its own (below). Lower is smoother and slower, 1 is instant.", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "" },
                 } },
                 new Group { Title = "Appearing tiles", Help = null, Items = new List<Item>
@@ -273,9 +273,9 @@ namespace RaintileOptions
                 } },
                 new Group { Title = null, Help = "Off: the grid jumps and the wheel snaps to the new place.", Switch = "AnimScroll", Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "AnimScroll", Label = "Smooth scrolling", Help = "" },
+                    new Item { Kind = "bool", Key = "AnimScroll", Label = "Smooth scrolling", Help = "", Keywords = "speed fast slow" },
                     new Item { Kind = "float", Key = "AnimScrollSmooth", Label = "Smoothing", Help = "Lower is smoother and slower, 1 is instant.", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "", When = "ScrollMode=Grid" },
-                    new Item { Kind = "int", Key = "WheelStepTime", Label = "Wheel turn time", Help = "For one tile.", Min = 60.0, Max = 600.0, Step = 10.0, Unit = "ms", When = "ScrollMode=Wheel" },
+                    new Item { Kind = "int", Key = "WheelStepTime", Label = "Wheel turn time", Help = "For one tile.", Min = 60.0, Max = 600.0, Step = 10.0, Unit = "ms", When = "ScrollMode=Wheel", Keywords = "speed fast slow rotation spin" },
                 } },
                 new Group { Title = "Highlight", Help = null, Items = new List<Item>
                 {
@@ -287,18 +287,18 @@ namespace RaintileOptions
                 } },
                 new Group { Title = null, Help = null, Switch = "LaunchAnimation", Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "LaunchAnimation", Label = "Tile launch: full-screen expansion", Help = "The tile expands to full screen before the launcher hides." },
+                    new Item { Kind = "bool", Key = "LaunchAnimation", Label = "Tile launch: full-screen expansion", Help = "The tile expands to full screen before the launcher hides.", Keywords = "start zoom" },
                     new Item { Kind = "int", Key = "LaunchAnimFrames", Label = "Expansion length", Help = "", Min = 1.0, Max = 60.0, Step = 1.0, Unit = "steps" },
                     new Item { Kind = "int", Key = "LaunchHold", Label = "Time at full screen", Help = "", Min = 0.0, Max = 5000.0, Step = 100.0, Unit = "ms" },
                     new Item { Kind = "size", Key = "LaunchLogoSize", Label = "Logo size at full screen", Help = "", Axis = "H" },
                     new Item { Kind = "int", Key = "LaunchFontSize", Label = "Text size for tiles without a logo", Help = "", Min = 8.0, Max = 120.0, Step = 1.0, Unit = "pt" },
                 } },
             } },
-            new Page { Id = "keybindings", Title = "Keybindings", Icon = 0xE765, Desc = "Click a key and press the new one: the keys that open and close the launcher here, the keyboard and the gamepad on the pages below.", Groups = new List<Group>
+            new Page { Id = "keybindings", Title = "Keybindings", Icon = 0xE765, Desc = "Click a key and press the new one: the keys that open and close the launcher here, the keyboard and the gamepad on the pages below.", Keywords = "shortcut hotkey keyboard", Groups = new List<Group>
             {
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "combo", Key = "OpenHotKey", Label = "Open / close the launcher", Help = "Works everywhere, also while the launcher is hidden. Hold the modifiers, then press the key." },
+                    new Item { Kind = "combo", Key = "OpenHotKey", Label = "Open / close the launcher", Help = "Works everywhere, also while the launcher is hidden. Hold the modifiers, then press the key.", Keywords = "shortcut hotkey show hide" },
                     new Item { Kind = "key", Key = "CloseHotKey", Label = "Close", Help = "Closes the search first, if it is open." },
                     new Item { Kind = "choice", Key = "TileKeysWhen", Label = "Tile hot keys", Help = "When the key combinations of the tiles (tile editor > Hot key) start them. Only with the launcher open, the keys stay free for other programs the rest of the time.", Choices = new List<string[]> { new[] { "Always", "Always, also with the launcher closed" }, new[] { "Open", "Only with the launcher open" } } },
                 } },
@@ -318,7 +318,7 @@ namespace RaintileOptions
                     new Item { Kind = "key", Key = "NavSearch", Label = "Search", Help = "" },
                 } },
             } },
-            new Page { Id = "gamepad", Switch = "Gamepad", Title = "Gamepad", Icon = 0xE7FC, Desc = "Xbox and compatible (XInput) controllers, read by a small background helper. Click a field and pick its buttons on the dial (each click puts one in or takes it out), or press A on it and hold the new buttons together on the pad. With more buttons (up to 4), all are held together.", Groups = new List<Group>
+            new Page { Id = "gamepad", Switch = "Gamepad", Title = "Gamepad", Icon = 0xE7FC, Desc = "Xbox and compatible (XInput) controllers, read by a small background helper. Click a field and pick its buttons on the dial (each click puts one in or takes it out), or press A on it and hold the new buttons together on the pad. With more buttons (up to 4), all are held together.", Keywords = "controller joystick xbox", Groups = new List<Group>
             {
                 new Group { Title = "Controller", Help = null, Items = new List<Item>
                 {
@@ -365,7 +365,7 @@ namespace RaintileOptions
                 {
                 } },
             } },
-            new Page { Id = "import", Title = "Import", Icon = 0xE896, Desc = "Where to look for the games and apps installed on this PC, and where they go. The ones found are on Found, below: pick the ones to add, they become normal tiles with their images. Nothing is added by itself, unless Auto add games is on (below). To remove a tile: Categories, the tile, then its bin button (or right click it in the launcher > Remove from...).", Groups = new List<Group>
+            new Page { Id = "import", Title = "Import", Icon = 0xE896, Desc = "Where to look for the games and apps installed on this PC, and where they go. The ones found are on Found, below: pick the ones to add, they become normal tiles with their images. Nothing is added by itself, unless Auto add games is on (below). To remove a tile: Categories, the tile, then its bin button (or right click it in the launcher > Remove from...).", Keywords = "add scan steam epic gog ubisoft xbox battlenet", Groups = new List<Group>
             {
                 new Group { Title = "Game stores", Help = null, Items = new List<Item>
                 {
@@ -391,10 +391,10 @@ namespace RaintileOptions
                 } },
                 new Group { Title = "Images", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "secret", Key = "SteamGridDBKey", Label = "SteamGridDB API key", Help = "Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded. Saved encrypted: only your Windows user on this PC can read it." },
+                    new Item { Kind = "secret", Key = "SteamGridDBKey", Label = "SteamGridDB API key", Help = "Free, from steamgriddb.com > Preferences > API. When adding a game without local images, its background and logo are downloaded. Saved encrypted: only your Windows user on this PC can read it.", Keywords = "images artwork cover logo download" },
                 } },
             } },
-            new Page { Id = "found", Title = "Found", Icon = 0, Desc = "The games and apps found on this PC: tick the ones to add, then Add selected. Where to look is on Import. To remove a tile: Categories, the tile, then its bin button.", Groups = new List<Group>
+            new Page { Id = "found", Title = "Found", Icon = 0, Desc = "The games and apps found on this PC: tick the ones to add, then Add selected. Where to look is on Import. To remove a tile: Categories, the tile, then its bin button.", Keywords = "add install installed games apps", Groups = new List<Group>
             {
                 new Group { Title = null, Help = null, Found = true, Items = new List<Item>
                 {
@@ -404,12 +404,12 @@ namespace RaintileOptions
             {
                 new Group { Title = "Performance", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "Thumbnails", Label = "Thumbnails", Help = "Uses copies of the images at the exact displayed size, made in the background." },
-                    new Item { Kind = "choice", Key = "FrameRate", Label = "Animation steps", Help = "Rainmeter draws the whole window on every step: on very large screens fewer steps keep the animations smooth. Automatic: 30 per second from about 3 million pixels (e.g. 3440x1440), otherwise 60. Animations last the same either way.", Choices = new List<string[]> { new[] { "Auto", "Automatic" }, new[] { "60", "60 per second" }, new[] { "30", "30 per second" } } },
+                    new Item { Kind = "bool", Key = "Thumbnails", Label = "Thumbnails", Help = "Uses copies of the images at the exact displayed size, made in the background.", Keywords = "performance slow memory" },
+                    new Item { Kind = "choice", Key = "FrameRate", Label = "Animation steps", Help = "Rainmeter draws the whole window on every step: on very large screens fewer steps keep the animations smooth. Automatic: 30 per second from about 3 million pixels (e.g. 3440x1440), otherwise 60. Animations last the same either way.", Choices = new List<string[]> { new[] { "Auto", "Automatic" }, new[] { "60", "60 per second" }, new[] { "30", "30 per second" } }, Keywords = "performance fps slow" },
                 } },
                 new Group { Title = "Diagnostics", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "DebugLog", Label = "Debug log", Help = "Writes details to the Rainmeter log (About > Log)." },
+                    new Item { Kind = "bool", Key = "DebugLog", Label = "Debug log", Help = "Writes details to the Rainmeter log (About > Log).", Keywords = "logging problems" },
                 } },
                 new Group { Title = "Other settings", Help = null, Other = true, Items = new List<Item>
                 {
@@ -419,11 +419,11 @@ namespace RaintileOptions
             {
                 new Group { Title = "Updates", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "bool", Key = "CheckUpdates", Label = "Check for updates", Help = "Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info." },
+                    new Item { Kind = "bool", Key = "CheckUpdates", Label = "Check for updates", Help = "Once a day, on GitHub. A new version lights the dot on the gear and is shown in Info.", Keywords = "version" },
                     new Item { Kind = "choice", Key = "UpdateChannel", Label = "Channel", Help = "Nightly: also the build made on every change (e.g. 1.2.1.5, the 5th after the release 1.2.1): the newest features, not tested as much. A copy of the skin is kept in Skins\\@Backup before each update.", Choices = new List<string[]> { new[] { "Release", "Releases" }, new[] { "Nightly", "Nightly builds" } } },
                 } },
             } },
-            new Page { Id = "categories", Title = "Categories", Icon = 0xECA5, Desc = "One file per category in Categories\\. Select a category to edit it; double-click it, or pick it in the menu, for its tiles: there a tile is edited, moved or removed (its bin button).", Groups = new List<Group>
+            new Page { Id = "categories", Title = "Categories", Icon = 0xECA5, Desc = "One file per category in Categories\\. Select a category to edit it; double-click it, or pick it in the menu, for its tiles: there a tile is edited, moved or removed (its bin button).", Keywords = "delete remove uninstall game app tile tiles edit rename icon image", Groups = new List<Group>
             {
             } },
         };

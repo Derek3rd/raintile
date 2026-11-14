@@ -117,12 +117,14 @@ namespace RaintileOptions
                 navBuilding = false;
                 ShowNavTarget((NavTag)sel.Tag);
             };
-            // Up and down go round the menu
+            InitSearch();
+            // Up and down go round the menu; up from its first entry, to the search
             foreach (var list in new[] { nav, navBottom })
                 list.PreviewKeyDown += (s, e) =>
                 {
                     if ((e.Key != Key.Up && e.Key != Key.Down) || Keyboard.Modifiers != ModifierKeys.None) return;
                     e.Handled = true;
+                    if (e.Key == Key.Up && NavEntries().IndexOf((nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem) == 0) { FocusSearch(); return; }
                     var next = NavStep(e.Key == Key.Down ? 1 : -1);
                     if (next != null) next.Focus();
                 };
@@ -136,6 +138,11 @@ namespace RaintileOptions
                 {
                     e.Handled = true;
                     StartSaveAndRefresh();
+                }
+                else if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control && capturing == null)
+                {
+                    e.Handled = true;
+                    FocusSearch();
                 }
             };
             win.Closing += (s, e) =>
@@ -543,6 +550,8 @@ namespace RaintileOptions
 
         void ShowNavTarget(NavTag tag)
         {
+            // another page from the menu (or LB / RB): the menu back in place of the results
+            if (navSearch != null && SearchShown) navSearch.Text = "";
             switch (tag.Type)
             {
                 case "page": ShowPage(tag.Page); break;

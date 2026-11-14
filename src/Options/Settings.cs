@@ -843,7 +843,7 @@ namespace RaintileOptions
                     continue;
                 }
                 if (group.Dash) { AddTo(sp, NewDashCard()); continue; }
-                if (group.Profiles) { AddTo(sp, NewProfilesCard(group)); continue; }
+                if (group.Profiles) { var profiles = NewProfilesCard(group); AddTo(sp, profiles); foundTargets[group] = profiles; continue; }
                 if (group.Market)
                 {
                     // widgets to download (its own card)
@@ -864,10 +864,14 @@ namespace RaintileOptions
                 {
                     foreach (var item in group.Items)
                     {
-                        if (item == sw || item == pageSw) { rows++; continue; }
+                        // (what the search lights: the card's header, the switch beside the title)
+                        if (item == sw) { foundTargets[item] = (FrameworkElement)CardPanel(card).Children[0]; rows++; continue; }
+                        if (item == pageSw) { foundTargets[item] = (FrameworkElement)pageSwitches[page.Id]; rows++; continue; }
                         if (item.Kind == "stores")
                         {
-                            foreach (var r in NewStoresRows(item)) { CardPanel(card).Children.Add(r); rows++; }
+                            var storeRows = NewStoresRows(item);
+                            if (storeRows.Count > 0) foundTargets[item] = (FrameworkElement)storeRows[0];
+                            foreach (var r in storeRows) { CardPanel(card).Children.Add(r); rows++; }
                             continue;
                         }
                         // your folders: a grid as wide as the card (name, folder, kind, category)
@@ -877,11 +881,12 @@ namespace RaintileOptions
                             help.Margin = T(0, 0, 0, Gap.Control);
                             AddTo(CardPanel(card), help);
                             AddTo(CardPanel(card), NewFoldersControl(item.Key));
+                            foundTargets[item] = (FrameworkElement)CardPanel(card).Children[0];   // the header, with its switch
                             rows++;
                             continue;
                         }
                         var row = NewItemRow(item);
-                        if (row != null) { CardPanel(card).Children.Add(row); rows++; }
+                        if (row != null) { CardPanel(card).Children.Add(row); foundTargets[item] = (FrameworkElement)row; rows++; }
                         var b = row as Border;
                         // the categories the carousel cannot centre (UpdateCarouselNote)
                         if (b != null && !string.IsNullOrEmpty(item.When))
@@ -891,7 +896,7 @@ namespace RaintileOptions
                 // (with a switch, no reason: the switch is in the header)
                 if (rows > 0 && groupWhen != null)
                     whenCards.Add(new WhenCard { Outer = pageWhen, Own = own, Card = card, Why = sw != null || group.When == null ? null : AddCardReason(card, WhenReason(group.When, page)), Keep = group.Store != null ? ((Grid)CardPanel(card).Children[0]) : null });
-                if (rows > 0) AddTo(sp, card);
+                if (rows > 0) { AddTo(sp, card); foundTargets[group] = card; }
             }
             UpdateWhenRows();
             return sv;

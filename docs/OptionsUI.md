@@ -23,24 +23,27 @@ checked.
 ## 0. Where a setting goes
 
 Settings are placed **by the part of the launcher they change**, not by the kind of
-value: a part's sizes, font size, colours and timing live on its page. Only what
+value: a part's sizes, font size and colours live on its page. Only what
 several parts share has a page of its own: **Theme** (the font, the text colours,
-background, accent, highlight) and **Animations** (effects of the whole launcher).
+background and transparency, accent, highlight) and **Animations** (how things move:
+the fade, the smoothing and the length of every movement, the wheel's turn time
+too, so they are found together).
 
 | Part of the launcher | Page |
 | --- | --- |
 | Saved sets of the settings (profiles): pick, load, save, delete | General (its first card) |
-| Where it shows, its mode (full screen, window, docked), margins, opening and closing | General |
+| Where it shows, its mode (full screen, window, docked), margins, opening and closing behaviour | General |
 | Grid or wheel, scrolling and spacing of both, the tile itself in both (colour, corners, inner margin, highlight, label) | Tiles |
 | Rows and columns, the grid tiles' logo size, scroll direction, edge fade, how the background images move, scrollbar | Tiles > Grid |
-| The wheel's shape, its thumbnails, its backdrop, its turning, its inner wheel of categories | Tiles > Wheel |
+| The wheel's shape, its thumbnails, its backdrop, the mouse on its side tiles, its inner wheel of categories | Tiles > Wheel |
 | The play time line, Steam updates on the tiles | Tiles > Play time and updates |
-| The category menu and its colours, Favorites, the buttons of the top row | Top row |
-| Recent, Not played yet | Top row > Recent and Not played yet |
+| The category menu and its colours, the buttons of the top row | Top row |
+| Favorites, Recent, Not played yet | Top row > Quick categories |
 | Time and date | Top row > Clock |
 | Search bar, filter bar | Top row > Search |
 | Shared font and colours | Theme |
-| Effects, appearing tiles, smoothing, tile launch | Animations |
+| The fade when opening and closing, smoothing, appearing tiles, smooth scrolling and the wheel's turn time, highlight and logo zoom, tile launch | Animations |
+| The category on a side of the screen | Rainside |
 | Opening keys, tile hot keys; navigation keys; the gamepad | Keybindings; > Keyboard; > Gamepad |
 | Where to look for games and apps, your folders, where they go | Import |
 | The games and apps found, the tiles no longer installed | Import > Found |
@@ -48,6 +51,17 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 | Performance, diagnostics | Advanced |
 | The updates (check, channel) with the installed and latest version | Info > Updates |
 
+- **The menu in sections**, in this order: **Your launcher** (what is in it: Categories,
+  Import, Widgets), **Look and behaviour** (the parts above), **Controls** (keys,
+  gamepad), **System** (Advanced); Info at the bottom. A page starting a section has
+  `Section` on its `NavNode`; the section title is not an entry (`NewNavSection`).
+- **The user's words.** A label says what it changes as someone looking for it would
+  say it; where the value has a technical name, the label or help also gives the
+  common one (the background's alpha is its *transparency*). A label never repeats
+  the title of its card (Scrollbar > Thickness, not Scrollbar thickness).
+- **What is done elsewhere is said where it is looked for**: a page whose task is
+  done on another page says where in its description (removing a tile: Import,
+  Found and Categories say it is the tile's bin button in Categories).
 - A new setting: find its part in the table. A new part gets a row here (and its
   page, or a group on the page of the part it belongs to) in the same PR.
 - **Settings of one layout.** What only the grid uses (rows and columns, `Size=`, the

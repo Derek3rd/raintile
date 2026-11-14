@@ -303,6 +303,21 @@ namespace RaintileOptions
             return item;
         }
 
+        // The title of a section of the menu (NavNode.Section), above its entries:
+        // not an entry, never selected nor passed over (NavEntries leaves out the
+        // disabled ones)
+        ListBoxItem NewNavSection(string title)
+        {
+            var t = NewSectionTitle(title);
+            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            return new ListBoxItem
+            {
+                Content = t, IsEnabled = false, IsHitTestVisible = false, Focusable = false,
+                Padding = T(Gap.Group, nav.Items.Count == 0 ? Gap.Line : Gap.Card, Gap.Group, Gap.Line),
+                Tag = new NavTag { Type = "section" },
+            };
+        }
+
         // The page of a mode not in use (Page.When: Grid, Wheel): its entry greyed
         // out and passed over, until the setting it needs changes
         void SetNavApplies(ListBoxItem item)
@@ -376,6 +391,7 @@ namespace RaintileOptions
                 nav.Items.Clear();
                 foreach (var node in Schema.NavTree)
                 {
+                    if (node.Section != null) nav.Items.Add(NewNavSection(node.Section));
                     if (node.Children != null)
                     {
                         // a page with sub-pages below it: a click on it shows it and

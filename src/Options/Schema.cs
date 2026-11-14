@@ -68,10 +68,11 @@ namespace RaintileOptions
         public bool GameArt;
     }
 
-    // Menu on the left: a page (with its sub-pages, Children), or the categories
+    // Menu on the left: a page (with its sub-pages, Children), or the categories;
+    // Section: the title of the section of the menu it starts
     public class NavNode
     {
-        public string Page, Id, Title;
+        public string Page, Id, Title, Section;
         public int Icon;
         public string[] Children;
         public bool Categories;

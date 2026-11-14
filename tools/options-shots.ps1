@@ -59,6 +59,13 @@ param(
     [string[]]$Page = @()   # entries of the menu to shoot; empty: every page
 )
 $ErrorActionPreference = 'Stop'
+# Any failure ends the run with exit code 1 and says what failed, also when the script
+# is called from another PowerShell (& tools\options-shots.ps1), where an error alone
+# would leave $LASTEXITCODE as it was
+trap {
+    [Console]::Error.WriteLine('options-shots: FAILED: ' + ($_ | Out-String).Trim())
+    exit 1
+}
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $Out) { $Out = Join-Path $repo 'build\options-shots' }
 $cache = Join-Path $Out 'cache'
@@ -95,6 +102,8 @@ using System.Runtime.InteropServices;
 public static class ShotsWin32 {
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
     [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
 }
 public static class ShotsDiff {
@@ -177,19 +186,47 @@ function Get-Key([string]$ref, [string]$inputsId) {
     return ((($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 16))
 }
 
-function Save-Shot([IntPtr]$hwnd, [string]$file) {
+# The client area of the window; $null when it cannot be read or is empty
+function Get-ClientSize([IntPtr]$hwnd) {
     $r = New-Object ShotsWin32+RECT
-    [void][ShotsWin32]::GetClientRect($hwnd, [ref]$r)
-    $bmp = New-Object System.Drawing.Bitmap(($r.R - $r.L), ($r.B - $r.T))
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $dc = $g.GetHdc()
-    # PW_RENDERFULLCONTENT (also when covered) + PW_CLIENTONLY: without the title bar,
-    # drawn differently when the window is not active
-    [void][ShotsWin32]::PrintWindow($hwnd, $dc, 3)
-    $g.ReleaseHdc($dc)
-    $g.Dispose()
-    $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bmp.Dispose()
+    if (-not [ShotsWin32]::GetClientRect($hwnd, [ref]$r)) { return $null }
+    if ($r.R - $r.L -le 0 -or $r.B - $r.T -le 0) { return $null }
+    return New-Object PSObject -Property @{ W = $r.R - $r.L; H = $r.B - $r.T }
+}
+
+# One shot of the window's client area. A window minimised (by someone working
+# beside the run) has no client area: it is restored once, at its place and size. A
+# shot that still cannot be taken stops the run: a missing or empty shot must not go
+# into the cache as this page's.
+function Save-Shot([IntPtr]$hwnd, [string]$file) {
+    $shot = [System.IO.Path]::GetFileNameWithoutExtension($file)
+    $size = Get-ClientSize $hwnd
+    if (-not $size -and [ShotsWin32]::IsIconic($hwnd)) {
+        Write-Output "  ${shot}: the window was minimised, restored"
+        [void][ShotsWin32]::ShowWindow($hwnd, 9)   # SW_RESTORE
+        [void][OptionsWin32]::MoveWindow($hwnd, 0, 0, $Width, $Height, $true)
+        Start-Sleep -Milliseconds 1500
+        $size = Get-ClientSize $hwnd
+    }
+    if (-not $size) {
+        $r = New-Object ShotsWin32+RECT
+        [void][ShotsWin32]::GetClientRect($hwnd, [ref]$r)
+        throw ('shot {0}: the window has no client area to shoot ({1}x{2}, minimised: {3}); keep it open and not minimised while the run lasts' -f
+            $shot, ($r.R - $r.L), ($r.B - $r.T), [ShotsWin32]::IsIconic($hwnd))
+    }
+    $bmp = New-Object System.Drawing.Bitmap($size.W, $size.H)
+    try {
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $dc = $g.GetHdc()
+        # PW_RENDERFULLCONTENT (also when covered) + PW_CLIENTONLY: without the title bar,
+        # drawn differently when the window is not active
+        $printed = [ShotsWin32]::PrintWindow($hwnd, $dc, 3)
+        $g.ReleaseHdc($dc)
+        $g.Dispose()
+        if (-not $printed) { throw ('shot {0}: PrintWindow failed on the window ({1}x{2})' -f $shot, $size.W, $size.H) }
+        $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally { $bmp.Dispose() }
 }
 
 # The tiles of the category page on screen (the strip right of the menu)
@@ -302,7 +339,12 @@ function Save-Tree([string]$label, [string]$tree, [string]$key) {
         return
     }
     if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }   # left by a run that was stopped
-    Save-Window (Build-Program $tree (Join-Path $Out "$label-bin")) (New-Stage $tree) $dir
+    # a run that fails leaves no shots there: a content is cached whole or not at all
+    try { Save-Window (Build-Program $tree (Join-Path $Out "$label-bin")) (New-Stage $tree) $dir }
+    catch {
+        if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
+        throw
+    }
     $what = $label
     if ($pageNames.Count -gt 0) { $what += ', pages ' + ($pageNames -join ',') }
     [System.IO.File]::WriteAllText((Join-Path $dir 'done.txt'), $what)

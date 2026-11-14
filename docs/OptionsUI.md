@@ -8,7 +8,8 @@ Most rules are already code: the constants and helpers in `src/Options/Ui.cs`
 (`Glyph`, `Fs`, `Gap`, `FieldWidth`, `NewHelp`, `NewSectionTitle`, `NewLabelBlock`,
 `NewClearButton`, `NewDeleteButton`, `NewResetIcon`, `SetActionVisible`,
 `MarkInvalid`, `SetTrimmed`, `NewNumberField`, `NewSizeField`, `NewChoiceBox` with
-`SelectChoice` / `ChoiceValue` / `SetChoices`, `NumericOnly`, `NewEqualButtons`, `AddRowNote`, `ShowDialog`), and in `Categories.cs` the stacked row `NewFormRow` with
+`SelectChoice` / `ChoiceValue` / `SetChoices`, `NumericOnly`, `NewEqualButtons`, `AddRowNote`, `ShowDialog`,
+`NewSearchBox`, `BringIntoViewWithRoom`), and in `Categories.cs` the stacked row `NewFormRow` with
 `SetFormHelp`. Build new UI with them: no glyph codes,
 font sizes or margins written by hand. When a page needs something the helpers do
 not have, add it to `Ui.cs` and to this page, not to the page's own file.
@@ -23,24 +24,27 @@ checked.
 ## 0. Where a setting goes
 
 Settings are placed **by the part of the launcher they change**, not by the kind of
-value: a part's sizes, font size, colours and timing live on its page. Only what
+value: a part's sizes, font size and colours live on its page. Only what
 several parts share has a page of its own: **Theme** (the font, the text colours,
-background, accent, highlight) and **Animations** (effects of the whole launcher).
+background and transparency, accent, highlight) and **Animations** (how things move:
+the fade, the smoothing and the length of every movement, the wheel's turn time
+too, so they are found together).
 
 | Part of the launcher | Page |
 | --- | --- |
 | Saved sets of the settings (profiles): pick, load, save, delete | General (its first card) |
-| Where it shows, its mode (full screen, window, docked), margins, opening and closing | General |
+| Where it shows, its mode (full screen, window, docked), margins, opening and closing behaviour, the edge delay (the docked launcher's and the Rainside's) | General |
 | Grid or wheel, scrolling and spacing of both, the tile itself in both (colour, corners, inner margin, highlight, label) | Tiles |
 | Rows and columns, the grid tiles' logo size, scroll direction, edge fade, how the background images move, scrollbar | Tiles > Grid |
-| The wheel's shape, its thumbnails, its backdrop, its turning, its inner wheel of categories | Tiles > Wheel |
+| The wheel's shape, its thumbnails, its backdrop, the mouse on its side tiles, its inner wheel of categories | Tiles > Wheel |
 | The play time line, Steam updates on the tiles | Tiles > Play time and updates |
-| The category menu and its colours, Favorites, the buttons of the top row | Top row |
-| Recent, Not played yet | Top row > Recent and Not played yet |
+| The category menu and its colours, the buttons of the top row | Top row |
+| Favorites, Recent, Not played yet | Top row > Quick categories |
 | Time and date | Top row > Clock |
 | Search bar, filter bar | Top row > Search |
 | Shared font and colours | Theme |
-| Effects, appearing tiles, smoothing, tile launch | Animations |
+| The fade when opening and closing, smoothing, appearing tiles, smooth scrolling and the wheel's turn time, highlight and logo zoom, tile launch | Animations |
+| The category on a side of the screen | Rainside |
 | Opening keys, tile hot keys; navigation keys; the gamepad | Keybindings; > Keyboard; > Gamepad |
 | Where to look for games and apps, your folders, where they go | Import |
 | The games and apps found, the tiles no longer installed | Import > Found |
@@ -48,6 +52,19 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
 | Performance, diagnostics | Advanced |
 | The updates (check, channel) with the installed and latest version | Info > Updates |
 
+- **The menu in sections**: **General** first, on its own (the window opens on it,
+  and it holds what the whole launcher is: profiles, screen, mode), then **Your
+  launcher** (what is in it: Categories, Import, Widgets), **Look and behaviour**
+  (the parts above), **Controls** (keys, gamepad), **System** (Advanced); Info at
+  the bottom. A page starting a section has
+  `Section` on its `NavNode`; the section title is not an entry (`NewNavSection`).
+- **The user's words.** A label says what it changes as someone looking for it would
+  say it; where the value has a technical name, the label or help also gives the
+  common one (the background's alpha is its *transparency*). A label never repeats
+  the title of its card (Scrollbar > Thickness, not Scrollbar thickness).
+- **What is done elsewhere is said where it is looked for**: a page whose task is
+  done on another page says where in its description (removing a tile: Import,
+  Found and Categories say it is the tile's bin button in Categories).
 - A new setting: find its part in the table. A new part gets a row here (and its
   page, or a group on the page of the part it belongs to) in the same PR.
 - **Settings of one layout.** What only the grid uses (rows and columns, `Size=`, the
@@ -146,6 +163,74 @@ background, accent, highlight) and **Animations** (effects of the whole launcher
   a page's only card has no title, that every card after the first has a title or a
   switch, and that every page is in the menu (`NavTree`) once.
 
+### Details
+
+A card shows what most people change; a fine tuning whose default suits almost
+everyone (`Details = true` on the item) goes under **More settings** at the card's
+bottom, closed (`NewCardDetails`): the link says how many settings it holds and, while
+it is closed, how many differ from their default (in the accent colour), so a changed
+value is never hidden without a word. A search result on one of them opens it.
+
+- **A setting is a detail when all of these hold:**
+  1. its default suits almost everyone;
+  2. it tunes a secondary element or a secondary aspect of what the card sets: the
+     inner geometry of a sub-element (the padding of an entry, the space between
+     entries, the corners of a pill or a chip, a label's inset, the inner wheel's
+     distance and size); the stagger, slide or smoothing of one effect, or a length
+     that is not the card's speed; the amount of an effect (a zoom, the overscan);
+     the tuning of an input (the stick's dead zone, the repeat, the edge delay); a
+     size used only in an edge case (the text of a launched tile without a logo);
+  3. changing the card's other settings does not usually require changing it too:
+     what must change together stays together in view (a chip's height with its font
+     size).
+- **Never a detail:** a switch, or a setting another one needs (`When`): they change
+  what the card is; a colour or an opacity; the main size of a part (its height,
+  width, logo size, the font size of its text); the spacing and corners of the main
+  element (the margins, `Gap`, `TileRadius`, `WheelSpacing`, the place of the wheel's
+  selected tile); a count; on each card of Animations, the one speed people feel (the
+  fade, the scrolling's smoothing and the wheel's turn time, the appearing tiles'
+  length, the time held at full screen).
+- **The same kind, the same choice.** Before marking a setting, look at the settings
+  of its kind on the other pages (a padding, a gap, a radius, a font size, a length, a
+  smoothing, a zoom) and follow them; when one has to differ, this section says why.
+- **Order.** A setting that depends on one in the middle of its card (it "comes right
+  after it") stays in view rather than become a detail far from it.
+- **Text.** A card's help and a page's description never explain only settings that
+  are closed (a unit, a percent): that goes into the details' own help.
+- The details are the last items of their group, which keeps one setting at least out
+  of them. They keep their `When` and their reset arrow; a card that does not apply
+  disables them too. `tools/check.py` checks what can be checked: no switch, no
+  setting a `When` needs, no colour or opacity, no font size in `pt` (but the listed
+  edge cases), details last, one setting at least in view.
+
+### Search
+
+The field above the menu (`Search.cs`) finds pages, cards and settings while you type:
+its results take the place of the menu, the best first, each with where it is; a
+result opens its page and lights its row for a moment (`FlashFound`). The results
+stay, the one open marked, so another can be tried (a click on the one open lights
+its row again), until the field is emptied (`Esc`, its x, or a page picked from the
+menu at the bottom): the menu comes back on the page shown. `Ctrl+F` goes to it; the
+arrows go from it to the results and back (up from the menu's first entry too), and
+`Enter` opens one, the focus staying on it. With the pad: up from the first entry of
+the menu, `A` for the on-screen keyboard, down to the results, `A` opens one, `B`
+closes the search.
+
+- **What it reads** (`Schema.Search`): every word typed must start a word of the
+  entry (its label or title, its help, its key, its `Keywords`; a colour also answers
+  to *colour*) or of where it is (its card, its page), and one at least of the entry
+  itself: a page's name lists the page, not every setting on it. A label counts more
+  than a keyword, a keyword than the key, the key than the help.
+- **`Keywords`** (`Page`, `Group`, `Item`): the words people use for something that
+  its label and help do not say (*transparency* for the background's alpha; *delete*,
+  *remove* for Categories, where tiles are removed). Lower case, separated by spaces,
+  each once (`tools/check.py`). Add them when a setting is looked for by another name,
+  not words already in its label or help.
+- A page whose mode is not in use (Wheel with the grid) still opens from a result;
+  the status line says what it needs.
+- A new kind of row lit by a result: register it in `foundTargets` where the page is
+  built (`NewSettingsPage`), as the rows, the switch cards and the cards are.
+
 ## 1. Nothing only in a tooltip
 
 The window is used with the mouse, the keyboard and the gamepad: hovering is not
@@ -186,6 +271,8 @@ Marks (not buttons), in a round badge on a corner of a small tile of the strip (
 | `0xE718` | `Glyph.Pin` | a pinned tile, top left |
 | `0xE9E9` | `Glyph.Own` | a tile with settings of its own, not those of All tiles, top right |
 
+`0xE721` `Glyph.Search` is the magnifier inside a search field (`NewSearchBox`), not a button.
+
 The accent dot means only **something new to look at**, the same everywhere: on the gear of the launcher, on the entries of the menu it leads to (a group too, open or closed), on a small tile (a game added by itself, until it is selected). Never for a state that stays.
 
 In short: the arrow and the x act on a field, in the action column of its row (or,
@@ -222,17 +309,23 @@ list, or renames the entry picked in a combo. A field never has a bin.
 | A number in a range worth dragging (counts, ms, pt, zoom, opacity) | Slider + text box with its unit (`NewNumberField`) |
 | A length that can be pixels or a share of the screen | `size`: text box + px / % combo (`NewSizeField`) |
 | An identifier or a huge range (a port) | Text box with its unit (`NoSlider` in the schema) |
-| A colour | Swatch + text box |
+| A colour | Swatch + text box, and under them its opacity: slider + box in % (`NewColorField`) |
+| An opacity kept as an alpha (0-255) | `alpha`: slider + box in %, as a colour's opacity (`NewAlphaControl`) |
 | A key | Key button + clear |
 | Gamepad buttons (one, or two held together) | Two key buttons + clear, with the button's glyph (`NewPadControl`): clicked, the dial of the buttons around it; with the pad, A and then the button |
 | Text, path | Text box (paths: + "Browse...") |
 
+- A colour's opacity is its alpha shown in % (0-100), as every opacity is: the slider
+  writes it into the text in the format the colour already has (`R,G,B,A`, `#RRGGBBAA`
+  or `0xRRGGBBAA`; `Core.FormatColorOpacity`), and follows the text typed by hand. The
+  colour of a category or a tile in the category editor keeps swatch + text box: the
+  Opacity row after it is the opacity of the whole tile (`TileOpacity`, `Opacity`).
 - No row of chips for a single choice: it wraps and clutters the page. Chips stay for
   several of a set. The filters of a list are combos too (Import > Found: the kind, the store or folder, the order), so a new kind or store adds an entry, not a chip.
 - A unit of measure is always shown (px, pt, ms, s, %, ×, / 255, steps), inside the
   number's box on its right (the `UnitBox` style of `Options.xaml`: the unit is the
   box's `Tag`). A count has no unit when its label already says what it counts
-  (Columns, Rows, Tiles in Recent); it keeps it when the label does not (a tile's
+  (Columns, Rows, Recent > Tiles); it keeps it when the label does not (a tile's
   Width in columns). Every number box is `FieldWidth.S` wide, so the boxes line up and
   the sliders before them take the rest of the row.
 - Number boxes take only numbers (`NumericOnly`, already in `NewNumberField` and
@@ -405,6 +498,8 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
 - [ ] A new setting is on the page of the part it changes ("Where a setting goes"),
       after the switch it depends on, with its `When` (or in the group of its switch).
 - [ ] No title is repeated: page, card and first row do not say the same word.
+- [ ] A setting people look for by another name has it in its `Keywords` ("Search").
+- [ ] A new fine tuning is a detail of its card ("Details"); a setting most people change is not.
 - [ ] Every field shows its help; tooltips only name icon buttons, show cut text or
       shortcuts.
 - [ ] The control matches the kind of value: a single choice is a combo, a unit only

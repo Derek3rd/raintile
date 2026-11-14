@@ -25,6 +25,12 @@ namespace RaintileOptions
         // the settings this one applies with, "Key=value" (values separated by
         // |, conditions by ;): otherwise disabled, with the reason under it
         public string When;
+        // other words people use for it, found by the search above the menu
+        // (lower case, separated by spaces): "transparency" for a colour's alpha
+        public string Keywords;
+        // a fine tuning whose default suits almost everyone: under "More
+        // settings" at the bottom of its card, closed (docs/OptionsUI.md, "Details")
+        public bool Details;
     }
 
     public class Group
@@ -41,6 +47,7 @@ namespace RaintileOptions
         public string Store;
         // Profiles: the card of the saved sets of settings (Profiles.cs)
         public bool Found, Other, Market, Dash, Profiles;
+        public string Keywords;   // as Item.Keywords
         public List<Item> Items = new List<Item>();
     }
 
@@ -53,6 +60,7 @@ namespace RaintileOptions
         // a bool that turns the whole page on or off (the first setting of its
         // first group): beside the page title, the page disabled while it is off
         public string Switch;
+        public string Keywords;   // as Item.Keywords
         public List<Group> Groups = new List<Group>();
     }
 
@@ -68,10 +76,11 @@ namespace RaintileOptions
         public bool GameArt;
     }
 
-    // Menu on the left: a page (with its sub-pages, Children), or the categories
+    // Menu on the left: a page (with its sub-pages, Children), or the categories;
+    // Section: the title of the section of the menu it starts
     public class NavNode
     {
-        public string Page, Id, Title;
+        public string Page, Id, Title, Section;
         public int Icon;
         public string[] Children;
         public bool Categories;

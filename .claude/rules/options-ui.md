@@ -9,6 +9,9 @@ paths:
 - Read `docs/OptionsUI.md` before changing a page: it says which glyph, control, size,
   spacing, button and word to use. Build with the helpers of `src/Options/Ui.cs`; what
   they lack goes into `Ui.cs` and into `docs/OptionsUI.md`, not into the page.
+- A new or moved setting: is it a detail of its card (`Details = true`)? Look at the
+  settings of its kind on the other pages first ("Details" in `docs/OptionsUI.md`: the
+  same kind, the same choice). Does it need `Keywords` ("Search")?
 - Layout changes: compare the page you changed with one you did not (General against
   Layout, Keyboard, Categories). The control column has the same edges on every page,
   every row ends with the action column, icon buttons that cannot act are hidden.

@@ -117,12 +117,14 @@ namespace RaintileOptions
                 navBuilding = false;
                 ShowNavTarget((NavTag)sel.Tag);
             };
-            // Up and down go round the menu
+            InitSearch();
+            // Up and down go round the menu; up from its first entry, to the search
             foreach (var list in new[] { nav, navBottom })
                 list.PreviewKeyDown += (s, e) =>
                 {
                     if ((e.Key != Key.Up && e.Key != Key.Down) || Keyboard.Modifiers != ModifierKeys.None) return;
                     e.Handled = true;
+                    if (e.Key == Key.Up && NavEntries().IndexOf((nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem) == 0) { FocusSearch(); return; }
                     var next = NavStep(e.Key == Key.Down ? 1 : -1);
                     if (next != null) next.Focus();
                 };
@@ -136,6 +138,11 @@ namespace RaintileOptions
                 {
                     e.Handled = true;
                     StartSaveAndRefresh();
+                }
+                else if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control && capturing == null)
+                {
+                    e.Handled = true;
+                    FocusSearch();
                 }
             };
             win.Closing += (s, e) =>
@@ -303,6 +310,21 @@ namespace RaintileOptions
             return item;
         }
 
+        // The title of a section of the menu (NavNode.Section), above its entries:
+        // not an entry, never selected nor passed over (NavEntries leaves out the
+        // disabled ones)
+        ListBoxItem NewNavSection(string title)
+        {
+            var t = NewSectionTitle(title);
+            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            return new ListBoxItem
+            {
+                Content = t, IsEnabled = false, IsHitTestVisible = false, Focusable = false,
+                Padding = T(Gap.Group, nav.Items.Count == 0 ? Gap.Line : Gap.Card, Gap.Group, Gap.Line),
+                Tag = new NavTag { Type = "section" },
+            };
+        }
+
         // The page of a mode not in use (Page.When: Grid, Wheel): its entry greyed
         // out and passed over, until the setting it needs changes
         void SetNavApplies(ListBoxItem item)
@@ -376,6 +398,7 @@ namespace RaintileOptions
                 nav.Items.Clear();
                 foreach (var node in Schema.NavTree)
                 {
+                    if (node.Section != null) nav.Items.Add(NewNavSection(node.Section));
                     if (node.Children != null)
                     {
                         // a page with sub-pages below it: a click on it shows it and
@@ -527,6 +550,10 @@ namespace RaintileOptions
 
         void ShowNavTarget(NavTag tag)
         {
+            // another page from the menu (or LB / RB): the menu back in place of the
+            // results; not for the page of a result (OpenSearchHit)
+            if (navSearch != null && SearchShown && !keepSearch) navSearch.Text = "";
+            keepSearch = false;
             switch (tag.Type)
             {
                 case "page": ShowPage(tag.Page); break;

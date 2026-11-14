@@ -65,6 +65,30 @@ Test 'Options: a tile takes its own Size or the TileSize of All tiles, as the la
     Assert-Equal (& $span $cat (New-Section @{ Size = 'big' })) '1x1' 'a size that is not WxH'
 }
 
+Test 'Options: the opacity of a colour is its alpha in %, written back in the format of the colour' {
+    $core = $optionsApp.Assembly.GetType('RaintileOptions.Core')
+    $opacity = { param($c) $core.GetMethod('ColorOpacity').Invoke($null, [object[]]@($c)) }
+    $format = { param($c, $p) $core.GetMethod('FormatColorOpacity').Invoke($null, [object[]]@($c, [double]$p)) }
+    Assert-Equal (& $opacity '8,8,12,200') 78 'decimal with alpha'
+    Assert-Equal (& $opacity '#00D2B480') 50 'hex with alpha'
+    Assert-Equal (& $opacity '0,210,180') 100 'without alpha'
+    Assert-Equal (& $opacity 'teal') -1 'not a colour'
+    Assert-Equal (& $format '8,8,12,200' 50) '8,8,12,128' 'decimal'
+    Assert-Equal (& $format '#00D2B4FF' 50) '#00D2B480' 'hex with #'
+    Assert-Equal (& $format '0x00d2b4' 0) '0x00D2B400' 'hex with 0x, without alpha'
+    Assert-Equal (& $format '0,210,180' 100) '0,210,180,255' 'decimal without alpha'
+    Assert-Equal (& $format '8,8,12,200' 150) '8,8,12,255' 'more than 100%'
+    Assert-Equal (& $format 'teal' 50) $null 'not a colour'
+    # every percent goes to its own alpha and back
+    foreach ($p in 0..100) { Assert-Equal (& $opacity (& $format '1,2,3' $p)) $p "$p% back" }
+    # an opacity kept as an alpha alone (Kind alpha: MenuIconDimAlpha) is shown the same way
+    Assert-Equal ($core.GetMethod('AlphaToPercent').Invoke($null, [object[]]@([double]150))) 59 'alpha 150 in %'
+    Assert-Equal ($core.GetMethod('PercentToAlpha').Invoke($null, [object[]]@([double]59))) 150 '59% as an alpha'
+    # the picker keeps the alpha, and the format
+    Assert-Equal ($core.GetMethod('FormatPickedColor').Invoke($null, [object[]]@('#00D2B480', 1, 2, 3))) '#01020380' 'picked into hex'
+    Assert-Equal ($core.GetMethod('FormatPickedColor').Invoke($null, [object[]]@('', 1, 2, 3))) '1,2,3,255' 'picked into nothing'
+}
+
 Test 'Options: NumericOnly records the characters a box takes' {
     $tb = New-Object System.Windows.Controls.TextBox
     Invoke-Options 'NumericOnly' @($tb, $false, $true) | Out-Null
@@ -435,4 +459,30 @@ Test 'Options: the games found are added by themselves once, the apps never' {
     [IO.File]::WriteAllText($settings, "[Variables]`r`nAutoAddGames=1`r`nImportCategory=Games`r`n", $utf8)
     Assert-Equal (& $add) 'Later Game' 'a game found later'
     Assert-Equal (@([IO.File]::ReadAllLines($newTiles)) -join ',') 'Games.ini|New Game,Emulators.ini|Emu Game,Games.ini|Later Game' 'new tiles after a later game'
+}
+
+Test 'Options: the search finds settings by the words people use for them' {
+    $schema = $optionsApp.Assembly.GetType('RaintileOptions.Schema')
+    $search = { param($q) @($schema.GetMethod('Search').Invoke($null, [object[]]@([string]$q))) }
+    $first = { param($q) $h = & $search $q; if ($h.Count -eq 0) { '(nothing)' } elseif ($h[0].Item) { $h[0].Item.Key } elseif ($h[0].Group) { 'card ' + $h[0].Group.Title } else { 'page ' + $h[0].Page.Id } }
+
+    Assert-Equal (& $first 'transparency') 'BgColor' 'transparency (a keyword)'
+    Assert-Equal (& $first 'TRANSP') 'BgColor' 'the start of a word, any case'
+    Assert-Equal (& $first 'bgcolor') 'BgColor' 'the key'
+    Assert-Equal (& $first 'wheel turn') 'WheelStepTime' 'two words'
+    Assert-Equal (& $first 'delete game') 'page categories' 'removing a game'
+    Assert-Equal (& $first 'steamgriddb') 'SteamGridDBKey' 'the SteamGridDB key'
+    Assert-Equal (& $first 'profiles') 'card Profiles' 'a card'
+    # a page's name lists the page, not every setting on it
+    $anim = & $search 'animations'
+    Assert-Equal (& $first 'animations') 'page animations' 'a page'
+    Assert-True (-not ($anim | Where-Object { $_.Item -and $_.Page.Id -eq 'animations' })) 'the settings of Animations found by the page name'
+    # every colour is found as one
+    Assert-True ((& $search 'colour' | Where-Object { $_.Item -and $_.Item.Key -eq 'ScrollThumbColor' }).Count -eq 1) 'a colour whose label does not say it'
+    Assert-Equal (& $search '').Count 0 'empty query'
+    Assert-Equal (& $search 'zzqx').Count 0 'nothing to find'
+    Assert-True ((& $search 'e').Count -le $schema.GetField('SearchMax').GetValue($null)) 'more results than the most shown'
+    # where it is: the page (with its menu entry) and the card
+    $h = (& $search 'recent tiles')[0]
+    Assert-Equal $h.Path 'Top row > Quick categories > Recent' 'the place of Recent > Tiles'
 }

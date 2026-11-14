@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -47,6 +48,7 @@ namespace RaintileOptions
         public const int Refresh = 0xE72C;  // a list read again from where it comes from (Import > Found)
         public const int Pin = 0xE718;      // marks a pinned tile (not a button)
         public const int Own = 0xE9E9;      // marks a tile with settings of its own, not those of All tiles (not a button)
+        public const int Search = 0xE721;   // inside a search field (not a button)
         // the pad button that presses a button, before its text while the pad is in use
         // (AddPadHint), and on the keys and the hint line of the on-screen keyboard
         public const int PadA = 0xF093, PadB = 0xF094, PadY = 0xF095, PadX = 0xF096, PadStart = 0xEDE3;
@@ -116,6 +118,17 @@ namespace RaintileOptions
             // (only the colour: the row keeps its height)
             set { var b = value ? Brushes.Transparent : line; if (BorderBrush != b) BorderBrush = b; }
         }
+    }
+
+    // The fine tunings of a card (Item.Details), at its bottom: hidden until
+    // Toggle ("More settings") opens them. Keys: their settings, to count the
+    // ones changed. docs/OptionsUI.md, "Details".
+    public class CardDetails : StackPanel
+    {
+        public Button Toggle;
+        public TextBlock Label, Changed;
+        public List<string> Keys = new List<string>();
+        public bool Open { get { return Visibility == Visibility.Visible; } }
     }
 
     // The panel of a card (NewCard, NewSwitchCard): the first thing shown in it,
@@ -194,6 +207,38 @@ namespace RaintileOptions
         public string Value
         {
             get { string t = Box.Text.Trim(); return t == "" ? "" : t + (IsPct ? "%" : ""); }
+        }
+    }
+
+    // A colour: swatch + text box, and under them its opacity (the alpha, in %),
+    // NewColorField. Show() puts a value in it without reporting a change.
+    public class ColorField
+    {
+        public Button Swatch;
+        public TextBox Box;
+        public NumberField Opacity;
+        public FrameworkElement Root;
+        public bool Sync;
+
+        public void Show(string value)
+        {
+            Sync = true;
+            try
+            {
+                Box.Text = value ?? "";
+                Box.ClearValue(Control.BorderBrushProperty);   // a value put in is valid again
+                ShowColor();
+            }
+            finally { Sync = false; }
+        }
+
+        // the swatch and the opacity as the text says (left as they are while it is not a colour)
+        public void ShowColor()
+        {
+            var brush = OptionsApp.NewColorBrush(Box.Text, true);
+            if (brush != null) Swatch.Background = brush;
+            int pct = Core.ColorOpacity(Box.Text);
+            if (pct >= 0) Opacity.Show(pct.ToString(), 100);
         }
     }
 
@@ -406,6 +451,89 @@ namespace RaintileOptions
             return NewText(text, Fs.Help, brush ?? ResBrush("DimBrush"), false, true);
         }
 
+        // A search field: the magnifier and, while it is empty, the hint inside it
+        // (it says what it searches, as a label would); while it is not, the x that
+        // empties it. box holds them all
+        public TextBox NewSearchBox(string hint, out Grid box)
+        {
+            box = new Grid();
+            // (a text box puts its padding twice before its text, in its border and
+            // in its text host: half the room of the magnifier, and of the x)
+            var tb = new TextBox { Padding = T((Gap.Column + Gap.Icon) / 2, Gap.Line, (Gap.Column + Gap.Icon) / 2, Gap.Line) };
+            AutomationProperties.SetName(tb, hint);
+            box.Children.Add(tb);
+            var glyph = NewGlyph(Glyph.Search, Fs.Help);
+            glyph.Foreground = ResBrush("DimBrush");
+            glyph.Margin = T(Gap.Group, 0, 0, 0);
+            glyph.HorizontalAlignment = HorizontalAlignment.Left;
+            glyph.IsHitTestVisible = false;
+            box.Children.Add(glyph);
+            // where the text box draws its text: its padding, border and inner margin
+            var h = NewText(hint, Fs.Label, ResBrush("DimBrush"));
+            h.Margin = T(Gap.Column + Gap.Icon + Gap.Help, 0, Gap.Control, 0);
+            h.VerticalAlignment = VerticalAlignment.Center;
+            h.TextTrimming = TextTrimming.CharacterEllipsis;
+            h.IsHitTestVisible = false;
+            box.Children.Add(h);
+            var clear = NewClearButton("Clear the search (Esc)");
+            clear.Margin = T(0);
+            clear.HorizontalAlignment = HorizontalAlignment.Right;
+            clear.Click += (s, e) => { tb.Text = ""; tb.Focus(); };
+            SetActionVisible(clear, false);
+            box.Children.Add(clear);
+            tb.TextChanged += (s, e) =>
+            {
+                h.Visibility = tb.Text == "" ? Visibility.Visible : Visibility.Collapsed;
+                SetActionVisible(clear, tb.Text != "");
+            };
+            return tb;
+        }
+
+        // The details of a card (Item.Details): the toggle, a row of the card that
+        // says how many there are and how many differ from their default, then
+        // the rows, hidden. The toggle and the panel go at the card's bottom.
+        public CardDetails NewCardDetails(StackPanel card)
+        {
+            var d = new CardDetails { Visibility = Visibility.Collapsed };
+            var content = NewPanel(Orientation.Horizontal);
+            // (the colour of the labels, not the link's dim one: it is easy to miss otherwise)
+            d.Label = NewText("", Fs.Label, ResBrush("TextBrush"));
+            d.Changed = NewText("", Fs.Label, ResBrush("AccentBrush"));
+            AddTo(content, d.Label);
+            AddTo(content, d.Changed);
+            d.Toggle = NewButton("", "LinkButton");
+            d.Toggle.Content = content;
+            // (the link's own padding outside the label column: its text lines up with the labels)
+            d.Toggle.Margin = T(-Gap.Control, Gap.Line, 0, Gap.Line);
+            d.Toggle.HorizontalAlignment = HorizontalAlignment.Left;
+            d.Toggle.Click += (s, e) => SetDetailsOpen(d, !d.Open);
+            card.Children.Add(new CardRow(ResBrush("LineBrush")) { Child = d.Toggle });
+            card.Children.Add(d);
+            return d;
+        }
+
+        public void SetDetailsOpen(CardDetails d, bool open)
+        {
+            d.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            UpdateDetailsToggle(d);
+        }
+
+        // "More settings (3)  1 changed": the changed ones said while they are hidden
+        public void UpdateDetailsToggle(CardDetails d)
+        {
+            int changed = d.Keys.Count(k => { string def; return Schema.Defaults.TryGetValue(k, out def) && V(k) != def; });
+            d.Label.Text = d.Open ? "Fewer settings" : "More settings (" + d.Keys.Count + ")";
+            d.Changed.Text = !d.Open && changed > 0 ? "   " + Dot + "   " + changed + " changed" : "";
+            AutomationProperties.SetName(d.Toggle, d.Label.Text + d.Changed.Text);
+        }
+
+        // Scrolls an element into view with some room around it: the title of its
+        // card above, the next row below (the pad, a search result)
+        public static void BringIntoViewWithRoom(FrameworkElement fe)
+        {
+            fe.BringIntoView(new Rect(-24, -56, fe.ActualWidth + 48, fe.ActualHeight + 112));
+        }
+
         // Title of a card or of a list
         public TextBlock NewSectionTitle(string title)
         {
@@ -467,7 +595,10 @@ namespace RaintileOptions
         // under the title instead of under each row
         public void SetCardApplies(Border card, bool on, TextBlock why)
         {
-            foreach (var row in ((StackPanel)card.Child).Children.Cast<UIElement>().OfType<Border>())
+            // (the rows of its details too)
+            var children = ((StackPanel)card.Child).Children.Cast<UIElement>();
+            children = children.Concat(children.OfType<CardDetails>().SelectMany(d => d.Children.Cast<UIElement>()));
+            foreach (var row in children.OfType<Border>())
                 if (row.Child is Grid && ((Grid)row.Child).Children.Count > 0 && ((Grid)row.Child).Children[0] is StackPanel)
                     SetRowApplies(row, on, null, false);
             if (why != null) why.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
@@ -624,6 +755,46 @@ namespace RaintileOptions
                 tb.Text = t;
                 f.Sync = false;
                 changed(f.Value);
+            };
+            return f;
+        }
+
+        // A colour (docs/OptionsUI.md, 3): the swatch (the Windows picker) and the text
+        // box filling the row, and under them its opacity, the alpha in % as every
+        // opacity is shown, written into the text in its format (R,G,B,A or hex).
+        // 'changed' gets the text when it is a colour; text that is not one gets the
+        // red border and is not reported.
+        public ColorField NewColorField(Action<string> changed)
+        {
+            var f = new ColorField();
+            var top = NewGrid("Auto", "*");
+            f.Swatch = NewButton("", "Swatch", "Pick a colour");
+            f.Box = new TextBox { Margin = T(Gap.Control, 0, 0, 0) };
+            SetCol(f.Box, 1);
+            top.Children.Add(f.Swatch); top.Children.Add(f.Box);
+            f.Opacity = NewNumberField(0, 100, 1, "% opacity", t =>
+            {
+                double n;
+                string v = Core.TryNumber(t, out n) ? Core.FormatColorOpacity(f.Box.Text, n) : null;
+                if (v != null) f.Box.Text = v;
+            });
+            f.Opacity.Root.Margin = T(0, Gap.Control, 0, 0);
+            var root = NewPanel();
+            AddTo(root, top); AddTo(root, f.Opacity.Root);
+            f.Root = root;
+            f.Swatch.Click += (s, e) =>
+            {
+                string n = SelectColor(f.Box.Text);
+                if (n != null) f.Box.Text = n;
+            };
+            f.Box.TextChanged += (s, e) =>
+            {
+                if (f.Sync) return;
+                bool ok = Core.ColorFromText(f.Box.Text) != null;
+                MarkInvalid(f.Box, !ok);
+                if (!ok) return;
+                f.ShowColor();
+                changed(f.Box.Text.Trim());
             };
             return f;
         }

@@ -23,11 +23,12 @@ namespace RaintileOptions
         public Panel Panel;
         public List<CheckBox> Boxes;   // stores: one switch per store
         public TextBox Text;
-        public Button Swatch, Button, Clear;
+        public Button Button, Clear;
         public Control Input;   // text, font, category, secret, choice
         public ComboBox Area, Monitor;
         public NumberField Num;
         public SizeField Size;
+        public ColorField Color;
     }
 
     class ResetInfo { public string[] KeyList; public Button Button; }
@@ -91,6 +92,7 @@ namespace RaintileOptions
 
         void UpdateResets()
         {
+            foreach (var d in cardDetails) UpdateDetailsToggle(d);
             foreach (var r in resets)
             {
                 bool differs = false;
@@ -155,6 +157,8 @@ namespace RaintileOptions
         // (Outer: the page's switch, Own: the group's When, whose reason Why shows)
         class WhenCard { public string Outer, Own; public Border Card; public TextBlock Why; public UIElement Keep; }
         readonly List<WhenCard> whenCards = new List<WhenCard>();
+        // the More settings of the cards (NewCardDetails): their counts follow the values
+        readonly List<CardDetails> cardDetails = new List<CardDetails>();
 
         // "Key=a|b;Key2=c": every condition holds (one of its values)
         bool WhenHolds(string when)
@@ -228,8 +232,9 @@ namespace RaintileOptions
                     case "choice": SelectChoice((ComboBox)c.Input, v); break;
                     case "int":
                     case "float": c.Num.Show(v, c.Num.Slider.Minimum); break;
+                    case "alpha": c.Num.Show(AlphaShown(v), 100); break;
                     case "size": c.Size.Show(v); break;
-                    case "color": c.Text.Text = v; c.Swatch.Background = NewColorBrush(v, true); break;
+                    case "color": c.Color.Show(v); break;
                     case "text": ((TextBox)c.Input).Text = v; break;
                     case "folders": Action redraw; if (folderLists.TryGetValue(key, out redraw)) redraw(); break;
                     case "font": ((ComboBox)c.Input).Text = v; break;
@@ -278,6 +283,22 @@ namespace RaintileOptions
             return f.Root;
         }
 
+        // An opacity kept as an alpha (0-255), shown in % as every opacity is
+        UIElement NewAlphaControl(Item item)
+        {
+            string key = item.Key;
+            var f = NewNumberField(0, 100, 1, "%", t => { double n; if (Core.TryNumber(t, out n)) SetValue(key, Core.PercentToAlpha(n).ToString(CultureInfo.InvariantCulture)); });
+            f.Show(AlphaShown(V(key)), 100);
+            ctl[key] = new Ctl { Kind = item.Kind, Num = f, Text = f.Box };
+            return f.Root;
+        }
+
+        static string AlphaShown(string alpha)
+        {
+            double n;
+            return Core.TryNumber(alpha, out n) ? Core.AlphaToPercent(n).ToString(CultureInfo.InvariantCulture) : "";
+        }
+
         UIElement NewSizeControl(Item item)
         {
             string key = item.Key;
@@ -290,32 +311,10 @@ namespace RaintileOptions
 
         UIElement NewColorControl(string key)
         {
-            // the swatch, then the field filling the column
-            var sp = NewGrid("Auto", "*");
-            var sw = NewButton("", "Swatch", "Pick a colour");
-            sw.Background = NewColorBrush(V(key), true);
-            var tb = new TextBox { Margin = T(Gap.Control, 0, 0, 0), Text = V(key) };
-            SetCol(tb, 1);
-            sp.Children.Add(sw); sp.Children.Add(tb);
-            ctl[key] = new Ctl { Kind = "color", Swatch = sw, Text = tb };
-            sw.Click += (s, e) =>
-            {
-                string n = SelectColor(tb.Text);
-                if (n != null) tb.Text = n;
-            };
-            tb.TextChanged += (s, e) =>
-            {
-                if (updating) return;
-                var brush = NewColorBrush(tb.Text, true);
-                if (brush != null)
-                {
-                    sw.Background = brush;
-                    MarkInvalid(tb, false);
-                    SetValue(key, tb.Text.Trim());
-                }
-                else MarkInvalid(tb, true);
-            };
-            return sp;
+            var f = NewColorField(v => SetValue(key, v));
+            f.Show(V(key));
+            ctl[key] = new Ctl { Kind = "color", Color = f, Text = f.Box };
+            return f.Root;
         }
 
         // Hidden text (the SteamGridDB key): shown as dots, saved encrypted
@@ -777,6 +776,7 @@ namespace RaintileOptions
                     break;
                 case "int":
                 case "float": control = NewNumberControl(item); break;
+                case "alpha": control = NewAlphaControl(item); break;
                 case "size": control = Regex.IsMatch(V(k), @"^\s*-?[\d.]+\s*%?\s*$") ? NewSizeControl(item) : NewTextControl(k); break;
                 case "color": control = NewColorControl(k); break;
                 case "text": control = k == "ImportFolders" ? NewFoldersControl(k) : NewTextControl(k); break;
@@ -833,6 +833,7 @@ namespace RaintileOptions
                 string own = group.When ?? (sw != null ? sw.Key + "=1" : group.Store != null ? "ImportStores=" + group.Store : null);
                 string groupWhen = pageWhen == null ? own : own == null ? pageWhen : pageWhen + ";" + own;
                 int rows = 0;
+                CardDetails details = null;
                 if (group.Found)
                 {
                     // tiles of games no longer installed, then the list of the games
@@ -843,7 +844,7 @@ namespace RaintileOptions
                     continue;
                 }
                 if (group.Dash) { AddTo(sp, NewDashCard()); continue; }
-                if (group.Profiles) { AddTo(sp, NewProfilesCard(group)); continue; }
+                if (group.Profiles) { var profiles = NewProfilesCard(group); AddTo(sp, profiles); foundTargets[group] = profiles; continue; }
                 if (group.Market)
                 {
                     // widgets to download (its own card)
@@ -864,10 +865,14 @@ namespace RaintileOptions
                 {
                     foreach (var item in group.Items)
                     {
-                        if (item == sw || item == pageSw) { rows++; continue; }
+                        // (what the search lights: the card's header, the switch beside the title)
+                        if (item == sw) { foundTargets[item] = (FrameworkElement)CardPanel(card).Children[0]; rows++; continue; }
+                        if (item == pageSw) { foundTargets[item] = (FrameworkElement)pageSwitches[page.Id]; rows++; continue; }
                         if (item.Kind == "stores")
                         {
-                            foreach (var r in NewStoresRows(item)) { CardPanel(card).Children.Add(r); rows++; }
+                            var storeRows = NewStoresRows(item);
+                            if (storeRows.Count > 0) foundTargets[item] = (FrameworkElement)storeRows[0];
+                            foreach (var r in storeRows) { CardPanel(card).Children.Add(r); rows++; }
                             continue;
                         }
                         // your folders: a grid as wide as the card (name, folder, kind, category)
@@ -877,11 +882,20 @@ namespace RaintileOptions
                             help.Margin = T(0, 0, 0, Gap.Control);
                             AddTo(CardPanel(card), help);
                             AddTo(CardPanel(card), NewFoldersControl(item.Key));
+                            foundTargets[item] = (FrameworkElement)CardPanel(card).Children[0];   // the header, with its switch
                             rows++;
                             continue;
                         }
                         var row = NewItemRow(item);
-                        if (row != null) { CardPanel(card).Children.Add(row); rows++; }
+                        if (row != null && item.Details)
+                        {
+                            // a fine tuning: under More settings, at the card's bottom
+                            if (details == null) { details = NewCardDetails(CardPanel(card)); cardDetails.Add(details); }
+                            details.Children.Add(row);
+                            details.Keys.Add(item.Key);
+                        }
+                        else if (row != null) CardPanel(card).Children.Add(row);   // (the details come last: tools/check.py)
+                        if (row != null) { foundTargets[item] = (FrameworkElement)row; rows++; }
                         var b = row as Border;
                         // the categories the carousel cannot centre (UpdateCarouselNote)
                         if (b != null && !string.IsNullOrEmpty(item.When))
@@ -891,7 +905,8 @@ namespace RaintileOptions
                 // (with a switch, no reason: the switch is in the header)
                 if (rows > 0 && groupWhen != null)
                     whenCards.Add(new WhenCard { Outer = pageWhen, Own = own, Card = card, Why = sw != null || group.When == null ? null : AddCardReason(card, WhenReason(group.When, page)), Keep = group.Store != null ? ((Grid)CardPanel(card).Children[0]) : null });
-                if (rows > 0) AddTo(sp, card);
+                if (details != null) UpdateDetailsToggle(details);
+                if (rows > 0) { AddTo(sp, card); foundTargets[group] = card; }
             }
             UpdateWhenRows();
             return sv;

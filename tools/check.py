@@ -326,18 +326,26 @@ def check_schema_layout(schema):
         elif len(set(words)) != len(words):
             fail('Options schema: Keywords "%s" has a word twice' % m.group(1))
     # Details (docs/OptionsUI.md, "Details"): a fine tuning, under More settings
-    # at the bottom of its card: never a switch nor what a When needs, after the
-    # other settings of its group, which keeps one at least in view
+    # at the bottom of its card: never a switch nor what a When needs, nor a
+    # colour, an opacity or the font size of a text (but the edge cases listed),
+    # after the other settings of its group, which keeps one at least in view
     needed = {c.partition('=')[0] for _, when in conds for c in when.split(';')}
     switches = set(re.findall(r'Switch = "([A-Za-z0-9]+)"', schema))
+    edge_font_sizes = {'LaunchFontSize'}   # the text of a launched tile without a logo
     for gm in re.finditer(r'Items = new List<Item>\n\s*\{\n(.*?)^\s*\} \},', schema, re.S | re.M):
         rows = re.findall(r'Key = "([A-Za-z0-9]+)"[^\n]*?(, Details = true)? \},?\n', gm.group(1))
         seen_details = False
         for key, det in rows:
             if det:
                 seen_details = True
+                kind, _ = items.get(key, ('', []))
+                pt = re.search(r'Key = "%s",[^\n]*Unit = "pt"' % key, gm.group(1))
                 if key in switches or key in needed:
                     fail('Options schema: %s is a detail but %s' % (key, 'a switch' if key in switches else 'another setting needs it (When)'))
+                elif kind in ('color', 'alpha'):
+                    fail('Options schema: %s is a detail but a colour or an opacity' % key)
+                elif pt and key not in edge_font_sizes:
+                    fail('Options schema: %s is a detail but the font size of a text' % key)
             elif seen_details:
                 fail('Options schema: %s comes after a detail of its group (details go last)' % key)
         if rows and all(det for _, det in rows):

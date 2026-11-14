@@ -33,7 +33,7 @@ too, so they are found together).
 | Part of the launcher | Page |
 | --- | --- |
 | Saved sets of the settings (profiles): pick, load, save, delete | General (its first card) |
-| Where it shows, its mode (full screen, window, docked), margins, opening and closing behaviour | General |
+| Where it shows, its mode (full screen, window, docked), margins, opening and closing behaviour, the edge delay (the docked launcher's and the Rainside's) | General |
 | Grid or wheel, scrolling and spacing of both, the tile itself in both (colour, corners, inner margin, highlight, label) | Tiles |
 | Rows and columns, the grid tiles' logo size, scroll direction, edge fade, how the background images move, scrollbar | Tiles > Grid |
 | The wheel's shape, its thumbnails, its backdrop, the mouse on its side tiles, its inner wheel of categories | Tiles > Wheel |
@@ -171,14 +171,37 @@ bottom, closed (`NewCardDetails`): the link says how many settings it holds and,
 it is closed, how many differ from their default (in the accent colour), so a changed
 value is never hidden without a word. A search result on one of them opens it.
 
-- A setting is a detail when its default suits almost everyone and it fine-tunes a
-  size, a time or a smoothing of something the card's other settings already set
-  (paddings, gaps, radii, the lengths and smoothing of an animation, the stick's dead
-  zone). Never a switch, nor a setting another one needs (`When`): they change what
-  the card is.
+- **A setting is a detail when all of these hold:**
+  1. its default suits almost everyone;
+  2. it tunes a secondary element or a secondary aspect of what the card sets: the
+     inner geometry of a sub-element (the padding of an entry, the space between
+     entries, the corners of a pill or a chip, a label's inset, the inner wheel's
+     distance and size); the stagger, slide or smoothing of one effect, or a length
+     that is not the card's speed; the amount of an effect (a zoom, the overscan);
+     the tuning of an input (the stick's dead zone, the repeat, the edge delay); a
+     size used only in an edge case (the text of a launched tile without a logo);
+  3. changing the card's other settings does not usually require changing it too:
+     what must change together stays together in view (a chip's height with its font
+     size).
+- **Never a detail:** a switch, or a setting another one needs (`When`): they change
+  what the card is; a colour or an opacity; the main size of a part (its height,
+  width, logo size, the font size of its text); the spacing and corners of the main
+  element (the margins, `Gap`, `TileRadius`, `WheelSpacing`, the place of the wheel's
+  selected tile); a count; on each card of Animations, the one speed people feel (the
+  fade, the scrolling's smoothing and the wheel's turn time, the appearing tiles'
+  length, the time held at full screen).
+- **The same kind, the same choice.** Before marking a setting, look at the settings
+  of its kind on the other pages (a padding, a gap, a radius, a font size, a length, a
+  smoothing, a zoom) and follow them; when one has to differ, this section says why.
+- **Order.** A setting that depends on one in the middle of its card (it "comes right
+  after it") stays in view rather than become a detail far from it.
+- **Text.** A card's help and a page's description never explain only settings that
+  are closed (a unit, a percent): that goes into the details' own help.
 - The details are the last items of their group, which keeps one setting at least out
-  of them (`tools/check.py` checks the three rules). They keep their `When` and their
-  reset arrow; a card that does not apply disables them too.
+  of them. They keep their `When` and their reset arrow; a card that does not apply
+  disables them too. `tools/check.py` checks what can be checked: no switch, no
+  setting a `When` needs, no colour or opacity, no font size in `pt` (but the listed
+  edge cases), details last, one setting at least in view.
 
 ### Search
 

@@ -313,7 +313,11 @@ namespace RaintileOptions
             status.Text = !string.IsNullOrEmpty(h.Page.When) && !WhenHolds(h.Page.When) ? h.Page.Title + ": " + WhenReason(h.Page.When, null) : "";
             // (a page, or a row not on the page shown: the page only)
             FrameworkElement fe;
-            if (!foundTargets.TryGetValue((object)h.Item ?? h.Group ?? (object)h.Page, out fe) || !fe.IsVisible) return;
+            if (!foundTargets.TryGetValue((object)h.Item ?? h.Group ?? (object)h.Page, out fe)) return;
+            // a fine tuning: its More settings opened first
+            var details = LogicalTreeHelper.GetParent(fe) as CardDetails;
+            if (details != null && !details.Open) { SetDetailsOpen(details, true); fe.UpdateLayout(); }
+            if (!fe.IsVisible) return;
             // the focus stays on the result: the row is scrolled into view with
             // room around it and lit, its control a click (or right) away
             BringIntoViewWithRoom(fe);

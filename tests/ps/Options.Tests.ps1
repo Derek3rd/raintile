@@ -81,6 +81,9 @@ Test 'Options: the opacity of a colour is its alpha in %, written back in the fo
     Assert-Equal (& $format 'teal' 50) $null 'not a colour'
     # every percent goes to its own alpha and back
     foreach ($p in 0..100) { Assert-Equal (& $opacity (& $format '1,2,3' $p)) $p "$p% back" }
+    # an opacity kept as an alpha alone (Kind alpha: MenuIconDimAlpha) is shown the same way
+    Assert-Equal ($core.GetMethod('AlphaToPercent').Invoke($null, [object[]]@([double]150))) 59 'alpha 150 in %'
+    Assert-Equal ($core.GetMethod('PercentToAlpha').Invoke($null, [object[]]@([double]59))) 150 '59% as an alpha'
     # the picker keeps the alpha, and the format
     Assert-Equal ($core.GetMethod('FormatPickedColor').Invoke($null, [object[]]@('#00D2B480', 1, 2, 3))) '#01020380' 'picked into hex'
     Assert-Equal ($core.GetMethod('FormatPickedColor').Invoke($null, [object[]]@('', 1, 2, 3))) '1,2,3,255' 'picked into nothing'

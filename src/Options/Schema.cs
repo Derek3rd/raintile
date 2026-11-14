@@ -28,6 +28,9 @@ namespace RaintileOptions
         // other words people use for it, found by the search above the menu
         // (lower case, separated by spaces): "transparency" for a colour's alpha
         public string Keywords;
+        // a fine tuning whose default suits almost everyone: under "More
+        // settings" at the bottom of its card, closed (docs/OptionsUI.md, "Details")
+        public bool Details;
     }
 
     public class Group

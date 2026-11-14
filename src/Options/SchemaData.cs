@@ -30,7 +30,7 @@ namespace RaintileOptions
                     new Item { Kind = "choice", Key = "DockSide", Label = "Side", Help = "", Choices = new List<string[]> { new[] { "Left", "Left" }, new[] { "Right", "Right" }, new[] { "Top", "Top" }, new[] { "Bottom", "Bottom" } } },
                     new Item { Kind = "size", Key = "DockSize", Label = "Size", Help = "Width when docked left or right; height (of the screen height) when docked at the top or bottom.", Axis = "W" },
                     new Item { Kind = "bool", Key = "DockEdge", Label = "Open from the edge", Help = "It also opens when the mouse rests on that edge of the screen. Not while a full-screen program (e.g. a game) is in front." },
-                    new Item { Kind = "int", Key = "DockEdgeDelay", Label = "Edge delay", Help = "How long the mouse rests on the edge before it opens.", Min = 0.0, Max = 2000.0, Step = 50.0, Unit = "ms", When = "DockEdge=1" },
+                    new Item { Kind = "int", Key = "DockEdgeDelay", Label = "Edge delay", Help = "How long the mouse rests on the edge before it opens.", Min = 0.0, Max = 2000.0, Step = 50.0, Unit = "ms", When = "DockEdge=1", Details = true },
                 } },
                 new Group { Title = "Margins", Help = "In pixels, or as a percentage of the screen.", Items = new List<Item>
                 {
@@ -60,9 +60,9 @@ namespace RaintileOptions
                     new Item { Kind = "color", Key = "TileColor", Label = "Default tile colour", Help = "", Keywords = "background" },
                     new Item { Kind = "bool", Key = "AutoTileColor", Label = "Colour from the logo", Help = "Tiles with a logo but no background image and no colour of their own get a dark colour taken from the logo." },
                     new Item { Kind = "int", Key = "TileRadius", Label = "Rounded corners", Help = "Radius of the corners of the tiles and of the highlight. 0 = square.", Min = 0.0, Max = 60.0, Step = 1.0, Unit = "px" },
-                    new Item { Kind = "size", Key = "LabelPad", Label = "Inner margin", Help = "From the edge of the tile to its label and to the lines of the play time and updates.", Axis = "H" },
                     new Item { Kind = "bool", Key = "LogoGreyscale", Label = "Greyscale logos", Help = "They turn to colour under the mouse." },
                     new Item { Kind = "bool", Key = "TileHover", Label = "Highlight the tile under the mouse", Help = "" },
+                    new Item { Kind = "size", Key = "LabelPad", Label = "Inner margin", Help = "From the edge of the tile to its label and to the lines of the play time and updates.", Axis = "H", Details = true },
                 } },
                 new Group { Title = null, Help = null, Switch = "ShowLabels", Items = new List<Item>
                 {
@@ -84,9 +84,9 @@ namespace RaintileOptions
                 new Group { Title = "Backgrounds", Help = "How the background images of the tiles move. In the wheel the thumbnails are cropped.", Items = new List<Item>
                 {
                     new Item { Kind = "choice", Key = "BgStyle", Label = "Style", Help = "Crop: fixed. Pan: under the mouse the image slowly slides. Parallax: it moves slower than the tile while scrolling. Zoom: it grows slightly under the mouse.", Choices = new List<string[]> { new[] { "Crop", "Crop" }, new[] { "Pan", "Pan" }, new[] { "Parallax", "Parallax" }, new[] { "Zoom", "Zoom" } } },
-                    new Item { Kind = "float", Key = "BgOverscan", Label = "Overscan", Help = "How much larger than the tile the image is: room to move.", Min = 1.0, Max = 1.5, Step = 0.01, Unit = "\u00D7", When = "BgStyle=Pan|Parallax|Zoom" },
-                    new Item { Kind = "int", Key = "BgPanFrames", Label = "Pan length", Help = "", Min = 30.0, Max = 600.0, Step = 10.0, Unit = "steps", When = "BgStyle=Pan" },
-                    new Item { Kind = "float", Key = "BgHoverZoom", Label = "Zoom amount", Help = "", Min = 1.0, Max = 1.3, Step = 0.01, Unit = "\u00D7", When = "BgStyle=Zoom" },
+                    new Item { Kind = "float", Key = "BgOverscan", Label = "Overscan", Help = "How much larger than the tile the image is: room to move.", Min = 1.0, Max = 1.5, Step = 0.01, Unit = "\u00D7", When = "BgStyle=Pan|Parallax|Zoom", Details = true },
+                    new Item { Kind = "int", Key = "BgPanFrames", Label = "Pan length", Help = "", Min = 30.0, Max = 600.0, Step = 10.0, Unit = "steps", When = "BgStyle=Pan", Details = true },
+                    new Item { Kind = "float", Key = "BgHoverZoom", Label = "Zoom amount", Help = "", Min = 1.0, Max = 1.3, Step = 0.01, Unit = "\u00D7", When = "BgStyle=Zoom", Details = true },
                 } },
                 new Group { Title = "Scrollbar", Help = null, Items = new List<Item>
                 {
@@ -102,10 +102,10 @@ namespace RaintileOptions
                     new Item { Kind = "choice", Key = "WheelAxis", Label = "Direction", Help = "Auto: along the side when docked, across otherwise.", Choices = new List<string[]> { new[] { "Auto", "Auto" }, new[] { "Vertical", "Vertical" }, new[] { "Horizontal", "Horizontal" } } },
                     new Item { Kind = "choice", Key = "WheelCurve", Label = "Curve", Help = "", Choices = new List<string[]> { new[] { "Out", "Bulging towards the screen" }, new[] { "In", "Hollow" } } },
                     new Item { Kind = "int", Key = "WheelRadius", Label = "Radius", Help = "", Min = 25.0, Max = 300.0, Step = 5.0, Unit = "%" },
-                    new Item { Kind = "int", Key = "WheelAnchor", Label = "Place of the selected tile", Help = "Across the launcher, from its docked side.", Min = 10.0, Max = 90.0, Step = 1.0, Unit = "%" },
                     new Item { Kind = "int", Key = "WheelSpacing", Label = "Space between tiles", Help = "Under 100 the tiles overlap; the middle one stays on top.", Min = 30.0, Max = 160.0, Step = 2.0, Unit = "%" },
                     new Item { Kind = "int", Key = "WheelVisible", Label = "Tiles shown", Help = "", Min = 3.0, Max = 15.0, Step = 2.0, Unit = "" },
-                    new Item { Kind = "int", Key = "WheelFade", Label = "Fade at the ends", Help = "", Min = 0.0, Max = 90.0, Step = 1.0, Unit = "%" },
+                    new Item { Kind = "int", Key = "WheelAnchor", Label = "Place of the selected tile", Help = "Across the launcher, from its docked side.", Min = 10.0, Max = 90.0, Step = 1.0, Unit = "%", Details = true },
+                    new Item { Kind = "int", Key = "WheelFade", Label = "Fade at the ends", Help = "", Min = 0.0, Max = 90.0, Step = 1.0, Unit = "%", Details = true },
                 } },
                 new Group { Title = "Thumbnails", Help = "The tiles of the wheel: squares, edited in Categories as the tiles of the grid (logo, framing, play time line); Size, columns and rows are the grid's.", Items = new List<Item>
                 {
@@ -118,9 +118,9 @@ namespace RaintileOptions
                     new Item { Kind = "bool", Key = "WheelBackdrop", Label = "Backdrop", Help = "", Keywords = "wallpaper background" },
                     new Item { Kind = "int", Key = "WheelBackdropOpacity", Label = "Opacity", Help = "Over the launcher's background colour.", Min = 5.0, Max = 100.0, Step = 5.0, Unit = "%" },
                     new Item { Kind = "choice", Key = "WheelLogoOn", Label = "Logo of the selected tile", Help = "On the backdrop: on the area under the top row, at its own place and size (Categories > the tile > Place on: The backdrop). The other thumbnails keep theirs; with Logos only, the selected one shows its background image.", Choices = new List<string[]> { new[] { "Tile", "On its thumbnail" }, new[] { "Background", "On the backdrop" } } },
-                    new Item { Kind = "int", Key = "WheelBackdropLogoSize", Label = "Logo size", Help = "Its height in percent of the area under the top row, times the size the tile has there.", Min = 5.0, Max = 80.0, Step = 1.0, Unit = "%", When = "WheelLogoOn=Background" },
                     new Item { Kind = "choice", Key = "WheelInfoOn", Label = "Play time and updates", Help = "On the backdrop: the selected tile's lines, on the area under the top row at their own place (Categories > the tile > Place on: The backdrop), shown as on a highlighted tile; the thumbnails show none. When they show still follows Tiles > Play time and updates.", Choices = new List<string[]> { new[] { "Tile", "On the thumbnails" }, new[] { "Background", "On the backdrop" } } },
                     new Item { Kind = "color", Key = "TopBarColor", Label = "Band behind the top row", Help = "One rounded band behind the clock, the search and the buttons, so they stay readable over the picture." },
+                    new Item { Kind = "int", Key = "WheelBackdropLogoSize", Label = "Logo size", Help = "Its height in percent of the area under the top row, times the size the tile has there.", Min = 5.0, Max = 80.0, Step = 1.0, Unit = "%", When = "WheelLogoOn=Background", Details = true },
                 } },
                 new Group { Title = "Mouse", Help = "How fast it turns is on Animations (Smooth scrolling).", Items = new List<Item>
                 {
@@ -130,8 +130,8 @@ namespace RaintileOptions
                 new Group { Title = "Categories", Help = "Sizes in percent of a thumbnail.", Items = new List<Item>
                 {
                     new Item { Kind = "choice", Key = "WheelMenu", Label = "Shown as", Help = "Ring: on an inner wheel, Q / E or LB / RB turn it.", Choices = new List<string[]> { new[] { "Ring", "Inner wheel" }, new[] { "Bar", "Menu at the top" } } },
-                    new Item { Kind = "int", Key = "WheelMenuGap", Label = "Inner wheel: distance", Help = "From the wheel of tiles.", Min = 10.0, Max = 150.0, Step = 2.0, Unit = "%", When = "WheelMenu=Ring" },
-                    new Item { Kind = "int", Key = "WheelMenuSize", Label = "Inner wheel: entries", Help = "", Min = 20.0, Max = 80.0, Step = 1.0, Unit = "%", When = "WheelMenu=Ring" },
+                    new Item { Kind = "int", Key = "WheelMenuGap", Label = "Inner wheel: distance", Help = "From the wheel of tiles.", Min = 10.0, Max = 150.0, Step = 2.0, Unit = "%", When = "WheelMenu=Ring", Details = true },
+                    new Item { Kind = "int", Key = "WheelMenuSize", Label = "Inner wheel: entries", Help = "", Min = 20.0, Max = 80.0, Step = 1.0, Unit = "%", When = "WheelMenu=Ring", Details = true },
                 } },
             } },
             new Page { Id = "playtime", Title = "Play time and updates", Icon = 0, Desc = "The line on the tiles with the play time and the last launch, and the Steam updates waiting.", Groups = new List<Group>
@@ -149,7 +149,7 @@ namespace RaintileOptions
                     new Item { Kind = "choice", Key = "DownloadStyle", Label = "Download on the tile", Help = "How the progress of a download shows on its tile.", Choices = new List<string[]> { new[] { "Bar", "A bar along the bottom" }, new[] { "Greyscale", "Background in greyscale, coloured again as it goes" }, new[] { "Both", "Both" } }, When = "UpdateInfo=Hover|Always" },
                     new Item { Kind = "color", Key = "DownloadColor1", Label = "Colour 1", Help = "Border of a tile with an update (a gradient from 1 to 2) and the bar.", When = "UpdateInfo=Hover|Always" },
                     new Item { Kind = "color", Key = "DownloadColor2", Label = "Colour 2", Help = "Other end of the border gradient.", When = "UpdateInfo=Hover|Always" },
-                    new Item { Kind = "int", Key = "UpdateGlowTime", Label = "Border turning", Help = "Seconds the border turns when the launcher opens. 0 = it stays still.", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "s", When = "UpdateInfo=Hover|Always" },
+                    new Item { Kind = "int", Key = "UpdateGlowTime", Label = "Border turning", Help = "Seconds the border turns when the launcher opens. 0 = it stays still.", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "s", When = "UpdateInfo=Hover|Always", Details = true },
                 } },
             } },
             new Page { Id = "toprow", Title = "Top row", Icon = 0xE700, Desc = "The row at the top: the category menu and the buttons here; Favorites, Recent and Not played yet, the clock and the search on the pages below.", Groups = new List<Group>
@@ -160,13 +160,13 @@ namespace RaintileOptions
                     new Item { Kind = "size", Key = "MenuH", Label = "Height", Help = "", Axis = "H" },
                     new Item { Kind = "int", Key = "MenuFontSize", Label = "Font size", Help = "", Min = 6.0, Max = 40.0, Step = 1.0, Unit = "pt" },
                     new Item { Kind = "size", Key = "MenuIconSize", Label = "Icon size", Help = "", Axis = "H" },
-                    new Item { Kind = "size", Key = "MenuIconGap", Label = "Space between icon and text", Help = "", Axis = "W" },
-                    new Item { Kind = "int", Key = "MenuIconDimAlpha", Label = "Opacity of inactive icons", Help = "0 = invisible, 255 = as the active one.", Min = 0.0, Max = 255.0, Step = 5.0, Unit = "/ 255" },
-                    new Item { Kind = "size", Key = "MenuItemPad", Label = "Entry padding", Help = "", Axis = "W" },
-                    new Item { Kind = "size", Key = "MenuGap", Label = "Space between entries", Help = "", Axis = "W" },
-                    new Item { Kind = "size", Key = "MenuRadius", Label = "Corner radius", Help = "", Axis = "H" },
                     new Item { Kind = "color", Key = "ActiveCategoryColor", Label = "Active category", Help = "" },
                     new Item { Kind = "color", Key = "HoverCategoryColor", Label = "Category under the mouse", Help = "" },
+                    new Item { Kind = "size", Key = "MenuIconGap", Label = "Space between icon and text", Help = "", Axis = "W", Details = true },
+                    new Item { Kind = "alpha", Key = "MenuIconDimAlpha", Label = "Opacity of inactive icons", Help = "0 % = invisible, 100 % = as the active one.", Min = 0.0, Max = 255.0, Step = 5.0, Unit = "", Details = true },
+                    new Item { Kind = "size", Key = "MenuItemPad", Label = "Entry padding", Help = "", Axis = "W", Details = true },
+                    new Item { Kind = "size", Key = "MenuGap", Label = "Space between entries", Help = "", Axis = "W", Details = true },
+                    new Item { Kind = "size", Key = "MenuRadius", Label = "Corner radius", Help = "", Axis = "H", Details = true },
                 } },
                 new Group { Title = "Buttons", Help = null, Items = new List<Item>
                 {
@@ -215,10 +215,10 @@ namespace RaintileOptions
                 {
                     new Item { Kind = "bool", Key = "FilterBar", Label = "Filter bar", Help = "" },
                     new Item { Kind = "bool", Key = "FilterStores", Label = "A chip per store", Help = "Only when the tiles come from at least two stores." },
-                    new Item { Kind = "size", Key = "FilterH", Label = "Chip height", Help = "", Axis = "H" },
                     new Item { Kind = "int", Key = "FilterFontSize", Label = "Font size", Help = "", Min = 6.0, Max = 30.0, Step = 1.0, Unit = "pt" },
-                    new Item { Kind = "size", Key = "FilterPad", Label = "Chip padding", Help = "", Axis = "W" },
-                    new Item { Kind = "size", Key = "FilterGap", Label = "Space between chips", Help = "", Axis = "W" },
+                    new Item { Kind = "size", Key = "FilterH", Label = "Chip height", Help = "", Axis = "H", Details = true },
+                    new Item { Kind = "size", Key = "FilterPad", Label = "Chip padding", Help = "", Axis = "W", Details = true },
+                    new Item { Kind = "size", Key = "FilterGap", Label = "Space between chips", Help = "", Axis = "W", Details = true },
                 } },
             } },
             new Page { Id = "rainside", Switch = "Rainside", Title = "Rainside", Icon = 0xE90D, Desc = "One category on a side of the screen, apart from the launcher: always there, or coming out of its edge, with its widgets. The category is not in the launcher's menu; search still finds its tiles.", Keywords = "sidebar panel bar", Groups = new List<Group>
@@ -266,10 +266,10 @@ namespace RaintileOptions
                 {
                     new Item { Kind = "bool", Key = "AnimOpen", Label = "When opening", Help = "" },
                     new Item { Kind = "bool", Key = "AnimCategory", Label = "On category change", Help = "The menu pill slides too." },
-                    new Item { Kind = "int", Key = "AnimAppearFrames", Label = "Length", Help = "", Min = 1.0, Max = 60.0, Step = 1.0, Unit = "steps" },
-                    new Item { Kind = "int", Key = "AnimStagger", Label = "Delay between one tile and the next", Help = "", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "steps" },
-                    new Item { Kind = "int", Key = "AnimSlide", Label = "Upward slide", Help = "", Min = 0.0, Max = 200.0, Step = 1.0, Unit = "px" },
-                    new Item { Kind = "float", Key = "AnimPillSmooth", Label = "Menu pill smoothing", Help = "", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "", When = "AnimCategory=1" },
+                    new Item { Kind = "int", Key = "AnimAppearFrames", Label = "Length", Help = "", Min = 1.0, Max = 60.0, Step = 1.0, Unit = "steps", Details = true },
+                    new Item { Kind = "int", Key = "AnimStagger", Label = "Delay between one tile and the next", Help = "", Min = 0.0, Max = 10.0, Step = 1.0, Unit = "steps", Details = true },
+                    new Item { Kind = "int", Key = "AnimSlide", Label = "Upward slide", Help = "", Min = 0.0, Max = 200.0, Step = 1.0, Unit = "px", Details = true },
+                    new Item { Kind = "float", Key = "AnimPillSmooth", Label = "Menu pill smoothing", Help = "", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "", When = "AnimCategory=1", Details = true },
                 } },
                 new Group { Title = null, Help = "Off: the grid jumps and the wheel snaps to the new place.", Switch = "AnimScroll", Items = new List<Item>
                 {
@@ -280,18 +280,18 @@ namespace RaintileOptions
                 new Group { Title = "Highlight", Help = null, Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "AnimHover", Label = "Sliding highlight", Help = "" },
-                    new Item { Kind = "float", Key = "AnimHoverSmooth", Label = "Highlight smoothing", Help = "", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "", When = "AnimHover=1" },
                     new Item { Kind = "bool", Key = "AnimLogoZoom", Label = "Logo zoom under the mouse", Help = "" },
                     new Item { Kind = "float", Key = "HoverLogoScale", Label = "Logo zoom", Help = "", Min = 1.0, Max = 2.0, Step = 0.05, Unit = "\u00D7", When = "AnimLogoZoom=1" },
-                    new Item { Kind = "float", Key = "AnimLogoSmooth", Label = "Logo zoom and colour smoothing", Help = "Also the greyscale logos turning to colour.", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "" },
+                    new Item { Kind = "float", Key = "AnimHoverSmooth", Label = "Highlight smoothing", Help = "", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "", When = "AnimHover=1", Details = true },
+                    new Item { Kind = "float", Key = "AnimLogoSmooth", Label = "Logo zoom and colour smoothing", Help = "Also the greyscale logos turning to colour.", Min = 0.05, Max = 1.0, Step = 0.01, Unit = "", Details = true },
                 } },
                 new Group { Title = null, Help = null, Switch = "LaunchAnimation", Items = new List<Item>
                 {
                     new Item { Kind = "bool", Key = "LaunchAnimation", Label = "Tile launch: full-screen expansion", Help = "The tile expands to full screen before the launcher hides.", Keywords = "start zoom" },
-                    new Item { Kind = "int", Key = "LaunchAnimFrames", Label = "Expansion length", Help = "", Min = 1.0, Max = 60.0, Step = 1.0, Unit = "steps" },
                     new Item { Kind = "int", Key = "LaunchHold", Label = "Time at full screen", Help = "", Min = 0.0, Max = 5000.0, Step = 100.0, Unit = "ms" },
-                    new Item { Kind = "size", Key = "LaunchLogoSize", Label = "Logo size at full screen", Help = "", Axis = "H" },
-                    new Item { Kind = "int", Key = "LaunchFontSize", Label = "Text size for tiles without a logo", Help = "", Min = 8.0, Max = 120.0, Step = 1.0, Unit = "pt" },
+                    new Item { Kind = "int", Key = "LaunchAnimFrames", Label = "Expansion length", Help = "", Min = 1.0, Max = 60.0, Step = 1.0, Unit = "steps", Details = true },
+                    new Item { Kind = "size", Key = "LaunchLogoSize", Label = "Logo size at full screen", Help = "", Axis = "H", Details = true },
+                    new Item { Kind = "int", Key = "LaunchFontSize", Label = "Text size for tiles without a logo", Help = "", Min = 8.0, Max = 120.0, Step = 1.0, Unit = "pt", Details = true },
                 } },
             } },
             new Page { Id = "keybindings", Title = "Keybindings", Icon = 0xE765, Desc = "Click a key and press the new one: the keys that open and close the launcher here, the keyboard and the gamepad on the pages below.", Keywords = "shortcut hotkey keyboard", Groups = new List<Group>
@@ -325,9 +325,9 @@ namespace RaintileOptions
                     new Item { Kind = "bool", Key = "Gamepad", Label = "Gamepad support", Help = "" },
                     new Item { Kind = "pad", Key = "GamepadToggle", Label = "Open / close", Help = "Also while the launcher is hidden." },
                     new Item { Kind = "bool", Key = "GamepadLegend", Label = "Button legend", Help = "At the bottom of the launcher, what the buttons do (not the moves). It shows after a button of the pad and goes when the mouse or the keyboard is used." },
-                    new Item { Kind = "int", Key = "GamepadDeadZone", Label = "Stick dead zone", Help = "How far the stick moves before it counts.", Min = 0.0, Max = 32767.0, Step = 500.0, Unit = "/ 32767" },
-                    new Item { Kind = "int", Key = "GamepadRepeatDelay", Label = "Repeat delay", Help = "Holding a direction: wait before it repeats.", Min = 50.0, Max = 1000.0, Step = 10.0, Unit = "ms" },
-                    new Item { Kind = "int", Key = "GamepadRepeatRate", Label = "Repeat interval", Help = "", Min = 30.0, Max = 500.0, Step = 10.0, Unit = "ms" },
+                    new Item { Kind = "int", Key = "GamepadDeadZone", Label = "Stick dead zone", Help = "How far the stick moves before it counts.", Min = 0.0, Max = 32767.0, Step = 500.0, Unit = "/ 32767", Details = true },
+                    new Item { Kind = "int", Key = "GamepadRepeatDelay", Label = "Repeat delay", Help = "Holding a direction: wait before it repeats.", Min = 50.0, Max = 1000.0, Step = 10.0, Unit = "ms", Details = true },
+                    new Item { Kind = "int", Key = "GamepadRepeatRate", Label = "Repeat interval", Help = "", Min = 30.0, Max = 500.0, Step = 10.0, Unit = "ms", Details = true },
                 } },
                 new Group { Title = "Buttons", Help = null, Items = new List<Item>
                 {

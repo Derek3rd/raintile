@@ -163,6 +163,23 @@ too, so they are found together).
   a page's only card has no title, that every card after the first has a title or a
   switch, and that every page is in the menu (`NavTree`) once.
 
+### Details
+
+A card shows what most people change; a fine tuning whose default suits almost
+everyone (`Details = true` on the item) goes under **More settings** at the card's
+bottom, closed (`NewCardDetails`): the link says how many settings it holds and, while
+it is closed, how many differ from their default (in the accent colour), so a changed
+value is never hidden without a word. A search result on one of them opens it.
+
+- A setting is a detail when its default suits almost everyone and it fine-tunes a
+  size, a time or a smoothing of something the card's other settings already set
+  (paddings, gaps, radii, the lengths and smoothing of an animation, the stick's dead
+  zone). Never a switch, nor a setting another one needs (`When`): they change what
+  the card is.
+- The details are the last items of their group, which keeps one setting at least out
+  of them (`tools/check.py` checks the three rules). They keep their `When` and their
+  reset arrow; a card that does not apply disables them too.
+
 ### Search
 
 The field above the menu (`Search.cs`) finds pages, cards and settings while you type:
@@ -270,6 +287,7 @@ list, or renames the entry picked in a combo. A field never has a bin.
 | A length that can be pixels or a share of the screen | `size`: text box + px / % combo (`NewSizeField`) |
 | An identifier or a huge range (a port) | Text box with its unit (`NoSlider` in the schema) |
 | A colour | Swatch + text box, and under them its opacity: slider + box in % (`NewColorField`) |
+| An opacity kept as an alpha (0-255) | `alpha`: slider + box in %, as a colour's opacity (`NewAlphaControl`) |
 | A key | Key button + clear |
 | Gamepad buttons (one, or two held together) | Two key buttons + clear, with the button's glyph (`NewPadControl`): clicked, the dial of the buttons around it; with the pad, A and then the button |
 | Text, path | Text box (paths: + "Browse...") |
@@ -458,6 +476,7 @@ Cards use the `Card` style. A spacing that none of these fits is a new constant 
       after the switch it depends on, with its `When` (or in the group of its switch).
 - [ ] No title is repeated: page, card and first row do not say the same word.
 - [ ] A setting people look for by another name has it in its `Keywords` ("Search").
+- [ ] A new fine tuning is a detail of its card ("Details"); a setting most people change is not.
 - [ ] Every field shows its help; tooltips only name icon buttons, show cut text or
       shortcuts.
 - [ ] The control matches the kind of value: a single choice is a combo, a unit only

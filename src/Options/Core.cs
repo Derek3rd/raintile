@@ -166,7 +166,18 @@ namespace RaintileOptions
         {
             var v = ColorFromText(text);
             if (v == null) return -1;
-            return v.Length < 4 ? 100 : (int)Math.Round(Math.Max(0, Math.Min(255, v[3])) * 100 / 255.0);
+            return v.Length < 4 ? 100 : AlphaToPercent(v[3]);
+        }
+
+        // An alpha (0-255) as the % every opacity is shown in, and back
+        public static int AlphaToPercent(double alpha)
+        {
+            return (int)Math.Round(Math.Max(0, Math.Min(255, alpha)) * 100 / 255.0);
+        }
+
+        public static int PercentToAlpha(double percent)
+        {
+            return (int)Math.Round(Math.Max(0, Math.Min(100, percent)) * 255 / 100);
         }
 
         // The colour 'old' with the opacity 'percent' (0-100) as its alpha, in the
@@ -175,7 +186,7 @@ namespace RaintileOptions
         {
             var v = ColorFromText(old);
             if (v == null) return null;
-            return FormatColor(old, v[0], v[1], v[2], (int)Math.Round(Math.Max(0, Math.Min(100, percent)) * 255 / 100));
+            return FormatColor(old, v[0], v[1], v[2], PercentToAlpha(percent));
         }
 
         // R,G,B and the alpha 'a' (-1: none) in the format of 'old': R,G,B[,A], or

@@ -120,6 +120,17 @@ namespace RaintileOptions
         }
     }
 
+    // The fine tunings of a card (Item.Details), at its bottom: hidden until
+    // Toggle ("More settings") opens them. Keys: their settings, to count the
+    // ones changed. docs/OptionsUI.md, "Details".
+    public class CardDetails : StackPanel
+    {
+        public Button Toggle;
+        public TextBlock Label, Changed;
+        public List<string> Keys = new List<string>();
+        public bool Open { get { return Visibility == Visibility.Visible; } }
+    }
+
     // The panel of a card (NewCard, NewSwitchCard): the first thing shown in it,
     // when it is a row, has no line, also when what was above it (a reason, a
     // row of the tile editor) is hidden. docs/OptionsUI.md, "A card".
@@ -478,6 +489,43 @@ namespace RaintileOptions
             return tb;
         }
 
+        // The details of a card (Item.Details): the toggle, a row of the card that
+        // says how many there are and how many differ from their default, then
+        // the rows, hidden. The toggle and the panel go at the card's bottom.
+        public CardDetails NewCardDetails(StackPanel card)
+        {
+            var d = new CardDetails { Visibility = Visibility.Collapsed };
+            var content = NewPanel(Orientation.Horizontal);
+            d.Label = NewText("", Fs.Label);
+            d.Changed = NewText("", Fs.Label, ResBrush("AccentBrush"));
+            AddTo(content, d.Label);
+            AddTo(content, d.Changed);
+            d.Toggle = NewButton("", "LinkButton");
+            d.Toggle.Content = content;
+            // (the link's own padding outside the label column: its text lines up with the labels)
+            d.Toggle.Margin = T(-Gap.Control, Gap.Line, 0, Gap.Line);
+            d.Toggle.HorizontalAlignment = HorizontalAlignment.Left;
+            d.Toggle.Click += (s, e) => SetDetailsOpen(d, !d.Open);
+            card.Children.Add(new CardRow(ResBrush("LineBrush")) { Child = d.Toggle });
+            card.Children.Add(d);
+            return d;
+        }
+
+        public void SetDetailsOpen(CardDetails d, bool open)
+        {
+            d.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            UpdateDetailsToggle(d);
+        }
+
+        // "More settings (3)  1 changed": the changed ones said while they are hidden
+        public void UpdateDetailsToggle(CardDetails d)
+        {
+            int changed = d.Keys.Count(k => { string def; return Schema.Defaults.TryGetValue(k, out def) && V(k) != def; });
+            d.Label.Text = d.Open ? "Fewer settings" : "More settings (" + d.Keys.Count + ")";
+            d.Changed.Text = !d.Open && changed > 0 ? "   " + Dot + "   " + changed + " changed" : "";
+            AutomationProperties.SetName(d.Toggle, d.Label.Text + d.Changed.Text);
+        }
+
         // Scrolls an element into view with some room around it: the title of its
         // card above, the next row below (the pad, a search result)
         public static void BringIntoViewWithRoom(FrameworkElement fe)
@@ -546,7 +594,10 @@ namespace RaintileOptions
         // under the title instead of under each row
         public void SetCardApplies(Border card, bool on, TextBlock why)
         {
-            foreach (var row in ((StackPanel)card.Child).Children.Cast<UIElement>().OfType<Border>())
+            // (the rows of its details too)
+            var children = ((StackPanel)card.Child).Children.Cast<UIElement>();
+            children = children.Concat(children.OfType<CardDetails>().SelectMany(d => d.Children.Cast<UIElement>()));
+            foreach (var row in children.OfType<Border>())
                 if (row.Child is Grid && ((Grid)row.Child).Children.Count > 0 && ((Grid)row.Child).Children[0] is StackPanel)
                     SetRowApplies(row, on, null, false);
             if (why != null) why.Visibility = on ? Visibility.Collapsed : Visibility.Visible;

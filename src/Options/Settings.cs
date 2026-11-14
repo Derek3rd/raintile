@@ -92,6 +92,7 @@ namespace RaintileOptions
 
         void UpdateResets()
         {
+            foreach (var d in cardDetails) UpdateDetailsToggle(d);
             foreach (var r in resets)
             {
                 bool differs = false;
@@ -156,6 +157,8 @@ namespace RaintileOptions
         // (Outer: the page's switch, Own: the group's When, whose reason Why shows)
         class WhenCard { public string Outer, Own; public Border Card; public TextBlock Why; public UIElement Keep; }
         readonly List<WhenCard> whenCards = new List<WhenCard>();
+        // the More settings of the cards (NewCardDetails): their counts follow the values
+        readonly List<CardDetails> cardDetails = new List<CardDetails>();
 
         // "Key=a|b;Key2=c": every condition holds (one of its values)
         bool WhenHolds(string when)
@@ -229,6 +232,7 @@ namespace RaintileOptions
                     case "choice": SelectChoice((ComboBox)c.Input, v); break;
                     case "int":
                     case "float": c.Num.Show(v, c.Num.Slider.Minimum); break;
+                    case "alpha": c.Num.Show(AlphaShown(v), 100); break;
                     case "size": c.Size.Show(v); break;
                     case "color": c.Color.Show(v); break;
                     case "text": ((TextBox)c.Input).Text = v; break;
@@ -277,6 +281,22 @@ namespace RaintileOptions
             f.Show(V(key), item.Min);
             ctl[key] = new Ctl { Kind = item.Kind, Num = f, Text = f.Box };
             return f.Root;
+        }
+
+        // An opacity kept as an alpha (0-255), shown in % as every opacity is
+        UIElement NewAlphaControl(Item item)
+        {
+            string key = item.Key;
+            var f = NewNumberField(0, 100, 1, "%", t => { double n; if (Core.TryNumber(t, out n)) SetValue(key, Core.PercentToAlpha(n).ToString(CultureInfo.InvariantCulture)); });
+            f.Show(AlphaShown(V(key)), 100);
+            ctl[key] = new Ctl { Kind = item.Kind, Num = f, Text = f.Box };
+            return f.Root;
+        }
+
+        static string AlphaShown(string alpha)
+        {
+            double n;
+            return Core.TryNumber(alpha, out n) ? Core.AlphaToPercent(n).ToString(CultureInfo.InvariantCulture) : "";
         }
 
         UIElement NewSizeControl(Item item)
@@ -756,6 +776,7 @@ namespace RaintileOptions
                     break;
                 case "int":
                 case "float": control = NewNumberControl(item); break;
+                case "alpha": control = NewAlphaControl(item); break;
                 case "size": control = Regex.IsMatch(V(k), @"^\s*-?[\d.]+\s*%?\s*$") ? NewSizeControl(item) : NewTextControl(k); break;
                 case "color": control = NewColorControl(k); break;
                 case "text": control = k == "ImportFolders" ? NewFoldersControl(k) : NewTextControl(k); break;
@@ -812,6 +833,7 @@ namespace RaintileOptions
                 string own = group.When ?? (sw != null ? sw.Key + "=1" : group.Store != null ? "ImportStores=" + group.Store : null);
                 string groupWhen = pageWhen == null ? own : own == null ? pageWhen : pageWhen + ";" + own;
                 int rows = 0;
+                CardDetails details = null;
                 if (group.Found)
                 {
                     // tiles of games no longer installed, then the list of the games
@@ -865,7 +887,15 @@ namespace RaintileOptions
                             continue;
                         }
                         var row = NewItemRow(item);
-                        if (row != null) { CardPanel(card).Children.Add(row); foundTargets[item] = (FrameworkElement)row; rows++; }
+                        if (row != null && item.Details)
+                        {
+                            // a fine tuning: under More settings, at the card's bottom
+                            if (details == null) { details = NewCardDetails(CardPanel(card)); cardDetails.Add(details); }
+                            details.Children.Add(row);
+                            details.Keys.Add(item.Key);
+                        }
+                        else if (row != null) CardPanel(card).Children.Add(row);   // (the details come last: tools/check.py)
+                        if (row != null) { foundTargets[item] = (FrameworkElement)row; rows++; }
                         var b = row as Border;
                         // the categories the carousel cannot centre (UpdateCarouselNote)
                         if (b != null && !string.IsNullOrEmpty(item.When))
@@ -875,6 +905,7 @@ namespace RaintileOptions
                 // (with a switch, no reason: the switch is in the header)
                 if (rows > 0 && groupWhen != null)
                     whenCards.Add(new WhenCard { Outer = pageWhen, Own = own, Card = card, Why = sw != null || group.When == null ? null : AddCardReason(card, WhenReason(group.When, page)), Keep = group.Store != null ? ((Grid)CardPanel(card).Children[0]) : null });
+                if (details != null) UpdateDetailsToggle(details);
                 if (rows > 0) { AddTo(sp, card); foundTargets[group] = card; }
             }
             UpdateWhenRows();

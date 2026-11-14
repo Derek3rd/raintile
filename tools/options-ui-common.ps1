@@ -7,10 +7,22 @@
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -TypeDefinition @"
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 public static class OptionsWin32 {
     [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int hh, bool repaint);
     [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeout(IntPtr h, uint msg, IntPtr w, IntPtr l, uint flags, uint timeout, out IntPtr result);
+    delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc p, IntPtr l);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    // The visible top-level windows of a process, cloaked ones included (UI
+    // Automation leaves those out of the children of its root)
+    public static List<IntPtr> WindowsOf(int pid) {
+        var r = new List<IntPtr>();
+        EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == (uint)pid && IsWindowVisible(h)) r.Add(h); return true; }, IntPtr.Zero);
+        return r;
+    }
 }
 "@
 $UA = [System.Windows.Automation.AutomationElement]
@@ -90,10 +102,13 @@ function Remove-BaseTree([string]$tree) { [void](Invoke-Git worktree remove --fo
 
 # Opens the program on the staged skin, with a fresh copy of the frozen data (a page
 # may mark things as seen) and the skin name RaintileShots (nothing is saved, no bang
-# reaches the skin), at the given size; waits for its window. Values: Process, Win
-# (the UI Automation element), Hwnd. The caller stops the process.
+# reaches the skin), at the given size; waits for its window. -Offscreen: the window
+# is cloaked (not on screen, never under the mouse, still rendered for PrintWindow),
+# without the focus or a taskbar button; a program older than the switch ignores it
+# and shows its window.
+# Values: Process, Win (the UI Automation element), Hwnd. The caller stops the process.
 function Start-OptionsWindow([string]$exe, [string]$resources, [int]$width, [int]$height) {
-    $a = @('-Resources', ('"' + $resources + '"'), '-Config', 'RaintileShots')
+    $a = @('-Resources', ('"' + $resources + '"'), '-Config', 'RaintileShots', '-Offscreen')
     $data = Join-Path $Out 'data'
     if (Test-Path -LiteralPath $data) { Remove-Item -LiteralPath $data -Recurse -Force }
     $frozen = Join-Path $inputs 'data'
@@ -106,11 +121,16 @@ function Start-OptionsWindow([string]$exe, [string]$resources, [int]$width, [int
     for ($i = 0; $i -lt 120 -and -not $win; $i++) {
         Start-Sleep -Milliseconds 500
         if ($p.HasExited) { throw "the window closed at once: see $resources\Generated\Options.log" }
-        $w = $UA::RootElement.FindFirst($Scope::Children, (New-Condition $UA::ProcessIdProperty $p.Id))
-        if ($w -and $w.Current.Name -and $w.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window) { $win = $w }
+        # the window with the pages (the preview is a window of its own)
+        foreach ($h in [OptionsWin32]::WindowsOf($p.Id)) {
+            $w = $UA::FromHandle($h)
+            if ($w.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window -and
+                $w.FindFirst($Scope::Descendants, (New-Condition $UA::AutomationIdProperty 'PageTitle'))) { $win = $w; break }
+        }
     }
     if (-not $win) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; throw 'no window after 60 s' }
     $hwnd = [IntPtr]$win.Current.NativeWindowHandle
+    $script:OptionsHwnd = $hwnd   # for Select-Item
     [void][OptionsWin32]::MoveWindow($hwnd, 0, 0, $width, $height, $true)
     Start-Sleep -Milliseconds 2500   # the first page is built after the window shows
     return New-Object PSObject -Property @{ Process = $p; Win = $win; Hwnd = $hwnd }
@@ -120,8 +140,28 @@ function Get-ListItems($win) {
     return @($win.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::ListItem))))
 }
 
+# UI Automation's Select, Scroll and Realize activate the window and take the focus
+# from the user: the program started with -Offscreen does them when asked with a
+# message instead (WM_APP + 1: select, WM_APP + 2: scroll, WM_APP + 3: an entry of a
+# list into view; Nav.cs), at the middle of the element's part inside its parent (an
+# entry scrolled into view may stick out of the menu). True when it did; a program
+# older than that answers nothing, and the caller uses UI Automation.
+function Send-WindowAsk([int]$msg, [int]$wParam, $element) {
+    $r = $element.Current.BoundingRectangle
+    $parent = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($element)
+    if ($parent) { $r = [System.Windows.Rect]::Intersect($r, $parent.Current.BoundingRectangle) }
+    if ($r.IsEmpty) { return $false }
+    $x = [int]($r.X + $r.Width / 2); $y = [int]($r.Y + $r.Height / 2)
+    $answer = [IntPtr]::Zero
+    $sent = [OptionsWin32]::SendMessageTimeout($script:OptionsHwnd, $msg, [IntPtr]$wParam, [IntPtr](($y -band 0xFFFF) * 65536 + ($x -band 0xFFFF)), 0, 30000, [ref]$answer)
+    return ($sent -ne [IntPtr]::Zero -and $answer -eq [IntPtr]1)
+}
+
+# Selects an entry (of the menu, of the tiles), with UI Automation when the program
+# could not (see Send-WindowAsk). Not checked here: selecting a category rebuilds the
+# menu, and $item no longer says; the callers check the page or the tile shown.
 function Select-Item($item) {
-    $item.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select()
+    if (-not (Send-WindowAsk 0x8001 0 $item)) { $item.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Select() }
     Start-Sleep -Milliseconds 1500
 }
 
@@ -129,15 +169,23 @@ function Select-Item($item) {
 # list of its own and comes first). They are virtualized: an entry scrolled out of
 # the menu may not be in the tree at all, so the entries are walked with
 # ItemContainerPattern, not looked for among the descendants.
-function Find-MenuEntry($win, [int]$n) {
+# Values: Item, List (its list) and Index (its place there); $null after the last one
+function Find-MenuPlace($win, [int]$n) {
     $lists = @($win.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::List))) |
         Where-Object { $_.Current.BoundingRectangle.X -lt 200 })
     foreach ($list in $lists) {
         $ic = $list.GetCurrentPattern([System.Windows.Automation.ItemContainerPattern]::Pattern)
         $item = $ic.FindItemByProperty($null, $null, $null)
-        while ($item -and $n -gt 0) { $n--; $item = $ic.FindItemByProperty($item, $null, $null) }
-        if ($item) { return $item }
+        $i = 0
+        while ($item -and $n -gt 0) { $n--; $i++; $item = $ic.FindItemByProperty($item, $null, $null) }
+        if ($item) { return New-Object PSObject -Property @{ Item = $item; List = $list; Index = $i } }
     }
+    return $null
+}
+
+function Find-MenuEntry($win, [int]$n) {
+    $place = Find-MenuPlace $win $n
+    if ($place) { return $place.Item }
     return $null
 }
 
@@ -149,12 +197,18 @@ function Test-Offscreen($item) {
 # Entry n of the menu (from 0), scrolled into view first when it is out of it, as a
 # click on it would need; $null after the last one
 function Get-MenuEntry($win, [int]$n) {
-    $item = Find-MenuEntry $win $n
-    if (-not $item -or -not (Test-Offscreen $item)) { return $item }
-    $p = $null
-    if ($item.TryGetCurrentPattern([System.Windows.Automation.VirtualizedItemPattern]::Pattern, [ref]$p)) { $p.Realize() }
-    elseif ($item.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$p)) { $p.ScrollIntoView() }
-    else { throw "menu entry ${n}: out of view, and it cannot be scrolled into it" }
+    $place = Find-MenuPlace $win $n
+    if (-not $place) { return $null }
+    $item = $place.Item
+    if (-not (Test-Offscreen $item)) { return $item }
+    # asked to the program (Send-WindowAsk: Realize would activate the window), else
+    # with UI Automation
+    if (-not (Send-WindowAsk 0x8003 $place.Index $place.List)) {
+        $p = $null
+        if ($item.TryGetCurrentPattern([System.Windows.Automation.VirtualizedItemPattern]::Pattern, [ref]$p)) { $p.Realize() }
+        elseif ($item.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$p)) { $p.ScrollIntoView() }
+        else { throw "menu entry ${n}: out of view, and it cannot be scrolled into it" }
+    }
     Start-Sleep -Milliseconds 400
     $item = Find-MenuEntry $win $n
     if (-not $item -or (Test-Offscreen $item)) { throw "menu entry ${n}: still out of view after scrolling to it" }

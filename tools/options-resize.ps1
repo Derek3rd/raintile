@@ -5,7 +5,8 @@
 # scrollbar that shows, narrows the page, hides, widens it...) makes the window
 # loop for a second or more at some widths: this finds it. Run by hand after a
 # change that sizes things from the layout (docs/OptionsUI.md, "Sizes taken from the
-# layout"); it opens the windows and takes a few minutes, so tools/check.py does not.
+# layout"); it takes a few minutes, so tools/check.py does not. The windows are not
+# on screen and never take the focus (as in tools\options-shots.ps1).
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\options-resize.ps1 -Base origin/nightly
 #   ... -Page Found      only the entries named (Found,General: several)

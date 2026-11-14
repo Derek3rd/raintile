@@ -155,16 +155,40 @@ namespace RaintileOptions
         // its opacity
         public static string FormatPickedColor(string old, int r, int g, int b)
         {
-            old = (old ?? "").Trim();
             var v = ColorFromText(old);
+            int a = v != null && v.Length >= 4 ? v[3] : (old ?? "").Trim() == "" ? 255 : -1;
+            return FormatColor(old, r, g, b, a);
+        }
+
+        // The opacity of a colour in % (0-100; 100 without an alpha), -1 when the
+        // text is not a colour
+        public static int ColorOpacity(string text)
+        {
+            var v = ColorFromText(text);
+            if (v == null) return -1;
+            return v.Length < 4 ? 100 : (int)Math.Round(Math.Max(0, Math.Min(255, v[3])) * 100 / 255.0);
+        }
+
+        // The colour 'old' with the opacity 'percent' (0-100) as its alpha, in the
+        // format of 'old'; null when 'old' is not a colour
+        public static string FormatColorOpacity(string old, double percent)
+        {
+            var v = ColorFromText(old);
+            if (v == null) return null;
+            return FormatColor(old, v[0], v[1], v[2], (int)Math.Round(Math.Max(0, Math.Min(100, percent)) * 255 / 100));
+        }
+
+        // R,G,B and the alpha 'a' (-1: none) in the format of 'old': R,G,B[,A], or
+        // hex (#RRGGBB[AA], 0x as 'old' has it) when 'old' is hex
+        static string FormatColor(string old, int r, int g, int b, int a)
+        {
+            old = (old ?? "").Trim();
             if (old != "" && !old.Contains(","))
             {
                 string prefix = old.StartsWith("#") ? "#" : Regex.IsMatch(old, "^0[xX]") ? "0x" : "#";
-                string a = v != null && v.Length >= 4 ? v[3].ToString("X2") : "";
-                return prefix + r.ToString("X2") + g.ToString("X2") + b.ToString("X2") + a;
+                return prefix + r.ToString("X2") + g.ToString("X2") + b.ToString("X2") + (a >= 0 ? a.ToString("X2") : "");
             }
-            string alpha = v != null && v.Length >= 4 ? "," + v[3] : old == "" ? ",255" : "";
-            return r + "," + g + "," + b + alpha;
+            return r + "," + g + "," + b + (a >= 0 ? "," + a : "");
         }
 
         // --- Numbers and screen area ---------------------------------------------------

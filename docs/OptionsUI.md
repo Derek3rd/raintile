@@ -222,11 +222,16 @@ list, or renames the entry picked in a combo. A field never has a bin.
 | A number in a range worth dragging (counts, ms, pt, zoom, opacity) | Slider + text box with its unit (`NewNumberField`) |
 | A length that can be pixels or a share of the screen | `size`: text box + px / % combo (`NewSizeField`) |
 | An identifier or a huge range (a port) | Text box with its unit (`NoSlider` in the schema) |
-| A colour | Swatch + text box |
+| A colour | Swatch + text box, and under them its opacity: slider + box in % (`NewColorField`) |
 | A key | Key button + clear |
 | Gamepad buttons (one, or two held together) | Two key buttons + clear, with the button's glyph (`NewPadControl`): clicked, the dial of the buttons around it; with the pad, A and then the button |
 | Text, path | Text box (paths: + "Browse...") |
 
+- A colour's opacity is its alpha shown in % (0-100), as every opacity is: the slider
+  writes it into the text in the format the colour already has (`R,G,B,A`, `#RRGGBBAA`
+  or `0xRRGGBBAA`; `Core.FormatColorOpacity`), and follows the text typed by hand. The
+  colour of a category or a tile in the category editor keeps swatch + text box: the
+  Opacity row after it is the opacity of the whole tile (`TileOpacity`, `Opacity`).
 - No row of chips for a single choice: it wraps and clutters the page. Chips stay for
   several of a set. The filters of a list are combos too (Import > Found: the kind, the store or folder, the order), so a new kind or store adds an entry, not a chip.
 - A unit of measure is always shown (px, pt, ms, s, %, ×, / 255, steps), inside the

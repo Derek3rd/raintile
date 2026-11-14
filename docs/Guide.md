@@ -541,7 +541,7 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
 | Categories > *each category* | its tiles side by side, **All tiles** first (grid, logo size, tile colour and background, framing and logo of every tile); a large preview to frame the background and place the logo; edit, drag a tile onto another category in the menu to move it there, turn imported games into normal tiles |
 | Info (at the bottom) | version and updates (whether to check, releases or nightly builds), your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide |
 
-- Every setting has a fitting control: switches, sliders with their unit (you can also type the value: number boxes take only numbers, and a comma becomes the decimal point), drop-down lists for choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit in the list after the box converts the number for the main screen). The same kind of value has the same control everywhere, in the category editor too. A value that is not valid is outlined in red and not saved until it is fixed.
+- Every setting has a fitting control: switches, sliders with their unit (you can also type the value: number boxes take only numbers, and a comma becomes the decimal point), drop-down lists for choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`) with their opacity under them, in % (the alpha of the colour: the launcher background's, `BgColor` on Theme, is the launcher's transparency), and sizes in **px** or **%** (switching unit in the list after the box converts the number for the main screen). The same kind of value has the same control everywhere, in the category editor too. A value that is not valid is outlined in red and not saved until it is fixed.
 - What each setting or field does is written under its name. A setting that only applies with another one (the sizes of the inner wheel with the inner wheel) is greyed out while it does not apply, with what it needs under it, and so is a whole group (General > Window, General > Docked: only in that mode). A part that can be turned off has its switch beside the title of its page (the clock, keyboard navigation, the gamepad) or in the header of its group (the filter bar, labels, Steam updates), and the rest is greyed out while it is off; the page of the layout not in use (Grid or Wheel) is greyed out in the menu.
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default (in the category editor: from All tiles), and restores it. The **x** empties a field (an image or an icon goes to the Recycle Bin, asked first); the bin in the header of a list deletes the entry selected (a tile, a category), asked first.
@@ -866,7 +866,7 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFold
 
 ### Appearance
 
-<a id="colours"></a>Colours can be written as `R,G,B,A` (e.g. `0,210,180,255`; the alpha is optional) or in hex as `#RRGGBBAA` or `#RRGGBB` (e.g. `#00D2B4FF`; the `#` is optional). Alpha is the opacity, 0-255 (`00`-`FF`). The same formats work for `Color=` in the category files.
+<a id="colours"></a>Colours can be written as `R,G,B,A` (e.g. `0,210,180,255`; the alpha is optional) or in hex as `#RRGGBBAA` or `#RRGGBB` (e.g. `#00D2B4FF`; the `#` is optional). Alpha is the opacity, 0-255 (`00`-`FF`); in Options it is the **opacity** slider under each colour, in %, which writes it in the format the colour already has. The same formats work for `Color=` in the category files.
 
 | Setting | Default | Description |
 | --- | --- | --- |
@@ -880,7 +880,7 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFold
 | `UpdateGlowTime` | `3` | seconds the border turns when the launcher opens; `0` = still |
 | `FontFace` | `Segoe UI` | font |
 | `MenuFontSize`, `LabelFontSize` | `12`, `14` | font sizes (points) |
-| `BgColor` | `8,8,12,200` | launcher background |
+| `BgColor` | `8,8,12,200` | launcher background; its alpha is the launcher's transparency |
 | `TopBarColor` | `0,0,0,255` | band behind the row at the top, with the wheel showing the selected tile's background (`WheelBackdrop`) |
 | `TileColor` | `36,36,44,255` | default tile colour |
 | `TileRadius` | `0` | rounded corners of the tiles and of the highlight, in pixels (`0` = square) |

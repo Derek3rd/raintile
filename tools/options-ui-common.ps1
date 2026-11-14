@@ -140,13 +140,12 @@ function Get-ListItems($win) {
     return @($win.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::ListItem))))
 }
 
-# UI Automation's Select and Scroll activate the window and take the focus from the
-# user: the program started with -Offscreen does them when asked with a message
-# instead (WM_APP + 1: select, WM_APP + 2: scroll, WM_APP + 3: an entry of a list into
-# view; Nav.cs), at the middle of the
-# element's part inside its parent (an entry scrolled into view may stick out of
-# the menu). True when it did; a program older than that answers nothing, and the
-# caller uses UI Automation.
+# UI Automation's Select, Scroll and Realize activate the window and take the focus
+# from the user: the program started with -Offscreen does them when asked with a
+# message instead (WM_APP + 1: select, WM_APP + 2: scroll, WM_APP + 3: an entry of a
+# list into view; Nav.cs), at the middle of the element's part inside its parent (an
+# entry scrolled into view may stick out of the menu). True when it did; a program
+# older than that answers nothing, and the caller uses UI Automation.
 function Send-WindowAsk([int]$msg, [int]$wParam, $element) {
     $r = $element.Current.BoundingRectangle
     $parent = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($element)

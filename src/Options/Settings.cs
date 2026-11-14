@@ -23,11 +23,12 @@ namespace RaintileOptions
         public Panel Panel;
         public List<CheckBox> Boxes;   // stores: one switch per store
         public TextBox Text;
-        public Button Swatch, Button, Clear;
+        public Button Button, Clear;
         public Control Input;   // text, font, category, secret, choice
         public ComboBox Area, Monitor;
         public NumberField Num;
         public SizeField Size;
+        public ColorField Color;
     }
 
     class ResetInfo { public string[] KeyList; public Button Button; }
@@ -229,7 +230,7 @@ namespace RaintileOptions
                     case "int":
                     case "float": c.Num.Show(v, c.Num.Slider.Minimum); break;
                     case "size": c.Size.Show(v); break;
-                    case "color": c.Text.Text = v; c.Swatch.Background = NewColorBrush(v, true); break;
+                    case "color": c.Color.Show(v); break;
                     case "text": ((TextBox)c.Input).Text = v; break;
                     case "folders": Action redraw; if (folderLists.TryGetValue(key, out redraw)) redraw(); break;
                     case "font": ((ComboBox)c.Input).Text = v; break;
@@ -290,32 +291,10 @@ namespace RaintileOptions
 
         UIElement NewColorControl(string key)
         {
-            // the swatch, then the field filling the column
-            var sp = NewGrid("Auto", "*");
-            var sw = NewButton("", "Swatch", "Pick a colour");
-            sw.Background = NewColorBrush(V(key), true);
-            var tb = new TextBox { Margin = T(Gap.Control, 0, 0, 0), Text = V(key) };
-            SetCol(tb, 1);
-            sp.Children.Add(sw); sp.Children.Add(tb);
-            ctl[key] = new Ctl { Kind = "color", Swatch = sw, Text = tb };
-            sw.Click += (s, e) =>
-            {
-                string n = SelectColor(tb.Text);
-                if (n != null) tb.Text = n;
-            };
-            tb.TextChanged += (s, e) =>
-            {
-                if (updating) return;
-                var brush = NewColorBrush(tb.Text, true);
-                if (brush != null)
-                {
-                    sw.Background = brush;
-                    MarkInvalid(tb, false);
-                    SetValue(key, tb.Text.Trim());
-                }
-                else MarkInvalid(tb, true);
-            };
-            return sp;
+            var f = NewColorField(v => SetValue(key, v));
+            f.Show(V(key));
+            ctl[key] = new Ctl { Kind = "color", Color = f, Text = f.Box };
+            return f.Root;
         }
 
         // Hidden text (the SteamGridDB key): shown as dots, saved encrypted

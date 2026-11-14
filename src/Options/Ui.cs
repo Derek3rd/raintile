@@ -199,6 +199,38 @@ namespace RaintileOptions
         }
     }
 
+    // A colour: swatch + text box, and under them its opacity (the alpha, in %),
+    // NewColorField. Show() puts a value in it without reporting a change.
+    public class ColorField
+    {
+        public Button Swatch;
+        public TextBox Box;
+        public NumberField Opacity;
+        public FrameworkElement Root;
+        public bool Sync;
+
+        public void Show(string value)
+        {
+            Sync = true;
+            try
+            {
+                Box.Text = value ?? "";
+                Box.ClearValue(Control.BorderBrushProperty);   // a value put in is valid again
+                ShowColor();
+            }
+            finally { Sync = false; }
+        }
+
+        // the swatch and the opacity as the text says (left as they are while it is not a colour)
+        public void ShowColor()
+        {
+            var brush = OptionsApp.NewColorBrush(Box.Text, true);
+            if (brush != null) Swatch.Background = brush;
+            int pct = Core.ColorOpacity(Box.Text);
+            if (pct >= 0) Opacity.Show(pct.ToString(), 100);
+        }
+    }
+
     static class Program
     {
         // Arguments: -Resources <dir> -Data <dir> -Config <name> -Page <page>, or
@@ -671,6 +703,46 @@ namespace RaintileOptions
                 tb.Text = t;
                 f.Sync = false;
                 changed(f.Value);
+            };
+            return f;
+        }
+
+        // A colour (docs/OptionsUI.md, 3): the swatch (the Windows picker) and the text
+        // box filling the row, and under them its opacity, the alpha in % as every
+        // opacity is shown, written into the text in its format (R,G,B,A or hex).
+        // 'changed' gets the text when it is a colour; text that is not one gets the
+        // red border and is not reported.
+        public ColorField NewColorField(Action<string> changed)
+        {
+            var f = new ColorField();
+            var top = NewGrid("Auto", "*");
+            f.Swatch = NewButton("", "Swatch", "Pick a colour");
+            f.Box = new TextBox { Margin = T(Gap.Control, 0, 0, 0) };
+            SetCol(f.Box, 1);
+            top.Children.Add(f.Swatch); top.Children.Add(f.Box);
+            f.Opacity = NewNumberField(0, 100, 1, "% opacity", t =>
+            {
+                double n;
+                string v = Core.TryNumber(t, out n) ? Core.FormatColorOpacity(f.Box.Text, n) : null;
+                if (v != null) f.Box.Text = v;
+            });
+            f.Opacity.Root.Margin = T(0, Gap.Control, 0, 0);
+            var root = NewPanel();
+            AddTo(root, top); AddTo(root, f.Opacity.Root);
+            f.Root = root;
+            f.Swatch.Click += (s, e) =>
+            {
+                string n = SelectColor(f.Box.Text);
+                if (n != null) f.Box.Text = n;
+            };
+            f.Box.TextChanged += (s, e) =>
+            {
+                if (f.Sync) return;
+                bool ok = Core.ColorFromText(f.Box.Text) != null;
+                MarkInvalid(f.Box, !ok);
+                if (!ok) return;
+                f.ShowColor();
+                changed(f.Box.Text.Trim());
             };
             return f;
         }

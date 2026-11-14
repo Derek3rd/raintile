@@ -65,6 +65,27 @@ Test 'Options: a tile takes its own Size or the TileSize of All tiles, as the la
     Assert-Equal (& $span $cat (New-Section @{ Size = 'big' })) '1x1' 'a size that is not WxH'
 }
 
+Test 'Options: the opacity of a colour is its alpha in %, written back in the format of the colour' {
+    $core = $optionsApp.Assembly.GetType('RaintileOptions.Core')
+    $opacity = { param($c) $core.GetMethod('ColorOpacity').Invoke($null, [object[]]@($c)) }
+    $format = { param($c, $p) $core.GetMethod('FormatColorOpacity').Invoke($null, [object[]]@($c, [double]$p)) }
+    Assert-Equal (& $opacity '8,8,12,200') 78 'decimal with alpha'
+    Assert-Equal (& $opacity '#00D2B480') 50 'hex with alpha'
+    Assert-Equal (& $opacity '0,210,180') 100 'without alpha'
+    Assert-Equal (& $opacity 'teal') -1 'not a colour'
+    Assert-Equal (& $format '8,8,12,200' 50) '8,8,12,128' 'decimal'
+    Assert-Equal (& $format '#00D2B4FF' 50) '#00D2B480' 'hex with #'
+    Assert-Equal (& $format '0x00d2b4' 0) '0x00D2B400' 'hex with 0x, without alpha'
+    Assert-Equal (& $format '0,210,180' 100) '0,210,180,255' 'decimal without alpha'
+    Assert-Equal (& $format '8,8,12,200' 150) '8,8,12,255' 'more than 100%'
+    Assert-Equal (& $format 'teal' 50) $null 'not a colour'
+    # every percent goes to its own alpha and back
+    foreach ($p in 0..100) { Assert-Equal (& $opacity (& $format '1,2,3' $p)) $p "$p% back" }
+    # the picker keeps the alpha, and the format
+    Assert-Equal ($core.GetMethod('FormatPickedColor').Invoke($null, [object[]]@('#00D2B480', 1, 2, 3))) '#01020380' 'picked into hex'
+    Assert-Equal ($core.GetMethod('FormatPickedColor').Invoke($null, [object[]]@('', 1, 2, 3))) '1,2,3,255' 'picked into nothing'
+}
+
 Test 'Options: NumericOnly records the characters a box takes' {
     $tb = New-Object System.Windows.Controls.TextBox
     Invoke-Options 'NumericOnly' @($tb, $false, $true) | Out-Null

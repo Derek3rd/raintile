@@ -430,13 +430,14 @@ namespace RaintileOptions
 
         public static readonly List<NavNode> NavTree = new List<NavNode>
         {
-            // what is in the launcher first, then how it looks and behaves, then
-            // how it is driven (docs/OptionsUI.md, "Where a setting goes")
+            // General first, on its own (the window opens on it); then what is in
+            // the launcher, how it looks and behaves, how it is driven
+            // (docs/OptionsUI.md, "Where a setting goes")
+            new NavNode { Page = "general" },
             new NavNode { Page = "categories", Categories = true, Section = "Your launcher" },
             new NavNode { Page = "import", Children = new[] { "found" } },
             new NavNode { Page = "dashboard" },
-            new NavNode { Page = "general", Section = "Look and behaviour" },
-            new NavNode { Page = "tiles", Children = new[] { "grid", "wheel", "playtime" } },
+            new NavNode { Page = "tiles", Children = new[] { "grid", "wheel", "playtime" }, Section = "Look and behaviour" },
             new NavNode { Page = "toprow", Children = new[] { "shortcuts", "clock", "search" } },
             new NavNode { Page = "theme" },
             new NavNode { Page = "animations" },

@@ -51,9 +51,11 @@ too, so they are found together).
 | Performance, diagnostics | Advanced |
 | The updates (check, channel) with the installed and latest version | Info > Updates |
 
-- **The menu in sections**, in this order: **Your launcher** (what is in it: Categories,
-  Import, Widgets), **Look and behaviour** (the parts above), **Controls** (keys,
-  gamepad), **System** (Advanced); Info at the bottom. A page starting a section has
+- **The menu in sections**: **General** first, on its own (the window opens on it,
+  and it holds what the whole launcher is: profiles, screen, mode), then **Your
+  launcher** (what is in it: Categories, Import, Widgets), **Look and behaviour**
+  (the parts above), **Controls** (keys, gamepad), **System** (Advanced); Info at
+  the bottom. A page starting a section has
   `Section` on its `NavNode`; the section title is not an entry (`NewNavSection`).
 - **The user's words.** A label says what it changes as someone looking for it would
   say it; where the value has a technical name, the label or help also gives the

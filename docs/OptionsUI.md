@@ -248,7 +248,7 @@ list, or renames the entry picked in a combo. A field never has a bin.
 - A unit of measure is always shown (px, pt, ms, s, %, ×, / 255, steps), inside the
   number's box on its right (the `UnitBox` style of `Options.xaml`: the unit is the
   box's `Tag`). A count has no unit when its label already says what it counts
-  (Columns, Rows, Tiles in Recent); it keeps it when the label does not (a tile's
+  (Columns, Rows, Recent > Tiles); it keeps it when the label does not (a tile's
   Width in columns). Every number box is `FieldWidth.S` wide, so the boxes line up and
   the sliders before them take the rest of the row.
 - Number boxes take only numbers (`NumericOnly`, already in `NewNumberField` and

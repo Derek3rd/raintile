@@ -249,7 +249,7 @@ namespace RaintileOptions
                 } },
                 new Group { Title = "Colours", Help = null, Items = new List<Item>
                 {
-                    new Item { Kind = "color", Key = "BgColor", Label = "Launcher background", Help = "Its opacity is the launcher's transparency: lower it to see the desktop behind." },
+                    new Item { Kind = "color", Key = "BgColor", Label = "Launcher background", Help = "" },
                     new Item { Kind = "color", Key = "AccentColor", Label = "Accent", Help = "Highlight border, scrollbar, buttons under the mouse." },
                     new Item { Kind = "color", Key = "HoverColor", Label = "Highlight fill", Help = "" },
                 } },

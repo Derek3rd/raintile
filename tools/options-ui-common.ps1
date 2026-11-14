@@ -121,9 +121,11 @@ function Start-OptionsWindow([string]$exe, [string]$resources, [int]$width, [int
     for ($i = 0; $i -lt 120 -and -not $win; $i++) {
         Start-Sleep -Milliseconds 500
         if ($p.HasExited) { throw "the window closed at once: see $resources\Generated\Options.log" }
+        # the window with the pages (the preview is a window of its own)
         foreach ($h in [OptionsWin32]::WindowsOf($p.Id)) {
             $w = $UA::FromHandle($h)
-            if ($w.Current.Name -and $w.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window) { $win = $w; break }
+            if ($w.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window -and
+                $w.FindFirst($Scope::Descendants, (New-Condition $UA::AutomationIdProperty 'PageTitle'))) { $win = $w; break }
         }
     }
     if (-not $win) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; throw 'no window after 60 s' }
@@ -140,7 +142,8 @@ function Get-ListItems($win) {
 
 # UI Automation's Select and Scroll activate the window and take the focus from the
 # user: the program started with -Offscreen does them when asked with a message
-# instead (WM_APP + 1: select, WM_APP + 2: scroll; Nav.cs), at the middle of the
+# instead (WM_APP + 1: select, WM_APP + 2: scroll, WM_APP + 3: an entry of a list into
+# view; Nav.cs), at the middle of the
 # element's part inside its parent (an entry scrolled into view may stick out of
 # the menu). True when it did; a program older than that answers nothing, and the
 # caller uses UI Automation.
@@ -167,15 +170,23 @@ function Select-Item($item) {
 # list of its own and comes first). They are virtualized: an entry scrolled out of
 # the menu may not be in the tree at all, so the entries are walked with
 # ItemContainerPattern, not looked for among the descendants.
-function Find-MenuEntry($win, [int]$n) {
+# Values: Item, List (its list) and Index (its place there); $null after the last one
+function Find-MenuPlace($win, [int]$n) {
     $lists = @($win.FindAll($Scope::Descendants, (New-Condition $UA::ControlTypeProperty ([System.Windows.Automation.ControlType]::List))) |
         Where-Object { $_.Current.BoundingRectangle.X -lt 200 })
     foreach ($list in $lists) {
         $ic = $list.GetCurrentPattern([System.Windows.Automation.ItemContainerPattern]::Pattern)
         $item = $ic.FindItemByProperty($null, $null, $null)
-        while ($item -and $n -gt 0) { $n--; $item = $ic.FindItemByProperty($item, $null, $null) }
-        if ($item) { return $item }
+        $i = 0
+        while ($item -and $n -gt 0) { $n--; $i++; $item = $ic.FindItemByProperty($item, $null, $null) }
+        if ($item) { return New-Object PSObject -Property @{ Item = $item; List = $list; Index = $i } }
     }
+    return $null
+}
+
+function Find-MenuEntry($win, [int]$n) {
+    $place = Find-MenuPlace $win $n
+    if ($place) { return $place.Item }
     return $null
 }
 
@@ -187,26 +198,18 @@ function Test-Offscreen($item) {
 # Entry n of the menu (from 0), scrolled into view first when it is out of it, as a
 # click on it would need; $null after the last one
 function Get-MenuEntry($win, [int]$n) {
-    $item = Find-MenuEntry $win $n
-    if (-not $item -or -not (Test-Offscreen $item)) { return $item }
-    # the menu one screen down at a time, asked to the program (Send-WindowAsk): UI
-    # Automation's Realize would activate the window; until the menu stops moving
-    $list = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($item)
-    $ls = $null
-    if ($list -and $list.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern, [ref]$ls)) {
-        for ($i = 0; $i -lt 20 -and (Test-Offscreen $item); $i++) {
-            $before = $ls.Current.VerticalScrollPercent
-            if (-not (Send-WindowAsk 0x8002 1 $list)) { break }
-            Start-Sleep -Milliseconds 400
-            $item = Find-MenuEntry $win $n
-            if ($ls.Current.VerticalScrollPercent -le $before) { break }
-        }
-        if (-not (Test-Offscreen $item)) { return $item }
+    $place = Find-MenuPlace $win $n
+    if (-not $place) { return $null }
+    $item = $place.Item
+    if (-not (Test-Offscreen $item)) { return $item }
+    # asked to the program (Send-WindowAsk: Realize would activate the window), else
+    # with UI Automation
+    if (-not (Send-WindowAsk 0x8003 $place.Index $place.List)) {
+        $p = $null
+        if ($item.TryGetCurrentPattern([System.Windows.Automation.VirtualizedItemPattern]::Pattern, [ref]$p)) { $p.Realize() }
+        elseif ($item.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$p)) { $p.ScrollIntoView() }
+        else { throw "menu entry ${n}: out of view, and it cannot be scrolled into it" }
     }
-    $p = $null
-    if ($item.TryGetCurrentPattern([System.Windows.Automation.VirtualizedItemPattern]::Pattern, [ref]$p)) { $p.Realize() }
-    elseif ($item.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$p)) { $p.ScrollIntoView() }
-    else { throw "menu entry ${n}: out of view, and it cannot be scrolled into it" }
     Start-Sleep -Milliseconds 400
     $item = Find-MenuEntry $win $n
     if (-not $item -or (Test-Offscreen $item)) { throw "menu entry ${n}: still out of view after scrolling to it" }

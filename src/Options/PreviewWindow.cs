@@ -91,8 +91,7 @@ namespace RaintileOptions
             // Shown again by hand it failed once maximized, as it is not activated.)
             win.StateChanged += (s, e) => PlacePreview();
             win.Closed += (s, e) => { if (previewWin != null) previewWin.Close(); };
-            // (not in a run of the UI tools: it may have been left loose on the screen)
-            win.ContentRendered += (s, e) => { if (previewWin == null && previewWanted && !offscreen) OpenPreview(); };
+            win.ContentRendered += (s, e) => { if (previewWin == null && previewWanted) OpenPreview(); };
         }
 
         void OpenPreview()
@@ -194,6 +193,8 @@ namespace RaintileOptions
             LoadWheelCategories();
             if (currentFile != null) PreviewFollow(currentFile);
             PlacePreview();
+            // a run of the UI tools: not on screen either, as Options (Nav.cs)
+            if (offscreen) w.SourceInitialized += (s, e) => Cloak(w);
             w.Show();
             if (previewMax && previewFree.HasValue) w.WindowState = WindowState.Maximized;
             DrawWheel();

@@ -77,6 +77,51 @@ namespace RaintileOptions
             var work = SystemParameters.WorkArea;
             win.Width = Math.Max(win.MinWidth, Math.Min(win.Width, work.Width - 40));
             win.Height = Math.Max(win.MinHeight, Math.Min(win.Height, work.Height - 40));
+            if (offscreen)
+            {
+                // cloaked (DWMWA_CLOAK, as the windows of another virtual desktop): not
+                // drawn on screen, never under the mouse, but still rendered, so the
+                // tools shoot it with PrintWindow and reach its pages with UI
+                // Automation. Off every monitor instead, WPF would not render it.
+                win.ShowActivated = false;
+                win.ShowInTaskbar = false;
+                win.WindowStartupLocation = WindowStartupLocation.Manual;
+                win.Left = 0;
+                win.Top = 0;
+                win.SourceInitialized += (s, e) =>
+                {
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(win).Handle;
+                    int on = 1;
+                    Win32.DwmSetWindowAttribute(hwnd, 13, ref on, sizeof(int));
+                    // What the tools change, they ask with a message, lParam the point on
+                    // the screen of what they mean: UI Automation's Select and Scroll would
+                    // activate the window (they do with any WPF window) and take the focus
+                    // from the user. WM_APP + 1: select the entry there (of the menu, of
+                    // the tiles); WM_APP + 2: the page there to its top (wParam 0) or one
+                    // screen down (1). Answer 1: done; 0: nothing there to do it to.
+                    System.Windows.Interop.HwndSource.FromHwnd(hwnd).AddHook((IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) =>
+                    {
+                        if (msg != 0x8001 && msg != 0x8002) return IntPtr.Zero;
+                        handled = true;
+                        long v = lp.ToInt64();
+                        var hit = win.InputHitTest(win.PointFromScreen(new Point((short)(v & 0xFFFF), (short)((v >> 16) & 0xFFFF)))) as DependencyObject;
+                        // the entry, or the outermost list that scrolls: the page, not a list in it
+                        DependencyObject found = null;
+                        for (; hit != null; hit = hit is Visual ? VisualTreeHelper.GetParent(hit) : LogicalTreeHelper.GetParent(hit))
+                        {
+                            if (msg == 0x8001 && hit is ListBoxItem) { found = hit; break; }
+                            var sv = hit as ScrollViewer;
+                            if (msg == 0x8002 && sv != null && sv.ScrollableHeight > 0) found = sv;
+                        }
+                        if (found == null) return IntPtr.Zero;
+                        if (msg == 0x8001) ((ListBoxItem)found).IsSelected = true;
+                        else if (wp == IntPtr.Zero) ((ScrollViewer)found).ScrollToTop();
+                        else ((ScrollViewer)found).PageDown();
+                        win.UpdateLayout();
+                        return (IntPtr)1;
+                    });
+                };
+            }
             ((TextBlock)win.FindName("Version")).Text = version;
             AddStartStep("window");
             nav = (ListBox)win.FindName("Nav");
@@ -156,12 +201,16 @@ namespace RaintileOptions
             InitGamepad();
             InitPreview();
             // Started without a console: bring the window to the foreground explicitly
+            // (not in a run of the UI tools: the focus stays where the user is working)
             win.ContentRendered += (s, e) =>
             {
-                win.Topmost = true;
-                win.Activate();
-                win.Topmost = false;
-                Win32.SetForegroundWindow(new System.Windows.Interop.WindowInteropHelper(win).Handle);
+                if (!offscreen)
+                {
+                    win.Topmost = true;
+                    win.Activate();
+                    win.Topmost = false;
+                    Win32.SetForegroundWindow(new System.Windows.Interop.WindowInteropHelper(win).Handle);
+                }
                 if (!firstShown)
                 {
                     firstShown = true;

@@ -1,8 +1,12 @@
 # Screenshots of every page of the Options window (RaintileOptions.exe), or of the
 # ones named with -Page, and, with -Base, of the same pages at another git ref, compared pixel by
-# pixel: a check by eye of what a change does to the layout. It opens the windows
-# and takes a few minutes, so it is run by hand when the window changed, never by
-# tools/check.py; with -Base it stops at once when nothing of the window changed.
+# pixel: a check by eye of what a change does to the layout. It takes a few minutes,
+# so it is run by hand when the window changed, never by tools/check.py; with -Base it
+# stops at once when nothing of the window changed. The windows are not on screen and
+# never take the focus (-Offscreen: cloaked, no taskbar button, pages selected and
+# scrolled through messages to the program, not with UI Automation, which activates
+# the window): the PC stays usable while it runs. A -Base ref older than that switch
+# shows its window and takes the focus as before.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\options-shots.ps1 -Base origin/nightly
 #   ... -Base HEAD     while working on a change: against its last commit
@@ -144,6 +148,13 @@ public static class ShotsDiff {
             return new[] { n, x0, y0, x1, y1, r };
         }
     }
+    // A shot of one colour only: the window was not rendered (no page is ever that)
+    public static bool OneColour(Bitmap b) {
+        byte[] p = Bytes(b);
+        for (int i = 4; i < p.Length; i += 4)
+            if (p[i] != p[0] || p[i + 1] != p[1] || p[i + 2] != p[2]) return false;
+        return true;
+    }
     static byte[] Bytes(Bitmap b) {
         var bd = b.LockBits(new Rectangle(0, 0, b.Width, b.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
         var a = new byte[b.Width * b.Height * 4];
@@ -224,6 +235,7 @@ function Save-Shot([IntPtr]$hwnd, [string]$file) {
         $g.ReleaseHdc($dc)
         $g.Dispose()
         if (-not $printed) { throw ('shot {0}: PrintWindow failed on the window ({1}x{2})' -f $shot, $size.W, $size.H) }
+        if ([ShotsDiff]::OneColour($bmp)) { throw ('shot {0}: the window came out of one colour only (not rendered)' -f $shot) }
         $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
     }
     finally { $bmp.Dispose() }
@@ -249,21 +261,31 @@ function Show-FirstTile($win, [string]$label) {
 function Save-Page($win, [IntPtr]$hwnd, [string]$dir, [string]$name) {
     $scroll = @($win.FindAll($Scope::Descendants, (New-Condition $UA::IsScrollPatternAvailableProperty $true)) |
         Where-Object { $_.Current.BoundingRectangle.X -gt 200 -and $_.Current.BoundingRectangle.Height -gt 400 } |
-        ForEach-Object { $_.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern) } |
-        Where-Object { $_.Current.VerticallyScrollable } | Select-Object -First 1)
+        Where-Object { $_.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern).Current.VerticallyScrollable } | Select-Object -First 1)
     if ($scroll.Count -eq 0) { Save-Shot $hwnd (Join-Path $dir "$name.png"); return }
-    $sp = $scroll[0]
-    $sp.SetScrollPercent(-1, 0)
-    Start-Sleep -Milliseconds 400
+    $el = $scroll[0]
+    $sp = $el.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern)
+    Move-Page $el $sp $true
     for ($n = 0; $n -lt 10; $n++) {
         Save-Shot $hwnd (Join-Path $dir ('{0}-{1}.png' -f $name, $n))
         $before = $sp.Current.VerticalScrollPercent
         if ($before -ge 99.9) { break }
-        $sp.ScrollVertical([System.Windows.Automation.ScrollAmount]::LargeIncrement)
-        Start-Sleep -Milliseconds 400
+        Move-Page $el $sp $false
         if ($sp.Current.VerticalScrollPercent -le $before) { break }
     }
-    $sp.SetScrollPercent(-1, 0)
+    Move-Page $el $sp $true
+}
+
+# The page to its top, or one screen down: asked to the program (Send-WindowAsk), with
+# UI Automation when it could not. A screen down that did not move is the end of the
+# page, and Save-Page stops there.
+function Move-Page($el, $sp, [bool]$top) {
+    $wParam = 1
+    if ($top) { $wParam = 0 }
+    $done = Send-WindowAsk 0x8002 $wParam $el
+    if ($top -and -not ($done -and $sp.Current.VerticalScrollPercent -le 0)) { $sp.SetScrollPercent(-1, 0) }
+    elseif (-not $top -and -not $done) { $sp.ScrollVertical([System.Windows.Automation.ScrollAmount]::LargeIncrement) }
+    Start-Sleep -Milliseconds 400
 }
 
 # Opens one window (the program 'exe') and shoots every page (with -Page, the

@@ -91,7 +91,8 @@ namespace RaintileOptions
             // Shown again by hand it failed once maximized, as it is not activated.)
             win.StateChanged += (s, e) => PlacePreview();
             win.Closed += (s, e) => { if (previewWin != null) previewWin.Close(); };
-            win.ContentRendered += (s, e) => { if (previewWin == null && previewWanted) OpenPreview(); };
+            // (not in a run of the UI tools: it may have been left loose on the screen)
+            win.ContentRendered += (s, e) => { if (previewWin == null && previewWanted && !offscreen) OpenPreview(); };
         }
 
         void OpenPreview()

@@ -228,4 +228,38 @@ function T.widget_sounds()
 	t.clean(s)
 end
 
+-- The on-screen keyboard: its keys, and the pad's Delete (X) and Done
+-- (Start) as its Delete and Done keys
+function T.keyboard_keys()
+	local s = R.new({ settings = { Sounds = 1, SoundKey = 'tap.wav' } })
+	host_mkdir(s.data .. 'Sounds')
+	for _, f in ipairs({ 'tap.wav', 'tap_delete.wav', 'tap_done.wav' }) do R.writeFile(s.data .. 'Sounds\\' .. f, 'RIFF') end
+	s:start()
+	local function plays()
+		local list = {}
+		for _, line in ipairs(s.log) do
+			local f = line:match('^run: Play "(.+)"$')
+			if f then list[#list + 1] = f:match('([^\\]+)$') end
+		end
+		s.log = {}
+		return table.concat(list, ' ')
+	end
+	s:call("Pad('PadSearch')")
+	plays()
+	s:call("Pad('Confirm')")
+	t.eq(plays(), 'tap.wav', 'a key typed')
+	s:call("Pad('PadX')")
+	t.eq(plays(), 'tap_delete.wav', 'the pad\'s Delete')
+	s:call("Pad('PadStart')")
+	t.eq(plays(), 'tap_done.wav', 'the pad\'s Done')
+	s:call("Pad('PadSearch')")
+	plays()
+	local OSK = s:upvalue('OSK')
+	for k, key in ipairs(OSK) do
+		if key.value == 'DONE' then s:call('OskPress(' .. k .. ')') end
+	end
+	t.eq(plays(), 'tap_done.wav', 'the Done key: once')
+	t.clean(s)
+end
+
 return T

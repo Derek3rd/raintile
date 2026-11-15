@@ -7649,7 +7649,8 @@ function OskPress(i)
 	if not ready or not key then return end
 	if not typing then SearchOpen() end
 	osk.sel = i
-	M.sound('key', key.value == 'BACK' and 'delete' or key.value == 'DONE' and 'done' or nil)
+	-- (Done: PadStart's sound, as with Start)
+	if key.value ~= 'DONE' then M.sound('key', key.value == 'BACK' and 'delete' or nil) end
 	if key.value == 'DONE' then
 		PadStart()
 		return
@@ -7666,12 +7667,17 @@ function PadStart()
 		if not M.closeTileMenu() then M.openTileMenu() end
 		return
 	end
+	M.sound('key', 'done')
 	closeOsk()
 	if typing then TypeKey('ENTER') end
 end
 
+-- (the pad's Delete: the sound of the Delete key of the keyboard)
 function PadX()
-	if osk.open and typing then TypeKey('BACK') end
+	if osk.open and typing then
+		M.sound('key', 'delete')
+		TypeKey('BACK')
+	end
 end
 
 -- GamepadOptions (RS): the Options window, as the gear. Only while the

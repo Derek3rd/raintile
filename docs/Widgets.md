@@ -17,6 +17,7 @@ Examples in this repository: [`widgets/BigClock`](../widgets/BigClock) (meters o
   - [WidgetChanged()](#widgetchanged)
 - [Settings of a widget](#settings-of-a-widget)
 - [Parts of a tile](#parts-of-a-tile)
+- [Sounds](#sounds)
 - [Getting data: scripts](#getting-data-scripts)
   - [Keys of the user's](#keys-of-the-users)
 - [Rules](#rules)
@@ -60,6 +61,7 @@ The `.ini` is written like a Rainmeter skin, but it is not a skin of its own: Ra
 | `#WIDGETW#`, `#WIDGETH#` | the size of the tile, in pixels (with `Size=` larger) |
 | `#WIDGETPATH#` | the widget's folder, with a backslash at the end: `#WIDGETPATH#icon.png`, `"#WIDGETPATH#read.ps1"` |
 | `#WIDGET:<Section>#` | the name a section of the widget has in the launcher: `[!CommandMeasure #WIDGET:Read# "Run"]` |
+| `#WIDGETSOUND:<sound>#` | the bang that plays a sound, if the user has sounds on (`Sounds=1`): `LeftMouseUpAction=#WIDGETSOUND:click.wav#`; see [Sounds](#sounds) |
 | `#WIDGETOPTION#` | the tile's `WidgetOption=` (Options: the tile's *Widget setting*), empty without one: e.g. which game. Two tiles of the same widget can have different ones: give files that depend on it its value in their name (`List=list_#WIDGETOPTION#.txt`) |
 | `#OPTION:<Name>#` | the value of one of [its settings](#settings-of-a-widget) (not of a `secret` one: empty) |
 | `#SETTINGSPATH#` | (Rainmeter's) the folder of Rainmeter's settings: Raintile's own are in `#SETTINGSPATH#Raintile\Settings.inc` |
@@ -197,6 +199,22 @@ LeftMouseUpAction=["steam://rungameid/570"]
 - The meter's own `MouseOverAction` / `MouseLeaveAction` still run.
 - The keyboard and the gamepad treat the tile as any other at first: the arrows (D-pad) highlight it whole and go on to the next tile. `Enter` / `A` enters it, onto its first part; inside, the arrows move to the next part in that direction and stay in the tile at its edges, `Enter` / `A` does what a click on the part does (its `LeftMouseUpAction`; a row of a list: its command), and `Esc` / `B` leaves it, the whole tile highlighted again (a second one closes the launcher, as always). With the mouse on a part, the keys are inside and go on from it.
 - A part can take a direction itself: `KeyLeftAction=`, `KeyRightAction=`, `KeyUpAction=`, `KeyDownAction=` on its meter run when that arrow (D-pad) is pressed on it, inside the tile, and the highlight stays (e.g. left and right change a volume, [`AudioControl`](../widgets/AudioControl)). The other directions still go to the other parts, so take only left and right in a widget of one column.
+
+## Sounds
+
+A widget plays a sound with `#WIDGETSOUND:<sound>#` in an action (Raintile writes the bang in its place), so it follows the user's `Sounds=` as the launcher's own do: nothing with sounds off. `<sound>` is
+
+- a `.wav` of the widget's own folder, by name only: `#WIDGETSOUND:click.wav#` (not a path: a file elsewhere is never played). The name is written as it is (not a variable: Raintile turns it into the bang when it writes the widget); for a sound the user picks among its files, give the widget one action per file and show the one of [its setting](#settings-of-a-widget);
+- or one of the launcher's events, the sound the user picked for it: `open`, `close`, `move`, `launch`, `category`, `menu`, `key`, `back`, with a variant too (`move_up`, `category_next`, `key_delete`...; see the Guide's [Sounds](Guide.md#sounds)).
+
+Rainmeter plays one sound at a time (`.wav` only): a widget's cuts the launcher's short, and the other way round. Keep them short.
+
+```ini
+[Play]
+Meter=String
+Text=Play
+LeftMouseUpAction=#WIDGETSOUND:move#[!CommandMeasure #WIDGET:Player# "Play"]
+```
 
 ## Getting data: scripts
 

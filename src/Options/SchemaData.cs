@@ -294,6 +294,22 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "LaunchFontSize", Label = "Text size for tiles without a logo", Help = "", Min = 8.0, Max = 120.0, Step = 1.0, Unit = "pt", Details = true },
                 } },
             } },
+            new Page { Id = "sounds", Switch = "Sounds", Title = "Sounds", Icon = 0xE767, Desc = "A short sound for what happens on screen. Rainmeter plays one at a time, at its own volume: Rainmeter in the volume mixer of Windows. The lists have Raintile's sounds and yours: the .wav files in Sounds of your data folder (Info). A name is a set: name_up.wav, name_next.wav... play where they apply (the Guide, Sounds).", Groups = new List<Group>
+            {
+                new Group { Title = null, Help = null, Items = new List<Item>
+                {
+                    new Item { Kind = "bool", Key = "Sounds", Label = "Sounds", Help = "" },
+                    new Item { Kind = "sound", Key = "SoundOpen", Label = "Opening", Help = "The launcher and the Rainside." },
+                    new Item { Kind = "sound", Key = "SoundClose", Label = "Closing", Help = "Not after starting a tile." },
+                    new Item { Kind = "sound", Key = "SoundMove", Label = "Moving", Help = "The highlight to another tile, part, menu entry or key, with the keys or the gamepad." },
+                    new Item { Kind = "bool", Key = "SoundMouse", Label = "Moving with the mouse", Help = "Onto another tile." },
+                    new Item { Kind = "sound", Key = "SoundLaunch", Label = "Starting a tile", Help = "" },
+                    new Item { Kind = "sound", Key = "SoundCategory", Label = "Another category", Help = "" },
+                    new Item { Kind = "sound", Key = "SoundMenu", Label = "A menu", Help = "The tile menu, the \u2630 list, the power list." },
+                    new Item { Kind = "sound", Key = "SoundKey", Label = "On-screen keyboard", Help = "A key typed." },
+                    new Item { Kind = "sound", Key = "SoundBack", Label = "Back", Help = "A menu, the search or a widget closed, the launcher staying open." },
+                } },
+            } },
             new Page { Id = "keybindings", Title = "Keybindings", Icon = 0xE765, Desc = "Click a key and press the new one: the keys that open and close the launcher here, the keyboard and the gamepad on the pages below.", Keywords = "shortcut hotkey keyboard", Groups = new List<Group>
             {
                 new Group { Title = null, Help = null, Items = new List<Item>
@@ -441,6 +457,7 @@ namespace RaintileOptions
             new NavNode { Page = "toprow", Children = new[] { "shortcuts", "clock", "search" } },
             new NavNode { Page = "theme" },
             new NavNode { Page = "animations" },
+            new NavNode { Page = "sounds" },
             new NavNode { Page = "rainside" },
             new NavNode { Page = "keybindings", Children = new[] { "keys", "gamepad" }, Section = "Controls" },
             new NavNode { Page = "advanced", Section = "System" },
@@ -581,6 +598,16 @@ namespace RaintileOptions
             { "PadY", "24" },
             { "RecentCount", "12" },
             { "RecentOrder", "Recent" },
+            { "SoundBack", "button_back.wav" },
+            { "SoundCategory", "change_category.wav" },
+            { "SoundClose", "close.wav" },
+            { "SoundKey", "button_click1.wav" },
+            { "SoundLaunch", "launch.wav" },
+            { "SoundMenu", "context_menu.wav" },
+            { "SoundMouse", "0" },
+            { "SoundMove", "tile_move.wav" },
+            { "SoundOpen", "open.wav" },
+            { "Sounds", "0" },
             { "ScanOnStart", "1" },
             { "ScreenH", "#SCREENAREAHEIGHT#" },
             { "ScreenW", "#SCREENAREAWIDTH#" },

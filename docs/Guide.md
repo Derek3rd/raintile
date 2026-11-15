@@ -19,6 +19,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Tags and filter bar](#tags-and-filter-bar)
 - [Play time](#play-time)
 - [Launching a tile](#launching-a-tile)
+- [Sounds](#sounds)
 - [Streaming the PC](#streaming-the-pc)
 - [Widgets and the Dashboard](#widgets-and-the-dashboard)
   - [Widgets](#widgets)
@@ -273,6 +274,34 @@ On click the tile expands to full screen (with background and logo at full resol
 | `LaunchHold` | `1500` | ms at full screen before hiding |
 | `LaunchLogoSize` | `33%` | final logo size |
 | `LaunchFontSize` | `48` | centre text for tiles without a logo |
+
+## Sounds
+
+With `Sounds=1` (Options > **Sounds**) a short sound goes with what happens on screen, each with its own (a list of the sounds there are, with **Play** to hear one, or *None*):
+
+| Sound | When | Setting | Default |
+| --- | --- | --- | --- |
+| Opening | the launcher or the [Rainside](#rainside) opens | `SoundOpen` | `open.wav` |
+| Closing | it closes (not after starting a tile) | `SoundClose` | `close.wav` |
+| Moving | the highlight to another tile, part of a widget, menu entry or key, with the keys or the gamepad (with the mouse too: `SoundMouse=1`) | `SoundMove` | `tile_move.wav` |
+| Starting a tile | a tile starts | `SoundLaunch` | `launch.wav` |
+| Another category | | `SoundCategory` | `change_category.wav` |
+| A menu | the tile menu, the ☰ list, the power list | `SoundMenu` | `context_menu.wav` |
+| A key | of the on-screen keyboard | `SoundKey` | `button_click1.wav` |
+| Back | a menu, the search or a widget closed, the launcher staying open | `SoundBack` | `button_back.wav` |
+
+Raintile's own are in `@Resources\Sounds\`. Yours: put `.wav` files in `Sounds\` of [your data folder](#your-data-and-updates), and they are in the lists too (one with the name of one of Raintile's plays instead of it). The settings hold the name of the file (`SoundOpen=open.wav`); empty = none.
+
+**More sounds for one event**: a name is a set. Next to `swoosh.wav`, the files `swoosh_<variant>.wav` play where that variant applies, `swoosh.wav` (or nothing, without it) everywhere else; the lists show the set once. The variants:
+
+| Event | Variants |
+| --- | --- |
+| Opening, closing | `_side`: the Rainside |
+| Moving | `_up`, `_down`, `_left`, `_right`; then `_v` (up, down) or `_h` (left, right) |
+| Another category | `_next`, `_prev` (the keys and the pad; a click: the side of the active one) |
+| A key | `_delete`, `_done` |
+
+[Custom widgets](Widgets.md#sounds) can play sounds too (theirs, or the launcher's), with sounds on only. Rainmeter plays them with its `Play` command: `.wav` only, one at a time (the next cuts the last one short), at Rainmeter's own volume, which you set in the volume mixer of Windows.
 
 ## Streaming the PC
 
@@ -535,12 +564,13 @@ The pages are in the menu on the left, one per part of the launcher, **General**
 | Top row > Search | search bar, filter bar |
 | Theme | font, text colours, background and transparency, accent, highlight |
 | Animations | the fade when opening and closing, smoothing, appearing tiles, smooth scrolling (and the wheel's turn time), highlight and logo zoom, tile launch |
+| Sounds | the sounds of opening, moving, starting a tile... |
 | Rainside | the category on a side of the screen: which, mode, side, size; its shortcut and behaviour |
 | Keybindings | open/close shortcut, close key, tile hot keys |
 | Keybindings > Keyboard | navigation keys |
 | Keybindings > Gamepad | support, button legend, dead zone, repeat, the buttons of every action |
 | Advanced | performance, debug log, entries without a page of their own |
-| Info (at the bottom) | version and updates (whether to check, releases or nightly builds), your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide |
+| Info (at the bottom) | version and updates (whether to check, releases or nightly builds), your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide; Raintile's license (GNU GPL v3 or later) and the credits and licenses of what of others it ships or runs on (the HotKey plugin, Rainmeter) |
 
 - Every setting has a fitting control: switches, sliders with their unit (you can also type the value: number boxes take only numbers, and a comma becomes the decimal point), drop-down lists for choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`) with their opacity under them, in % (the alpha of the colour: the launcher background's, `BgColor`, is the launcher's transparency), and sizes in **px** or **%** (switching unit in the list after the box converts the number for the main screen). The same kind of value has the same control everywhere, in the category editor too. A value that is not valid is outlined in red and not saved until it is fixed.
 - What each setting or field does is written under its name. A setting that only applies with another one (the sizes of the inner wheel with the inner wheel) is greyed out while it does not apply, with what it needs under it, and so is a whole group (General > Window, General > Docked: only in that mode). A part that can be turned off has its switch beside the title of its page (the clock, keyboard navigation, the gamepad) or in the header of its group (the filter bar, labels, Steam updates), and the rest is greyed out while it is off; the page of the layout not in use (Grid or Wheel) is greyed out in the menu.
@@ -796,6 +826,16 @@ All of them only run while something moves.
 
 Smooth scrolling uses one extra row (or column) of tiles and Rainmeter's `Container` option to clip them at the edges of the grid, hence Rainmeter 4.5+.
 
+### Sounds
+
+See [Sounds](#sounds).
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `Sounds` | `0` | `1` = a short sound for what happens on screen |
+| `SoundOpen`, `SoundClose`, `SoundMove`, `SoundLaunch`, `SoundCategory`, `SoundMenu`, `SoundKey`, `SoundBack` | `open.wav`, `close.wav`, `tile_move.wav`, `launch.wav`, `change_category.wav`, `context_menu.wav`, `button_click1.wav`, `button_back.wav` | the sound of each: the name of a `.wav` in `Sounds\` of the data folder or of the skin; empty = none |
+| `SoundMouse` | `0` | the moving sound also when the mouse moves onto another tile |
+
 ### Tile backgrounds
 
 | Setting | Default | Description |
@@ -929,6 +969,7 @@ Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its n
   Categories/*.ini           default categories (Dashboard.ini: the default Dashboard), copied to the data folder the first time
   Images/<category>/         their icons, backgrounds and logos
   Icons/                     icons of Favorites and Recent
+  Sounds/*.wav               Raintile's sounds; yours in Sounds\ of the data folder
   Scripts/Data.ps1           prepares the data folder
   Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic

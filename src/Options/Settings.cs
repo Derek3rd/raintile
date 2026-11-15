@@ -240,6 +240,7 @@ namespace RaintileOptions
                     case "font": ((ComboBox)c.Input).Text = v; break;
                     case "secret": ((PasswordBox)c.Input).Password = Core.UnprotectSecret(v); break;
                     case "category": ((ComboBox)c.Input).SelectedItem = v; break;
+                    case "sound": ShowSoundChoices((ComboBox)c.Input, v); break;
                     case "stores":
                         foreach (var cb in c.Boxes) cb.IsChecked = v.Split('|').Select(x => x.Trim().Replace(".", "")).Contains(((string[])cb.Tag)[1]);
                         break;
@@ -355,6 +356,81 @@ namespace RaintileOptions
             cb.SelectionChanged += (s, e) => { if (cb.SelectedItem != null) SetValue(key, (string)cb.SelectedItem); };
             ctl[key] = new Ctl { Kind = "category", Input = cb };
             return cb;
+        }
+
+        // The sound of an event (Sounds page): the .wav files of the user's Sounds
+        // folder and of the skin's (the user's first when both have the name, as
+        // the launcher looks for them), or none. A name is a set: name_next.wav,
+        // name_up.wav... (SoundVariants, as M.SOUND_VARIANTS of the launcher) are
+        // listed once, under the name; Play plays the set's own file, or one of
+        // its variants when it has none
+        static readonly string[] SoundVariants = { "side", "up", "down", "left", "right", "h", "v", "next", "prev", "delete", "done" };
+
+        static IEnumerable<string> SoundDirs()
+        {
+            return new[] { System.IO.Path.Combine(Core.Data, "Sounds"), System.IO.Path.Combine(Core.Resources, "Sounds") };
+        }
+
+        // "swoosh_next" -> "swoosh"; a name without a variant stays as it is
+        static string SoundStem(string name)
+        {
+            foreach (var v in SoundVariants)
+                if (name.EndsWith("_" + v, StringComparison.OrdinalIgnoreCase) && name.Length > v.Length + 1) return name.Substring(0, name.Length - v.Length - 1);
+            return name;
+        }
+
+        static string SoundPath(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            string stem = System.IO.Path.GetFileNameWithoutExtension(name);
+            foreach (var file in new[] { name }.Concat(SoundVariants.Select(v => stem + "_" + v + ".wav")))
+                foreach (var dir in SoundDirs())
+                {
+                    string p = System.IO.Path.Combine(dir, file);
+                    if (System.IO.File.Exists(p)) return p;
+                }
+            return null;
+        }
+
+        static List<string[]> SoundChoices(string current)
+        {
+            var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dir in SoundDirs())
+            {
+                try
+                {
+                    if (System.IO.Directory.Exists(dir))
+                        foreach (var f in System.IO.Directory.GetFiles(dir, "*.wav")) names.Add(SoundStem(System.IO.Path.GetFileNameWithoutExtension(f)) + ".wav");
+                }
+                catch { }
+            }
+            // (a name of the settings no longer there: kept, so it is seen)
+            if (!string.IsNullOrEmpty(current) && current != "1" && !names.Contains(current)) names.Add(current);
+            var list = new List<string[]> { new[] { "", "None" } };
+            foreach (var n in names) list.Add(new[] { n, System.IO.Path.GetFileNameWithoutExtension(n) });
+            return list;
+        }
+
+        void ShowSoundChoices(ComboBox cb, string v)
+        {
+            SetChoices(cb, SoundChoices(v), v);
+        }
+
+        UIElement NewSoundControl(string key)
+        {
+            var cb = NewChoiceBox(SoundChoices(V(key)), V(key), v => { if (!updating) SetValue(key, v); });
+            var play = NewButton("Play", "", "Play the sound picked");
+            play.Margin = T(Gap.Control, 0, 0, 0);
+            play.Click += (s, e) =>
+            {
+                string path = SoundPath(ChoiceValue(cb));
+                if (path == null) return;
+                try { new System.Media.SoundPlayer(path).Play(); } catch { }
+            };
+            cb.SelectionChanged += (s, e) => play.IsEnabled = SoundPath(ChoiceValue(cb)) != null;
+            play.IsEnabled = SoundPath(V(key)) != null;
+            ctl[key] = new Ctl { Kind = "sound", Input = cb };
+            return NewFieldRow(null, cb, play);
         }
 
         // Where to look (ImportStores, "Steam|Epic|..."): a row per store with its
@@ -783,6 +859,7 @@ namespace RaintileOptions
                 case "secret": control = NewSecretControl(k); break;
                 case "font": control = NewFontControl(k); break;
                 case "category": control = NewCategoryControl(k); break;
+                case "sound": control = NewSoundControl(k); break;
                 case "pad": control = NewPadControl(k); break;
                 case "key": control = NewKeyControl(k); break;
                 case "combo": control = NewKeyControl(k, true); break;

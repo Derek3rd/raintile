@@ -24,6 +24,7 @@ Your games, apps, links and system tools become large tiles with background art 
 - **Power button**: lock, sleep, restart or shut down the PC from the launcher.
 - **Hot keys for tiles**: give a game a key combination and start it from anywhere, even with the launcher closed.
 - **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.
+- **Sounds** (optional): short sounds for opening, moving, starting a tile, changing category and the menus each one picked from a list (yours too) or off.
 - **Lightweight**: no update cycle (0% CPU at rest), a fixed number of meters however many tiles you have, thumbnails at the exact displayed size, loaded once and then just shown/hidden.
 - **Options window** to edit every setting, the categories and their tiles without touching files, with a search that knows the words you use (*transparency*, *delete game*).
 - **Profiles**: save the settings, the look of the categories and the widgets' settings as named profiles (a desk and a couch setup, a docked wheel and a full-screen grid) and switch between them, or go back to the default settings; your tiles stay as they are.
@@ -64,3 +65,16 @@ The launcher places itself at the top-left corner and covers the screen. Do not 
 ## Documentation
 
 Everything else — every setting, category and tile files, adding games and apps, keyboard and gamepad controls, search, animations, how it works and troubleshooting — is in the **[Guide](docs/Guide.md)**.
+
+## License and credits
+
+**Raintile** — Copyright (C) 2026 Derek3rd. Raintile is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. In short: you can use, share and change it; a changed version you share must stay under the GPL, with its source.
+
+The sounds in `@Resources/Sounds/` are Raintile's own, made for it, under the same license.
+
+What of others Raintile ships or runs on:
+
+- **HotKey plugin**: by Brian Ferguson, shipped in the package for the shortcuts and the keys — source and license: [brianferguson/HotKey.dll](https://github.com/brianferguson/HotKey.dll) (see `tools/plugins/`).
+- **Rainmeter**: Raintile is a skin for [Rainmeter](https://www.rainmeter.net/), free and open source under the GNU GPL v2.
+
+Options > Info lists them too.

@@ -306,6 +306,30 @@ AnimLogoSmooth=0.2
 ; AnimAppearFrames (tiles appearing), BgPanFrames (background Pan),
 ; LaunchAnimFrames (launch expansion)
 
+; --- Sounds ---------------------------------------------------------------------
+; 1 = a short sound for what happens on screen; 0 = silent. Rainmeter plays
+; one at a time, at its own volume (Rainmeter in the volume mixer of Windows)
+Sounds=0
+; The sound of each: the name of a .wav, looked for in Sounds\ of the data
+; folder (yours), then in the skin's (Raintile's);
+; empty = none. Opening and
+; closing (the launcher and the Rainside), the highlight moving (keys and
+; gamepad), a tile started, another category, a menu opened, a key of the
+; on-screen keyboard, back (a menu, the search or a widget closed)
+; A name is a set: <name>_<variant>.wav plays where it applies (open, close:
+; _side; move: _up _down _left _right, then _v _h; category: _next _prev;
+; key: _delete _done), <name>.wav elsewhere
+SoundOpen=open.wav
+SoundClose=close.wav
+SoundMove=tile_move.wav
+SoundLaunch=launch.wav
+SoundCategory=change_category.wav
+SoundMenu=context_menu.wav
+SoundKey=button_click1.wav
+SoundBack=button_back.wav
+; 1 = also when the mouse moves onto another tile
+SoundMouse=0
+
 ; --- Tile backgrounds -----------------------------------------------------------
 ; In the grid (the wheel's thumbnails are always cropped):
 ; BgStyle: Crop     = fixed crop at the centre of the image

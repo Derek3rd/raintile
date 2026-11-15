@@ -99,14 +99,14 @@ end
 function T.files()
 	local s = R.new({ settings = { Sounds = 1, SoundKey = 'mine.wav', SoundBack = 'gone.wav', SoundMenu = '..\\..\\x.wav' } })
 	host_mkdir(s.data .. 'Sounds')
-	R.writeFile(s.data .. 'Sounds\\rollover2.wav', 'RIFF')
+	R.writeFile(s.data .. 'Sounds\\tile_move.wav', 'RIFF')
 	R.writeFile(s.data .. 'Sounds\\mine.wav', 'RIFF')
 	s:start()
 	local M = s:upvalue('M')
 	for _, name in ipairs(M.SOUNDS) do
 		local f = M.soundFile[name]
 		if name == 'move' then
-			t.eq(f, s.data .. 'Sounds\\rollover2.wav', 'not the user\'s rollover2.wav, the default name of move')
+			t.eq(f, s.data .. 'Sounds\\tile_move.wav', 'not the user\'s tile_move.wav, the default name of move')
 		elseif name == 'key' then
 			t.eq(f, s.data .. 'Sounds\\mine.wav', 'not the user\'s sound picked for a key')
 		elseif name == 'back' then

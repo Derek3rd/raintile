@@ -4671,15 +4671,15 @@ end
 -- (SoundOpen=open.wav, SoundClose=, ...: the name of a .wav; empty = none):
 -- Rainmeter's Play command, one at a time (the next one cuts it short). Looked for
 -- in Sounds\ of the data folder (yours), then in @Resources\Sounds\
--- (Raintile's: Kenney's UI Audio, CC0). The mouse moving over the
+-- (Raintile's). The mouse moving over the
 -- tiles only with SoundMouse=1.
 -- A name is a set: <name>_<variant>.wav plays where that variant applies
 -- (M.SOUND_VARIANTS: a move up, the next category, the Rainside opening...),
 -- <name>.wav where there is none; a move falls back to _h / _v first.
 M.SOUNDS = { 'open', 'close', 'move', 'launch', 'category', 'menu', 'key', 'back' }
 -- (the default of each, if the settings have none)
-M.SOUND_DEFAULT = { open = 'switch33.wav', close = 'switch21.wav', move = 'rollover2.wav', launch = 'switch18.wav',
-	category = 'switch28.wav', menu = 'switch7.wav', key = 'click5.wav', back = 'rollover5.wav' }
+M.SOUND_DEFAULT = { open = 'open.wav', close = 'close.wav', move = 'tile_move.wav', launch = 'launch.wav',
+	category = 'change_category.wav', menu = 'context_menu.wav', key = 'button_click1.wav', back = 'button_back.wav' }
 M.SOUND_VARIANTS = { open = { 'side' }, close = { 'side' }, move = { 'up', 'down', 'left', 'right', 'h', 'v' },
 	category = { 'next', 'prev' }, key = { 'delete', 'done' } }
 function M.readSounds()

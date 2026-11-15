@@ -288,7 +288,7 @@ namespace RaintileOptions
                     new Item { Kind = "int", Key = "LaunchFontSize", Label = "Text size for tiles without a logo", Help = "", Min = 8.0, Max = 120.0, Step = 1.0, Unit = "pt" },
                 } },
             } },
-            new Page { Id = "sounds", Switch = "Sounds", Title = "Sounds", Icon = 0xE767, Desc = "A short sound for what happens on screen. Rainmeter plays one at a time, at its own volume: Rainmeter in the volume mixer of Windows. The lists have Raintile's sounds (Kenney's UI Audio, free to use) and yours: the .wav files in Sounds of your data folder (Info). A name is a set: name_up.wav, name_next.wav... play where they apply (the Guide, Sounds).", Groups = new List<Group>
+            new Page { Id = "sounds", Switch = "Sounds", Title = "Sounds", Icon = 0xE767, Desc = "A short sound for what happens on screen. Rainmeter plays one at a time, at its own volume: Rainmeter in the volume mixer of Windows. The lists have Raintile's sounds and yours: the .wav files in Sounds of your data folder (Info). A name is a set: name_up.wav, name_next.wav... play where they apply (the Guide, Sounds).", Groups = new List<Group>
             {
                 new Group { Title = null, Help = null, Items = new List<Item>
                 {
@@ -584,15 +584,15 @@ namespace RaintileOptions
             { "PadY", "24" },
             { "RecentCount", "12" },
             { "RecentOrder", "Recent" },
-            { "SoundBack", "rollover5.wav" },
-            { "SoundCategory", "switch28.wav" },
-            { "SoundClose", "switch21.wav" },
-            { "SoundKey", "click5.wav" },
-            { "SoundLaunch", "switch18.wav" },
-            { "SoundMenu", "switch7.wav" },
+            { "SoundBack", "button_back.wav" },
+            { "SoundCategory", "change_category.wav" },
+            { "SoundClose", "close.wav" },
+            { "SoundKey", "button_click1.wav" },
+            { "SoundLaunch", "launch.wav" },
+            { "SoundMenu", "context_menu.wav" },
             { "SoundMouse", "0" },
-            { "SoundMove", "rollover2.wav" },
-            { "SoundOpen", "switch33.wav" },
+            { "SoundMove", "tile_move.wav" },
+            { "SoundOpen", "open.wav" },
             { "Sounds", "0" },
             { "ScanOnStart", "1" },
             { "ScreenH", "#SCREENAREAHEIGHT#" },

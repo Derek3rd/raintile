@@ -24,7 +24,7 @@ Your games, apps, links and system tools become large tiles with background art 
 - **Power button**: lock, sleep, restart or shut down the PC from the launcher.
 - **Hot keys for tiles**: give a game a key combination and start it from anywhere, even with the launcher closed.
 - **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.
-- **Sounds** (optional): short sounds for opening, moving, starting a tile, changing category and the menus (Kenney's free *UI Audio* set), each one picked from a list (yours too) or off.
+- **Sounds** (optional): short sounds for opening, moving, starting a tile, changing category and the menus each one picked from a list (yours too) or off.
 - **Lightweight**: no update cycle (0% CPU at rest), a fixed number of meters however many tiles you have, thumbnails at the exact displayed size, loaded once and then just shown/hidden.
 - **Options window** to edit every setting, the categories and their tiles without touching files.
 - **Profiles**: save the settings, the look of the categories and the widgets' settings as named profiles (a desk and a couch setup, a docked wheel and a full-screen grid) and switch between them, or go back to the default settings; your tiles stay as they are.
@@ -74,7 +74,6 @@ Everything else — every setting, category and tile files, adding games and app
 
 What of others Raintile ships or runs on:
 
-- **Sounds**: the *UI Audio* set by [Kenney](https://www.kenney.nl/assets/ui-audio), released under [Creative Commons Zero (CC0)](https://creativecommons.org/publicdomain/zero/1.0/) — free to use, credit not required (thank you!). In `@Resources/Sounds/`, with its `License.txt`.
 - **HotKey plugin**: by Brian Ferguson, shipped in the package for the shortcuts and the keys — source and license: [brianferguson/HotKey.dll](https://github.com/brianferguson/HotKey.dll) (see `tools/plugins/`).
 - **Rainmeter**: Raintile is a skin for [Rainmeter](https://www.rainmeter.net/), free and open source under the GNU GPL v2.
 

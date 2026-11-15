@@ -10,7 +10,7 @@ Your games, apps, links and system tools become large tiles with background art 
 
 - **Categories** in a centred menu at the top (icon, text or both), each with its own grid size.
 - **Tiles** with background image, logo, label and any command: programs, shortcuts, URLs, folders, `steam://` links, Rainmeter bangs. Tiles can take more cells (`Size=2x2`) for a featured game or a bigger widget, one by one or all the tiles of a category at once. Backgrounds fit the tile by themselves; you can also frame each one by dragging and zooming it in Options, and move and resize its logo on its own, or set both once for a whole category (every logo on the right, say) and reset them all.
-- **Add games and apps** found on this PC — Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Battle.net, EA app, Xbox, and the programs of the Start menu — picking them from a list, with background and logo (local Steam cache, [SteamGridDB](https://www.steamgriddb.com/), program icons). New ones are signalled with a dot on the gear.
+- **Add games and apps** found on this PC — Steam, Epic Games, GOG Galaxy, Ubisoft Connect, Battle.net, EA app, Xbox, and the programs of the Start menu — picking them from a list, with background and logo (local Steam cache, [SteamGridDB](https://www.steamgriddb.com/), program icons). New ones are signalled with a dot on the gear, or new games added by themselves if you want.
 - **Clock and date** at the top left, and a **search** across all categories that opens when you hover it, with results that follow every key.
 - **Favorites and Recent**: your favorite tiles and the ones launched lately (or most often), one click away from the buttons next to the search bar.
 - **Tags**: tag your tiles (multiplayer, coop, ...); search finds them, and chips above the results filter by tag or by store with a click.
@@ -26,19 +26,18 @@ Your games, apps, links and system tools become large tiles with background art 
 - **Animations**: tiles appearing, smooth (and optionally infinite) scrolling, sliding highlight, logos turning from greyscale to colour, background pan/parallax/zoom, full-screen expansion when a tile is launched. Every one of them can be turned off.
 - **Sounds** (optional): short sounds for opening, moving, starting a tile, changing category and the menus each one picked from a list (yours too) or off.
 - **Lightweight**: no update cycle (0% CPU at rest), a fixed number of meters however many tiles you have, thumbnails at the exact displayed size, loaded once and then just shown/hidden.
-- **Options window** to edit every setting, the categories and their tiles without touching files.
+- **Options window** to edit every setting, the categories and their tiles without touching files, with a search that knows the words you use (*transparency*, *delete game*).
 - **Profiles**: save the settings, the look of the categories and the widgets' settings as named profiles (a desk and a couch setup, a docked wheel and a full-screen grid) and switch between them, or go back to the default settings; your tiles stay as they are.
 
 ## Requirements
 
 - Windows 10 or 11
 - [Rainmeter](https://www.rainmeter.net/) **4.5** or later
-- The **HotKey** plugin, for the open shortcut, Esc and keyboard navigation ([HotKey.dll](https://github.com/brianferguson/HotKey.dll))
-- Windows PowerShell 5.1 and .NET Framework 4.8 (both included in Windows 10/11), used for thumbnails, the search of games and apps, the gamepad helper and the Options window
+- Windows PowerShell 5.1 and .NET Framework 4.8 (both included in Windows 10/11), used for thumbnails, the search of games and apps, the keyboard and gamepad helper and the Options window
 
 ## Installation
 
-**With the package** (recommended): download the `.rmskin` file of the latest [release](https://github.com/Derek3rd/raintile/releases) and open it: the Rainmeter installer installs and loads the skin. Install the HotKey plugin too if you don't have it.
+**With the package** (recommended): download the `.rmskin` file of the latest [release](https://github.com/Derek3rd/raintile/releases) and open it: the Rainmeter installer installs and loads the skin. No plugins to install.
 
 **By hand**:
 
@@ -48,9 +47,8 @@ Your games, apps, links and system tools become large tiles with background art 
    Documents\Rainmeter\Skins\Raintile\Raintile.ini
    ```
 
-2. Install the HotKey plugin if you don't have it yet.
-3. In Rainmeter: **Manage** > **Refresh all**, then load `Raintile\Raintile.ini`.
-4. Press **Ctrl+Alt+G** to show or hide the launcher.
+2. In Rainmeter: **Manage** > **Refresh all**, then load `Raintile\Raintile.ini`.
+3. Press **Ctrl+Alt+G** to show or hide the launcher.
 
 **Updates**: Raintile checks GitHub once a day and shows a dot on the gear when a new version is out; Options > Info installs it with one click (directly, or with the Rainmeter installer). Your settings, categories and images live in `%APPDATA%\Rainmeter\Raintile\`, so updating never touches them.
 

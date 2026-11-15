@@ -264,8 +264,6 @@ function R.new(opts)
 		end
 		writeFile(self.data .. 'Settings.inc', text)
 	end
-	local sc = opts.screen or { 0, 0, 1920, 1040 }
-	local wa = opts.work or sc
 	self.builtins = {
 		['@'] = self.resources,
 		settingspath = self.settingsPath,
@@ -275,15 +273,9 @@ function R.new(opts)
 		currentconfig = self.side and 'Raintile\\Rainside' or 'Raintile', rootconfig = 'Raintile',
 		currentfile = self.side and 'Rainside.ini' or 'Raintile.ini',
 		programpath = 'C:\\Program Files\\Rainmeter\\',
-		screenareax = tostring(sc[1]), screenareay = tostring(sc[2]),
-		screenareawidth = tostring(sc[3]), screenareaheight = tostring(sc[4]),
-		workareax = tostring(wa[1]), workareay = tostring(wa[2]),
-		workareawidth = tostring(wa[3]), workareaheight = tostring(wa[4]),
-		virtualscreenx = '0', virtualscreeny = '0',
-		virtualscreenwidth = tostring(sc[3]), virtualscreenheight = tostring(sc[4]),
-		pscreenareawidth = tostring(sc[3]), pscreenareaheight = tostring(sc[4]),
 		crlf = '\n',
 	}
+	self:setScreen(opts.screen or { 0, 0, 1920, 1040 }, opts.work)
 	self.errors = {}
 	self.log = {}       -- every bang and program, as text
 	self.commands = {}  -- programs run (tile commands, scripts)
@@ -301,6 +293,21 @@ end
 
 function Skin:cleanup()
 	host_rmtree(self.tmp)
+end
+
+-- The screen (#SCREENAREA...#) and its work area (#WORKAREA...#, the screen
+-- if not given). Rainmeter follows a resolution or monitor change at once,
+-- without a refresh: so does a skin already loaded here.
+function Skin:setScreen(sc, wa)
+	wa = wa or sc
+	local b = self.builtins
+	b.screenareax, b.screenareay = tostring(sc[1]), tostring(sc[2])
+	b.screenareawidth, b.screenareaheight = tostring(sc[3]), tostring(sc[4])
+	b.workareax, b.workareay = tostring(wa[1]), tostring(wa[2])
+	b.workareawidth, b.workareaheight = tostring(wa[3]), tostring(wa[4])
+	b.virtualscreenx, b.virtualscreeny = '0', '0'
+	b.virtualscreenwidth, b.virtualscreenheight = tostring(sc[3]), tostring(sc[4])
+	b.pscreenareawidth, b.pscreenareaheight = tostring(sc[3]), tostring(sc[4])
 end
 
 -- INI reading ---------------------------------------------------------------

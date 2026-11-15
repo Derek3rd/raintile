@@ -1,8 +1,12 @@
 # Screenshots of every page of the Options window (RaintileOptions.exe), or of the
 # ones named with -Page, and, with -Base, of the same pages at another git ref, compared pixel by
-# pixel: a check by eye of what a change does to the layout. It opens the windows
-# and takes a few minutes, so it is run by hand when the window changed, never by
-# tools/check.py; with -Base it stops at once when nothing of the window changed.
+# pixel: a check by eye of what a change does to the layout. It takes a few minutes,
+# so it is run by hand when the window changed, never by tools/check.py; with -Base it
+# stops at once when nothing of the window changed. The windows are not on screen and
+# never take the focus (-Offscreen: cloaked, no taskbar button, pages selected and
+# scrolled through messages to the program, not with UI Automation, which activates
+# the window): the PC stays usable while it runs. A -Base ref older than that switch
+# shows its window and takes the focus as before.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\options-shots.ps1 -Base origin/nightly
 #   ... -Base HEAD     while working on a change: against its last commit
@@ -59,6 +63,13 @@ param(
     [string[]]$Page = @()   # entries of the menu to shoot; empty: every page
 )
 $ErrorActionPreference = 'Stop'
+# Any failure ends the run with exit code 1 and says what failed, also when the script
+# is called from another PowerShell (& tools\options-shots.ps1), where an error alone
+# would leave $LASTEXITCODE as it was
+trap {
+    [Console]::Error.WriteLine('options-shots: FAILED: ' + ($_ | Out-String).Trim())
+    exit 1
+}
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $Out) { $Out = Join-Path $repo 'build\options-shots' }
 $cache = Join-Path $Out 'cache'
@@ -95,6 +106,8 @@ using System.Runtime.InteropServices;
 public static class ShotsWin32 {
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
     [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
 }
 public static class ShotsDiff {
@@ -134,6 +147,13 @@ public static class ShotsDiff {
             foreach (bool on in rows) if (on) r++;
             return new[] { n, x0, y0, x1, y1, r };
         }
+    }
+    // A shot of one colour only: the window was not rendered (no page is ever that)
+    public static bool OneColour(Bitmap b) {
+        byte[] p = Bytes(b);
+        for (int i = 4; i < p.Length; i += 4)
+            if (p[i] != p[0] || p[i + 1] != p[1] || p[i + 2] != p[2]) return false;
+        return true;
     }
     static byte[] Bytes(Bitmap b) {
         var bd = b.LockBits(new Rectangle(0, 0, b.Width, b.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
@@ -177,19 +197,48 @@ function Get-Key([string]$ref, [string]$inputsId) {
     return ((($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 16))
 }
 
-function Save-Shot([IntPtr]$hwnd, [string]$file) {
+# The client area of the window; $null when it cannot be read or is empty
+function Get-ClientSize([IntPtr]$hwnd) {
     $r = New-Object ShotsWin32+RECT
-    [void][ShotsWin32]::GetClientRect($hwnd, [ref]$r)
-    $bmp = New-Object System.Drawing.Bitmap(($r.R - $r.L), ($r.B - $r.T))
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $dc = $g.GetHdc()
-    # PW_RENDERFULLCONTENT (also when covered) + PW_CLIENTONLY: without the title bar,
-    # drawn differently when the window is not active
-    [void][ShotsWin32]::PrintWindow($hwnd, $dc, 3)
-    $g.ReleaseHdc($dc)
-    $g.Dispose()
-    $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bmp.Dispose()
+    if (-not [ShotsWin32]::GetClientRect($hwnd, [ref]$r)) { return $null }
+    if ($r.R - $r.L -le 0 -or $r.B - $r.T -le 0) { return $null }
+    return New-Object PSObject -Property @{ W = $r.R - $r.L; H = $r.B - $r.T }
+}
+
+# One shot of the window's client area. A window minimised (by someone working
+# beside the run) has no client area: it is restored once, at its place and size. A
+# shot that still cannot be taken stops the run: a missing or empty shot must not go
+# into the cache as this page's.
+function Save-Shot([IntPtr]$hwnd, [string]$file) {
+    $shot = [System.IO.Path]::GetFileNameWithoutExtension($file)
+    $size = Get-ClientSize $hwnd
+    if (-not $size -and [ShotsWin32]::IsIconic($hwnd)) {
+        Write-Output "  ${shot}: the window was minimised, restored"
+        [void][ShotsWin32]::ShowWindow($hwnd, 9)   # SW_RESTORE
+        [void][OptionsWin32]::MoveWindow($hwnd, 0, 0, $Width, $Height, $true)
+        Start-Sleep -Milliseconds 1500
+        $size = Get-ClientSize $hwnd
+    }
+    if (-not $size) {
+        $r = New-Object ShotsWin32+RECT
+        [void][ShotsWin32]::GetClientRect($hwnd, [ref]$r)
+        throw ('shot {0}: the window has no client area to shoot ({1}x{2}, minimised: {3}); keep it open and not minimised while the run lasts' -f
+            $shot, ($r.R - $r.L), ($r.B - $r.T), [ShotsWin32]::IsIconic($hwnd))
+    }
+    $bmp = New-Object System.Drawing.Bitmap($size.W, $size.H)
+    try {
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        $dc = $g.GetHdc()
+        # PW_RENDERFULLCONTENT (also when covered) + PW_CLIENTONLY: without the title bar,
+        # drawn differently when the window is not active
+        $printed = [ShotsWin32]::PrintWindow($hwnd, $dc, 3)
+        $g.ReleaseHdc($dc)
+        $g.Dispose()
+        if (-not $printed) { throw ('shot {0}: PrintWindow failed on the window ({1}x{2})' -f $shot, $size.W, $size.H) }
+        if ([ShotsDiff]::OneColour($bmp)) { throw ('shot {0}: the window came out of one colour only (not rendered)' -f $shot) }
+        $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally { $bmp.Dispose() }
 }
 
 # The tiles of the category page on screen (the strip right of the menu)
@@ -212,21 +261,31 @@ function Show-FirstTile($win, [string]$label) {
 function Save-Page($win, [IntPtr]$hwnd, [string]$dir, [string]$name) {
     $scroll = @($win.FindAll($Scope::Descendants, (New-Condition $UA::IsScrollPatternAvailableProperty $true)) |
         Where-Object { $_.Current.BoundingRectangle.X -gt 200 -and $_.Current.BoundingRectangle.Height -gt 400 } |
-        ForEach-Object { $_.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern) } |
-        Where-Object { $_.Current.VerticallyScrollable } | Select-Object -First 1)
+        Where-Object { $_.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern).Current.VerticallyScrollable } | Select-Object -First 1)
     if ($scroll.Count -eq 0) { Save-Shot $hwnd (Join-Path $dir "$name.png"); return }
-    $sp = $scroll[0]
-    $sp.SetScrollPercent(-1, 0)
-    Start-Sleep -Milliseconds 400
+    $el = $scroll[0]
+    $sp = $el.GetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern)
+    Move-Page $el $sp $true
     for ($n = 0; $n -lt 10; $n++) {
         Save-Shot $hwnd (Join-Path $dir ('{0}-{1}.png' -f $name, $n))
         $before = $sp.Current.VerticalScrollPercent
         if ($before -ge 99.9) { break }
-        $sp.ScrollVertical([System.Windows.Automation.ScrollAmount]::LargeIncrement)
-        Start-Sleep -Milliseconds 400
+        Move-Page $el $sp $false
         if ($sp.Current.VerticalScrollPercent -le $before) { break }
     }
-    $sp.SetScrollPercent(-1, 0)
+    Move-Page $el $sp $true
+}
+
+# The page to its top, or one screen down: asked to the program (Send-WindowAsk), with
+# UI Automation when it could not. A screen down that did not move is the end of the
+# page, and Save-Page stops there.
+function Move-Page($el, $sp, [bool]$top) {
+    $wParam = 1
+    if ($top) { $wParam = 0 }
+    $done = Send-WindowAsk 0x8002 $wParam $el
+    if ($top -and -not ($done -and $sp.Current.VerticalScrollPercent -le 0)) { $sp.SetScrollPercent(-1, 0) }
+    elseif (-not $top -and -not $done) { $sp.ScrollVertical([System.Windows.Automation.ScrollAmount]::LargeIncrement) }
+    Start-Sleep -Milliseconds 400
 }
 
 # Opens one window (the program 'exe') and shoots every page (with -Page, the
@@ -302,7 +361,12 @@ function Save-Tree([string]$label, [string]$tree, [string]$key) {
         return
     }
     if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }   # left by a run that was stopped
-    Save-Window (Build-Program $tree (Join-Path $Out "$label-bin")) (New-Stage $tree) $dir
+    # a run that fails leaves no shots there: a content is cached whole or not at all
+    try { Save-Window (Build-Program $tree (Join-Path $Out "$label-bin")) (New-Stage $tree) $dir }
+    catch {
+        if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
+        throw
+    }
     $what = $label
     if ($pageNames.Count -gt 0) { $what += ', pages ' + ($pageNames -join ',') }
     [System.IO.File]::WriteAllText((Join-Path $dir 'done.txt'), $what)

@@ -43,7 +43,9 @@ namespace RaintileOptions
         readonly Dictionary<string, bool> navOpen = new Dictionary<string, bool> { { "tiles", true }, { "toprow", true }, { "keybindings", true }, { "import", true }, { "categories", true } };
         bool navBuilding;
         string navCurrent, navPending;
-        bool[] navDots;   // new found / missing, update
+        // what the dots of the menu show, read again after a change (UpdateNavDots)
+        class NavDotState { public bool Found, Update; public HashSet<string> NewTileFiles; }
+        NavDotState navDots;
         string[] editTile;
 
         public int Run()
@@ -75,6 +77,62 @@ namespace RaintileOptions
             var work = SystemParameters.WorkArea;
             win.Width = Math.Max(win.MinWidth, Math.Min(win.Width, work.Width - 40));
             win.Height = Math.Max(win.MinHeight, Math.Min(win.Height, work.Height - 40));
+            if (offscreen)
+            {
+                // cloaked (Cloak), without the focus or a taskbar button
+                win.ShowActivated = false;
+                win.ShowInTaskbar = false;
+                win.WindowStartupLocation = WindowStartupLocation.Manual;
+                win.Left = 0;
+                win.Top = 0;
+                win.SourceInitialized += (s, e) =>
+                {
+                    var hwnd = Cloak(win);
+                    // What the tools change, they ask with a message, lParam the point on
+                    // the screen of what they mean: UI Automation's Select, Scroll and
+                    // Realize would activate the window (they do with any WPF window) and
+                    // take the focus from the user. Each does what UI Automation does.
+                    // WM_APP + 1: select the entry there (of the menu, of the tiles);
+                    // WM_APP + 2: the page there to its top (wParam 0) or one screen down
+                    // (1); WM_APP + 3: in the list there, entry wParam into view. Answer
+                    // 1: done; 0: nothing there to do it to.
+                    System.Windows.Interop.HwndSource.FromHwnd(hwnd).AddHook((IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) =>
+                    {
+                        if (msg < 0x8001 || msg > 0x8003) return IntPtr.Zero;
+                        handled = true;
+                        long v = lp.ToInt64();
+                        var hit = win.InputHitTest(win.PointFromScreen(new Point((short)(v & 0xFFFF), (short)((v >> 16) & 0xFFFF)))) as DependencyObject;
+                        // the entry, the list, or the outermost view that scrolls: the page,
+                        // not a list in it
+                        DependencyObject found = null;
+                        for (; hit != null; hit = hit is Visual ? VisualTreeHelper.GetParent(hit) : LogicalTreeHelper.GetParent(hit))
+                        {
+                            if (msg == 0x8001 && hit is ListBoxItem) { found = hit; break; }
+                            if (msg == 0x8003 && hit is ListBox) { found = hit; break; }
+                            var sv = hit as ScrollViewer;
+                            if (msg == 0x8002 && sv != null && sv.ScrollableHeight > 0) found = sv;
+                        }
+                        if (found == null) return IntPtr.Zero;
+                        if (msg == 0x8001)
+                        {
+                            // whole in view, as when Select gave it the focus
+                            ((ListBoxItem)found).IsSelected = true;
+                            ((ListBoxItem)found).BringIntoView();
+                        }
+                        else if (msg == 0x8003)
+                        {
+                            var list = (ListBox)found;
+                            int n = wp.ToInt32();
+                            if (n < 0 || n >= list.Items.Count) return IntPtr.Zero;
+                            list.ScrollIntoView(list.Items[n]);
+                        }
+                        else if (wp == IntPtr.Zero) ((ScrollViewer)found).ScrollToTop();
+                        else ((ScrollViewer)found).PageDown();
+                        win.UpdateLayout();
+                        return (IntPtr)1;
+                    });
+                };
+            }
             ((TextBlock)win.FindName("Version")).Text = version;
             AddStartStep("window");
             nav = (ListBox)win.FindName("Nav");
@@ -115,12 +173,14 @@ namespace RaintileOptions
                 navBuilding = false;
                 ShowNavTarget((NavTag)sel.Tag);
             };
-            // Up and down go round the menu
+            InitSearch();
+            // Up and down go round the menu; up from its first entry, to the search
             foreach (var list in new[] { nav, navBottom })
                 list.PreviewKeyDown += (s, e) =>
                 {
                     if ((e.Key != Key.Up && e.Key != Key.Down) || Keyboard.Modifiers != ModifierKeys.None) return;
                     e.Handled = true;
+                    if (e.Key == Key.Up && NavEntries().IndexOf((nav.SelectedItem ?? navBottom.SelectedItem) as ListBoxItem) == 0) { FocusSearch(); return; }
                     var next = NavStep(e.Key == Key.Down ? 1 : -1);
                     if (next != null) next.Focus();
                 };
@@ -129,11 +189,16 @@ namespace RaintileOptions
             ((Button)win.FindName("BtnClose")).Click += (s, e) => win.Close();
             win.PreviewKeyDown += (s, e) =>
             {
-                if (refreshing) { e.Handled = true; return; }   // waiting for the skin
+                if (refreshing || autoAdding) { e.Handled = true; return; }   // waiting for the skin, or for the games added
                 if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control && capturing == null)
                 {
                     e.Handled = true;
                     StartSaveAndRefresh();
+                }
+                else if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control && capturing == null)
+                {
+                    e.Handled = true;
+                    FocusSearch();
                 }
             };
             win.Closing += (s, e) =>
@@ -147,12 +212,16 @@ namespace RaintileOptions
             InitGamepad();
             InitPreview();
             // Started without a console: bring the window to the foreground explicitly
+            // (not in a run of the UI tools: the focus stays where the user is working)
             win.ContentRendered += (s, e) =>
             {
-                win.Topmost = true;
-                win.Activate();
-                win.Topmost = false;
-                Win32.SetForegroundWindow(new System.Windows.Interop.WindowInteropHelper(win).Handle);
+                if (!offscreen)
+                {
+                    win.Topmost = true;
+                    win.Activate();
+                    win.Topmost = false;
+                    Win32.SetForegroundWindow(new System.Windows.Interop.WindowInteropHelper(win).Handle);
+                }
                 if (!firstShown)
                 {
                     firstShown = true;
@@ -173,6 +242,8 @@ namespace RaintileOptions
             AddStartStep("  rest of the setup");
             updating = false;
             editTile = openPage == "tile" ? ReadEditTile() : null;
+            // (-Page new: the category of the first tile added by itself, not shown yet)
+            if (openPage == "new") { var t = NewTiles().FirstOrDefault(); if (t != null) editTile = new[] { t.File, "" }; }
             // The menu is built before the window appears, the page right after
             if (openPage == "info") BuildNav("");
             else if (editTile != null) { navOpen["categories"] = true; BuildNav("cat:" + editTile[0]); }
@@ -182,6 +253,18 @@ namespace RaintileOptions
             win.ShowDialog();
             app.Shutdown();
             return 0;
+        }
+
+        // -Offscreen: a window cloaked (DWMWA_CLOAK, as the windows of another virtual
+        // desktop): not drawn on screen, never under the mouse, but still rendered, so
+        // the tools shoot it with PrintWindow and read it with UI Automation. Off every
+        // monitor instead, WPF would not render it. Returns its handle.
+        static IntPtr Cloak(Window w)
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(w).Handle;
+            int on = 1;
+            Win32.DwmSetWindowAttribute(hwnd, 13, ref on, sizeof(int));
+            return hwnd;
         }
 
         void AddStartStepLead()
@@ -203,7 +286,7 @@ namespace RaintileOptions
             {
                 var sel = nav.SelectedItem as ListBoxItem;
                 if (sel != null) ShowNavTarget((NavTag)sel.Tag);
-                SelectTileByName(editTile[1]);
+                if (editTile[1] != "") SelectTileByName(editTile[1]);
             }
             else
             {
@@ -242,7 +325,7 @@ namespace RaintileOptions
         ListBoxItem NewNavItem(string id, string title, int glyph, int level, NavTag tag, string icon = "", bool? open = null)
         {
             var item = new ListBoxItem();
-            var g = NewGrid("Auto", "*", "Auto");
+            var g = NewGrid("Auto", "*", "Auto", "Auto");
             if (level == 0)
             {
                 var gl = NewGlyph(glyph, 15);   // ui-exempt: menu chrome
@@ -272,26 +355,24 @@ namespace RaintileOptions
                 if (tip == "") { e.Handled = true; return; }
                 item.ToolTip = tip;
             };
+            // the dot of the gear in the launcher, on the entries it leads to (a
+            // group too, also closed)
+            var dot = new Ellipse
+            {
+                Width = 8, Height = 8, Fill = ResBrush("AccentBrush"), Margin = T(Gap.Control, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
+            };
+            SetCol(dot, 2);
+            g.Children.Add(dot);
+            tag.Dot = dot;
             if (open != null)
             {
                 var ch = NewGlyph(open.Value ? Glyph.GroupOpen : Glyph.GroupClosed, 9);   // ui-exempt: menu chrome
                 ch.Foreground = ResBrush("DimBrush");
                 ch.Margin = T(Gap.Control, 0, 0, 0);
-                SetCol(ch, 2);
+                SetCol(ch, 3);
                 g.Children.Add(ch);
                 item.PreviewMouseLeftButtonDown += (s, e) => SwitchNavGroup(item, e);
-            }
-            else if (level == 0)
-            {
-                // the dot of the gear in the launcher, on the entry it leads to
-                var dot = new Ellipse
-                {
-                    Width = 8, Height = 8, Fill = ResBrush("AccentBrush"), Margin = T(Gap.Control, 0, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed,
-                };
-                SetCol(dot, 2);
-                g.Children.Add(dot);
-                tag.Dot = dot;
             }
             item.Content = g;
             tag.Id = id;
@@ -299,6 +380,21 @@ namespace RaintileOptions
             item.Tag = tag;
             SetNavApplies(item);
             return item;
+        }
+
+        // The title of a section of the menu (NavNode.Section), above its entries:
+        // not an entry, never selected nor passed over (NavEntries leaves out the
+        // disabled ones)
+        ListBoxItem NewNavSection(string title)
+        {
+            var t = NewSectionTitle(title);
+            t.TextTrimming = TextTrimming.CharacterEllipsis;
+            return new ListBoxItem
+            {
+                Content = t, IsEnabled = false, IsHitTestVisible = false, Focusable = false,
+                Padding = T(Gap.Group, nav.Items.Count == 0 ? Gap.Line : Gap.Card, Gap.Group, Gap.Line),
+                Tag = new NavTag { Type = "section" },
+            };
         }
 
         // The page of a mode not in use (Page.When: Grid, Wheel): its entry greyed
@@ -343,16 +439,26 @@ namespace RaintileOptions
         {
             // while the window opens the files are not read: ShowFirstPage does it
             if (!reload && navDots == null && !firstShown) return;
-            if (reload || navDots == null) navDots = new[] { TestNewFound() || TestMissingAny(), TestUpdateAvailable() };
-            bool newFound = navDots[0], update = navDots[1];
+            if (reload || navDots == null)
+            {
+                newTiles = null;
+                navDots = new NavDotState
+                {
+                    Found = TestNewFound() || TestMissingAny(), Update = TestUpdateAvailable(),
+                    NewTileFiles = new HashSet<string>(NewTiles().Select(t => t.File), StringComparer.OrdinalIgnoreCase),
+                };
+            }
             foreach (var it in nav.Items.OfType<ListBoxItem>().Concat(navBottom.Items.OfType<ListBoxItem>()))
             {
                 var tag = (NavTag)it.Tag;
                 if (tag.Dot == null) continue;
-                bool on = (tag.Id == "page:import" && newFound) || (tag.Id == "page:info" && update);
-                tag.Dot.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
-                tag.DotTip = !on ? null : (update && tag.Id == "page:info") ? "A new version of Raintile is available."
-                    : "New games or apps found, or tiles of games no longer installed.";
+                string tip = null;
+                if ((tag.Id == "page:import" || tag.Id == "page:found") && navDots.Found) tip = "New games or apps found, or tiles of games no longer installed.";
+                else if (tag.Id == "page:info" && navDots.Update) tip = "A new version of Raintile is available.";
+                else if ((tag.Id == "categories" && navDots.NewTileFiles.Count > 0) || (tag.Type == "category" && navDots.NewTileFiles.Contains(tag.File)))
+                    tip = "Games added by themselves: open the category to see them.";
+                tag.Dot.Visibility = tip != null ? Visibility.Visible : Visibility.Collapsed;
+                tag.DotTip = tip;
             }
         }
 
@@ -364,6 +470,7 @@ namespace RaintileOptions
                 nav.Items.Clear();
                 foreach (var node in Schema.NavTree)
                 {
+                    if (node.Section != null) nav.Items.Add(NewNavSection(node.Section));
                     if (node.Children != null)
                     {
                         // a page with sub-pages below it: a click on it shows it and
@@ -515,6 +622,10 @@ namespace RaintileOptions
 
         void ShowNavTarget(NavTag tag)
         {
+            // another page from the menu (or LB / RB): the menu back in place of the
+            // results; not for the page of a result (OpenSearchHit)
+            if (navSearch != null && SearchShown && !keepSearch) navSearch.Text = "";
+            keepSearch = false;
             switch (tag.Type)
             {
                 case "page": ShowPage(tag.Page); break;
@@ -522,6 +633,8 @@ namespace RaintileOptions
                 case "widget": ShowWidgetPage(tag.File); break;
                 default: return;
             }
+            // the Categories page: the tiles added by themselves have been seen
+            if (tag.Id == "categories") SetNewTilesSeen(null);
             navCurrent = tag.Id;
         }
 
@@ -670,7 +783,7 @@ namespace RaintileOptions
                     try { Directory.Delete(folder, true); } catch { }
                 }
                 ShowDialog("Update Raintile", "Raintile " + latest + " is installed. Rainmeter reloads now.\r\n\r\nThe previous files are in:\r\n" + backup);
-                // every skin is reloaded (new mini-skins and scripts are seen);
+                // every skin is reloaded (new skins and scripts are seen);
                 // the launcher shows itself once loaded
                 WriteShowOnLoad();
                 win.Close();

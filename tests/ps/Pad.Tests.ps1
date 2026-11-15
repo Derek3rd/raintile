@@ -120,6 +120,62 @@ Test 'Pad: the Rainside has no button by default; its own open it, also hidden' 
     Assert-Equal (Press $p '') '' 'released'
 }
 
+# --- Keyboard (RaintileKeys) ---------------------------------------------------
+
+function Combo([string]$Text) { $k = [RaintileKeys]::ParseCombo($Text); if ($null -eq $k) { return 'null' }; return ($k | ForEach-Object { '{0:X2}' -f $_ }) -join ' ' }
+
+Test 'Keys: the HotKey plugin names, as Settings.inc and the Options window write them' {
+    Assert-Equal (Combo 'CTRL ALT G') '11 12 47' 'CTRL ALT G'
+    Assert-Equal (Combo 'ctrl alt g') '11 12 47' 'lower case'
+    Assert-Equal (Combo 'LWIN SPACE') '20 5B' 'LWIN SPACE'
+    Assert-Equal (Combo 'ESCAPE') '1B' 'ESCAPE'
+    Assert-Equal (Combo 'NUM7') '67' 'NUM7'
+    Assert-Equal (Combo 'F12') '7B' 'F12'
+    Assert-Equal (Combo 'F24') '87' 'F24'
+    Assert-Equal (Combo '7') '37' 'a digit'
+    Assert-Equal (Combo '0x41') '41' 'hex'
+    Assert-Equal (Combo '65') '41' 'decimal'
+    Assert-Equal (Combo 'SHIFT LSHIFT A') '10 41' 'SHIFT covers LSHIFT'
+    Assert-Equal (Combo 'LCTRL RALT 1') '31 A2 A5' 'left and right kept'
+    Assert-Equal (Combo 'CTRL NOPE') 'null' 'an unknown name'
+    Assert-Equal (Combo '') 'null' 'empty'
+    # every name the Options window writes (Schema.VkNames) and the defaults
+    $names = 'BACKSPACE TAB ENTER PAUSE CAPSLOCK ESCAPE SPACE PAGEUP PAGEDOWN END HOME LEFT UP RIGHT DOWN PRINTSCREEN INSERT DELETE ' +
+        'LWIN RWIN MENU MULT ADD SUBTRACT DECIMAL DIVIDE NUMLOCK SCROLLLOCK SHIFT CTRL ALT LSHIFT RSHIFT LCTRL RCTRL LALT RALT ' +
+        'COLON PLUS COMMA MINUS PERIOD FORWARDSLASH BACKTICK LBRACKET BACKSLASH RBRACKET QUOTE NUM0 NUM9 F1 A Z 0 9 W S D Q E F'
+    foreach ($n in $names.Split(' ')) { Assert-True ((Combo $n) -ne 'null') "$n not read" }
+}
+
+Test 'Keys: the plugin rule, the key of the combination with the others held' {
+    $held = New-Object 'System.Collections.Generic.HashSet[int]'
+    $isHeld = [Func[int, bool]] { param($k) $held.Contains($k) }
+    $combo = [RaintileKeys]::ParseCombo('CTRL ALT G')
+    Assert-True (-not [RaintileKeys]::Fires($combo, 0x47, $isHeld)) 'G alone'
+    [void]$held.Add(0x11); [void]$held.Add(0x12)
+    Assert-True ([RaintileKeys]::Fires($combo, 0x47, $isHeld)) 'G with CTRL ALT held'
+    [void]$held.Add(0x10)
+    Assert-True ([RaintileKeys]::Fires($combo, 0x47, $isHeld)) 'SHIFT held too: still (as the plugin)'
+    Assert-True (-not [RaintileKeys]::Fires($combo, 0x48, $isHeld)) 'another key'
+    $held.Clear()
+    $w = [RaintileKeys]::ParseCombo('W')
+    Assert-True ([RaintileKeys]::Fires($w, 0x57, $isHeld)) 'one key'
+}
+
+Test 'Keys: the list of the skin (Generated\HotKeys.txt)' {
+    $log = $false
+    $list = [RaintileKeys]::ParseList(@('CTRL ALT G|down|Raintile|Toggle()', 'ENTER|up|Raintile|Confirm()',
+        "SPACE|down|Raintile|TypeKey(' ')", 'log', 'end'), [ref]$log)
+    Assert-Equal $list.Count 3 'bindings'
+    Assert-True $log 'log'
+    Assert-True ($list[1].Up) 'ENTER on release'
+    Assert-Equal $list[2].Function "TypeKey(' ')" 'the function'
+    Assert-Equal ([RaintileKeys]::ParseList(@('CTRL ALT G|down|Raintile|Toggle()'), [ref]$log)) $null 'no end: being written'
+    $list = [RaintileKeys]::ParseList(@('NOPE|down|Raintile|Toggle()', 'A|sideways|Raintile|Toggle()', 'A|down||Toggle()',
+        'A|down|Raintile|Toggle', 'A|down|Raintile|X("y")', 'A|down|Raintile|X()][!Quit]', 'A|down', 'end'), [ref]$log)
+    Assert-Equal $list.Count 0 'lines not valid are left out'
+    Assert-True (-not $log) 'no log line'
+}
+
 # The launcher's window among Rainmeter's skins ("w, h, visible 1/0" each)
 function Pick([object[]]$Skins, [int]$W, [int]$H) {
     $list = New-Object 'System.Collections.Generic.List[int[]]'

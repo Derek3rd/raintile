@@ -58,6 +58,18 @@ function T.its_category_on_its_side()
 	t.clean(s)
 end
 
+-- The screens changed (the launcher passes DisplayChanged on): the Rainside,
+-- always there, goes to the edge of the new screen at once
+function T.follows_display_changes()
+	local s = rainside({ RainsideSide = 'Right', RainsideSize = '200' })
+	s:setScreen({ 0, 0, 3840, 2160 })
+	s:call('DisplayChanged()')
+	t.clean(s)
+	local V = s:upvalue('V')
+	t.eq(V.ScreenX, 3840 - 200, 'not on the right edge of the new screen')
+	t.eq(V.ScreenH, 2160, 'not as tall as the new screen')
+end
+
 -- At the top: a row of tiles, as tall as RainsideSize
 function T.along_the_top()
 	local s = rainside({ RainsideSide = 'Top', RainsideSize = '160' })
@@ -123,6 +135,13 @@ function T.launcher_side()
 	local M = s:upvalue('M')
 	t.ok(M.sideCat and M.sideCat.file == 'Apps.ini', 'the Rainside\'s category not kept for search')
 	t.ok(logged(s, '!ActivateConfig Raintile\\Rainside Rainside.ini'), 'the launcher did not load the Rainside')
+	t.clean(s)
+	-- its key (RainsideHotKey), in the launcher's list: Toggle() of the Rainside
+	s = R.new({ settings = { Rainside = 1, RainsideCategory = 'Apps', RainsideHotKey = 'CTRL ALT R' } }):start()
+	s:call('Hide()')
+	t.ok((R.readFile(s.resources .. 'Generated\\HotKeys.txt') or ''):find('CTRL ALT R|down|Raintile\\Rainside|Toggle()', 1, true),
+		'the Rainside\'s key is not for the Rainside')
+	s:call('Show()')
 	-- search finds its tiles
 	s:call("SearchOpen()")
 	s:call("TypeKey('C')")
@@ -149,7 +168,8 @@ function T.keys_to_the_rainside()
 	local s = R.new({ settings = { Rainside = 1, RainsideCategory = 'Apps' } }):start()
 	s:call('Hide()')
 	s:call('RainsideFocus(1)')
-	t.ok(logged(s, '!ActivateConfig Raintile\\Navigation'), 'the arrows are off while the Rainside has the keys')
+	local keys = R.readFile(s.resources .. 'Generated\\HotKeys.txt') or ''
+	t.ok(keys:find('UP|down|Raintile|Nav(0,-1)', 1, true), 'the arrows are off while the Rainside has the keys')
 	s:call('Nav(0, 1)')
 	t.ok(logged(s, '!CommandMeasure MeasureScript Nav(0,1) Raintile\\Rainside'), 'the arrow did not go to the Rainside')
 	s:call("Pad('Confirm')")

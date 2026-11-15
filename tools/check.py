@@ -317,6 +317,39 @@ def check_schema_layout(schema):
                 fail('Options schema: page %s: its switch %s is not the first setting of its first group, or not a bool' % (pm.group(1), psw.group(1)))
         if len(groups) == 1 and groups[0][0] != 'null' and pm.group(1) != 'info' and not re.search(r'Dash|Market|Found|Other', pm.group(3)):
             fail('Options schema: page %s: its only card has a title (the page has it)' % pm.group(1))
+    # Keywords: the other words the search finds a page, card or setting by
+    # (docs/OptionsUI.md, "Search"): lower case ASCII, each word once
+    for m in re.finditer(r'Keywords = "([^"]*)"', schema):
+        words = m.group(1).split(' ')
+        if not re.fullmatch(r'[a-z0-9-]+( [a-z0-9-]+)*', m.group(1)):
+            fail('Options schema: Keywords "%s": lower case letters, digits and dashes, one space between words' % m.group(1))
+        elif len(set(words)) != len(words):
+            fail('Options schema: Keywords "%s" has a word twice' % m.group(1))
+    # Details (docs/OptionsUI.md, "Details"): a fine tuning, under More settings
+    # at the bottom of its card: never a switch nor what a When needs, nor a
+    # colour, an opacity or the font size of a text (but the edge cases listed),
+    # after the other settings of its group, which keeps one at least in view
+    needed = {c.partition('=')[0] for _, when in conds for c in when.split(';')}
+    switches = set(re.findall(r'Switch = "([A-Za-z0-9]+)"', schema))
+    edge_font_sizes = {'LaunchFontSize'}   # the text of a launched tile without a logo
+    for gm in re.finditer(r'Items = new List<Item>\n\s*\{\n(.*?)^\s*\} \},', schema, re.S | re.M):
+        rows = re.findall(r'Key = "([A-Za-z0-9]+)"[^\n]*?(, Details = true)? \},?\n', gm.group(1))
+        seen_details = False
+        for key, det in rows:
+            if det:
+                seen_details = True
+                kind, _ = items.get(key, ('', []))
+                pt = re.search(r'Key = "%s",[^\n]*Unit = "pt"' % key, gm.group(1))
+                if key in switches or key in needed:
+                    fail('Options schema: %s is a detail but %s' % (key, 'a switch' if key in switches else 'another setting needs it (When)'))
+                elif kind in ('color', 'alpha'):
+                    fail('Options schema: %s is a detail but a colour or an opacity' % key)
+                elif pt and key not in edge_font_sizes:
+                    fail('Options schema: %s is a detail but the font size of a text' % key)
+            elif seen_details:
+                fail('Options schema: %s comes after a detail of its group (details go last)' % key)
+        if rows and all(det for _, det in rows):
+            fail('Options schema: the group of %s has only details' % rows[0][0])
     nav = re.search(r'NavTree = new List<NavNode>(.*?)\n        \};', schema, re.S).group(1)
     listed = re.findall(r'Page = "([a-z]+)"', nav) + [c for ch in re.findall(r'Children = new\[\] \{([^}]*)\}', nav) for c in re.findall(r'"([a-z]+)"', ch)]
     for pid in order:

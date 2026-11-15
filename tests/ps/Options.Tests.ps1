@@ -65,6 +65,30 @@ Test 'Options: a tile takes its own Size or the TileSize of All tiles, as the la
     Assert-Equal (& $span $cat (New-Section @{ Size = 'big' })) '1x1' 'a size that is not WxH'
 }
 
+Test 'Options: the opacity of a colour is its alpha in %, written back in the format of the colour' {
+    $core = $optionsApp.Assembly.GetType('RaintileOptions.Core')
+    $opacity = { param($c) $core.GetMethod('ColorOpacity').Invoke($null, [object[]]@($c)) }
+    $format = { param($c, $p) $core.GetMethod('FormatColorOpacity').Invoke($null, [object[]]@($c, [double]$p)) }
+    Assert-Equal (& $opacity '8,8,12,200') 78 'decimal with alpha'
+    Assert-Equal (& $opacity '#00D2B480') 50 'hex with alpha'
+    Assert-Equal (& $opacity '0,210,180') 100 'without alpha'
+    Assert-Equal (& $opacity 'teal') -1 'not a colour'
+    Assert-Equal (& $format '8,8,12,200' 50) '8,8,12,128' 'decimal'
+    Assert-Equal (& $format '#00D2B4FF' 50) '#00D2B480' 'hex with #'
+    Assert-Equal (& $format '0x00d2b4' 0) '0x00D2B400' 'hex with 0x, without alpha'
+    Assert-Equal (& $format '0,210,180' 100) '0,210,180,255' 'decimal without alpha'
+    Assert-Equal (& $format '8,8,12,200' 150) '8,8,12,255' 'more than 100%'
+    Assert-Equal (& $format 'teal' 50) $null 'not a colour'
+    # every percent goes to its own alpha and back
+    foreach ($p in 0..100) { Assert-Equal (& $opacity (& $format '1,2,3' $p)) $p "$p% back" }
+    # an opacity kept as an alpha alone (Kind alpha: MenuIconDimAlpha) is shown the same way
+    Assert-Equal ($core.GetMethod('AlphaToPercent').Invoke($null, [object[]]@([double]150))) 59 'alpha 150 in %'
+    Assert-Equal ($core.GetMethod('PercentToAlpha').Invoke($null, [object[]]@([double]59))) 150 '59% as an alpha'
+    # the picker keeps the alpha, and the format
+    Assert-Equal ($core.GetMethod('FormatPickedColor').Invoke($null, [object[]]@('#00D2B480', 1, 2, 3))) '#01020380' 'picked into hex'
+    Assert-Equal ($core.GetMethod('FormatPickedColor').Invoke($null, [object[]]@('', 1, 2, 3))) '1,2,3,255' 'picked into nothing'
+}
+
 Test 'Options: NumericOnly records the characters a box takes' {
     $tb = New-Object System.Windows.Controls.TextBox
     Invoke-Options 'NumericOnly' @($tb, $false, $true) | Out-Null
@@ -357,4 +381,108 @@ Test 'Options: the images kept stay under their limit, the last used first' {
         Assert-True ([object]::ReferenceEquals($shown[4], (Invoke-Options 'GetBitmap' @($files[4], 0)))) 'a picture just used dropped'
         Assert-True (-not [object]::ReferenceEquals($shown[5], (Invoke-Options 'GetBitmap' @($files[5], 0)))) 'the picture not used since kept over the limit'
     } finally { $limit.SetValue($null, $was) }
+}
+
+Test 'Options: the size of an image is read from its file, again when the file changes' {
+    $file = Join-Path (New-TestFolder) 'a.png'
+    New-TestImage $file 40 20
+    Assert-Equal ((Invoke-Options 'ImagePixelSize' @($file)) -join 'x') '40x20' 'size of the picture'
+    New-TestImage $file 60 30
+    (Get-Item -LiteralPath $file).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(1)
+    Assert-Equal ((Invoke-Options 'ImagePixelSize' @($file)) -join 'x') '60x30' 'the picture written again'
+    [IO.File]::WriteAllText($file, 'not an image')
+    (Get-Item -LiteralPath $file).LastWriteTimeUtc = [DateTime]::UtcNow.AddMinutes(2)
+    Assert-True ($null -eq (Invoke-Options 'ImagePixelSize' @($file))) 'a file that is not an image'
+    Assert-True ($null -eq (Invoke-Options 'ImagePixelSize' @(''))) 'no path'
+}
+
+Test 'Options: a background enlarged more than LowResLimit gets the low-resolution note' {
+    $note = { param($w, $h, $sw, $sh, $zoom) Invoke-Options 'LowResNote' @([int[]]@($w, $h), [double]$sw, [double]$sh, [double]$zoom, 'on the launch screen') }
+    # a Steam hero on a 1440p screen: cut to 16:9, its 620 rows become 1440
+    $text = & $note 1920 620 2560 1440 1
+    Assert-True ($text -match '2\.3') "enlargement not in the note: $text"
+    Assert-True ($text -match '2560.1440\.$') "size to use not in the note: $text"
+    Assert-Equal (& $note 1920 1080 2560 1440 1) '' '1920x1080 on 1440p (1.33x) is sharp enough'
+    Assert-Equal (& $note 3840 2160 2560 1440 1) '' 'a 4K image on 1440p'
+    # the zoom of the tile counts: 1.33 x 1.2 = 1.6
+    Assert-True ((& $note 1920 1080 2560 1440 1.2) -ne '') 'zoom of the tile not counted'
+    Assert-Equal (Invoke-Options 'LowResNote' @($null, [double]2560, [double]1440, [double]1, 'x')) '' 'no image size'
+}
+
+# The games found (Generated\Found.json) added by themselves to the category
+# files (AutoAddGames, -Action autoadd without the bang to the skin): the new
+# games only, each once, never the apps
+Test 'Options: the games found are added by themselves once, the apps never' {
+    $d = New-TestFolder
+    $res = Join-Path $d 'Res'; $data = Join-Path $d 'Data'
+    New-Item -ItemType Directory -Force -Path (Join-Path $res 'Generated'), (Join-Path $data 'Categories') | Out-Null
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    $settings = Join-Path $data 'Settings.inc'
+    $games = Join-Path $data 'Categories\Games.ini'
+    [IO.File]::WriteAllText($settings, "[Variables]`r`nAutoAddGames=1`r`nImportCategory=Games`r`n", $utf8)
+    [IO.File]::WriteAllText($games, "[Category]`r`nName=Games`r`n`r`n[Old Game]`r`nCommand=steam://rungameid/1`r`n", $utf8)
+    function Write-Found([object[]]$Items) {
+        $json = ConvertTo-Json -InputObject @{ Scanned = '2026-11-13T10:00:00'; Items = $Items } -Depth 4
+        [IO.File]::WriteAllText((Join-Path $res 'Generated\Found.json'), $json, $utf8)
+    }
+    Write-Found @(
+        @{ Id = 'Steam:1'; Kind = 'game'; Store = 'Steam'; Name = 'Old Game'; Command = 'steam://rungameid/1' },
+        @{ Id = 'Epic:x'; Kind = 'game'; Store = 'Epic'; Name = 'New Game'; Command = 'com.epicgames.launcher://apps/x' },
+        @{ Id = 'Folders:c:\emu\a.exe'; Kind = 'game'; Store = 'Folders'; Source = 'Emu'; Category = 'Emulators'; Name = 'Emu Game'; Command = '"C:\Emu\a.exe"' },
+        @{ Id = 'Apps:calc'; Kind = 'app'; Store = 'Apps'; Name = 'Calculator'; Command = 'calc.exe' })
+    $optionsApp.Assembly.GetType('RaintileOptions.Core').GetMethod('Init').Invoke($null, [object[]]@([string]$res, [string]$data, 'Test')) | Out-Null
+    $add = { @($optionsApp.GetMethod('AutoAddToFiles').Invoke($null, $null)) -join '|' }
+
+    Assert-Equal (& $add) 'New Game|Emu Game' 'games added'
+    $text = [IO.File]::ReadAllText($games)
+    Assert-True ($text -match '(?m)^\[New Game\]\r?\nCommand=com\.epicgames\.launcher://apps/x\r?\nSource=Epic:x') "the new game in Games.ini:`n$text"
+    Assert-True ([IO.File]::ReadAllText((Join-Path $data 'Categories\Emulators.ini')) -match '\[Emu Game\]') 'the game of a folder not in its own category'
+    Assert-True ((Get-ChildItem -LiteralPath (Join-Path $data 'Categories') -Recurse | Select-String -SimpleMatch 'Calculator') -eq $null) 'an app added'
+    $handled = @([IO.File]::ReadAllLines((Join-Path $data 'AutoAdded.txt')))
+    Assert-Equal ($handled -join '|') 'Epic:x|Folders:c:\emu\a.exe|Steam:1' 'games handled'
+    # new until shown in their category: the dots of the gear, the menu, the strip
+    $newTiles = Join-Path $res 'Generated\NewTiles.txt'
+    Assert-Equal (@([IO.File]::ReadAllLines($newTiles)) -join ',') 'Games.ini|New Game,Emulators.ini|Emu Game' 'new tiles'
+
+    # a tile removed by hand does not come back
+    [IO.File]::WriteAllText($games, "[Category]`r`nName=Games`r`n`r`n[Old Game]`r`nCommand=steam://rungameid/1`r`n", $utf8)
+    Assert-Equal (& $add) '' 'a removed game added again'
+    Assert-True (-not ([IO.File]::ReadAllText($games) -match 'New Game')) 'the removed game is back in Games.ini'
+    # the setting turned off and on again in the window: every missing game back
+    $optionsApp.GetMethod('ForgetAutoAdded').Invoke($null, $null) | Out-Null
+    Assert-Equal (& $add) 'New Game' 'the removed game after the setting was turned on again'
+
+    # a game found later is added; nothing with the setting off
+    Write-Found @(@{ Id = 'GOG:7'; Kind = 'game'; Store = 'GOG'; Name = 'Later Game'; Command = '"C:\GOG\later.exe"' })
+    [IO.File]::WriteAllText($settings, "[Variables]`r`nAutoAddGames=0`r`nImportCategory=Games`r`n", $utf8)
+    Assert-Equal (& $add) '' 'a game added with AutoAddGames=0'
+    [IO.File]::WriteAllText($settings, "[Variables]`r`nAutoAddGames=1`r`nImportCategory=Games`r`n", $utf8)
+    Assert-Equal (& $add) 'Later Game' 'a game found later'
+    Assert-Equal (@([IO.File]::ReadAllLines($newTiles)) -join ',') 'Games.ini|New Game,Emulators.ini|Emu Game,Games.ini|Later Game' 'new tiles after a later game'
+}
+
+Test 'Options: the search finds settings by the words people use for them' {
+    $schema = $optionsApp.Assembly.GetType('RaintileOptions.Schema')
+    $search = { param($q) @($schema.GetMethod('Search').Invoke($null, [object[]]@([string]$q))) }
+    $first = { param($q) $h = & $search $q; if ($h.Count -eq 0) { '(nothing)' } elseif ($h[0].Item) { $h[0].Item.Key } elseif ($h[0].Group) { 'card ' + $h[0].Group.Title } else { 'page ' + $h[0].Page.Id } }
+
+    Assert-Equal (& $first 'transparency') 'BgColor' 'transparency (a keyword)'
+    Assert-Equal (& $first 'TRANSP') 'BgColor' 'the start of a word, any case'
+    Assert-Equal (& $first 'bgcolor') 'BgColor' 'the key'
+    Assert-Equal (& $first 'wheel turn') 'WheelStepTime' 'two words'
+    Assert-Equal (& $first 'delete game') 'page categories' 'removing a game'
+    Assert-Equal (& $first 'steamgriddb') 'SteamGridDBKey' 'the SteamGridDB key'
+    Assert-Equal (& $first 'profiles') 'card Profiles' 'a card'
+    # a page's name lists the page, not every setting on it
+    $anim = & $search 'animations'
+    Assert-Equal (& $first 'animations') 'page animations' 'a page'
+    Assert-True (-not ($anim | Where-Object { $_.Item -and $_.Page.Id -eq 'animations' })) 'the settings of Animations found by the page name'
+    # every colour is found as one
+    Assert-True ((& $search 'colour' | Where-Object { $_.Item -and $_.Item.Key -eq 'ScrollThumbColor' }).Count -eq 1) 'a colour whose label does not say it'
+    Assert-Equal (& $search '').Count 0 'empty query'
+    Assert-Equal (& $search 'zzqx').Count 0 'nothing to find'
+    Assert-True ((& $search 'e').Count -le $schema.GetField('SearchMax').GetValue($null)) 'more results than the most shown'
+    # where it is: the page (with its menu entry) and the card
+    $h = (& $search 'recent tiles')[0]
+    Assert-Equal $h.Path 'Top row > Quick categories > Recent' 'the place of Recent > Tiles'
 }

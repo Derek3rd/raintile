@@ -20,6 +20,7 @@ Complete reference for Raintile. For a presentation and installation steps see t
 - [Play time](#play-time)
 - [Launching a tile](#launching-a-tile)
 - [Sounds](#sounds)
+- [Streaming the PC](#streaming-the-pc)
 - [Widgets and the Dashboard](#widgets-and-the-dashboard)
   - [Widgets](#widgets)
   - [Temperatures and fans](#temperatures-and-fans)
@@ -58,11 +59,13 @@ The launcher loads **once** (when Rainmeter starts, or on *Refresh skin*) and th
 | Losing focus: a click outside the launcher (e.g. on a second monitor) or another program coming to the foreground (`AutoHide=1`; not as a window) | | ✓ |
 | Docked: the mouse resting on that edge of the screen (`DockEdge=1`) | ✓ | |
 
-Without the HotKey plugin you can toggle it from a Windows shortcut: create a shortcut with this target and assign it a *Shortcut key* in its properties:
+You can also toggle it from a Windows shortcut: create a shortcut with this target and assign it a *Shortcut key* in its properties:
 
 ```
 "C:\Program Files\Rainmeter\Rainmeter.exe" !CommandMeasure MeasureScript "Toggle()" "Raintile"
 ```
+
+`"Show()"` or `"Hide()"` in its place only opens or only closes it (for a script, see [Streaming the PC](#streaming-the-pc)).
 
 ### Full screen, window or docked
 
@@ -74,6 +77,8 @@ Without the HotKey plugin you can toggle it from a Windows shortcut: create a sh
 
 Sizes in percent (margins, menu, fonts) are of the area, not of the window, so they stay the same in every mode.
 
+When the resolution changes or a monitor is added or removed (a game streaming host matching its client, a virtual display), the launcher lays itself out again for its area: at once while it is on screen (left behind another window, it stays there, without its keys), the next time it opens while it is hidden, so it never shows up over a game. The [Rainside](#rainside) follows at once.
+
 **Compact menu**: when the categories do not all fit in the menu (a narrow window, a launcher docked left or right, or just many categories) the clock, Favorites/Recent/Not played yet, the search, the power button and the gear move into a list opened by the **☰** button at the top left (with the time and date at its top). The categories stay in a strip between it and the X: scroll it with the wheel; its edges fade where more categories are hidden, and it follows the active one. *Search* in that list opens the search bar in the place of the categories.
 
 ### Rainside
@@ -81,7 +86,7 @@ Sizes in percent (margins, menu, fonts) are of the area, not of the window, so t
 One category can live on a side of the screen, apart from the launcher: the **Rainside** (Options > **Rainside**, `Rainside=1` and `RainsideCategory`, the name of its file without `.ini`). It is a skin of its own (`Raintile\Rainside`, loaded and refreshed by the launcher, unloaded when you turn it off) with that category's tiles and widgets in a bar `RainsideSize` wide (or tall) on `RainsideSide`, without the top row; the category is no longer in the launcher's menu, but search still finds its tiles. Without a grid of its own (`NX`, `NY` of the category) its tiles are one line along the bar, about square; a vertical bar scrolls up and down, a horizontal one sideways.
 
 - **Always there** (`RainsideMode=Fixed`): on screen beside the windows. Its shortcut (`RainsideHotKey`, and `GamepadRainside` on the pad) gives it the arrows, `Enter`, `Esc` and the gamepad (a second press, `Esc`, `B`, a click elsewhere or another program in front take them back); with the mouse it always works. `RainsideReserve=1` keeps its room free as the taskbar's: maximised windows stop beside it instead of going under it.
-- **Out of its edge** (`RainsideMode=Edge`): hidden until the mouse rests on its edge of the screen (`DockEdgeDelay`, not with a full-screen program in front), or its shortcut opens it (with the keys); it goes back in a moment after the mouse leaves it (opened with the shortcut: with `Esc`, `B`, the shortcut again or a click elsewhere) and, with `RainsideCloseOnLaunch=1`, after starting a tile. With `RainsideReserve=1` the maximised windows make room for it while it is out.
+- **Out of its edge** (`RainsideMode=Edge`): hidden until the mouse rests on its edge of the screen (`DockEdgeDelay`, Options > General > Opening and closing, not with a full-screen program in front), or its shortcut opens it (with the keys); it goes back in a moment after the mouse leaves it (opened with the shortcut: with `Esc`, `B`, the shortcut again or a click elsewhere) and, with `RainsideCloseOnLaunch=1`, after starting a tile. With `RainsideReserve=1` the maximised windows make room for it while it is out.
 - **Full-screen programs** (`RainsideFullscreen=1`): while a game or a video covers its screen it hides, its widgets stop, and it comes back afterwards. Its shortcut shows it anyway.
 - **The launcher on the same side**: docked on the Rainside's side, the launcher opens beside it (`RainsideOrder=Inside`: edge, Rainside, launcher; with a Rainside out of its edge, beside it if it is out, at the edge if not: each opens with its own shortcut) or at the edge, the Rainside sliding aside while it is open (`Outside`: edge, launcher, Rainside). Opening the launcher takes the keys back from the Rainside.
 
@@ -111,7 +116,7 @@ Right click on a tile of the Rainside, or `Start` on the pad, opens its [tile me
   - **Backdrop** (`WheelBackdrop=1`, Options > Tiles > Wheel > Backdrop): the launcher's background takes the background image of the selected tile, filling it as a desktop wallpaper (cut from its centre, not framed), fading from one to the next as the wheel turns, at `WheelBackdropOpacity` percent over `BgColor`; a game no longer installed is greyed out there too. The row at the top (clock, search, buttons, close) then gets one rounded band behind it, from the search to the close button and a little larger than the pills of the categories, so it stays readable over the picture: its colour is `TopBarColor` (black by default).
   - **Logo and lines on the backdrop** (`WheelLogoOn=Background`, `WheelInfoOn=Background`): the selected tile's logo, and its lines (the Steam update and the play time), go on the backdrop instead of on its thumbnail, on the area under the top row, at their own place there: `BackLogoPos=`, `BackLogoScale=` and `BackInfoPos=`, of the tile or of the category, as `LogoPos=`, `LogoScale=` and `InfoPos=` are on the tile (defaults: the logo in the middle, the lines at the top left). In the tile editor, **Place on** (*Its thumbnail* / *The backdrop*) chooses which one the preview shows and the drags change: on the backdrop it is that area, the logo and the lines at their real size, and the framing is off (the backdrop is not framed). The other thumbnails keep their logo; the lines are on none of them, only on the backdrop, shown as on a highlighted tile wherever the mouse is. With logos only, the selected thumbnail shows its background image instead of an empty colour. The logo is `WheelBackdropLogoSize` percent of the height of that area (times `BackLogoScale=`), from its full-size image, and the launch animation starts from it; when the lines show still follows `TileInfo` and the Steam updates (`Never`: none).
   - **Logos only** (`WheelIconsOnly=1`): the tiles show their logo on a colour taken from it (as `AutoTileColor`, also when that is off; a `Color=` of the tile or `TileColor=` of the category still wins). Tiles without a logo keep their background. Together with the background above: logos on the wheel, the art behind it.
-  - The mouse resting on a side tile turns the wheel to it (`WheelHover=Turn`; `Highlight` only highlights it); a click on a side tile launches it (`WheelClick=Launch`) or turns it to the middle (`Center`). `WheelStepTime` is the time to turn by one tile.
+  - The mouse resting on a side tile turns the wheel to it (`WheelHover=Turn`; `Highlight` only highlights it); a click on a side tile launches it (`WheelClick=Launch`) or turns it to the middle (`Center`). `WheelStepTime` is the time to turn by one tile (Options > Animations > *Smooth scrolling*).
   - **Inner wheel of categories** (`WheelMenu=Ring`): the categories go on a smaller circle inside the wheel of tiles, a disc each with the category's icon (or its initial), the active one in line with the selected tile and its name beside it. `Q` / `E`, `LB` / `RB`, a click or the mouse wheel over it change category; Favorites, Recent and Not played yet keep their buttons next to the search bar. `WheelMenuGap` (distance from the tiles) and `WheelMenuSize` (size of the discs) are in percent of a tile. `WheelMenu=Bar` keeps the categories in the menu at the top.
   - In a short launcher (docked at the top or bottom) leave room for the inner wheel: a lower `WheelAnchor` or `WheelTileSize`.
   - The **Preview** window of Options (below) shows the wheel with the tiles of a category and your categories on the inner wheel; it turns like the launcher (the mouse wheel, the arrows, a click, the mouse resting on a side tile, `Q` / `E`). The backgrounds are framed and the logos placed as on the tiles, and the lines are there too (on the thumbnails or on the backdrop): the Steam update line of the games with one waiting, and the play time as a sample ("24 h played - yesterday"), as in the tile editor.
@@ -141,9 +146,9 @@ Keys are only captured **while the launcher is visible and has the [focus](#focu
 | `F` | open the search |
 | `Esc` | close the search, or the launcher |
 
-Mouse and keyboard move the same highlight. A widget with parts (the rows of a list, e.g. Modrinth, the buttons of a player) is a tile like the others for the arrows and the D-pad; Enter / `A` enters it, onto its first part: then the arrows go from part to part without leaving the tile, Enter / `A` presses the part, as a click does, and Esc / `B` leaves it (a second one closes the launcher). Every action has two configurable keys (`NavUp`/`NavUp2`, `NavConfirm`/`NavConfirm2`, ...) using HotKey plugin key names: letters, `UP`, `DOWN`, `LEFT`, `RIGHT`, `SPACE`, `ENTER`, `TAB`, ... `KeyboardNav=0` turns keyboard navigation off. Confirm keys act on **release**, so key repeat and the release itself never reach the game you just launched.
+Mouse and keyboard move the same highlight. A widget with parts (the rows of a list, e.g. Modrinth, the buttons of a player) is a tile like the others for the arrows and the D-pad; Enter / `A` enters it, onto its first part: then the arrows go from part to part without leaving the tile, Enter / `A` presses the part, as a click does, and Esc / `B` leaves it (a second one closes the launcher). Every action has two configurable keys (`NavUp`/`NavUp2`, `NavConfirm`/`NavConfirm2`, ...) using these key names: letters, `UP`, `DOWN`, `LEFT`, `RIGHT`, `SPACE`, `ENTER`, `TAB`, ... `KeyboardNav=0` turns keyboard navigation off. Confirm keys act on **release**, so key repeat and the release itself never reach the game you just launched.
 
-The keys are registered by two invisible mini-skins, `Raintile\Hotkey` (Esc) and `Raintile\Navigation` (everything else), which the launcher activates when shown and deactivates when hidden or when it loses the focus. Don't load them by hand.
+The keys are read by the background helper (`Helper.ps1`) with a keyboard hook, no plugin needed: the launcher lists the keys active at each moment in `Generated\HotKeys.txt`, so Esc and the navigation keys work only while it is shown and has the focus, and reach the other programs as usual the rest of the time. The open/close combination and the tiles' hot keys (`TileKeysWhen=Always`) are always listed. A key the launcher uses still reaches the program in front, as it did with the HotKey plugin of earlier versions.
 
 ### Gamepad
 
@@ -194,7 +199,7 @@ At the top left, after the [clock](#clock) and the Favorites / Recent buttons, t
 - While typing, letters, digits (keypad too), space, `-` and `.` go into the search and `Backspace` deletes; the other keys of the launcher are off. **Enter** stops typing and keeps the results; the first one is highlighted: `Space`/`Enter` (or gamepad `A`) launches it, WASD/arrows move through the results.
 - `Esc`, clicking a category or an empty search go back to the categories, at the position you left them.
 - Results use the default grid (`NX`/`NY` in `Settings.inc`).
-- The keys are taken by the `Raintile\Typing` mini-skin (HotKey plugin), active only while you type.
+- The letters are listed for the helper (`Generated\HotKeys.txt`) only while you type.
 
 ## Tile menu
 
@@ -221,7 +226,7 @@ Three categories made of the tiles of the others. They are not in the category m
 - **Not played yet**: the tiles never launched (from Raintile, or with play time on Steam or [measured](#play-time)), the ones added last first: tiles added in the Options window remember the day (`Added=`). Up to `UnplayedCount`; `ShowUnplayed=0` turns it off.
 - **Recent**: the tiles you launched lately (`RecentOrder=Recent`) or most often (`MostUsed`), up to `RecentCount`.
 
-They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Top row for Favorites, Top row > Recent and Not played yet for the others).
+They are kept in your data folder (`Favorites.txt`, `Usage.txt`); turn them off with `ShowFavorites=0` / `ShowRecent=0` (Options > Top row > Quick categories).
 
 ## Tags and filter bar
 
@@ -297,6 +302,17 @@ Raintile's own are in `@Resources\Sounds\`. Yours: put `.wav` files in `Sounds\`
 | A key | `_delete`, `_done` |
 
 [Custom widgets](Widgets.md#sounds) can play sounds too (theirs, or the launcher's), with sounds on only. Rainmeter plays them with its `Play` command: `.wav` only, one at a time (the next cuts the last one short), at Rainmeter's own volume, which you set in the volume mixer of Windows.
+
+## Streaming the PC
+
+Raintile works on a PC streamed to another device with a game streaming host (Sunshine, Apollo) and a client (Moonlight, Artemis): the keys, the mouse and the controller the host passes on reach it as they would from the PC itself.
+
+- **Monitor**: keep the launcher on the *Main monitor* (Options > General > Screen), not on a numbered one. When the host adds a virtual display and makes it the main one (or the only one), the launcher goes there, at its resolution; a numbered monitor can change number when a display is added. Rainmeter itself must be running in your Windows session: on the lock screen or a UAC prompt there is no Raintile.
+- **Controller**: Raintile reads Xbox controllers (XInput). Set the host's emulated gamepad type (Configuration > Input) to **Xbox 360**: a PlayStation controller emulated as a DualShock 4 is not seen. Moonlight's combination to quit the stream (`Back` + `Start` + `LB` + `RB`) also holds `Back` + `Start`: change `GamepadToggle` if it gets in the way.
+- **Open it with the stream**: in the host's application (e.g. *Desktop*), add a command preparation with
+  - *Do*: `"C:\Program Files\Rainmeter\Rainmeter.exe" !CommandMeasure MeasureScript "Show()" "Raintile"`
+  - *Undo*: the same with `"Hide()"`
+- **4K**: the launcher draws every pixel of its area; on a 4K display turn on Rainmeter's hardware acceleration (Raintile suggests it with a notice) and see the last point of [Troubleshooting](#troubleshooting) if animations are choppy.
 
 ## Widgets and the Dashboard
 
@@ -415,7 +431,7 @@ Every section other than `[Category]` is a tile, in file order. Each category ca
 | `BackLogoPos`, `BackLogoScale`, `BackInfoPos` | the same on the wheel's backdrop, when the selected tile's logo or lines go there (`WheelLogoOn`, `WheelInfoOn` = `Background`): the logo's centre in % of the area under the top row (default `50,50`), its size times `WheelBackdropLogoSize` (default `1`), the lines' place in the room they leave there (default `0,0`); default: the category's. See [Grid or wheel](#grid-or-wheel) |
 | `Source` | where an added game or app comes from (`Steam:570`): gives its store to the [filter bar](#tags-and-filter-bar) and the Steam id to the [play time](#play-time) |
 | `Tags` | tags of the tile, separated by commas (`multiplayer, co-op`): found by search, chips of the [filter bar](#tags-and-filter-bar) |
-| `HotKey` | key combination that starts the tile, also while the launcher is hidden: HotKey plugin names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
+| `HotKey` | key combination that starts the tile, also while the launcher is hidden: key names separated by spaces (`CTRL ALT 1`); in the Options window click the field and press the keys. See [Launching a tile](#launching-a-tile) |
 | `PadKey` | gamepad buttons held together that start the tile while the launcher is open (`LB A`; `A B X Y LB RB LT RT BACK START LS RS UP DOWN LEFT RIGHT`). See [Launching a tile](#launching-a-tile) |
 | `Pinned` | `1` = at the start of the category, in the order of the file, whatever the category's `Sort=`: see [Sorting the tiles](#options-window) |
 | `Store` | store shown in the filter bar (`Steam`, `Epic Games`, `GOG`, ...), when it cannot be told from `Source` or the command |
@@ -456,6 +472,8 @@ Images\Games\
 
 Each tile looks for images named after itself, with the extensions `.png`, `.jpg`, `.jpeg`, `.bmp`, `.ico`, `.gif`. Use landscape backgrounds; logos work best as PNG with transparency.
 
+**How large a background should be.** A background is not only shown in its tile: the launch animation (`LaunchAnimation`) and the wheel's backdrop (`WheelBackdrop`) stretch it over the whole launcher, cut to its proportions. For a sharp picture it should be at least as large as the launcher on this screen (in window mode the window, docked the strip; e.g. 2560x1440 for a 1440p screen in full screen), and landscape. When it is enlarged more than 1.5 times somewhere (a rule of thumb: below about 2/3 of the resolution it shows), the tile editor says so under *Background*, with the size to use, and *Find online...* marks the images too small. Steam's library image is a wide banner: its 3840x1240 version (which *Find online...* shows first, when the game has it) is fine up to about 1440p, the 1920x620 one is not; for 4K look for a 16:9 image, for example on SteamGridDB or in the press kit of the game's publisher.
+
 **Find online...** next to *Background* and *Logo* in the tile editor (Options > the category > the tile) searches the images of that game or app: Steam's own (Steam games), [SteamGridDB](https://www.steamgriddb.com/) (with the key: games of every store and many apps, several of each), [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (logos of apps and services) and, for a link, the icon of its website. Click one and *Use it*: it is downloaded to the tile's folder, like a picked file.
 
 **Auto find images** under *All tiles* (Options > the category) does the same for every tile of the category without a background (**Background**), without a logo (**Logo**) or both (**All**: what each tile is missing), taking the first image found, one tile after the other, with a progress bar and a **Stop** button. To avoid wrong pictures, from SteamGridDB it only takes a game or app of the same name as the tile (or the Steam id of a Steam game). Widgets are left out. You don't need to resize anything: Raintile makes thumbnails at the displayed size (see [How it works](#how-it-works)).
@@ -477,12 +495,12 @@ The placement is saved in the tile as `LogoPos` (where the centre of the logo go
 Logo placement, framing and the place of the [play time](#play-time) line can also be set once for all the tiles of a category, e.g. every logo on the right, every background framed on its top part or the play time at the top right. The page of a category in Options shows its tiles side by side at the top, with **All tiles** first: it holds the settings of the whole category.
 
 - **All tiles**: the large preview shows the category's framing, logo placement and play time line (a sample text) on placeholder images, or on the images of a tile chosen in **Preview on**; drag and zoom them as on a tile. They are saved in `[Category]` with the same keys (`BgFocus`, `BgZoom`, `LogoPos`, `LogoScale`, `InfoPos`, and on the wheel's backdrop `BackLogoPos`, `BackLogoScale`, `BackInfoPos`), and every tile without its own follows them, the tiles added later too. The framing is relative to each image, so on other backgrounds it frames the same relative part. On the right: the grid, the size of the tiles (`TileSize`), the logo size, the tile colour and background of the category.
-- On a tile, a chip next to **Framing**, **Logo** and **Play time** says **From All tiles** or **Own**; a dot on the small tile in the strip marks the tiles with something of their own instead of the one of All tiles (colour, background opacity, size, framing, logo or play time line). Moving a tile's logo, background or play time line gives it its own; the reset arrow on the row gives it back the one of All tiles. To change every tile at once, use All tiles.
+- On a tile, a chip next to **Framing**, **Logo** and **Play time** says **From All tiles** or **Own**; a mark with sliders at the top right of the small tile in the strip marks the tiles with something of their own instead of the one of All tiles (colour, background opacity, size, framing, logo or play time line); the pin at the top left marks the pinned ones, and a dot the tiles of games added by themselves, the first time their category is opened (see [Adding games and apps](#adding-games-and-apps)). Moving a tile's logo, background or play time line gives it its own; the reset arrow on the row gives it back the one of All tiles. To change every tile at once, use All tiles.
 - **Logos** / **Framing** / **Play time** (All tiles > **Reset every tile**, asked first): every tile of the category back to the centre at the normal size (the play time line to the top left), the category's placement included. **Size**: every tile at the size of All tiles. The row also says the current placement and size and how many tiles have one of their own.
 
 ## Adding games and apps
 
-Right click on the launcher > **Add games and apps...**, or **Import > Found** in the Options window, shows what is installed on this PC (**Import** itself holds where to look, your folders and where they go). Nothing is added by itself: tick the games and apps you want and press **Add selected**. They become normal tiles, which you can edit, move and keep even after uninstalling.
+Right click on the launcher > **Add games and apps...**, or **Import > Found** in the Options window, shows what is installed on this PC (**Import** itself holds where to look, your folders and where they go). Nothing is added by itself (unless games are, see *Games added by themselves* below): tick the games and apps you want and press **Add selected**. They become normal tiles, which you can edit, move and keep even after uninstalling.
 
 The search (`Scripts\Scan.ps1`, in the background) looks in:
 
@@ -501,14 +519,15 @@ The search (`Scripts\Scan.ps1`, in the background) looks in:
 
 - **The list** (Import > Found) shows the cover (Steam) or the icon of each item, with its store or the name of its folder, and marks the new ones. Filter by type (All types, Games, Apps), by name, or by store or folder (lists at the top); order by name, the newest found first (the date each one was found the first time is kept in `FirstFound.txt`) or by store or folder; *Show added* also lists what is already in the launcher (dimmed, with its category); *Covers* off gives a compact text list.
 - **Where they go**: by type (games to `ImportCategory`, apps to `AppsCategory`, the programs of a folder with its own category to that one; the category is created if missing) or all to one category.
-- **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. Steam games without local images get theirs from Steam's servers (no key needed). Other games, and Steam games without images there, get background and logo from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Apps get a logo from [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (some 3500 apps and services) or, with the key, from SteamGridDB when it has an app of that very name; otherwise the program's icon. Set the key in Options > Import: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
+- **Images** are copied to the category folders, named after the tile: the Steam cover and logo, the program icon for apps. Steam games without local images get theirs from Steam's servers (no key needed). Other games, and Steam games without images there, get background and logo from [SteamGridDB](https://www.steamgriddb.com/) if `SteamGridDBKey` holds an API key (free, from the site's preferences). Apps get a logo from [Dashboard Icons](https://github.com/homarr-labs/dashboard-icons) (some 3500 apps and services) or, with the key, from SteamGridDB when it has an app of that very name; otherwise the program's icon. Set the key in Options > Import > *Images*: it is saved encrypted with Windows DPAPI (`SteamGridDBKey=dpapi:...`), so only your Windows user on this PC can read it; a key written in clear in `Settings.inc` is encrypted the next time the Options window opens.
 - Something already in the launcher, in any category (same name or same command), is not listed again.
 - **New ones**: with `ScanOnStart=1` the search runs in the background on every skin load; if it finds games or apps you have not seen in the list yet, a dot lights up on the gear, and on **Import** in the menu of the Options window. A click on it opens the list (Import > Found).
+- **Games added by themselves**: turning on *Auto add games* (Options > Import > *New games and apps*, `AutoAddGames=1`) searches at once and makes a tile of every game found that is not among the tiles yet, with a progress bar over the window and a message with what was added. Then each new game the search finds is added too: after the search on every skin load (it runs with `AutoAddGames=1` even when `ScanOnStart=0`) and each time **Found** opens. They go where games go (`ImportCategory`, or the category of their folder), with their images, as with **Add selected**; apps are still picked by hand. A dot on the gear lists the games added, and a click opens Options on their category: a dot marks it in the menu (and **Categories**) until you open it (or Categories), and its new tiles have a dot in the strip that time (`Generated\NewTiles.txt`). The launcher reloads to show their tiles, once it is hidden or loses the focus if you are using it. The games already handled, added or already there, are remembered (`AutoAdded.txt` in the data folder): a game whose tile you remove does not come back while the option stays on (add it again from the list). Turning the option off and on again in Options starts from nothing: every game found that is not among the tiles is added back.
 - **Games no longer installed** are reported by the same search (see below).
 - The added tiles are written at once; **Save and refresh** shows them in the launcher.
 - **Older versions** imported games automatically, in a block below the line `; ===== IMPORTED AUTOMATICALLY =====`. Opening **Import** turns those games into normal tiles, once.
 
-Settings: `ImportStores` (e.g. `Steam|Epic|Apps`), `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
+Settings: `ImportStores` (e.g. `Steam|Epic|Apps`), `ScanOnStart`, `AutoAddGames`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
 ### Games no longer installed
 
@@ -525,34 +544,35 @@ Reported tiles are **greyed out** in the launcher, say **Not installed** and do 
 
 The **gear** next to the X, or right click > **Options...**, opens the Options window: the program `Bin\RaintileOptions.exe` (C#, WPF, .NET Framework 4.8, included in Windows 10/11), in the packages of the releases (without it the launcher says it is missing and Raintile should be installed again; a copy of the repository builds it with `tools\dev-build.ps1`). Its look is in `Scripts\Options.xaml`. The **Preview** button at the bottom opens a window beside it (on its right, or its left when the right has no room) with the launcher as the settings make it, before saving: the mode, the sizes, the colours, the grid or the wheel, with the tiles of the category open in Categories (or the one chosen in the window) and every change you make to them. The mouse wheel scrolls it; it is closed with the same button and stays open, or closed, the next time. It follows the Options window until you move or size it by hand: then it stays where you put it, with that size, the next time too; Maximized, it stays so the next time too. **Attach** at its bottom right puts it back beside Options. Right click on a tile > **Edit \<tile\>...** (the last of Raintile's entries, shown only on a tile) opens it on that tile, ready to edit or frame.
 
-The sections are in the menu on the left, one per part of the launcher; **Tiles**, **Top row**, **Keybindings** and **Categories** have their own page and open into sub-entries (click them again, when shown, to close them):
+The pages are in the menu on the left, one per part of the launcher, **General** first, then three sections: **Your launcher** (what is in it: Categories, Import, Widgets), **Look and behaviour**, **Controls**, then **System** (Advanced) and Info at the bottom. **Categories**, **Import**, **Tiles**, **Top row** and **Keybindings** have their own page and open into sub-entries (click them again, when shown, to close them):
 
 | Section | What it holds |
 | --- | --- |
-| General | profiles (saved sets of the settings, to switch between them), area covered (whole screen or work area, monitor), mode (full screen, window, docked) and the window's or docked launcher's own settings, margins, opening and closing behaviour, fade |
+| General | profiles (saved sets of the settings, to switch between them), area covered (whole screen or work area, monitor), mode (full screen, window, docked) and the window's or docked launcher's own settings, margins, opening and closing behaviour |
+| Categories | the list of categories (create, open, reorder, delete), name and icon of the selected one |
+| Categories > *each category* | its tiles side by side, **All tiles** first (grid, logo size, tile colour and background, framing and logo of every tile); a large preview to frame the background and place the logo; edit or remove a tile (its bin button), drag a tile onto another category in the menu to move it there, turn imported games into normal tiles |
+| Import | where to look (game stores, Start menu apps: a switch each), your folders (a switch, and a grid: name, folder, games or apps, category), where they go, new games and apps (the search on start, auto add), images (the SteamGridDB key) |
+| Import > Found | the games and apps found on this PC, to add (filter, order); the tiles of games no longer installed |
+| Widgets | how often they update, the port for temperatures and fans, the example Dashboard, the widget gallery |
 | Tiles | grid or wheel, infinite scroll, mouse wheel notch, space under the top row; the tiles' colour, corners, inner margin, highlight and labels (grid and wheel) |
-| Tiles > Grid | default grid, logo size, scrolling direction, edge fade, how the background images move, scrollbar |
-| Tiles > Wheel | the wheel's shape, its thumbnails (size, logos only, names), the backdrop, how it turns, the inner wheel of categories |
+| Tiles > Grid | default grid, scrolling direction, logo size, carousel, edge fade, how the background images move, scrollbar |
+| Tiles > Wheel | the wheel's shape, its thumbnails (size, logos only, names), the backdrop, the mouse on its side tiles, the inner wheel of categories |
 | Tiles > Play time and updates | the play time line, play time outside Steam, Steam updates |
-| Top row | category menu (sizes, font, colours), Favorites, X, gear and power buttons |
-| Top row > Recent and Not played yet | Recent, Not played yet |
+| Top row | category menu (sizes, font, colours), X, gear and power buttons |
+| Top row > Quick categories | Favorites, Recent, Not played yet |
 | Top row > Clock | time and date |
 | Top row > Search | search bar, filter bar |
-| Theme | font, text colours, background, accent, highlight |
-| Animations | effects, appearing tiles, smoothing, tile launch |
+| Theme | font, text colours, background and transparency, accent, highlight |
+| Animations | the fade when opening and closing, smoothing, appearing tiles, smooth scrolling (and the wheel's turn time), highlight and logo zoom, tile launch |
 | Sounds | the sounds of opening, moving, starting a tile... |
+| Rainside | the category on a side of the screen: which, mode, side, size; its shortcut and behaviour |
 | Keybindings | open/close shortcut, close key, tile hot keys |
 | Keybindings > Keyboard | navigation keys |
-| Keybindings > Gamepad | support, dead zone, repeat, the buttons of every action |
-| Widgets | how often they update, the port for temperatures and fans, the example Dashboard, the widget gallery |
-| Import | where to look (game stores, Start menu apps: a switch each), your folders (a switch, and a grid: name, folder, games or apps, category), where they go, the search on start, the SteamGridDB key |
-| Import > Found | the games and apps found on this PC, to add (filter, order); the tiles of games no longer installed |
+| Keybindings > Gamepad | support, button legend, dead zone, repeat, the buttons of every action |
 | Advanced | performance, debug log, entries without a page of their own |
-| Categories | the list of categories (create, open, reorder, delete), name and icon of the selected one |
-| Categories > *each category* | its tiles side by side, **All tiles** first (grid, logo size, tile colour and background, framing and logo of every tile); a large preview to frame the background and place the logo; edit, drag a tile onto another category in the menu to move it there, turn imported games into normal tiles |
 | Info (at the bottom) | version and updates (whether to check, releases or nightly builds), your data folder, skin folder, number of categories and tiles; buttons to open `Settings.inc`, the folders, Rainmeter's Manage window and this Guide; Raintile's license (GNU GPL v3 or later) and the credits and licenses of what of others it ships or runs on (the HotKey plugin, Rainmeter) |
 
-- Every setting has a fitting control: switches, sliders with their unit (you can also type the value: number boxes take only numbers, and a comma becomes the decimal point), drop-down lists for choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`), and sizes in **px** or **%** (switching unit in the list after the box converts the number for the main screen). The same kind of value has the same control everywhere, in the category editor too. A value that is not valid is outlined in red and not saved until it is fixed.
+- Every setting has a fitting control: switches, sliders with their unit (you can also type the value: number boxes take only numbers, and a comma becomes the decimal point), drop-down lists for choices, colour swatches (click to pick; the text field takes `R,G,B,A` or `#RRGGBBAA`) with their opacity under them, in % (the alpha of the colour: the launcher background's, `BgColor`, is the launcher's transparency), and sizes in **px** or **%** (switching unit in the list after the box converts the number for the main screen). The same kind of value has the same control everywhere, in the category editor too. A value that is not valid is outlined in red and not saved until it is fixed.
 - What each setting or field does is written under its name. A setting that only applies with another one (the sizes of the inner wheel with the inner wheel) is greyed out while it does not apply, with what it needs under it, and so is a whole group (General > Window, General > Docked: only in that mode). A part that can be turned off has its switch beside the title of its page (the clock, keyboard navigation, the gamepad) or in the header of its group (the filter bar, labels, Steam updates), and the rest is greyed out while it is off; the page of the layout not in use (Grid or Wheel) is greyed out in the menu.
 - **Keybindings**: click a key and press the new one. For the open/close shortcut hold the modifiers (Ctrl, Alt, Shift, Win) and press the key. The **x** next to a key removes it. A key used by two actions is marked in red.
 - The arrow next to a setting appears when it differs from the default (in the category editor: from All tiles), and restores it. The **x** empties a field (an image or an icon goes to the Recycle Bin, asked first); the bin in the header of a list deletes the entry selected (a tile, a category), asked first.
@@ -563,10 +583,12 @@ The sections are in the menu on the left, one per part of the launcher; **Tiles*
     - **Pinned tiles** (the tile's **Pinned** box, or right click on the tile in the launcher > **Pin to the start**) come first, in the order you drag them to, with a pin on their small tile; sorting moves only the others.
   - **Moving a tile to another category**: drag it from the strip onto that category in the menu on the left (the entry is outlined when it can take it). The tile and its images move, and both category files are saved at once. Imported games move only once they are normal tiles.
   - **Imported games** are shown read-only. **Make it a normal tile** turns one into a hand-written tile: its images are copied to the category folders, and the import will not add it again.
-- **Gamepad** (off with `Gamepad=0`): while the window is in the foreground the controller moves a ring between the controls. D-pad / left stick move, `A` presses a button, starts changing a slider (the ring goes and its knob turns to the accent colour: left and right change the value, `A` keeps it, `B` puts back the one it had; the number field next to it is a stop of its own), flips a switch, picks a choice or a list entry, opens a drop-down list (up/down choose, `LB`/`RB` jump by 10, `A` keeps, `B` puts back) or types into a text field, `B` goes back to the menu (in the menu it closes the window, in a dialog it cancels), `LB` / `RB` go to the previous / next page, `Start` alone saves and refreshes, `Y` shows or hides the preview beside the window, the right stick scrolls. On the field of a gamepad setting `A` waits for the button to pick ([Choosing the buttons](#gamepad)). A reset or clear button pressed hides itself (nothing left to do): the ring goes to the first control of its row. In the menu on the left there is no ring: up and down open the entry's page right away (its background marks it) and go round from the last entry to the first, passing over an open group; right goes to the first control of the page, and coming back to the menu lands on the page shown. While the pad is in use, *Preview* shows the `Y` glyph, *Save and refresh* the `Start` glyph and *Close* (and the last button of a dialog) the `B` glyph. The ring and the glyphs go away when you move the mouse or press a key; the next pad input brings them back without acting. The arrow keys go round the menu the same way.
+- **Gamepad** (off with `Gamepad=0`): while the window is in the foreground the controller moves a ring between the controls. D-pad / left stick move, `A` presses a button, starts changing a slider (the ring goes and its knob turns to the accent colour: left and right change the value, `A` keeps it, `B` puts back the one it had; the number field next to it is a stop of its own), flips a switch, picks a choice or a list entry, opens a drop-down list (up/down choose, `LB`/`RB` jump by 10, `A` keeps, `B` puts back) or types into a text field, `B` goes back to the menu (in the menu it closes the window, in a dialog it cancels), `LB` / `RB` go to the previous / next page, `Start` alone saves and refreshes, `Y` shows or hides the preview beside the window, the right stick scrolls. On the field of a gamepad setting `A` waits for the button to pick ([Choosing the buttons](#gamepad)). A reset or clear button pressed hides itself (nothing left to do): the ring goes to the first control of its row. In the menu on the left there is no ring: up and down open the entry's page right away (its background marks it) and go round from the last entry to the first, passing over an open group (up from the first entry goes to the search field: `A` types in it, down goes to the results, `B` closes the search); right goes to the first control of the page, and coming back to the menu lands on the page shown. While the pad is in use, *Preview* shows the `Y` glyph, *Save and refresh* the `Start` glyph and *Close* (and the last button of a dialog) the `B` glyph. The ring and the glyphs go away when you move the mouse or press a key; the next pad input brings them back without acting. The arrow keys go round the menu the same way.
   - **On-screen keyboard** (`A` on a text field): the launcher's layout with lower case, **Shift** for capitals and a page of symbols (`#+=`) for paths and commands; the text shows above the keys. `A` types the key, `X` deletes, `Y` adds a space, `LB` / `RB` move the cursor, `LT` is Shift, `RT` the symbols, `Start` (or *Done*) keeps the text, `B` puts back what was there; the keys show the symbol of the controller button that presses them, and the line under the keys the others. The keys can be clicked too. On a number field it is a number pad instead (1 to 9, then 0, as on a phone): `-` and `.` are on only where they can go (the minus at the start, one decimal point, and only in a field that takes them), and moving skips the keys that are off.
   - **Tile preview** (`A` on it): moves the background, the logo or the play time line, as dragging them. The left stick moves the outlined part (the further, the faster), the D-pad by one pixel, `LB` / `RB` switch between background, logo and play time line, `LT` / `RT` make the background zoom or the logo smaller / larger, `A` keeps, `B` puts back what was there. A click or a key ends it and keeps the changes.
   - Still mouse or keyboard: key bindings (they wait for a key), colour and file pickers (Windows dialogs).
+- **More settings**: at the bottom of a group, the fine tunings that most people leave as they are (the paddings and gaps of the menu and of the chips, the smoothing and stagger of the animations, the amount of a zoom, the stick's dead zone) are closed under *More settings (n)*, which also says how many of them you changed. Click it to open them, *Fewer settings* to close them; a search result on one of them opens it.
+- **Search** (the field above the menu, or `Ctrl+F`): type what you are looking for (*transparency*, *wheel speed*, *delete game*) and the pages, groups and settings that have those words take the place of the menu, the best first, each with where it is. Click one (or `Enter`, or `A` with the controller) to open its page on it, lit for a moment. The results stay, the one open marked, so you can try another; the **x** in the field (or `Esc`) empties it and brings the menu back, on the page shown. The arrows move between the field and the results. It finds the settings of the pages, not the tiles of a category or the settings of a widget.
 - **Save and refresh** (or `Ctrl+S`) writes the files and refreshes the skin; a progress bar covers the window for 2.5-3.5 seconds, then the window closes, the skin refreshes and the launcher shows itself once reloaded. Saving only changes the values: comments and order of `Settings.inc` stay as they were.
 
 The window hides the launcher while open. You can always keep editing the files by hand.
@@ -619,6 +641,12 @@ With `CheckUpdates=1` (Options > Info > *Updates*) the skin asks GitHub for the 
 - Either way your data is not touched, and only files of this repository's releases on GitHub (https) are downloaded, into a new temporary folder, and checked to be a Rainmeter package before they are used. Without the Options program (a copy of the repository) the PowerShell window only has the installer.
 - **Check now** asks GitHub again; **Release page** opens the release on GitHub.
 
+**The HotKey plugin after updating from an older version.** Earlier versions used the HotKey plugin for the keys and installed it with the package; now the keys are read by the background helper, and the update leaves the plugin where it was, unused by Raintile. On load the launcher unloads and deletes the key mini-skins of those versions (`Hotkey`, `Navigation`, `Typing`, `TileKeys`: their empty folders stay in the skin folder and can be deleted). To remove the plugin too:
+
+1. Check that no other skin needs it: in PowerShell, `Get-ChildItem "$env:USERPROFILE\Documents\Rainmeter\Skins" -Recurse -Include *.ini,*.inc | Where-Object FullName -notmatch '\\@' | Select-String 'Plugin\s*=\s*HotKey' -List` lists the skins that use it (your skins folder, if you moved it; folders starting with `@`, such as the backups, are left out: Rainmeter does not load them). If one is listed, keep the plugin.
+2. Close Rainmeter (right click on its icon in the taskbar > *Exit*): it keeps the plugins it loaded open.
+3. Delete `%APPDATA%\Rainmeter\Plugins\HotKey.dll`, then start Rainmeter again.
+
 ### Checks and tests
 
 `python tools/check.py` checks a copy of the repository before a commit; the **checks** job of the **Release package** workflow runs it on every pull request, on Windows. It needs Python 3, Windows PowerShell and `lupa` (`pip install lupa`, which brings Lua 5.1, the version of Rainmeter). It takes a few seconds.
@@ -645,7 +673,7 @@ For the update check the tag must hold the version (if it has no number, the num
 
 **Nightly builds.** On every push to the branch `nightly` the **Nightly** workflow (`.github/workflows/nightly.yml`) builds the Options program and the `.rmskin` and publishes them as the pre-release **`nightly`** (replacing the previous one). Its version is the last release plus the number of commits since it: after `v1.2.1`, `1.2.1.1`, `1.2.1.2`, ... until the next release; it is written into the package's `Raintile.ini` (`tools/build_rmskin.py --nightly-version`). So the work merged into `nightly` reaches the skins on the nightly channel at once, the others with the next release.
 
-The package holds the skin only (with the HotKey plugin from `tools/plugins/`): `README.md`, `docs\`, `tests\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
+The package holds the skin only, with no plugins (Rainmeter's own are enough): `README.md`, `docs\`, `tests\` and `tools\` stay on GitHub (Options > Info opens the Guide there).
 
 In the package no *VariableFiles* are needed (settings are in the data folder) and the installer's default backup should be kept: the first update to this version recovers the user's categories and images from that backup.
 
@@ -676,7 +704,7 @@ See [Rainside](#rainside).
 | `RainsideMode` | `Fixed` | `Fixed`: always on screen; `Edge`: out of its edge when the mouse rests on it, back in when it leaves |
 | `RainsideSide` | `Right` | `Left`, `Right`, `Top`, `Bottom` |
 | `RainsideSize` | `10%` | its width (left, right) or height (top, bottom), pixels or % of the area |
-| `RainsideHotKey` | (none) | combination (HotKey plugin): `Edge` shows and hides it; `Fixed` gives it the keys and the gamepad, again takes them back |
+| `RainsideHotKey` | (none) | combination (as `OpenHotKey`): `Edge` shows and hides it; `Fixed` gives it the keys and the gamepad, again takes them back |
 | `RainsideCloseOnLaunch` | `1` | `Edge`: back in after starting a tile |
 | `RainsideFullscreen` | `1` | hidden while a program covers its screen (a game, a video), back afterwards |
 | `RainsideReserve` | `0` | its room kept free, as the taskbar's (an app bar); with `Edge` while it is out |
@@ -742,7 +770,7 @@ See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
 | `MenuItemPad` | `16` | inner padding of each entry's pill *(size)* |
 | `MenuGap` | `6` | space between entries *(size)* |
 | `MenuRadius` | `22` | pill corner radius *(size)* |
-| `MenuIconDimAlpha` | `150` | opacity of inactive category icons (0-255) |
+| `MenuIconDimAlpha` | `150` | opacity of inactive category icons (0-255; shown in % in Options) |
 | `ShowFavorites`, `ShowRecent` | `1`, `1` | the [Favorites and Recent](#favorites-and-recent) buttons, right of the search bar |
 | `RecentOrder` | `Recent` | `Recent` (last launched first) or `MostUsed` |
 | `RecentCount` | `12` | tiles in Recent |
@@ -755,7 +783,7 @@ See [Grid or wheel](#grid-or-wheel). Percentages are written as plain numbers.
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `OpenHotKey` | `CTRL ALT G` | combination that opens/closes the launcher (HotKey plugin) |
+| `OpenHotKey` | `CTRL ALT G` | combination that opens/closes the launcher: key names separated by spaces (`CTRL ALT G`, `LWIN SPACE`, `CTRL SHIFT F1`) |
 | `CloseAction` | `[!CommandMeasure MeasureScript "Hide()"]` | action of the X; `[!DeactivateConfig]` unloads the skin |
 | `CloseSize` | `14` | size of the X and gear buttons |
 | `CloseHotKey` | `ESCAPE` | close key, registered only while visible and in [focus](#focus); empty = none |
@@ -783,7 +811,7 @@ All of them only run while something moves.
 | `AnimOpen` | `1` | tiles appear one after another when the launcher opens |
 | `AnimCategory` | `1` | tiles appear again and the menu pill slides on category change |
 | `AnimHover` | `1` | the highlight box slides between tiles and fades in/out |
-| `AnimScroll` | `1` | smooth mouse wheel scrolling |
+| `AnimScroll` | `1` | smooth scrolling of the grid and turning of the wheel (off: the grid jumps, the wheel snaps) |
 | `AnimLogoZoom` | `1` | the logo under the mouse grows by `HoverLogoScale` |
 | `HoverLogoScale` | `1.25` | logo zoom factor |
 | `LogoGreyscale` | `1` | greyscale logos that turn to colour under the mouse |
@@ -865,7 +893,7 @@ See [Gamepad](#gamepad): `Gamepad`, `GamepadDeadZone` (0-32767), `GamepadRepeatD
 
 ### Games and apps
 
-See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFolders`, `ScanOnStart`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
+See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFolders`, `ScanOnStart`, `AutoAddGames`, `ImportCategory`, `AppsCategory`, `SteamGridDBKey`.
 
 ### Updates
 
@@ -877,11 +905,11 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFold
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `DebugLog` | `0` | write to the Rainmeter log what happens on confirm, launch, show/hide and focus loss, and the keys seen by the HotKey plugin |
+| `DebugLog` | `0` | write to the Rainmeter log what happens on confirm, launch, show/hide and focus loss, and, while the launcher has the keys, every key pressed |
 
 ### Appearance
 
-<a id="colours"></a>Colours can be written as `R,G,B,A` (e.g. `0,210,180,255`; the alpha is optional) or in hex as `#RRGGBBAA` or `#RRGGBB` (e.g. `#00D2B4FF`; the `#` is optional). Alpha is the opacity, 0-255 (`00`-`FF`). The same formats work for `Color=` in the category files.
+<a id="colours"></a>Colours can be written as `R,G,B,A` (e.g. `0,210,180,255`; the alpha is optional) or in hex as `#RRGGBBAA` or `#RRGGBB` (e.g. `#00D2B4FF`; the `#` is optional). Alpha is the opacity, 0-255 (`00`-`FF`); in Options it is the **opacity** slider under each colour, in %, which writes it in the format the colour already has. The same formats work for `Color=` in the category files.
 
 | Setting | Default | Description |
 | --- | --- | --- |
@@ -895,7 +923,7 @@ See [Adding games and apps](#adding-games-and-apps): `ImportStores`, `ImportFold
 | `UpdateGlowTime` | `3` | seconds the border turns when the launcher opens; `0` = still |
 | `FontFace` | `Segoe UI` | font |
 | `MenuFontSize`, `LabelFontSize` | `12`, `14` | font sizes (points) |
-| `BgColor` | `8,8,12,200` | launcher background |
+| `BgColor` | `8,8,12,200` | launcher background; its alpha (the last value) is the launcher's transparency: 0 see-through, 255 solid (in Options: its opacity slider, in %) |
 | `TopBarColor` | `0,0,0,255` | band behind the row at the top, with the wheel showing the selected tile's background (`WheelBackdrop`) |
 | `TileColor` | `36,36,44,255` | default tile colour |
 | `TileRadius` | `0` | rounded corners of the tiles and of the highlight, in pixels (`0` = square) |
@@ -913,7 +941,7 @@ Sizes in `Settings.inc` can be written in pixels (`PadX=40`) or as a percentage 
 - of the **width** for `PadX`, `SearchW`, `MenuItemPad`, `MenuGap`, `MenuIconGap`;
 - of the **height** for all the others (`PadY`, `Gap`, `MenuH`, `MenuIconSize`, `MenuRadius`, `IconSize`, `LabelPad`, `ScrollBarSize`, `LaunchLogoSize`), including `IconSize` in category files.
 
-With percentages the same settings work on monitors with different resolutions. Rainmeter does not understand `2%` in its formulas, so the script converts percentages to pixels into `Generated\Sizes.inc` (included after `Settings.inc`) and rewrites it, refreshing the skin, only when a percentage or the resolution changes. Font sizes stay in points.
+With percentages the same settings work on monitors with different resolutions. Rainmeter does not understand `2%` in its formulas, so the script converts percentages to pixels into `Generated\Sizes.inc` (included after `Settings.inc`) and rewrites it, refreshing the skin, only when a percentage or the resolution changes (also while it runs: see [Full screen, window or docked](#full-screen-window-or-docked)). Font sizes stay in points.
 
 ## How it works
 
@@ -932,10 +960,6 @@ Raintile is designed to be light even on a large full-screen window:
 
 ```
 Raintile.ini                 main skin (styles, measures, fixed meters)
-Hotkey/Hotkey.ini            Esc mini-skin (activated by the launcher while it has the focus)
-Navigation/Navigation.ini    navigation keys mini-skin (activated by the launcher while it has the focus)
-Typing/Typing.ini            keys typed in the search bar (activated while typing)
-TileKeys/TileKeys.ini        tile hot keys with TileKeysWhen=Open (activated while the launcher is open, with the focus)
 Instance.inc                 read by Raintile.ini as the launcher: its generated files
 Rainside/Rainside.ini        the Rainside (loaded by the launcher): Raintile.ini included and run as a bar
 Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its name and generated files
@@ -960,7 +984,7 @@ Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its n
   Generated/Sizes.inc        the launcher's rectangle (LauncherMode), percentage sizes and #hex colours converted for Rainmeter
   Generated/Thumbs/          thumbnails (safe to delete: they are rebuilt)
   Generated/Colors.txt       tile colours taken from logos (AutoTileColor)
-  Generated/Area.txt         grid area in pixels, for the framing preview of Options
+  Generated/Area.txt         grid area and launcher size in pixels, for the framing preview and the image sizes of Options
   Generated/EditTile.txt     tile to open Options on (Edit this tile), removed once read
   Generated/Found.json       games and apps found by the last search
   Generated/Found/           their icons
@@ -976,15 +1000,15 @@ Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its n
   Generated/Rainside*        the same files of the Rainside (RainsideGrid.inc, RainsideSizes.inc, RainsideDashOn.txt,
                              RainsideDockEdge.txt, RainsideLauncherSize.txt), and RainsideKeys.txt (while it has the keys),
                              RainsideScreen.txt (its screen, RainsideFullscreen), RainsideReserve.txt (RainsideReserve)
-  Generated/TileKeys.inc     the measures of the TileKeys mini-skin
+  Generated/HotKeys.txt      the keys active now, for the helper's keyboard hook
 ```
 
 The data folder (`%APPDATA%\Rainmeter\Raintile\`) is described in [Where your data is](#where-your-data-is).
 
 ## Troubleshooting
 
-- **First stop: the Rainmeter log** (*Manage* > *Log*). Raintile's messages start with `Raintile:`. Set `DebugLog=1` for more detail.
-- **Esc, keyboard navigation or the gamepad don't work after an update**: in Rainmeter use **Refresh all** (not just *Refresh skin*) so it sees new or renamed mini-skins and scripts. Check that the HotKey plugin is installed.
+- **First stop: the Rainmeter log** (right click on the Rainmeter icon in the taskbar > *About* > *Log*; to keep it in a file, *Manage* > *Settings* > *Log to file*: `%APPDATA%\Rainmeter\Rainmeter.log`). Raintile's messages start with `Raintile:`. Set `DebugLog=1` for more detail.
+- **The keys or the gamepad don't work**: both come from the background helper, started with the skin; a second or two after a refresh it is ready. In Rainmeter use **Refresh all** (not just *Refresh skin*) after an update. If the keyboard hook cannot start, the log says so (`Raintile: the keyboard hook could not start`).
 - **A category icon doesn't show**: the icon goes in `Images\<file name>\icon.png` — the folder is named after the category *file* (`Games`), not its menu label. The log shows exactly where it looked (`Raintile: no icon for category ...`).
 - **A tile image doesn't show**: check the file name matches the tile name (or its `Image`/`Background`/`Logo` key); explicit names that are not found are logged.
 - **The Options window doesn't open, or shows an error**: errors are shown in a message box and written to `Generated\Options.log`. The program needs .NET Framework 4.8 (included in Windows 10/11); if it does not start, delete `@Resources\Bin\` in the skin folder and the window opens with PowerShell instead.

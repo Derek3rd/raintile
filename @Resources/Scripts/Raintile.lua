@@ -33,14 +33,15 @@ local ticking = false -- animation clock (ActionTimer) running
 local visible = true  -- launcher shown (Show/Hide)
 local searchCat = nil -- search results, shown instead of the active category
 local query = ''      -- searched text
-local typing = false  -- the search bar is being typed in (Typing mini-skin on)
+local typing = false  -- the search bar is being typed in (its keys on: M.writeKeys)
 local typed = ''      -- text typed so far
 local leaveSearch     -- defined in the Search section
 local stopTyping      -- defined in the Search section
 local updateSearchBar -- defined in the Search section
--- Dot on the gear: an update, new games or apps found, tiles of games no
+-- Dot on the gear: an update, games added by themselves (the names of their
+-- tiles not shown in Options yet), new games or apps found, tiles of games no
 -- longer installed (see showNotice)
-local notice = { found = 0, update = nil, missing = 0 }
+local notice = { found = 0, update = nil, missing = 0, added = {} }
 local showNotice      -- defined with OpenNotice
 -- Filter bar under the menu, shown only with the search results: chips =
 -- { { kind = 'all' | 'store' | 'tag', key, label }, ... }; the results shown
@@ -70,7 +71,7 @@ do
 	OSK[#OSK + 1] = { row = 5, col = 6, span = 4, value = 'DONE', label = 'Done' }
 end
 local osk = { open = false, sel = 1 }
-local tileKeys = {}  -- tile hot keys: { { key, id } }, in the order of their measures
+local tileKeys = {}  -- tile hot keys: { { key, id } }, TileHotKey(<index>)
 local widgets = {}   -- widget tiles of all categories, in the order of their meters (t.widget.idx)
 local updateDashState -- defined with the widgets
 local D = {}          -- functions and tables of the widgets (D for the Dashboard they began with)
@@ -1352,7 +1353,7 @@ end
 -- Grid.inc generation ------------------------------------------------------
 
 -- Bump when the format of the meters written by writeGrid() changes.
-local GRID_VERSION = 21
+local GRID_VERSION = 22
 
 -- Space taken by the filter bar while the search results are shown: the grid
 -- moves down by as much
@@ -1363,8 +1364,6 @@ end
 local function signature()
 	local s = { 'v' .. GRID_VERSION, slots, V.MenuMode, V.Wheel and ('wheel' .. (cats[1] and cats[1].tw or 0) .. (V.WheelRing and 'r' or '')) or 'grid' }
 	for _, chip in ipairs(filter.chips) do s[#s + 1] = 'chip:' .. chip.label end
-	if V.TileKeysOpen then s[#s + 1] = 'keys:open' end
-	for _, k in ipairs(tileKeys) do s[#s + 1] = 'key:' .. k.key .. '=' .. k.id end
 	for _, t in ipairs(widgets) do
 		s[#s + 1] = 'w:' .. t.widget.kind .. ':' .. t.widget.param .. ':' .. t.cols .. 'x' .. t.rows .. ':' .. (t.widget.option or '')
 		-- a changed custom widget file writes Grid.inc again
@@ -1450,18 +1449,6 @@ local function writeGrid(path, sig, files)
 		w('LeftMouseUpAction=[!CommandMeasure MeasureScript "ToggleFilter(' .. i .. ')"]')
 		w('MouseOverAction=[!CommandMeasure MeasureScript "HoverFilter(' .. i .. ')"]')
 		w('MouseLeaveAction=[!CommandMeasure MeasureScript "HoverFilter(0)"]')
-		w('')
-	end
-
-	-- Tile hot keys (HotKey plugin): active also while the launcher is hidden
-	-- (TileKeysWhen=Always); otherwise in the TileKeys mini-skin, only while
-	-- it is open (writeTileKeys)
-	for i, k in ipairs(V.TileKeysOpen and {} or tileKeys) do
-		w('[MeasureTileKey' .. i .. ']')
-		w('Measure=Plugin')
-		w('Plugin=HotKey')
-		w('HotKey=' .. k.key)
-		w('KeyDownAction=[!CommandMeasure MeasureScript "TileHotKey(' .. i .. ')"]')
 		w('')
 	end
 
@@ -4753,7 +4740,7 @@ function M.sideSettings()
 	V.Wheel, V.CenterSelection = false, false
 	V.ShowClock, V.ShowDate, V.ShowPower = false, false, false
 	V.ShowFavorites, V.ShowRecent, V.ShowUnplayed = false, false, false
-	V.FilterBar, V.CheckUpdates, V.ScanOnStart = false, false, false
+	V.FilterBar, V.CheckUpdates, V.ScanOnStart, V.AutoAddGames = false, false, false, false
 	V.Thumbnails, V.LaunchAnimation, V.TileKeysOpen = false, false, false
 	V.PadLegend = false
 	-- above the windows (it is meant to be seen)
@@ -4820,8 +4807,8 @@ function M.launcherRect(get)
 		if mode == 'window' and raw then raw = raw:gsub('#SCREENAREA', '#WORKAREA') end
 		return raw
 	end
-	local mx, my = M.evalSetting(area('screenx'), 0), M.evalSetting(area('screeny'), 0)
-	local mw, mh = M.evalSetting(area('screenw'), 1920), M.evalSetting(area('screenh'), 1080)
+	local spec = { area('screenx'), area('screeny'), area('screenw'), area('screenh') }
+	local mx, my, mw, mh = M.evalArea(spec)
 	local function px(raw, total, default)
 		local p = trim(raw or ''):match('^([%d%.]+)%s*%%$')
 		if p then return math.floor((tonumber(p) or 0) * total / 100 + 0.5) end
@@ -4846,7 +4833,29 @@ function M.launcherRect(get)
 	else
 		mode = 'fullscreen'
 	end
-	return mode, { math.floor(x), math.floor(y), math.floor(w), math.floor(h) }, { mx, my, mw, mh }
+	-- (and the area as the settings write it: M.areaMoved)
+	return mode, { math.floor(x), math.floor(y), math.floor(w), math.floor(h) }, { mx, my, mw, mh }, spec
+end
+
+-- An area as the settings write it (#SCREENAREAWIDTH#, #SCREENAREAX@2#, ...),
+-- in pixels now: x, y, w, h
+function M.evalArea(spec)
+	return M.evalSetting(spec[1], 0), M.evalSetting(spec[2], 0), M.evalSetting(spec[3], 1920), M.evalSetting(spec[4], 1080)
+end
+
+-- The area the launcher was laid out in (writeSizes): as the settings write
+-- it, and its pixels then
+M.area = nil
+
+-- The monitor changed since the launcher was laid out: a resolution changed,
+-- a monitor added or removed (a game streaming host matching its client, a
+-- virtual display). Rainmeter's variables follow, the numbers of Sizes.inc
+-- do not.
+function M.areaMoved()
+	local a = M.area
+	if not a then return false end
+	local x, y, w, h = M.evalArea(a.spec)
+	return x ~= a.at[1] or y ~= a.at[2] or w ~= a.at[3] or h ~= a.at[4]
 end
 
 local function writeSizes()
@@ -4862,7 +4871,8 @@ local function writeSizes()
 		return defaults[key]
 	end
 	if V.Side then get = M.sideGet(get) end
-	local mode, rect, mon = M.launcherRect(get)
+	local mode, rect, mon, spec = M.launcherRect(get)
+	M.area = { spec = spec, at = mon }
 	-- the launcher docked where the Rainside always is (RainsideOrder=Inside):
 	-- beside it
 	-- (out of its edge: only while it is out, M.besideSide)
@@ -4918,10 +4928,13 @@ local function writeSizes()
 end
 
 -- Grid area in pixels for the framing editor of the Options window, which
--- cannot work out the layout by itself: "width,height,gap" in
--- Generated\Area.txt, rewritten only when it changes.
+-- cannot work out the layout by itself, and the launcher's own size (what the
+-- backdrop and the launch screen fill, for its low-resolution note):
+-- "width,height,gap,launcherW,launcherH" in Generated\Area.txt, rewritten
+-- only when it changes.
 local function writeArea()
-	local text = string.format('%d,%d,%d\n', math.floor(V.AreaW), math.floor(V.AreaH), math.floor(V.Gap))
+	local text = string.format('%d,%d,%d,%d,%d\n', math.floor(V.AreaW), math.floor(V.AreaH), math.floor(V.Gap),
+		math.floor(V.ScreenW), math.floor(V.ScreenH))
 	local path = resources .. 'Generated\\Area.txt'
 	local f = io.open(path, 'rb')
 	local old = f and f:read('*a') or ''
@@ -4986,6 +4999,7 @@ function Initialize()
 	os.remove(M.gen('DashOn.txt'))
 	-- and the Steam downloads, followed only while it is open
 	os.remove(M.gen('DownloadOn.txt'))
+	M.removeOldKeySkins()
 	local userData = SKIN:ReplaceVariables('#SETTINGSPATH#') .. 'Raintile\\'
 	data = fileExists(userData .. 'Settings.inc') and userData or resources
 	V.NeedsSetup = data ~= userData or settingsOutdated(userData .. 'Settings.inc')
@@ -5031,12 +5045,22 @@ function Initialize()
 	V.StartHidden = num('StartHidden', 0) ~= 0
 	V.ShowZPos = SKIN:GetVariable('ShowZPos', '')
 	V.HotKey = trim(SKIN:GetVariable('CloseHotKey', ''))
-	-- The close key mini-skin: only active while the launcher is visible and
-	-- has the focus
-	V.HotKeyConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Hotkey'
+	V.OpenKey = trim(SKIN:GetVariable('OpenHotKey', ''))
+	V.SideKey = trim(SKIN:GetVariable('RainsideHotKey', ''))
 	V.KeyboardNav = num('KeyboardNav', 1) ~= 0
+	-- the navigation keys: { keys, function, on release }; Confirm and Search
+	-- on release, so the release does not land in the program just started or
+	-- in the search just opened
+	V.NavKeys = {}
+	for _, k in ipairs({ { 'NavUp', 'Nav(0,-1)' }, { 'NavUp2', 'Nav(0,-1)' }, { 'NavDown', 'Nav(0,1)' }, { 'NavDown2', 'Nav(0,1)' },
+		{ 'NavLeft', 'Nav(-1,0)' }, { 'NavLeft2', 'Nav(-1,0)' }, { 'NavRight', 'Nav(1,0)' }, { 'NavRight2', 'Nav(1,0)' },
+		{ 'NavConfirm', 'Confirm()', true }, { 'NavConfirm2', 'Confirm()', true },
+		{ 'NavPrevCategory', 'NextCategory(-1)' }, { 'NavNextCategory', 'NextCategory(1)' }, { 'NavSearch', 'SearchOpen()', true } }) do
+		V.NavKeys[#V.NavKeys + 1] = { SKIN:GetVariable(k[1], ''), k[2], k[3] }
+	end
 	V.DebugLog = num('DebugLog', 0) ~= 0
 	V.ScanOnStart = num('ScanOnStart', 1) ~= 0
+	V.AutoAddGames = num('AutoAddGames', 0) ~= 0
 	V.ShowFavorites = num('ShowFavorites', 1) ~= 0
 	V.ShowRecent = num('ShowRecent', 1) ~= 0
 	V.RecentMostUsed = SKIN:GetVariable('RecentOrder', 'Recent'):lower() == 'mostused'
@@ -5073,8 +5097,6 @@ function Initialize()
 	V.SensorPort = math.floor(num('SensorPort', 8085))
 	V.ShowDate = num('ShowDate', 1) ~= 0
 	V.SearchPlaceholder = SKIN:GetVariable('SearchPlaceholder', 'Search')
-	V.NavConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Navigation'
-	V.TileKeysConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\TileKeys'
 	-- tile hot keys: always (Always), or only while the launcher is open (Open)
 	V.TileKeysOpen = SKIN:GetVariable('TileKeysWhen', 'Always'):lower() == 'open'
 	-- the gamepad's legend (M.renderLegend) and the buttons it shows
@@ -5084,7 +5106,6 @@ function Initialize()
 		V.PadKeys[a] = SKIN:GetVariable('Gamepad' .. a, '')
 	end
 	M.legendKey = nil
-	V.TypingConfig = SKIN:ReplaceVariables('#ROOTCONFIG#') .. '\\Typing'
 	V.FilterBar = num('FilterBar', 1) ~= 0
 	V.FilterStores = num('FilterStores', 1) ~= 0
 	V.FilterH = num('FilterH', 30)
@@ -5179,7 +5200,7 @@ function Initialize()
 	if writeSizes() then return end
 
 	loadCategories(knownFiles)
-	M.writeTileKeys()
+	M.writeKeys()
 	if regenerate(knownFiles) then return end
 
 	active = math.min(math.max(1, math.floor(num('LastCategory', 1))), #cats)
@@ -5194,74 +5215,113 @@ function Initialize()
 	ready = true
 end
 
--- Turns on or off the mini-skin that registers the close key (Esc). When it
--- is off the key is free again for other applications.
--- Generated\TileKeys.inc: the measures of the TileKeys mini-skin
--- (TileKeysWhen=Open), written when they change
-function M.writeTileKeys()
-	local o = { '; GENERATED BY Raintile.lua: tile hot keys for the TileKeys mini-skin.' }
-	for i, k in ipairs(V.TileKeysOpen and tileKeys or {}) do
-		o[#o + 1] = '[MeasureTileKey' .. i .. ']'
-		o[#o + 1] = 'Measure=Plugin'
-		o[#o + 1] = 'Plugin=HotKey'
-		o[#o + 1] = 'HotKey=' .. k.key
-		o[#o + 1] = 'KeyDownAction=[!CommandMeasure MeasureScript "TileHotKey(' .. i .. ')" "#ROOTCONFIG#"]'
-		o[#o + 1] = ''
+-- The keys (Helper.ps1 hooks the keyboard): Generated\HotKeys.txt lists the
+-- ones active now, "<keys>|<down/up>|<config>|<function>" (the keys as in
+-- Settings.inc), last line "end" ("log": the helper logs every key,
+-- DebugLog). Written when it changes. Always: the open/close key, the
+-- Rainside's and the tile hot keys (TileKeysWhen=Always); while the launcher
+-- has the focus (M.keys, hotKey): Esc, the navigation, the tile hot keys
+-- (Open); while typing a search: the letters. A key works only while it is
+-- listed: the rest of the time it is free for other programs.
+M.keys = { on = false, tiles = false }
+
+-- What the keys type in the search: the letters, the digits (also on the
+-- keypad), space, - and ., Backspace, Enter (done), Esc (cancel)
+function M.typingKeys()
+	local list = {}
+	for c = string.byte('A'), string.byte('Z') do list[#list + 1] = { string.char(c), string.char(c):lower() } end
+	for n = 0, 9 do list[#list + 1] = { tostring(n), tostring(n) } end
+	for n = 0, 9 do list[#list + 1] = { 'NUM' .. n, tostring(n) } end
+	for _, k in ipairs({ { 'SPACE', ' ' }, { 'MINUS', '-' }, { 'SUBTRACT', '-' }, { 'PERIOD', '.' }, { 'DECIMAL', '.' },
+		{ 'BACKSPACE', 'BACK' }, { 'ENTER', 'ENTER' }, { 'ESCAPE', 'ESC' } }) do
+		list[#list + 1] = k
 	end
-	local text = table.concat(o, '\n') .. '\n'
-	local path = resources .. 'Generated\\TileKeys.inc'
-	local f = io.open(path, 'rb')
-	local old = f and f:read('*a')
-	if f then f:close() end
-	if old == text then return end
-	f = io.open(path, 'wb')
-	if f then f:write(text) f:close() end
+	return list
+end
+
+function M.writeKeys()
+	-- (the launcher's file: the Rainside's own key is in it)
+	if V.Side then return end
+	local o = {}
+	local function add(keys, fn, up, config)
+		keys = trim(keys or ''):gsub('[|\r\n]', '')
+		if keys ~= '' then o[#o + 1] = keys .. '|' .. (up and 'up' or 'down') .. '|' .. (config or V.MainConfig) .. '|' .. fn end
+	end
+	add(V.OpenKey, 'Toggle()')
+	if M.sideCat then add(V.SideKey, 'Toggle()', false, V.SideConfig) end
+	if not V.TileKeysOpen or M.keys.tiles then
+		for i, k in ipairs(tileKeys) do add(k.key, 'TileHotKey(' .. i .. ')') end
+	end
+	if M.keys.on then
+		add(V.HotKey, 'Escape()')
+		if V.KeyboardNav then
+			for _, k in ipairs(V.NavKeys) do add(k[1], k[2], k[3]) end
+		end
+	end
+	if typing then
+		for _, k in ipairs(M.typingKeys()) do add(k[1], "TypeKey('" .. k[2] .. "')") end
+	end
+	if V.DebugLog and (M.keys.on or typing) then o[#o + 1] = 'log' end
+	o[#o + 1] = 'end'
+	M.keepFile(M.gen('HotKeys.txt'), table.concat(o, '\r\n') .. '\r\n')
+end
+
+-- On unload (OnCloseAction): no key left to a launcher that is gone
+function KeysOff()
+	if V.Side then return end
+	M.keepFile(M.gen('HotKeys.txt'), 'end\r\n')
+end
+
+-- The key mini-skins of the versions with the HotKey plugin, left in the
+-- skin folder by an update that copies the new files over the old ones
+-- (Options > Info): one still loaded would keep its keys (and the plugin
+-- stays installed), firing them twice. Unloaded and deleted once; their
+-- empty folders stay (Lua removes files only).
+function M.removeOldKeySkins()
+	if V.Side then return end
+	local root = SKIN:ReplaceVariables('#ROOTCONFIGPATH#')
+	for _, name in ipairs({ 'Hotkey', 'Navigation', 'Typing', 'TileKeys' }) do
+		local ini = root .. name .. '\\' .. name .. '.ini'
+		if fileExists(ini) then
+			SKIN:Bang('!DeactivateConfig', V.MainConfig .. '\\' .. name)
+			os.remove(ini)
+		end
+	end
+	os.remove(M.gen('TileKeys.inc'))
 end
 
 -- Only while the launcher has the focus (M.setFocus): typing in another
 -- program, with the launcher left open beside it, the keys are its own.
 local function hotKey(on)
 	on = on and M.focused
-	-- the Rainside: the launcher's mini-skins send it the keys (M.toSide)
+	-- the Rainside: the launcher's keys reach it (M.toSide)
 	if V.Side then
 		M.sideFocus(on)
 		return
 	end
-	if V.TileKeysOpen and #tileKeys > 0 then
-		if on then
-			SKIN:Bang('!ActivateConfig', V.TileKeysConfig, 'TileKeys.ini')
-		else
-			SKIN:Bang('!DeactivateConfig', V.TileKeysConfig)
-		end
-	end
+	M.keys.tiles = on
 	-- the launcher hidden: Esc and the arrows go on for the Rainside while it
 	-- has them
 	if not visible and M.sideFocused then on = true end
-	if V.HotKey ~= '' then
-		if on then
-			SKIN:Bang('!ActivateConfig', V.HotKeyConfig, 'Hotkey.ini')
-		else
-			SKIN:Bang('!DeactivateConfig', V.HotKeyConfig)
-		end
-	end
-	-- navigation keys (WASD, arrows, Space/Enter, Q/E): same logic
-	if V.KeyboardNav then
-		if on then
-			SKIN:Bang('!ActivateConfig', V.NavConfig, 'Navigation.ini')
-		else
-			SKIN:Bang('!DeactivateConfig', V.NavConfig)
-		end
-	end
+	M.keys.on = on
+	M.writeKeys()
 end
 
 function Update()
 	-- With UpdateDivider=-1 this is only called once, on load.
 	if ready then
 		-- left by the Options window ("Save and refresh"): show the launcher
-		-- once loaded, also if it was hidden before the refresh
+		-- once loaded, also if it was hidden before the refresh; "back"
+		-- (M.followDisplay): it was open behind another window, so again,
+		-- without the keys
 		local flag = M.gen('ShowOnLoad')
-		local showNow = fileExists(flag)
-		if showNow then os.remove(flag) end
+		local f = io.open(flag, 'rb')
+		local showNow, back = f ~= nil, false
+		if f then
+			back = f:read('*a') == 'back'
+			f:close()
+			os.remove(flag)
+		end
 		local startHidden = V.StartHidden and not showNow
 		if V.AnimOpen and not startHidden then appear = 0 end
 		-- the Rainside: the grid's container on its own margins (the skin's
@@ -5270,12 +5330,13 @@ function Update()
 		updateEmptyHint()
 		render(true)
 		M.checkHwAccel()
-		if notice.missing > 0 or notice.hwaccel then showNotice() end
+		M.readAutoAdded()
+		if notice.missing > 0 or notice.hwaccel or #notice.added > 0 then showNotice() end
 		show('MeterPower', V.ShowPower and not M.compact)
 		updateDashState()
 		M.sideConfig()
 		if showNow then
-			M.zpos(true)
+			M.zpos(not back)
 			SKIN:Bang('!Show')
 		end
 		if startHidden then
@@ -5286,7 +5347,7 @@ function Update()
 			if V.Side then M.zpos(true) end
 			-- shown on load: ready for the keys and the gamepad, as when opened
 			-- (the Rainside: only its keys give it them)
-			M.focused = not V.Side
+			M.focused = not V.Side and not back
 			hotKey(true)
 			if appear then startTicker() end
 			ClockTick(0)
@@ -5507,11 +5568,40 @@ local function stopClock()
 	SKIN:Bang('!CommandMeasure', 'MeasureClock', 'Stop 2')
 end
 
+-- The monitor changed (M.areaMoved): laid out again for the one of now. The
+-- skin reloads (writeSizes) and, with show, shows itself once loaded
+-- (ShowOnLoad, as after "Save and refresh" in Options): 'front' in use,
+-- 'back' behind the window that has the focus. True: it is reloading.
+function M.followDisplay(show)
+	if not M.areaMoved() then return false end
+	local flag = M.gen('ShowOnLoad')
+	if show then M.keepFile(flag, show) end
+	if writeSizes() then return true end
+	if show then M.keepFile(flag, nil) end
+	return false
+end
+
+-- Helper.ps1: the screens changed (a resolution, a monitor added or removed).
+-- The launcher on screen follows at once, as it was (in use, or behind the
+-- window that has the focus); hidden, when it is opened next (Show), so it
+-- never shows up over a game. The Rainside, always there, at once.
+function DisplayChanged()
+	if not ready then return end
+	if V.Side then
+		M.followDisplay(nil)
+		return
+	end
+	-- (reloading, the launcher reloads the Rainside too: M.sideConfig)
+	if visible and not launching and M.followDisplay(M.focused and 'front' or 'back') then return end
+	if M.sideCat then SKIN:Bang('!CommandMeasure', 'MeasureScript', 'DisplayChanged()', V.SideConfig) end
+end
+
 -- how = 'edge': opened by the mouse on the docked edge (Helper.ps1), without
 -- the focus: the keys stay with the program in front until a click on it
 function Show(how)
 	dbg('Show: visible=' .. tostring(visible) .. ' how=' .. tostring(how))
 	if not ready then return end
+	if M.followDisplay('front') then return end
 	M.sideRelease()
 	-- (the Rainside opened with its keys over a full-screen program: shown)
 	if M.covered then
@@ -5633,6 +5723,7 @@ function Hide()
 		return
 	end
 	SKIN:Bang('!Hide')
+	M.refreshAdded()
 end
 
 -- End of the docked launcher going out: the window is hidden, ready (in
@@ -5644,6 +5735,7 @@ function M.finishHide()
 	M.dock.p = 0
 	SKIN:Bang('!SetTransparency', '255')
 	SKIN:Bang('!Move', tostring(V.ScreenX), tostring(V.ScreenY))
+	M.refreshAdded()
 end
 
 -- Open, or close; a launcher left open without the focus (a window, AutoHide=0,
@@ -5671,7 +5763,7 @@ end
 -- script: the launcher loads the Rainside (M.sideConfig), keeps its category
 -- out of the menu (in search still, M.sideCat) and takes for it the keys and
 -- the gamepad, which reach the launcher only: Esc and the arrows of its
--- mini-skins (Hotkey, Navigation), the buttons of the helper. While the
+-- keys (M.writeKeys), the buttons of the helper. While the
 -- Rainside has them (opened with its keys, RainsideHotKey / GamepadRainside)
 -- and the launcher is hidden, the launcher sends them on (M.toSide).
 M.sideFocused = false -- (the launcher) the Rainside has the keys
@@ -5876,7 +5968,7 @@ function OnCategoryList()
 	if table.concat(files, '|') ~= table.concat(knownFiles, '|') then
 		knownFiles = files
 		loadCategories(files)
-		M.writeTileKeys()
+		M.writeKeys()
 		regenerate(files)
 	end
 end
@@ -5968,20 +6060,27 @@ function OnSetup()
 end
 
 -- Background search of the installed games and apps on every load
--- (ScanOnStart=1). Nothing is added: new ones light the dot on the gear, and
--- are added from the Options window.
+-- (ScanOnStart=1, or AutoAddGames=1). New ones light the dot on the gear, and
+-- are added from the Options window; new games by themselves with
+-- AutoAddGames=1 (OnScan).
 function AutoScan()
-	if not ready or not V.ScanOnStart then return end
+	if not ready or not (V.ScanOnStart or V.AutoAddGames) then return end
 	SKIN:Bang('!CommandMeasure', 'MeasureScan', 'Run')
 end
 
--- Dot on the gear: an update, new games or apps found, or tiles of games no
--- longer installed. A click opens the Options window where they are (Info or
--- Import).
+-- Dot on the gear: an update, games added by themselves, new games or apps
+-- found, or tiles of games no longer installed. A click opens the Options
+-- window where they are (Info, the category of the games added, or Import).
 showNotice = function()
 	local tip
+	local added = #notice.added
 	if notice.update then
 		tip = 'Raintile ' .. notice.update .. ' is available: click for details'
+	elseif added > 0 then
+		-- the first names, the rest counted
+		local names = table.concat(notice.added, ', ', 1, math.min(added, 5))
+		if added > 5 then names = names .. ' and ' .. (added - 5) .. ' more' end
+		tip = D.text((added == 1 and '1 game' or (added .. ' games')) .. ' added by themselves: ' .. names .. '. Click to see them')
 	elseif notice.found > 0 then
 		tip = 'New games or apps found: click to add them'
 	elseif notice.missing > 0 then
@@ -5998,7 +6097,7 @@ showNotice = function()
 end
 
 function OpenNotice()
-	if not notice.update and notice.found == 0 and notice.missing == 0 and notice.hwaccel then
+	if not notice.update and #notice.added == 0 and notice.found == 0 and notice.missing == 0 and notice.hwaccel then
 		-- Rainmeter > Manage > Settings, where the box is; asked only once
 		notice.hwaccel = false
 		SKIN:Bang('!WriteKeyValue', 'Variables', 'HwAccelHint', '1', data .. 'State.inc')
@@ -6007,6 +6106,7 @@ function OpenNotice()
 		SKIN:Bang('!Manage', 'Settings')
 		return
 	end
+	if not notice.update and #notice.added > 0 then OpenOptions('new') return end
 	SKIN:Bang(SKIN:GetVariable(notice.update and 'OptionsInfoAction' or 'OptionsImportAction'))
 end
 
@@ -6402,6 +6502,47 @@ function OnScan()
 	showNotice()
 	base = -1
 	render(false)
+	-- the new games become tiles (the Options program, without its window,
+	-- which calls OnAutoAdded); while the window is open it adds them itself
+	-- when Found opens, on its unsaved changes
+	if V.AutoAddGames and not M.optionsOpen() and fileExists(resources .. 'Bin\\RaintileOptions.exe') then
+		SKIN:Bang(SKIN:GetVariable('AutoAddAction'))
+	end
+end
+
+-- Names of the games added by themselves whose tiles were not shown in
+-- Options yet (Generated\NewTiles.txt, "<category file>|<tile name>",
+-- written by the Options program)
+function M.readAutoAdded()
+	notice.added = {}
+	for _, line in ipairs(readLines(resources .. 'Generated\\NewTiles.txt')) do
+		local name = line:match('^[^|]*|(.+)$')
+		if name then notice.added[#notice.added + 1] = name end
+	end
+end
+
+-- The Options program changed the list: the dot follows
+function OnNewTiles()
+	if not ready then return end
+	M.readAutoAdded()
+	showNotice()
+end
+
+-- The Options program added games by themselves (without its window): the dot
+-- lists them, and the skin reloads to show their tiles (M.refreshAdded)
+function OnAutoAdded()
+	if not ready then return end
+	OnNewTiles()
+	M.addedRefresh = true
+	M.refreshAdded()
+end
+
+-- Reloads for the tiles added by themselves, but not under the hands of
+-- whoever is using the launcher: then when it hides or loses the focus
+function M.refreshAdded()
+	if not M.addedRefresh or (visible and M.focused) then return end
+	M.addedRefresh = false
+	SKIN:Bang('!Refresh')
 end
 
 -- The Options window removed or kept tiles of games no longer installed
@@ -7058,7 +7199,7 @@ local function launchTile(t, x, y)
 	SKIN:Bang('!CommandMeasure', 'MeasureLaunchAnim', 'Execute 1')
 end
 
--- Tile hot keys (HotKey= on a tile, MeasureTileKey<i> in Grid.inc): they
+-- Tile hot keys (HotKey= on a tile, M.writeKeys): they
 -- work also while the launcher is hidden. The tile starts right away, without
 -- the launch animation; an open launcher hides (CloseOnLaunch).
 
@@ -7164,8 +7305,8 @@ end
 
 -- Keyboard -------------------------------------------------------------------
 -- WASD/arrows move the highlight (the same one as the mouse), Space/Enter
--- launch the highlighted tile, Q/E switch category. The keys are registered by
--- the Raintile\Navigation mini-skin, only active while the launcher is visible
+-- launch the highlighted tile, Q/E switch category. The keys are listed for the
+-- helper (M.writeKeys) only while the launcher is visible
 -- and has the focus (see Focus).
 
 -- Nav() in a grid with tiles of more cells (c.pack): to the next tile in
@@ -7386,7 +7527,7 @@ end
 
 -- Search -----------------------------------------------------------------------
 -- A click on the bar at the top left (or the NavSearch key) starts typing: the
--- Raintile\Typing mini-skin takes the letters, digits, space, Backspace,
+-- keys (M.writeKeys) are the letters, digits, space, Backspace,
 -- Enter and Esc (TypeKey), and the grid shows, at every key, the tiles of
 -- every category that contain all the typed words (tile name, label or
 -- category). Enter stops typing and keeps the results (the first one is
@@ -7537,7 +7678,7 @@ function SearchOpen()
 	typing = true
 	typed = query
 	hotKey(false) -- the letters (WASD, Q, E, F...) are typed now
-	SKIN:Bang('!ActivateConfig', V.TypingConfig, 'Typing.ini')
+	M.writeKeys()
 	updateSearchBar()
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	SKIN:Bang('!Redraw')
@@ -7548,14 +7689,14 @@ stopTyping = function()
 	if not typing then return end
 	typing = false
 	if osk.open then osk.open = false renderOsk() end
-	SKIN:Bang('!DeactivateConfig', V.TypingConfig)
+	M.writeKeys()
 	updateSearchBar()
 	SKIN:Bang('!UpdateMeterGroup', 'Menu')
 	SKIN:Bang('!Redraw')
 	if visible then SKIN:Bang('!CommandMeasure', 'MeasureKeysDelay', 'Execute 1') end
 end
 
--- A key from the Typing mini-skin: a character, or BACK, ENTER, ESC
+-- A key typed in the search (M.writeKeys): a character, or BACK, ENTER, ESC
 function TypeKey(key)
 	M.keyInput()
 	if not ready or not visible or not typing then return end
@@ -7748,7 +7889,8 @@ function FocusLost()
 	if not ready or not visible then return end
 	M.setFocus(false)
 	M.zpos(false)
-	if launching or V.Mode == 'window' or not V.AutoHide then return end
+	if launching then return end
+	if V.Mode == 'window' or not V.AutoHide then M.refreshAdded() return end
 	Hide()
 end
 

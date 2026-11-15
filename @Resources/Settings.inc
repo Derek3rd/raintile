@@ -42,7 +42,7 @@ RainsideMode=Fixed
 RainsideSide=Right
 ; Its width (its height at the top or the bottom), pixels or % of the area
 RainsideSize=10%
-; Key combination (HotKey plugin, as OpenHotKey): with Edge it shows and hides
+; Key combination (as OpenHotKey): with Edge it shows and hides
 ; it; with Fixed it gives it the arrows and the gamepad (again: takes them
 ; back). Empty = none
 RainsideHotKey=
@@ -205,7 +205,7 @@ FilterFontSize=10
 ; The launcher loads once (when Rainmeter starts) and is then only shown and
 ; hidden. To open/close it from a shortcut:
 ;   Rainmeter.exe !CommandMeasure MeasureScript "Toggle()" "Raintile"
-; Key combination that opens and closes the launcher (HotKey plugin): keys
+; Key combination that opens and closes the launcher: key names
 ; separated by spaces, e.g. CTRL ALT G, LWIN SPACE, CTRL SHIFT F1
 OpenHotKey=CTRL ALT G
 ; Action of the X at the top right (default: hide the launcher).
@@ -215,7 +215,7 @@ CloseSize=14
 ; 1 = power button left of the gear: Lock, Sleep, Restart, Shut down (the
 ; last two want a second click)
 ShowPower=1
-; Key that closes the launcher (HotKey plugin), registered only while the
+; Key that closes the launcher, active only while the
 ; launcher is visible and has the focus. Empty = no key.
 CloseHotKey=ESCAPE
 ; Hot keys of the tiles (HotKey= in the category files): Always = they start
@@ -224,10 +224,10 @@ CloseHotKey=ESCAPE
 ; time)
 TileKeysWhen=Always
 ; Keyboard navigation, only active while the launcher is visible and has the
-; focus (HotKey plugin): 1 = on, 0 = off. The launcher has the focus when it
+; focus: 1 = on, 0 = off. The launcher has the focus when it
 ; is opened or clicked, and loses it to a click on another program or another
 ; program in front; the shortcut gives it back. Each action has two keys
-; (HotKey plugin names: letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
+; (key names: letters, UP DOWN LEFT RIGHT, SPACE, ENTER, TAB, ...)
 KeyboardNav=1
 NavUp=W
 NavUp2=UP
@@ -441,7 +441,7 @@ ClockFontSize=18
 ; --- Games and apps ---------------------------------------------------------------
 ; Right click on the skin > "Add games and apps..." (or Options > Import):
 ; the games and apps installed on this PC are listed, and the ones you pick
-; become normal tiles. Nothing is added by itself.
+; become normal tiles. Nothing is added by itself, unless AutoAddGames=1.
 ; Where to look, separated by |: Steam Epic GOG Ubisoft Battlenet EA Xbox
 ; GooglePlay (games), Folders (the programs in ImportFolders) and Apps (the
 ; Start menu)
@@ -456,10 +456,20 @@ ImportStores=Steam|Epic|GOG|Ubisoft|Battlenet|EA|Xbox|GooglePlay|Folders|Apps
 ; of their kind: ImportCategory or AppsCategory)
 ImportFolders=
 ; 1 = look for new games and apps in the background on every skin load: new
-; ones light a dot on the gear (nothing is added). The same search finds the
-; tiles of games no longer installed: they are greyed out, light the dot and
-; can be removed or kept in Options > Import.
+; ones light a dot on the gear (nothing is added, unless AutoAddGames=1). The
+; same search finds the tiles of games no longer installed: they are greyed
+; out, light the dot and can be removed or kept in Options > Import.
 ScanOnStart=1
+; 1 = add the games found by themselves (Options > Import > Auto add games):
+; turned on in Options, every game not among the tiles yet at once, then each
+; new one the search finds (on every skin load and when Options > Found
+; opens), to ImportCategory or to its folder's own category. Apps are still
+; picked by hand. A dot on the gear and on the category in Options marks what
+; was added until the category is opened there. Games already handled are
+; remembered (AutoAdded.txt in the data folder): a game tile you remove does
+; not come back while it stays on (add it again from Found); turned off and on
+; again in Options, every game not among the tiles is added back.
+AutoAddGames=0
 ; Categories where games and apps go when added
 ImportCategory=Games
 AppsCategory=Apps
@@ -480,8 +490,8 @@ CheckUpdates=1
 UpdateChannel=Release
 
 ; --- Diagnostics ----------------------------------------------------------------
-; 1 = write to the Rainmeter log (Manage > Log) what happens on confirm, on
-; tile launch and on show/hide, and the keys seen by the HotKey plugin
+; 1 = write to the Rainmeter log (About > Log) what happens on confirm, on
+; tile launch and on show/hide, and the keys pressed while it has the keys
 DebugLog=0
 
 ; --- Appearance -----------------------------------------------------------------

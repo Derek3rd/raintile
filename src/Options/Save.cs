@@ -24,7 +24,7 @@ namespace RaintileOptions
         double planTotal;
         Grid overlay;
         Border progressTrack, progressBar;
-        TextBlock progressPercent, progressStage;
+        TextBlock progressPercent, progressStage, overlayTitle, overlayText;
 
         void SaveAll(bool noRefresh = false)
         {
@@ -66,13 +66,13 @@ namespace RaintileOptions
             progressBar = (Border)win.FindName("ProgressBar");
             progressPercent = (TextBlock)win.FindName("ProgressPercent");
             progressStage = (TextBlock)win.FindName("ProgressStage");
+            overlayTitle = (TextBlock)win.FindName("OverlayTitle");
+            overlayText = (TextBlock)win.FindName("OverlayText");
             refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
             refreshTimer.Tick += (s, e) =>
             {
                 double p = PlannedProgress((DateTime.Now - refreshStart).TotalMilliseconds);
-                progressBar.Width = p * progressTrack.ActualWidth;
-                progressPercent.Text = (int)Math.Floor(p * 100) + "%";
-                progressStage.Text = p < 0.3 ? "Saving the settings..." : p < 0.85 ? "Refreshing the skin..." : "Opening the launcher...";
+                SetOverlayProgress(p, p < 0.3 ? "Saving the settings..." : p < 0.85 ? "Refreshing the skin..." : "Opening the launcher...");
                 if (p >= 1)
                 {
                     refreshTimer.Stop();
@@ -85,6 +85,23 @@ namespace RaintileOptions
                     InvokeRainmeter("!Refresh \"" + Core.Config + "\"");
                 }
             };
+        }
+
+        // The progress over the window: its title and what it is for, then the bar
+        void ShowProgressOverlay(string title, string text)
+        {
+            overlayTitle.Text = title;
+            overlayText.Text = text;
+            SetOverlayProgress(0, "");
+            overlay.Visibility = Visibility.Visible;
+        }
+
+        // The bar (0-1), its percentage and the step it is at
+        void SetOverlayProgress(double p, string stage)
+        {
+            progressBar.Width = Math.Max(0, Math.Min(1, p)) * progressTrack.ActualWidth;
+            progressPercent.Text = (int)Math.Floor(p * 100) + "%";
+            progressStage.Text = stage;
         }
 
         static void WriteShowOnLoad()
@@ -132,15 +149,13 @@ namespace RaintileOptions
 
         void StartSaveAndRefresh()
         {
-            if (refreshing) return;
+            if (refreshing || autoAdding) return;
             needsRefresh = false;
             SaveAll(true);   // the refresh comes at the end of the bar
             refreshing = true;
             NewProgressPlan();
-            progressBar.Width = 0;
-            progressPercent.Text = "0%";
-            progressStage.Text = "Saving the settings...";
-            overlay.Visibility = Visibility.Visible;
+            ShowProgressOverlay("Saving and refreshing", "The launcher opens in a moment.");
+            SetOverlayProgress(0, "Saving the settings...");
             refreshStart = DateTime.Now;
             refreshTimer.Start();
         }

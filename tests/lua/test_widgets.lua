@@ -367,6 +367,49 @@ function T.gallery_now_playing()
 	end
 end
 
+-- Claude Code (widgets/ClaudeCode): its sizes written out, its meters in
+-- the tile at every size, a list and a command file of each tile's own, the
+-- rows under the limits (ListY=), from the top without the title and the limits
+function T.gallery_claude_code()
+	local function load(settings)
+		local s = R.new({})
+		host_mkdir(s.data .. 'Widgets')
+		host_copytree(s.repo .. '\\widgets\\ClaudeCode', s.data .. 'Widgets\\ClaudeCode', '')
+		if settings then R.writeFile(s.data .. 'Widgets\\ClaudeCode\\settings.inc', settings) end
+		local cat = s.data .. 'Categories\\Dashboard.ini'
+		R.writeFile(cat, R.readFile(cat) .. '\r\n[Claude]\r\nWidget=custom\r\nParam=ClaudeCode\r\nSize=2x2\r\n')
+		s:start()
+		t.clean(s)
+		local w
+		for _, x in ipairs(s:upvalue('widgets')) do if x.widget.param == 'ClaudeCode' then w = x end end
+		t.ok(w, 'the widget tile is missing')
+		return s, w
+	end
+	local s, w = load()
+	local g = grid(s)
+	local own = g:match('#WIDGET[%w:]*#') or g:match('#OPTION:%w+#')
+	for _, v in ipairs({ 'CT', 'CY', 'CF', 'CL', 'CB', 'CCmd' }) do
+		own = own or (g:find('#' .. v .. '#', 1, true) and v)
+	end
+	t.ok(not own, 'a variable of the widget left in Grid.inc: ' .. tostring(own))
+	local p = 'CW' .. w.widget.idx .. '_'
+	t.ok(g:find('-Section "' .. p .. 'Server"', 1, true), 'the script is not given its section')
+	t.ok(g:find('cmd_' .. p .. 'Server.ini', 1, true), 'no command file of the tile\'s own')
+	local api = s:upvalue('M').widgetInfo(w)
+	t.ok(api.list and api.list:find('list_' .. p .. 'Server.txt', 1, true), 'no list of the tile\'s own: ' .. tostring(api.list))
+	t.ok(api.onShow and api.onShow:find('"Run"', 1, true), 'OnShow does not start the script')
+	-- (the title, then two limits of a text and a bar each)
+	t.ok(api.listY and api.listY >= 60 and api.listY <= 140, 'ListY= not under the limits: ' .. tostring(api.listY))
+	for _, size in ipairs({ { 360, 340 }, { 420, 200 }, { 200, 420 }, { 120, 110 }, { 800, 760 } }) do
+		local bad = widgetOutOfTile(s, w, size[1], size[2])
+		t.ok(not bad, string.format('a meter out of a %dx%d tile: %s', size[1], size[2], tostring(bad)))
+	end
+	s, w = load('ShowTitle=0\r\nShowUsage=0\r\n')
+	api = s:upvalue('M').widgetInfo(w)
+	t.ok(api.listY < 10, 'without the title and the limits the rows start at the top: ' .. tostring(api.listY))
+	t.ok(grid(s):find('-ShowUsage 0', 1, true), 'the script is not told the limits are off')
+end
+
 -- Keyboard and pad and a widget with parts (the rows of its list): the
 -- whole tile highlighted, Confirm enters it onto its first row, the arrows
 -- go from row to row and stay in it at its edges, Back leaves it (the whole

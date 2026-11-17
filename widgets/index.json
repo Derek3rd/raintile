@@ -78,6 +78,19 @@
       "base": "Spotify",
       "files": ["Spotify.ini", "Spotify.ps1"],
       "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/Spotify"
+    },
+    {
+      "id": "ClaudeCode",
+      "name": "Claude Code",
+      "author": "Raintile",
+      "version": "1.0",
+      "minVersion": "1.5.0",
+      "kind": "custom",
+      "category": "General",
+      "description": "The Claude Code sessions open on this PC: the ones that ask you something (a permission, a question) first, then the ones waiting for your next message, then the ones working, each with how long it has been so. Over them, how much of your plan's 5-hour and weekly limits you used and when they reset (with the widget's status line in Claude Code: the tile shows how). Give the tile more cells for more rows.",
+      "base": "ClaudeCode",
+      "files": ["ClaudeCode.ini", "ClaudeCode.ps1", "StatusLine.ps1", "needs.png", "turn.png", "working.png"],
+      "page": "https://github.com/Derek3rd/raintile/tree/nightly/widgets/ClaudeCode"
     }
   ]
 }

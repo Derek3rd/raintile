@@ -290,7 +290,7 @@ With `Sounds=1` (Options > **Sounds**) a short sound goes with what happens on s
 | A key | of the on-screen keyboard | `SoundKey` | `button_click1.wav` |
 | Back | a menu, the search or a widget closed, the launcher staying open | `SoundBack` | `button_back.wav` |
 
-Raintile's own are in `@Resources\Sounds\`. Yours: put `.wav` files in `Sounds\` of [your data folder](#your-data-and-updates), and they are in the lists too (one with the name of one of Raintile's plays instead of it). The settings hold the name of the file (`SoundOpen=open.wav`); empty = none.
+Raintile's own are in `@Resources\Sounds\`, made from nothing by `tools/make_sounds.py` (tones and filtered noise, no recordings). Yours: put `.wav` files in `Sounds\` of [your data folder](#your-data-and-updates), and they are in the lists too (one with the name of one of Raintile's plays instead of it). The settings hold the name of the file (`SoundOpen=open.wav`); empty = none.
 
 **More sounds for one event**: a name is a set. Next to `swoosh.wav`, the files `swoosh_<variant>.wav` play where that variant applies, `swoosh.wav` (or nothing, without it) everywhere else; the lists show the set once. The variants:
 
@@ -969,7 +969,7 @@ Rainside/Instance.inc        read by Raintile.ini when it is the Rainside: its n
   Categories/*.ini           default categories (Dashboard.ini: the default Dashboard), copied to the data folder the first time
   Images/<category>/         their icons, backgrounds and logos
   Icons/                     icons of Favorites and Recent
-  Sounds/*.wav               Raintile's sounds; yours in Sounds\ of the data folder
+  Sounds/*.wav               Raintile's sounds (tools/make_sounds.py); yours in Sounds\ of the data folder
   Scripts/Data.ps1           prepares the data folder
   Scripts/Update.ps1         update check
   Scripts/Raintile.lua       launcher logic

@@ -70,7 +70,7 @@ Everything else — every setting, category and tile files, adding games and app
 
 **Raintile** — Copyright (C) 2026 Derek3rd. Raintile is free software: you can redistribute it and/or modify it under the terms of the [GNU General Public License](LICENSE) as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. In short: you can use, share and change it; a changed version you share must stay under the GPL, with its source.
 
-The sounds in `@Resources/Sounds/` are Raintile's own, made for it, under the same license.
+The sounds in `@Resources/Sounds/` are Raintile's own, synthesised from nothing by `tools/make_sounds.py`, under the same license.
 
 What of others Raintile ships or runs on:
 

@@ -86,7 +86,8 @@ Test 'claude code: the status line keeps the limits' {
     Assert-True ($null -eq (Get-LimitValue $null)) 'no limit (an API key)'
     Assert-Equal (Format-Limits $five $null) "FiveHour=42.5`r`nFiveHourResets=1800003600" 'the file, without the week'
     Assert-Equal (Format-StatusLine 'Opus' $five @{ Used = 7.6; Resets = 0 }) 'Opus | 5h 43% | week 8%' 'the line'
-    Assert-Equal (Format-StatusLine 'Opus' $null $null) 'Opus' 'without limits'
+    Assert-Equal (Format-StatusLine 'Opus' $null $null) 'Opus | no limits reported' 'without limits: said'
+    Assert-Equal (Format-Limits $null $null) 'Reported=0' 'the file without limits'
     # (the script itself, given Claude Code's input on standard input)
     $dir = New-TestFolder
     $out = Join-Path $dir 'limits.txt'
@@ -100,4 +101,19 @@ Test 'claude code: the status line keeps the limits' {
     $limits = Read-KeyValues ([IO.File]::ReadAllText($out))
     Assert-Equal $limits['Week'] '30' 'the week kept'
     Assert-Equal $limits['FiveHourResets'] '1800003600' 'the reset kept'
+    # an input without limits (a new session, an API key): the limits kept
+    # stay; with no file yet, one that says none came
+    $run = {
+        param($json)
+        [IO.File]::WriteAllText($inFile, $json)
+        $q = Start-Process -FilePath $shell -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$lineScript`"", '-Out', "`"$out`"") `
+            -RedirectStandardInput $inFile -RedirectStandardOutput (Join-Path $dir 'line.txt') -NoNewWindow -Wait -PassThru
+        Assert-Equal $q.ExitCode 0 'the exit code'
+    }
+    & $run '{"model":{"display_name":"Opus"}}'
+    Assert-Equal (Read-KeyValues ([IO.File]::ReadAllText($out)))['Week'] '30' 'limits lost to an input without them'
+    Remove-Item -LiteralPath $out
+    & $run '{"model":{"display_name":"Opus"}}'
+    Assert-Equal ([IO.File]::ReadAllText($out)) 'Reported=0' 'nothing says Claude Code gives no limits'
+    Assert-Equal ([IO.File]::ReadAllText((Join-Path $dir 'line.txt')).Trim()) 'Opus | no limits reported' 'the line without limits'
 }

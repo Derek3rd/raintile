@@ -28,12 +28,13 @@ function Get-LimitValue($Limit) {
 }
 
 # limits.txt: FiveHour=<%>, FiveHourResets=<s>, Week=<%>, WeekResets=<s>
-# (a limit not reported: left out)
+# (a limit not reported: left out; none: Reported=0)
 function Format-Limits($Five, $Week) {
     $inv = [Globalization.CultureInfo]::InvariantCulture
     $lines = @()
     if ($Five) { $lines += 'FiveHour=' + $Five.Used.ToString('0.#', $inv); $lines += 'FiveHourResets=' + $Five.Resets }
     if ($Week) { $lines += 'Week=' + $Week.Used.ToString('0.#', $inv); $lines += 'WeekResets=' + $Week.Resets }
+    if ($lines.Count -eq 0) { $lines += 'Reported=0' }
     return ($lines -join "`r`n")
 }
 
@@ -44,6 +45,7 @@ function Format-StatusLine([string]$Model, $Five, $Week) {
     if ($m) { $parts += $m }
     if ($Five) { $parts += ('5h {0:0}%' -f $Five.Used) }
     if ($Week) { $parts += ('week {0:0}%' -f $Week.Used) }
+    if (-not $Five -and -not $Week) { $parts += 'no limits reported' }
     return ($parts -join ' | ')
 }
 
@@ -58,11 +60,15 @@ try {
         $five = Get-LimitValue $data.rate_limits.five_hour
         $week = Get-LimitValue $data.rate_limits.seven_day
     }
-    if ($five -or $week) {
-        if (-not $Out) { $Out = Join-Path $PSScriptRoot 'limits.txt' }
+    # (Claude Code's input without limits: written only while there is no
+    # file, so the tile says "none reported" instead of "not set up", and
+    # limits kept earlier are not lost to a session that has none yet)
+    if (-not $Out) { $Out = Join-Path $PSScriptRoot 'limits.txt' }
+    $has = Test-Path -LiteralPath $Out
+    if ($five -or $week -or ($data -and -not $has)) {
         $text = Format-Limits $five $week
         $old = $null
-        if (Test-Path -LiteralPath $Out) { $old = [IO.File]::ReadAllText($Out) }
+        if ($has) { $old = [IO.File]::ReadAllText($Out) }
         if ($text -ne $old) {
             $tmp = "$Out.tmp"
             [IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding $false))

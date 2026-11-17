@@ -28,14 +28,27 @@ function Get-LimitValue($Limit) {
 }
 
 # limits.txt: FiveHour=<%>, FiveHourResets=<s>, Week=<%>, WeekResets=<s>
-# (a limit not reported: left out; none: Reported=0)
-function Format-Limits($Five, $Week) {
+# (a limit not reported: left out; none: Reported=0), Updated=<s>: when
+# they were given (the tile shows how old they are)
+function Format-Limits($Five, $Week, [long]$Now) {
     $inv = [Globalization.CultureInfo]::InvariantCulture
     $lines = @()
     if ($Five) { $lines += 'FiveHour=' + $Five.Used.ToString('0.#', $inv); $lines += 'FiveHourResets=' + $Five.Resets }
     if ($Week) { $lines += 'Week=' + $Week.Used.ToString('0.#', $inv); $lines += 'WeekResets=' + $Week.Resets }
     if ($lines.Count -eq 0) { $lines += 'Reported=0' }
+    $lines += 'Updated=' + $Now
     return ($lines -join "`r`n")
+}
+
+# The file written again: the limits changed, or the time they were given
+# is a minute old (not at every line Claude Code asks for)
+function Test-LimitsChanged([string]$New, [string]$Old, [long]$Now) {
+    if (-not $Old) { return $true }
+    $strip = { param($t) (($t -split "`r?`n") | Where-Object { $_ -notmatch '^Updated=' }) -join "`n" }
+    if ((& $strip $New) -ne (& $strip $Old)) { return $true }
+    $at = [long]0
+    if ($Old -match '(?m)^Updated=(\d+)') { [void][long]::TryParse($Matches[1], [ref]$at) }
+    return ($Now - $at) -ge 60
 }
 
 # The line Claude Code shows: "Opus | 5h 42% | week 18%" (ASCII, one line)
@@ -66,10 +79,11 @@ try {
     if (-not $Out) { $Out = Join-Path $PSScriptRoot 'limits.txt' }
     $has = Test-Path -LiteralPath $Out
     if ($five -or $week -or ($data -and -not $has)) {
-        $text = Format-Limits $five $week
+        $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        $text = Format-Limits $five $week $now
         $old = $null
         if ($has) { $old = [IO.File]::ReadAllText($Out) }
-        if ($text -ne $old) {
+        if (Test-LimitsChanged $text $old $now) {
             $tmp = "$Out.tmp"
             [IO.File]::WriteAllText($tmp, $text, (New-Object System.Text.UTF8Encoding $false))
             Move-Item -LiteralPath $tmp -Destination $Out -Force

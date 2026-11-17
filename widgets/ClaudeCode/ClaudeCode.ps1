@@ -12,6 +12,10 @@
 # widget's folder. Without it the tile has a row that opens StatusLine.txt,
 # which says how (with this PC's path).
 #
+# A click on a session brings the window it runs in to the front (its
+# terminal, or the Claude app): the row's command writes "focus <pid>" into
+# -Cmd. Claude Code has no link that opens a given session.
+#
 # Started by the widget's OnShow and running only while it is on screen: it
 # waits on the sessions folder (and reads again every -Interval ms, for the
 # times shown), writes the rows into -List and the limits into the meters
@@ -62,10 +66,12 @@ function Get-AgeText([double]$Ms) {
     return ('{0} d' -f [Math]::Floor($s / 86400))
 }
 
-# A session file (its JSON, read) as a row: @{ Rank; When; Title; Sub; Icon }
-# (Rank: 0 waiting, 1 idle, 2 busy, 3 other), or $null for one not shown (a
-# spare process Claude Code keeps ready, not a session yet)
-function Get-SessionView($Session, [double]$NowMs, [string]$IconDir) {
+# A session file (its JSON, read) as a row: @{ Rank; When; Title; Sub; Icon;
+# Command } (Rank: 0 waiting, 1 idle, 2 busy, 3 other; Command: the bang
+# that asks this script, through the command file $Cmd, to bring its
+# window to the front), or $null for one not shown (a spare process Claude
+# Code keeps ready, not a session yet)
+function Get-SessionView($Session, [double]$NowMs, [string]$IconDir, [string]$Cmd) {
     if ($null -eq $Session -or $Session.spare) { return $null }
     $title = [string]$Session.name
     if (-not $title.Trim() -and $Session.cwd) { $title = Split-Path -Leaf ([string]$Session.cwd) }
@@ -85,9 +91,14 @@ function Get-SessionView($Session, [double]$NowMs, [string]$IconDir) {
         'busy' { $state = 'Working'; $rank = 2; $icon = 'working.png' }
         default { $state = 'Open'; $rank = 3; $icon = '' }
     }
+    $id = 0
+    $command = ''
+    if ($Cmd -and [int]::TryParse([string]$Session.pid, [ref]$id) -and $id -gt 0) {
+        $command = '[!WriteKeyValue Cmd Do "focus ' + $id + '" "' + $Cmd + '"]'
+    }
     return @{
         Rank = $rank; When = $when; Title = Get-FieldText $title; Sub = $state + $age
-        Icon = $(if ($icon) { $IconDir.TrimEnd('\') + '\' + $icon } else { '' })
+        Icon = $(if ($icon) { $IconDir.TrimEnd('\') + '\' + $icon } else { '' }); Command = $command
     }
 }
 
@@ -95,7 +106,7 @@ function Get-SessionView($Session, [double]$NowMs, [string]$IconDir) {
 function Format-SessionList($Views) {
     $lines = @()
     foreach ($v in @($Views | Where-Object { $_ } | Sort-Object @{ Expression = { $_.Rank } }, @{ Expression = { $_.When }; Descending = $true })) {
-        $lines += ($v.Title + '|' + $v.Sub + '|' + $v.Icon + '|')
+        $lines += ($v.Title + '|' + $v.Sub + '|' + $v.Icon + '|' + $v.Command)
     }
     return $lines
 }
@@ -132,13 +143,17 @@ function Get-LimitView($Values, [string]$Key, [long]$NowSec, [TimeZoneInfo]$Zone
 
 # The bangs that show the limits in the widget's meters (<Prefix><Meter>),
 # then the group updated and redrawn. Without them: a note (why) instead.
-function Format-UsageBang($Five, $Week, [string]$Note, [string]$Prefix, [string]$Group, [string]$Config, $Colors) {
+# $Age: how old they are, after the first line's name ("5 hours, 40 min
+# ago"): Claude Code gives them only while it runs in a terminal (the
+# Claude app runs no status line), and the use elsewhere is not in them.
+function Format-UsageBang($Five, $Week, [string]$Note, [string]$Age, [string]$Prefix, [string]$Group, [string]$Config, $Colors) {
     $sb = New-Object System.Text.StringBuilder
     $set = {
         param($name, $key, $value)
         [void]$sb.Append('[!SetOption "' + $Prefix + $name + '" "' + $key + '" "' + $value + '" "' + $Config + '"]')
     }
     $inv = [Globalization.CultureInfo]::InvariantCulture
+    & $set 'FiveLabel' 'Text' $(if ($Age -and ($Five -or $Week)) { '5 hours, ' + $Age + ' ago' } else { '5 hours' })
     foreach ($row in @(@('Five', $Five), @('Week', $Week))) {
         $v = $row[1]
         # (without them, the note on the first line: why)
@@ -176,6 +191,15 @@ function Get-StatusLineHelp([string]$Script, [string]$ClaudeFolder) {
         'next answer. Claude Code reports the limits with a Claude plan (Pro, Max),',
         'not with an API key.'
     ) -join "`r`n"
+}
+
+# A command of the widget: @{ Verb; Pid }, or $null (show, quit, focus <pid>)
+function ConvertFrom-ClaudeCommand([string]$Line) {
+    if ($null -eq $Line) { return $null }
+    $t = $Line.Trim()
+    if ($t -eq 'show' -or $t -eq 'quit') { return @{ Verb = $t; Pid = 0 } }
+    if ($t -match '^focus\s+(\d{1,9})$') { return @{ Verb = 'focus'; Pid = [int]$Matches[1] } }
+    return $null
 }
 
 # [Cmd] of the command file: @{ Owner; Do } (missing keys: '')
@@ -229,6 +253,26 @@ namespace RaintileClaudeCode
 
         public static bool Running() { return FindWindow("DummyRainWClass", null) != IntPtr.Zero; }
     }
+
+    public static class Window
+    {
+        [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+        [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
+        [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
+        [DllImport("user32.dll")] static extern void keybd_event(byte key, byte scan, int flags, IntPtr extra);
+
+        // To the front, restored if minimised. Windows lets only the program
+        // in front give the focus away: an Alt press and release first (no
+        // menu opens) lifts that, as tools that switch windows do.
+        public static void Front(IntPtr window)
+        {
+            if (window == IntPtr.Zero) return;
+            if (IsIconic(window)) ShowWindow(window, 9 /* SW_RESTORE */);
+            keybd_event(0x12 /* VK_MENU */, 0, 0, IntPtr.Zero);
+            keybd_event(0x12, 0, 2 /* KEYEVENTF_KEYUP */, IntPtr.Zero);
+            SetForegroundWindow(window);
+        }
+    }
 }
 '@
 
@@ -280,7 +324,7 @@ function Get-Rows {
         foreach ($f in Get-ChildItem -LiteralPath $sessions -Filter '*.json' -File) {
             try { $s = [IO.File]::ReadAllText($f.FullName) | ConvertFrom-Json } catch { continue }   # (being written)
             if (-not (Test-SessionAlive $s)) { continue }
-            $views += Get-SessionView $s $now $dir
+            $views += Get-SessionView $s $now $dir $Cmd
         }
     }
     $rows = @()
@@ -294,14 +338,42 @@ function Get-Rows {
     return ($rows + $sessionRows) -join "`r`n"
 }
 
+# The window a session runs in: the first of its process and the ones that
+# started it with a window of their own (the terminal, the Claude app); a
+# process of the Claude app without one (its windows are its main
+# process's): a window of a process of the same name
+function Invoke-Focus([int]$Id) {
+    for ($k = 0; $k -lt 8 -and $Id -gt 0; $k++) {
+        $p = Get-Process -Id $Id -ErrorAction SilentlyContinue
+        if (-not $p -or $p.ProcessName -eq 'explorer') { return }   # (the desktop's: not the session's)
+        if ($p.MainWindowHandle -ne [IntPtr]::Zero) { [RaintileClaudeCode.Window]::Front($p.MainWindowHandle); return }
+        if ($k -gt 0 -and $p.ProcessName -eq 'claude') {
+            $main = Get-Process -Name $p.ProcessName -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero } | Select-Object -First 1
+            if ($main) { [RaintileClaudeCode.Window]::Front($main.MainWindowHandle); return }
+        }
+        $w = Get-CimInstance Win32_Process -Filter "ProcessId=$Id" -ErrorAction SilentlyContinue
+        if (-not $w) { return }
+        $Id = [int]$w.ParentProcessId
+    }
+}
+
 function Get-UsageBang {
     $values = @{}
-    if (Test-Path -LiteralPath $limitsFile) { $values = Read-KeyValues ([IO.File]::ReadAllText($limitsFile)) }
+    $age = ''
     $nowSec = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+    if (Test-Path -LiteralPath $limitsFile) {
+        $values = Read-KeyValues ([IO.File]::ReadAllText($limitsFile))
+        $updated = [long]0
+        if (-not [long]::TryParse([string]$values['Updated'], [ref]$updated) -or $updated -le 0) {
+            $updated = ([DateTimeOffset](Get-Item -LiteralPath $limitsFile).LastWriteTimeUtc).ToUnixTimeSeconds()
+        }
+        # (just given: no age)
+        if ($nowSec - $updated -ge 120) { $age = Get-AgeText (1000.0 * ($nowSec - $updated)) }
+    }
     $five = Get-LimitView $values 'FiveHour' $nowSec ([TimeZoneInfo]::Local)
     $week = Get-LimitView $values 'Week' $nowSec ([TimeZoneInfo]::Local)
     $note = $(if ($five -or $week) { '' } elseif (Test-Path -LiteralPath $limitsFile) { 'none reported' } else { 'not set up' })
-    return Format-UsageBang $five $week $note $prefix $group $Config $colors
+    return Format-UsageBang $five $week $note $age $prefix $group $Config $colors
 }
 
 $watcher = $null
@@ -317,7 +389,9 @@ while ($true) {
             $cmdStamp = $stamp
             $file = Read-CommandFile $Cmd
             if ($file.Owner -and $file.Owner -ne [string]$PID) { exit 0 }
-            if ($file.Do -eq 'quit') { exit 0 }
+            $c = ConvertFrom-ClaudeCommand $file.Do
+            if ($c -and $c.Verb -eq 'quit') { exit 0 }
+            if ($c -and $c.Verb -eq 'focus') { try { Invoke-Focus $c.Pid } catch { } }   # (the session ended meanwhile)
         }
     }
     $rows = Get-Rows
